@@ -12,13 +12,15 @@ your starting point from the `version:` line of `.engineering/project.yaml`:
 | You have | This release | What to do |
 |---|---|---|
 | `version: aep.project/5` | reads and writes it | nothing |
-| `version: aep.project/1`, or no `version:` | reads and writes it, with a one-line notice on stderr | [migrate with this release](#from-aepproject1) |
-| a `.engineering/planning/` directory and no `project.yaml` | reads it inside a Git repository, with the same notice | [migrate with this release](#from-a-planning-directory-with-no-project-file), naming the protocol source and profile |
+| `version: aep.project/1`, or no `version:` | refuses every other planning command, naming this migration | [migrate with this release](#from-aepproject1) |
+| a `.engineering/planning/` directory with a `journal.jsonl` and no `project.yaml` | refuses every other planning command, naming this migration | [migrate with this release](#from-a-planning-directory-with-no-project-file), naming the protocol source and profile |
 | `version: aep.project/2`, `/3` or `/4` | refuses every planning command | [migrate with the bridge build](#from-an-event-log-store-aepproject24) |
 
-The notice is one line and changes neither standard output nor the exit code. Set
-`AEP_NO_UPGRADE_NOTICE=1` to hide it. `aep doctor` reports these stores as `warn` and names the same
-command.
+A `/1` store is no longer opened for reading or writing: this release keeps only the read-only
+journal reader the migration needs. `aep doctor` reports these stores as `warn` and names the same
+command. A `/1` project whose `store:` is SQLite or PostgreSQL is not migrated by this command:
+rewrite its `project.yaml` by hand as `aep.project/5` with a `planning_scope` and
+`store: { sqlite: { path: <file> } }` or `store: { postgres: { url: <url> } }`.
 
 ## From `aep.project/1`
 
@@ -51,6 +53,9 @@ What changes:
 
 - Each document becomes `aep.planning-md/3`. Its journalled moves become its `transitions`, in
   journal order, each marked `imported: true`. Other front-matter keys and the body are kept.
+- A document the journal never moved whose status is not its kind's initial state gets one imported
+  transition from the initial state to its status (and at least revision 2), so `validate` holds it
+  to its transitions however the migration is committed.
 - Each journalled evidence record becomes one file under `.engineering/evidence/`. Identical records
   stay separate files, because each counts.
 - `project.yaml` gets `version: aep.project/5`, `store: {git: {}}` and `planning_scope` set to the

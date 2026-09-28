@@ -1,5 +1,5 @@
-//! `aep.project/5` as the default: `aep plan store migrate git` over an `aep.project/1` Markdown
-//! store, `reverse init` writing `/5`, the one-line upgrade notice and `aep doctor`'s warning.
+//! `aep plan store migrate git` over an `aep.project/1` Markdown store — the one reader of that
+//! layout this build keeps — `reverse init` writing `/5`, and the refusal of a `/1` store.
 //!
 //! Each test builds a disposable project under Cargo's per-target scratch directory and drives the
 //! real binaries against it.
@@ -88,8 +88,7 @@ fn run_with(binary: &str, directory: &Path, args: &[&str], env: &[(&str, &str)])
     command
         .args(args)
         .current_dir(directory)
-        .env("AEP_ACTOR", "human:tester")
-        .env_remove("AEP_NO_UPGRADE_NOTICE");
+        .env("AEP_ACTOR", "human:tester");
     for (key, value) in env {
         command.env(key, value);
     }
@@ -152,7 +151,7 @@ fn contents(directory: &Path) -> Vec<(String, Vec<u8>)> {
     found
 }
 
-/// One journalled evidence record about `artifact`, as a `/1` store's recorder writes it.
+/// One journalled evidence record about `artifact`, as a `/1` store's recorder wrote it.
 fn evidence_line(artifact: &str, revision: u64) -> String {
     serde_json::json!({
         "at": "2026-09-28T10:00:00Z",
@@ -165,22 +164,109 @@ fn evidence_line(artifact: &str, revision: u64) -> String {
     .to_string()
 }
 
-/// A committed `/1` store: two stories, three moves, and two identical evidence records.
+/// One journal line in the shape a `/1` store wrote before its provider: an entry.
+fn entry_line(at: &str, artifact: &str, revision: u64, change: &serde_json::Value) -> String {
+    serde_json::json!({
+        "at": at,
+        "actor": "human:tester",
+        "artifact": artifact,
+        "kind": "story",
+        "revision": revision,
+        "change": change
+    })
+    .to_string()
+}
+
+/// One journal line in the shape a `/1` store's provider wrote: a domain event carrying the change.
+fn event_line(at: &str, name: &str, revision: u64, change: &serde_json::Value) -> String {
+    serde_json::json!({
+        "entity": "story",
+        "version": 1,
+        "id": name,
+        "revision": revision,
+        "type": "moved",
+        "from_state": change["from"],
+        "to_state": change["to"],
+        "changed": {"status": change["to"]},
+        "args": {},
+        "payload": {
+            "recorded_at": at,
+            "actor": "human:tester",
+            "change": change
+        }
+    })
+    .to_string()
+}
+
+/// An `aep.planning-md/1` story document.
+fn story(name: &str, status: &str, revision: u64) -> String {
+    format!(
+        "---\nformat: aep.planning-md/1\nid: story:{name}\nkind: story\nstatus: {status}\n\
+         title: {name}\nrevision: {revision}\n---\n\n# {name}\n"
+    )
+}
+
+/// A `/1` store written the way a `/1` build left one: two stories, three moves (in both journal
+/// shapes), two identical evidence records, and one story the journal never moved that a person
+/// set to `active` by hand.
+fn write_v1_store(project: &Path) {
+    let planning = project.join(".engineering/planning");
+    std::fs::create_dir_all(planning.join("story")).expect("the store is writable");
+    for (name, status, revision) in [
+        ("walked", "active", 3),
+        ("still", "proposed", 2),
+        ("handmade", "active", 1),
+    ] {
+        std::fs::write(
+            planning.join(format!("story/{name}.md")),
+            story(name, status, revision),
+        )
+        .expect("the document is writable");
+    }
+    let moved =
+        |from: &str, to: &str| serde_json::json!({"change": "moved", "from": from, "to": to});
+    let lines = [
+        entry_line(
+            "2026-09-28T09:00:00Z",
+            "story:walked",
+            1,
+            &serde_json::json!({"change": "created", "status": "draft"}),
+        ),
+        event_line(
+            "2026-09-28T09:10:00Z",
+            "walked",
+            2,
+            &moved("draft", "proposed"),
+        ),
+        entry_line(
+            "2026-09-28T09:20:00Z",
+            "story:walked",
+            3,
+            &moved("proposed", "active"),
+        ),
+        entry_line(
+            "2026-09-28T09:30:00Z",
+            "story:still",
+            1,
+            &serde_json::json!({"change": "created", "status": "draft"}),
+        ),
+        event_line(
+            "2026-09-28T09:40:00Z",
+            "still",
+            2,
+            &moved("draft", "proposed"),
+        ),
+        evidence_line("story:walked", 3),
+        evidence_line("story:walked", 3),
+    ];
+    std::fs::write(planning.join("journal.jsonl"), lines.join("\n") + "\n")
+        .expect("the journal is writable");
+}
+
+/// A committed `/1` store.
 fn populated_v1(name: &str) -> PathBuf {
     let project = v1_project(name);
-    ok(&project, &["new", "story", "walked", "--title", "Walked"]);
-    ok(&project, &["move", "story:walked", "--to", "proposed"]);
-    ok(&project, &["move", "story:walked", "--to", "active"]);
-    ok(&project, &["new", "story", "still", "--title", "Still"]);
-    ok(&project, &["move", "story:still", "--to", "proposed"]);
-    let journal = project.join(".engineering/planning/journal.jsonl");
-    let mut text = std::fs::read_to_string(&journal).expect("the /1 store journals");
-    let line = evidence_line("story:walked", 3);
-    for _ in 0..2 {
-        text.push_str(&line);
-        text.push('\n');
-    }
-    std::fs::write(&journal, text).expect("the journal is writable");
+    write_v1_store(&project);
     commit_all(&project);
     project
 }
@@ -188,7 +274,6 @@ fn populated_v1(name: &str) -> PathBuf {
 #[test]
 fn a_v1_store_migrates_with_verify_keeping_its_moves_and_evidence_and_dropping_its_journal() {
     let project = populated_v1("verify");
-    let before = ok(&project, &["list", "--format", "json"]);
 
     let migrated = aep(&project, &["plan", "store", "migrate", "git", "--verify"]);
     assert!(
@@ -198,7 +283,7 @@ fn a_v1_store_migrates_with_verify_keeping_its_moves_and_evidence_and_dropping_i
         stderr(&migrated)
     );
     assert!(
-        stdout(&migrated).contains("verified 2 artifact(s)"),
+        stdout(&migrated).contains("verified 3 artifact(s)"),
         "{}",
         stdout(&migrated)
     );
@@ -226,7 +311,8 @@ fn a_v1_store_migrates_with_verify_keeping_its_moves_and_evidence_and_dropping_i
     assert_eq!(
         walked.matches("imported: true").count(),
         2,
-        "both journalled moves are carried as imported transitions: {walked}"
+        "both journalled moves, one per journal shape, are carried as imported transitions: \
+         {walked}"
     );
     let first = walked.find("to: \"proposed\"").expect("the first move");
     let second = walked.find("to: \"active\"").expect("the second move");
@@ -245,9 +331,78 @@ fn a_v1_store_migrates_with_verify_keeping_its_moves_and_evidence_and_dropping_i
         .iter()
         .all(|path| path.starts_with("story/walked/")));
 
-    let after = ok(&project, &["list", "--format", "json"]);
-    assert_eq!(before, after, "`list` answers the same before and after");
+    let listed = ok(&project, &["list"]);
+    for line in ["story:walked", "story:still", "story:handmade"] {
+        assert!(listed.contains(line), "{listed}");
+    }
+    let history = ok(&project, &["history", "story:walked"]);
+    assert_eq!(
+        history.lines().count(),
+        4,
+        "two moves and two evidence records: {history}"
+    );
     ok(&project, &["validate"]);
+}
+
+/// A `/1` store first committed in the same commit as its migration — a squash of the two — is
+/// valid: an artifact the journal never moved carries its status as one imported transition, so
+/// `validate` does not depend on a history that begins in `aep.planning-md/1`.
+#[test]
+fn a_store_migrated_and_committed_in_one_commit_validates_and_a_hand_edited_status_is_still_refused(
+) {
+    let project = v1_project("one-commit");
+    run_git(
+        &project,
+        &["commit", "--quiet", "--allow-empty", "-m", "empty"],
+    );
+    write_v1_store(&project);
+    commit_all(&project);
+
+    let migrated = aep(&project, &["plan", "store", "migrate", "git", "--verify"]);
+    assert!(
+        migrated.status.success(),
+        "{}{}",
+        stdout(&migrated),
+        stderr(&migrated)
+    );
+    assert!(
+        stdout(&migrated).contains("1 artifact(s) the journal never moved"),
+        "{}",
+        stdout(&migrated)
+    );
+    let handmade = std::fs::read_to_string(project.join(".engineering/planning/story/handmade.md"))
+        .expect("the document reads");
+    assert!(
+        handmade.contains("from: \"draft\", to: \"active\"") && handmade.contains("imported: true"),
+        "the status is carried as one imported move from the initial state: {handmade}"
+    );
+
+    // The `/1` commit and the migration, squashed into one: every file's history now begins in
+    // the Git-native format.
+    run_git(&project, &["reset", "--quiet", "--soft", "HEAD~1"]);
+    commit_all(&project);
+    let validated = aep(&project, &["plan", "artifact", "validate"]);
+    assert!(
+        validated.status.success(),
+        "{}{}",
+        stdout(&validated),
+        stderr(&validated)
+    );
+
+    // A document born in the Git-native store is still held to its transitions.
+    ok(&project, &["new", "story", "born", "--title", "Born"]);
+    commit_all(&project);
+    let path = project.join(".engineering/planning/story/born.md");
+    let text = std::fs::read_to_string(&path).expect("the document reads");
+    std::fs::write(&path, text.replace("status: draft", "status: active"))
+        .expect("the document is writable");
+    let refused = aep(&project, &["plan", "artifact", "validate"]);
+    assert_eq!(refused.status.code(), Some(1), "{}", stdout(&refused));
+    assert!(
+        stdout(&refused).contains("story:born: `status: active` with no transitions"),
+        "{}",
+        stdout(&refused)
+    );
 }
 
 #[test]
@@ -257,7 +412,7 @@ fn a_dry_run_writes_nothing() {
     let output = aep(&project, &["plan", "store", "migrate", "git", "--dry-run"]);
     assert!(output.status.success(), "{}", stderr(&output));
     assert!(
-        stdout(&output).contains("would write 2 document(s)"),
+        stdout(&output).contains("would write 3 document(s)"),
         "{}",
         stdout(&output)
     );
@@ -272,10 +427,11 @@ fn a_dry_run_writes_nothing() {
 #[test]
 fn a_dirty_store_is_refused_and_left_as_it_was() {
     let project = populated_v1("dirty");
-    ok(
-        &project,
-        &["new", "story", "uncommitted", "--title", "Uncommitted"],
-    );
+    std::fs::write(
+        project.join(".engineering/planning/story/uncommitted.md"),
+        story("uncommitted", "draft", 1),
+    )
+    .expect("the document is writable");
     let before = contents(&project);
     let output = aep(&project, &["plan", "store", "migrate", "git"]);
     assert!(!output.status.success(), "a dirty store must be refused");
@@ -441,65 +597,53 @@ fn reverse_init_over_an_existing_plan_is_refused_and_migrate_git_adopts_it_as_v5
     ok(&project, &["validate"]);
 }
 
+/// A `/1` store is refused by every verb that opens it, naming the migration this build runs —
+/// through its project file, and through `--store` at a directory that still holds its journal.
 #[test]
-fn the_upgrade_notice_is_one_stderr_line_for_v1_and_absent_for_v5_or_when_suppressed() {
-    let project = populated_v1("notice");
+fn a_v1_store_is_refused_naming_the_migration_until_it_is_migrated() {
+    let project = populated_v1("refused");
     let listed = aep(&project, &["plan", "artifact", "list"]);
-    assert!(listed.status.success(), "{}", stderr(&listed));
-    let notice = stderr(&listed);
-    assert_eq!(
-        notice
-            .lines()
-            .filter(|line| line.starts_with("note: "))
-            .count(),
-        1,
-        "exactly one notice: {notice}"
-    );
+    assert_eq!(listed.status.code(), Some(1), "{}", stdout(&listed));
     assert!(
-        notice.contains("aep.project/1") && notice.contains("aep plan store migrate git --verify"),
-        "{notice}"
+        stderr(&listed).contains("aep.project/1")
+            && stderr(&listed).contains("aep plan store migrate git --verify"),
+        "{}",
+        stderr(&listed)
     );
+    assert!(stdout(&listed).is_empty(), "{}", stdout(&listed));
 
-    let quiet = run_with(
-        env!("CARGO_BIN_EXE_aep"),
-        &project,
-        &["plan", "artifact", "list"],
-        &[("AEP_NO_UPGRADE_NOTICE", "1")],
+    let unconfigured = scratch("refused-store", false);
+    let planning = unconfigured.join("plan");
+    write_v1_store(&unconfigured);
+    std::fs::rename(unconfigured.join(".engineering/planning"), &planning)
+        .expect("the store moves");
+    let explicit = aep(
+        &unconfigured,
+        &[
+            "plan",
+            "artifact",
+            "list",
+            "--store",
+            planning.to_str().expect("a printable path"),
+        ],
     );
-    assert_eq!(quiet.status.code(), listed.status.code());
-    assert_eq!(
-        quiet.stdout, listed.stdout,
-        "stdout does not carry the notice"
-    );
+    assert_eq!(explicit.status.code(), Some(1), "{}", stdout(&explicit));
     assert!(
-        !stderr(&quiet).contains("note: "),
-        "the variable suppresses it: {}",
-        stderr(&quiet)
+        stderr(&explicit).contains("journal.jsonl")
+            && stderr(&explicit).contains("aep plan store migrate git --verify"),
+        "{}",
+        stderr(&explicit)
     );
-
-    let json = aep(&project, &["plan", "artifact", "list", "--format", "json"]);
-    serde_json::from_slice::<serde_json::Value>(&json.stdout)
-        .expect("`--format json` stdout stays one clean JSON document");
 
     let migrated = aep(&project, &["plan", "store", "migrate", "git"]);
     assert!(migrated.status.success(), "{}", stderr(&migrated));
-    assert!(
-        !stderr(&migrated).contains("note: "),
-        "the migration does not suggest itself"
-    );
     let after = aep(&project, &["plan", "artifact", "list"]);
-    assert!(
-        !stderr(&after).contains("note: "),
-        "a /5 store gets no notice: {}",
-        stderr(&after)
-    );
+    assert!(after.status.success(), "{}", stderr(&after));
 }
 
 #[test]
-fn doctor_warns_on_a_v1_store_naming_the_migration() {
-    let project = v1_project("doctor");
-    ok(&project, &["new", "story", "seen", "--title", "Seen"]);
-    ok(&project, &["move", "story:seen", "--to", "proposed"]);
+fn doctor_names_the_migration_for_a_v1_store() {
+    let project = populated_v1("doctor");
     let output = aep(&project, &["doctor", "--root", "."]);
     let report = stdout(&output);
     let line = report

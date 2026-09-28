@@ -356,7 +356,7 @@ fn a_project_is_discovered_so_no_arguments_are_needed() {
     std::fs::write(
         project.join(".engineering/project.yaml"),
         format!(
-            "protocol: adp/1\nprofile: development.standard\nprotocols: {}\n",
+            "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\nprotocols: {}\n",
             parts.join("/")
         ),
     )
@@ -1076,7 +1076,7 @@ fn an_unparseable_workspace_file_is_refused_naming_the_file_and_the_reason() {
     std::fs::create_dir_all(root.join("protocols")).expect("scratch protocols");
     std::fs::write(
         root.join(".engineering/project.yaml"),
-        "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
+        "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
     )
     .expect("selector");
     // A closed format with one key misspelled: the mistake `deny_unknown_fields` exists to catch,

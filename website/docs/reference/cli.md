@@ -41,14 +41,15 @@ is missing here fails the build.
 | `AEP_ACTOR` | who a planning write is recorded as: `human:<name>`, `agent:<name>`, `service:<name>` or `system`. Unset means `human:$USER`, and an unparseable value is refused |
 | `AEP_PROJECT_DIR` | renames the project directory (default `.engineering`) |
 | `AEP_CACHE_DIR` | where pinned Git protocol sources are materialized (default `~/.cache/aep`) |
-| `AEP_NO_UPGRADE_NOTICE` | `1` hides the one-line notice printed for an `aep.project/1` store |
 | `AEP_DRIVE_PLUGIN_DIR` | the plugin directory `drive` and `doctor` use when `--plugin-dir` is absent |
 
 ## Plan: artifacts
 
 `aep plan artifact` reads and writes the planning store. Every verb takes `--store <dir>` (default
 `<project>/.engineering/planning`), `--root <tree>` (default: the project's `protocols` source) and
-`--format`. Writes change one file each: see [the planning store](../concepts/planning-store.md).
+`--format`. Writes change one file each: see [the planning store](../concepts/planning-store.md). A
+`--store` directory outside a project is opened as a Git-native store with its evidence under
+`<dir>/evidence`; one that still holds an `aep.project/1` `journal.jsonl` is refused.
 
 ### Write
 
@@ -84,21 +85,11 @@ is missing here fails the build.
 | `aep plan artifact relations` | the relation vocabulary |
 | `aep plan artifact lifecycle <kind>` | where a kind starts and what may follow what |
 
-### `aep.project/1` hybrid stores
-
-An `aep.project/1` project may keep its plan in Markdown **and** a SQLite or PostgreSQL replica
-(`store: hybrid`). These two verbs apply only there:
-
-| Command | Does |
-|---|---|
-| `aep plan artifact divergences` | the writes one side took and the other did not; the exit code says whether any are outstanding |
-| `aep plan artifact catch-up` | replays those divergences at the side that has not seen them; nothing is merged |
-
 ## Plan: store, browser, workspace
 
 | Command | Does |
 |---|---|
-| `aep plan store migrate git [--engineering <dir>] [--dry-run \| --verify] [--protocols <source> --profile <profile> [--protocol adp/1]]` | rewrites an `aep.project/1` store, or a planning directory with no `project.yaml`, as `aep.project/5`. Refuses a dirty `.engineering` and any document that disagrees with its journal. See [Migrate an older store](../guides/migrate-an-older-store.md) |
+| `aep plan store migrate git [--engineering <dir>] [--dry-run \| --verify] [--protocols <source> --profile <profile> [--protocol adp/1]]` | rewrites an `aep.project/1` store, or a planning directory with no `project.yaml`, as `aep.project/5`: the one verb that still reads a `/1` journal, which every other verb refuses. Refuses a dirty `.engineering` and any document that disagrees with its journal. See [Migrate an older store](../guides/migrate-an-older-store.md) |
 | `aep plan serve [--port 8899] [--read-only]` | the plan in a browser: board, artifact, next rungs with their price, and moves through the same decision `move` makes. Binds `127.0.0.1` only; the printed URL carries a per-run token. `--port 0` takes any free port |
 | `aep plan workspace members [--fetch]` | the repositories `.engineering/workspace.yaml` names and whether each store is present; `--fetch` materializes pinned Git members |
 | `aep plan workspace list [--kind …] [--status …] [--member …]` | the plan across every member |
@@ -121,7 +112,7 @@ An `aep.project/1` project may keep its plan in Markdown **and** a SQLite or Pos
 
 | Command | Does |
 |---|---|
-| `aep plan conformance [--level core\|audited\|full] [--suite <name>] [--inject <fault>] [--backend memory\|markdown\|sqlite\|postgres\|hybrid\|project] [--store …]` | holds a storage backend to the AEP contract suites; `--inject` breaks one property to show which suite catches it. The suites write, so a durable backend with no `--store` gets a scratch one |
+| `aep plan conformance [--level core\|audited\|full] [--suite <name>] [--inject <fault>] [--backend memory\|markdown\|sqlite\|postgres\|project] [--store …]` | holds a storage backend to the AEP contract suites; `--inject` breaks one property to show which suite catches it. The suites write, so a durable backend with no `--store` gets a scratch one |
 | `aep plan entity list <--artifacts <manifest> \| --planning <dir>> [--type <entity-type>]` | seeds an in-memory backend and lists its entities |
 | `aep plan entity get <--artifacts … \| --planning …> <reference>` | one entity |
 | `aep plan entity history <--artifacts … \| --planning …> <reference>` | its revision records |

@@ -32,7 +32,8 @@ const VENDORED: &[&str] = &[
 /// project file naming a profile no document declares is refused — which is the guide's own point
 /// about what a tree must contain, not a licence to skip it here.
 const OWNED_TREE_PROJECT: &str = "\
-version: aep.project/1
+version: aep.project/5
+planning_scope: adopter
 protocol: adp/1
 profile: development.standard
 protocols: .
@@ -42,7 +43,8 @@ profiles: local/profiles
 
 /// The same file with the two load-bearing lines left off, which is the mistake the guide warns of.
 const OWNED_TREE_WITHOUT_REDIRECTS: &str = "\
-version: aep.project/1
+version: aep.project/5
+planning_scope: adopter
 protocol: adp/1
 profile: development.standard
 protocols: .
@@ -50,7 +52,8 @@ protocols: .
 
 /// The other shape: a project pointing at a tree it does not own.
 const POINTING_PROJECT: &str = "\
-version: aep.project/1
+version: aep.project/5
+planning_scope: adopter
 protocol: adp/1
 profile: development.standard
 protocols: ../tree

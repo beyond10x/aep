@@ -920,8 +920,9 @@ fn coverage_planning_wraps_exact_unfiltered_bytes_and_escapes_full_descriptive_d
     ]);
     success(&output);
     let history: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    assert_eq!(history.as_array().unwrap().len(), 2);
-    let change = &history[1]["change"];
+    // A Git-native store records the observation; a creation is not a record of its own.
+    assert_eq!(history.as_array().unwrap().len(), 1);
+    let change = &history[0]["change"];
     assert_eq!(change["reference"], "a \"reference\"\nnext line");
     let source: serde_json::Value =
         serde_json::from_str(change["source"].as_str().unwrap()).unwrap();

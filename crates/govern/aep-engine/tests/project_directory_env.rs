@@ -23,7 +23,7 @@ fn project(root: &Path, directory: &str) {
     std::fs::create_dir_all(&metadata).expect("the tree is writable");
     std::fs::write(
         metadata.join("project.yaml"),
-        "protocol: adp/1\nprofile: development.standard\nprotocols: ../..\n",
+        "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../..\n",
     )
     .expect("the document is writable");
 }

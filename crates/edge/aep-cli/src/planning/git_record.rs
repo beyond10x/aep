@@ -26,6 +26,23 @@ fn git(directory: &Path, args: &[&str]) -> Option<Vec<u8>> {
     output.status.success().then_some(output.stdout)
 }
 
+/// Whether `directory` is excluded from its enclosing work tree by `.gitignore` (or not in one).
+///
+/// A store the enclosing repository ignores — a test fixture under `target/`, a scratch copy — is
+/// not versioned by that repository, so its history there says nothing about it: every question
+/// below answers as it does outside a work tree. Without this, the same store validated
+/// differently depending on whether the build directory happened to sit inside a checkout.
+fn unversioned(directory: &Path) -> bool {
+    let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
+        return true;
+    };
+    let Some(name) = name.to_str() else {
+        return true;
+    };
+    git(parent, &["rev-parse", "--is-inside-work-tree"]).is_none()
+        || git(parent, &["check-ignore", "--quiet", name]).is_some()
+}
+
 /// Every committed version of each of `paths` (relative to `root`), oldest first, keyed by the
 /// same relative path.
 ///
@@ -37,6 +54,9 @@ pub(super) fn committed_versions(
     root: &Path,
     paths: &[&str],
 ) -> Option<BTreeMap<String, Vec<Vec<u8>>>> {
+    if unversioned(root) {
+        return None;
+    }
     let prefix = String::from_utf8(git(root, &["rev-parse", "--show-prefix"])?).ok()?;
     let prefix = prefix.trim_end_matches('\n');
     if paths.is_empty() {
@@ -164,7 +184,7 @@ pub(super) fn changed_evidence(evidence: &Path) -> Vec<String> {
     let (Some(parent), Some(pathspec)) = (evidence.parent(), evidence.to_str()) else {
         return Vec::new();
     };
-    if !evidence.is_dir() {
+    if !evidence.is_dir() || unversioned(evidence) {
         return Vec::new();
     }
     let arguments = [
@@ -184,4 +204,51 @@ pub(super) fn changed_evidence(evidence: &Path) -> Vec<String> {
         .filter(|line| !line.is_empty())
         .map(ToOwned::to_owned)
         .collect()
+}
+
+/// When each of `paths` (relative to `root`) was added in its current incarnation, as milliseconds
+/// since the Unix epoch from the adding commit's author date, keyed by the same relative path.
+///
+/// One `git log` for the whole set. A path with no committed version is absent from the map, and
+/// so is every path outside a work tree.
+pub(super) fn first_committed(root: &Path, paths: &[&str]) -> BTreeMap<String, u64> {
+    let mut found = BTreeMap::new();
+    if paths.is_empty() || unversioned(root) {
+        return found;
+    }
+    let Some(prefix) = git(root, &["rev-parse", "--show-prefix"])
+        .and_then(|prefix| String::from_utf8(prefix).ok())
+    else {
+        return found;
+    };
+    let prefix = prefix.trim_end_matches('\n');
+    let mut args = vec![
+        "log",
+        "--no-renames",
+        "--diff-filter=A",
+        "--format=%x01%at",
+        "--name-only",
+        "--",
+    ];
+    args.extend_from_slice(paths);
+    let Some(log) = git(root, &args).and_then(|log| String::from_utf8(log).ok()) else {
+        return found;
+    };
+    // Newest first, and only the current incarnation counts: a file deleted and re-created is
+    // dated from its re-creation, which is the first addition this walk meets.
+    let mut seconds = None;
+    for line in log.lines() {
+        if let Some(at) = line.strip_prefix('\u{1}') {
+            seconds = at.trim().parse::<u64>().ok();
+            continue;
+        }
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(seconds) = seconds {
+            let relative = line.strip_prefix(prefix).unwrap_or(line).to_owned();
+            found.entry(relative).or_insert(seconds.saturating_mul(1000));
+        }
+    }
+    found
 }

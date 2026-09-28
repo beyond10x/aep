@@ -17,6 +17,29 @@ belongs in the commit message or in `docs/design/`.
   previous release's commit, since a commit cannot name itself; the next commit moves it forward.
   Pasted outputs still say which `aep` produced them.
 
+- SQLite and PostgreSQL plans are selected from `aep.project/5`: `store: { sqlite: { path: <file> } }`
+  and `store: { postgres: { url: <url> } }`. A `/1` project using `sqlite: <file>` or
+  `postgres: <url>` is rewritten by hand as `/5` with a `planning_scope`.
+- `--store <dir>` with no project around it opens a Git-native store: documents in `<dir>`, evidence
+  under `<dir>/evidence` (`.engineering/evidence` when `<dir>` is `.engineering/planning`). A
+  `.engineering/` with no `project.yaml` is the Git-native layout at `planning/` and `evidence/`.
+- `aep plan store migrate git` gives an artifact the journal never moved, whose status is not its
+  kind's initial state, one imported transition from the initial state to its status (at revision 2
+  or later), so a `/1` store migrated and committed in one commit validates.
+
+### Removed
+
+- The hybrid planning backend (`aep-backend-hybrid`, `store: hybrid`), with its
+  `aep plan artifact divergences` and `aep plan artifact catch-up` verbs and
+  `aep plan conformance --backend hybrid`. `entity-remote` is no longer a dependency.
+- The `aep.project/1` Markdown journal layout as a store: the store-wide `journal.jsonl` writer, its
+  hash chain, drift and forged-revision detection, and the journal reconciliation in `validate`
+  (with the `pre_provider` and `chain_*` fields of `validate --format json`). Every verb now refuses
+  an `aep.project/1` project file, or a file with no `version`, naming
+  `aep plan store migrate git --verify` — which this release still runs, through a read-only
+  journal reader. `--store <dir>` refuses a directory that still holds a `journal.jsonl` the same
+  way. The `AEP_NO_UPGRADE_NOTICE` variable is gone with the notice it hid.
+
 ### Fixed
 
 - Loading the protocol tree of a verified Git-pinned snapshot opens no directory: its files are
@@ -24,6 +47,13 @@ belongs in the commit message or in `docs/design/`.
   ordering, dotfile and extension rules as the directory walk. A local `protocols:` path is still
   walked. With a stamped pin, `aep plan artifact new task` makes 0 directory opens under
   `protocol-sources` (was 40) and `aep plan artifact list` 0 (was 20); file opens are unchanged.
+
+- `aep plan artifact validate` on an `aep.project/5` store accepts an artifact that predates the
+  Git-native layout and was first moved in it from a status other than its kind's initial state;
+  one born in the layout is still held to start there.
+- `validate --outcome-within` dates a review in an `aep.project/5` store from the commit that added
+  it, or now when it is not committed; it had no creation record to date from and reported nothing.
+
 
 ## [0.64.0] — 2026-09-28
 

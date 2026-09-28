@@ -39,36 +39,18 @@ aep plan entity list --planning .engineering/planning
 
 ## The same plan, kept in SQLite
 
-`.engineering/project.sqlite.yaml` is this project with one line changed:
+`.engineering/project.sqlite.yaml` is this project with its `store:` changed:
 
 ```yaml
 store:
-  sqlite: plan.sqlite3
+  sqlite:
+    path: plan.sqlite3
 ```
 
 Copy it over `project.yaml` and every verb above opens `.engineering/plan.sqlite3` instead of the
 documents — same commands, same output, same history. The store is a line in the project file, not a
-different tool; `docs/guide/backend.md` § *Choosing the store* has the three forms.
-
-## The same plan, kept twice
-
-`.engineering/project.hybrid.yaml` keeps the markdown **and** a SQLite replica, under the four words
-a hybrid store cannot work without:
-
-```yaml
-store:
-  hybrid:
-    authority: local
-    read: local-first
-    on_unreachable: refuse
-    on_divergence: record
-    local: markdown
-    replica: { sqlite: replica.sqlite3 }
-```
-
-Every verb writes both. When the replica would not take a write, `aep artifact divergences`
-says so and which side is authoritative; `aep artifact catch-up` replays it. The record lives in
-`planning/divergences.jsonl` between commands.
+different tool; `docs/guide/backend.md` § *Choosing the store* has the forms, `postgres: { url: … }`
+included.
 
 ## The contrast with `development-passkeys` is the point
 

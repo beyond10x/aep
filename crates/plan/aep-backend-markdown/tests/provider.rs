@@ -6,10 +6,7 @@ use std::path::{Path, PathBuf};
 use aep_backend_markdown::provider::{document_of, instance_of, MarkdownProvider};
 use aep_backend_markdown::store::MarkdownStore;
 use entity_core::{Decision, DomainEvent, EntityInstance, Registry, Runtime};
-use entity_store::{
-    conformance, AtomicBatchStore, AtomicCommit, EventProvider, Expect, StateProvider, Store,
-    StoreError,
-};
+use entity_store::{conformance, EventProvider, Expect, StateProvider, Store, StoreError};
 use serde_json::json;
 
 fn scratch(name: &str) -> PathBuf {
@@ -19,6 +16,12 @@ fn scratch(name: &str) -> PathBuf {
     let _ = std::fs::remove_dir_all(&root);
     std::fs::create_dir_all(&root).expect("a scratch directory");
     root
+}
+
+/// The provider over `root`, with its evidence beside it, as `aep.project/5` keeps it.
+fn open(root: impl AsRef<Path>) -> MarkdownProvider {
+    let root = root.as_ref();
+    MarkdownProvider::open_git(root, root.with_extension("evidence"))
 }
 
 fn registry() -> Registry {
@@ -41,56 +44,45 @@ fn registry() -> Registry {
     registry
 }
 
+/// The runtime's cases that read the event log back. The Git-native layout keeps no event log —
+/// a move is a transition in its document and an observation is an evidence file — so these are
+/// the cases it fails by design, and the only ones.
+const EVENT_LOG_CASES: &[&str] = &[
+    "state and events arrive together",
+    "an observation lands at an unchanged revision, and so does the next",
+    "an ordered batch sees its own earlier revision",
+];
+
+/// The cases `report` failed, each checked to be one that reads the event log back.
+fn only_event_log_cases_fail(failed: &[&str], summary: &str) {
+    for case in failed {
+        assert!(
+            EVENT_LOG_CASES.contains(case),
+            "`{case}` failed, and it is not an event-log case:\n{summary}"
+        );
+    }
+}
+
 #[test]
-fn the_markdown_provider_conforms() {
-    let mut provider = MarkdownProvider::open(scratch("conforms"));
+fn the_markdown_provider_passes_every_state_case_of_the_provider_suite() {
+    let mut provider = open(scratch("conforms"));
     let report = conformance::run(&mut provider);
-    assert!(report.is_clean(), "MarkdownProvider:\n{}", report.summary());
     assert_eq!(report.outcomes.len(), 10, "the whole suite ran");
+    let failed: Vec<&str> = report.failures().iter().map(|o| o.case).collect();
+    only_event_log_cases_fail(&failed, &report.summary());
+    assert!(
+        report.outcomes.len() - failed.len() >= 8,
+        "every state case passes:\n{}",
+        report.summary()
+    );
 }
 
 #[test]
 fn the_markdown_provider_commits_atomic_batches() {
-    let mut provider = MarkdownProvider::open(scratch("atomic-conformance"));
+    let mut provider = open(scratch("atomic-conformance"));
     let report = conformance::run_atomic(&mut provider);
-    assert!(report.is_clean(), "MarkdownProvider:\n{}", report.summary());
-}
-
-#[test]
-fn a_pending_batch_is_completed_before_a_read() {
-    let root = scratch("atomic-recovery");
-    let registry = registry();
-    let first = Runtime::new(&registry)
-        .create("ticket", 1, "one", json!({ "title": "One" }))
-        .expect("first decision");
-    let second = Runtime::new(&registry)
-        .create("ticket", 1, "two", json!({ "title": "Two" }))
-        .expect("second decision");
-    let mut provider = MarkdownProvider::open(&root);
-
-    // Make the event append fail after the first document lands. The durable intent remains.
-    std::fs::create_dir(root.join("journal.jsonl")).expect("journal obstruction");
-    let error = provider
-        .commit_batch(&[
-            AtomicCommit::new(first, Expect::Absent),
-            AtomicCommit::new(second, Expect::Absent),
-        ])
-        .expect_err("the interrupted batch cannot finish yet");
-    assert!(matches!(error, StoreError::Backend(_)), "{error}");
-    assert!(root.join(".aep-batch.pending.json").is_file());
-
-    std::fs::remove_dir(root.join("journal.jsonl")).expect("remove obstruction");
-    let held = provider.ids("ticket").expect("the read recovers the batch");
-    assert_eq!(held, ["one", "two"]);
-    assert!(!root.join(".aep-batch.pending.json").exists());
-    assert_eq!(
-        provider.events("ticket", "one").expect("first log").len(),
-        1
-    );
-    assert_eq!(
-        provider.events("ticket", "two").expect("second log").len(),
-        1
-    );
+    let failed: Vec<&str> = report.failures().iter().map(|o| o.case).collect();
+    only_event_log_cases_fail(&failed, &report.summary());
 }
 
 /// A copy of the provider that ignores the revision it was given — the runtime's `Broken`, written
@@ -126,7 +118,7 @@ impl Store for Broken {
 
 #[test]
 fn a_broken_copy_of_the_provider_is_caught() {
-    let mut broken = Broken(MarkdownProvider::open(scratch("broken")));
+    let mut broken = Broken(open(scratch("broken")));
     let report = conformance::run(&mut broken);
     assert!(
         !report.is_clean(),
@@ -144,19 +136,17 @@ fn a_broken_copy_of_the_provider_is_caught() {
 }
 
 #[test]
-fn a_refused_commit_changes_neither_the_document_nor_the_journal() {
-    // R-84 across two files: the bytes of both, before and after.
+fn a_refused_commit_leaves_the_document_as_it_was() {
+    // R-84: the bytes of the document, before and after.
     let root = scratch("refused");
-    let mut provider = MarkdownProvider::open(&root);
+    let mut provider = open(&root);
     let registry = registry();
     let created = Runtime::new(&registry)
         .create("ticket", 1, "one", json!({ "title": "A ticket" }))
         .expect("permitted");
     provider.commit(&created, Expect::Absent).expect("accepted");
     let document = root.join("ticket/one.md");
-    let journal = root.join("journal.jsonl");
     let document_before = std::fs::read(&document).expect("the document landed");
-    let journal_before = std::fs::read(&journal).expect("the event landed");
 
     let closed = Runtime::new(&registry)
         .execute(&created.instance, "close", json!({}))
@@ -173,10 +163,6 @@ fn a_refused_commit_changes_neither_the_document_nor_the_journal() {
         std::fs::read(&document).expect("still there"),
         document_before
     );
-    assert_eq!(
-        std::fs::read(&journal).expect("still there"),
-        journal_before
-    );
 }
 
 #[test]
@@ -188,7 +174,7 @@ fn a_document_a_person_wrote_by_hand_loads_with_an_empty_log() {
         "---\nid: story:passkey-login\nkind: story\nstatus: draft\ntitle: Passkey login\ntags:\n- auth\nsprint: 42\n---\n# Story: Passkey login\n\nSome prose.\n",
     )
     .expect("a hand-written document");
-    let provider = MarkdownProvider::open(&root);
+    let provider = open(&root);
 
     let held = provider
         .load("story", "passkey-login")
@@ -218,7 +204,7 @@ fn a_document_a_person_wrote_by_hand_loads_with_an_empty_log() {
             .events("story", "passkey-login")
             .expect("answers")
             .is_empty(),
-        "no journal at all is an empty log, not an error"
+        "the Git-native layout keeps no event log, and reading one is not an error"
     );
     assert_eq!(provider.ids("story").expect("answers"), ["passkey-login"]);
 }
@@ -229,7 +215,7 @@ fn this_repositorys_own_store_loads_and_every_document_round_trips_byte_for_byte
     // stands for renders back to the same bytes the store would have written. Story 2's golden
     // test rests on this.
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.engineering/planning");
-    let provider = MarkdownProvider::open(&root);
+    let provider = open(&root);
     let report = MarkdownStore::open(&root).load();
     assert!(report.is_clean(), "this repository's plan reads cleanly");
     assert!(report.documents.len() > 100, "the fixture is the real plan");
@@ -268,58 +254,11 @@ fn this_repositorys_own_store_loads_and_every_document_round_trips_byte_for_byte
 }
 
 #[test]
-fn a_torn_write_leaves_the_document_ahead_of_its_log_and_says_so() {
-    // The event append made to fail after the document landed — the way the runtime tests its own
-    // `FileStore` — by making the journal path unwritable. What a reader finds afterwards is the
-    // module doc's claim: a document at the new revision, a log one revision short, an error.
-    let root = scratch("torn");
-    let mut provider = MarkdownProvider::open(&root);
-    let registry = registry();
-    let created = Runtime::new(&registry)
-        .create("ticket", 1, "one", json!({ "title": "A ticket" }))
-        .expect("permitted");
-    provider.commit(&created, Expect::Absent).expect("accepted");
-    assert_eq!(provider.events("ticket", "one").expect("answers").len(), 1);
-
-    // A directory where the journal file was: every append now fails.
-    std::fs::remove_file(root.join("journal.jsonl")).expect("removable");
-    std::fs::create_dir(root.join("journal.jsonl")).expect("a directory in its place");
-
-    let closed = Runtime::new(&registry)
-        .execute(&created.instance, "close", json!({}))
-        .expect("permitted");
-    let error = provider
-        .commit(&closed, Expect::Revision(1))
-        .expect_err("the append cannot land");
-    assert!(matches!(error, StoreError::Backend(_)), "{error}");
-    assert!(
-        error.to_string().contains("journal.jsonl"),
-        "names the file: {error}"
-    );
-
-    let held = provider
-        .load("ticket", "one")
-        .expect("answers")
-        .expect("held");
-    assert_eq!(held.revision, 2, "the document landed");
-    assert_eq!(held.lifecycle_state, "closed");
-    std::fs::remove_dir(root.join("journal.jsonl")).expect("removable");
-    assert!(
-        provider
-            .events("ticket", "one")
-            .expect("answers")
-            .is_empty(),
-        "and the log has nothing for it any more — a document ahead of its history, which is what \
-         drift detection reports"
-    );
-}
-
-#[test]
 fn a_commit_leaves_no_temporary_behind() {
     // The store writes through one temporary per writer (pid + counter) and renames it into place;
     // a leftover would be a document-shaped file the loader skips only because it starts with a dot.
     let root = scratch("no-temporaries");
-    let mut provider = MarkdownProvider::open(&root);
+    let mut provider = open(&root);
     let registry = registry();
     let created = Runtime::new(&registry)
         .create("ticket", 1, "one", json!({ "title": "A ticket" }))

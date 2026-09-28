@@ -70,8 +70,9 @@ fn every_backend_reports_the_same_ladder_for_every_planning_kind() {
     let scratch = Path::new(env!("CARGO_TARGET_TMPDIR")).join("describe-type-markdown");
     let _ = std::fs::remove_dir_all(&scratch);
     std::fs::create_dir_all(&scratch).expect("a scratch store");
-    let markdown = MarkdownBackend::open(
-        &scratch,
+    let markdown = MarkdownBackend::open_git(
+        scratch.join("planning"),
+        scratch.join("evidence"),
         aep_domain::workspace::Membership::default(),
         Timestamp::from_epoch_millis(1_700_000_000_000),
         ActorRef::parse("human:operator").expect("an actor"),

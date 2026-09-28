@@ -37,7 +37,8 @@ fn write(path: &Path, contents: &str) {
 }
 
 /// A project file naming this repository's own arrangement: the tree is the checkout itself.
-const PROJECT_FILE: &str = "version: aep.project/1\n\
+const PROJECT_FILE: &str = "version: aep.project/5\n\
+                            planning_scope: fixture\n\
                             protocol: adp/1\n\
                             profile: development.standard\n\
                             protocols: ..\n";
@@ -299,13 +300,12 @@ fn a_planning_store_that_is_absent_or_invalid_fails_with_the_finding_artifact_va
     write(&root.join(".engineering/planning/story/only.md"), ONE_STORY);
     let (status, detail) = check(&doctor(&root, &[]), "planning-store");
     assert_eq!(
-        status, "warn",
-        "dropping the dangling edge leaves only the `aep.project/1` warning"
+        status, "ok",
+        "dropping the dangling edge leaves nothing to report"
     );
     assert!(
-        detail.contains("1 artifact(s), no problems")
-            && detail.contains("aep plan store migrate git --verify"),
-        "the line says how much it read and how to reach the Git store: {detail}"
+        detail.contains("1 artifact(s)") && detail.contains("no problems"),
+        "the line says how much it read: {detail}"
     );
 }
 

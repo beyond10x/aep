@@ -2828,7 +2828,7 @@ mod layout_tests {
         let members: BTreeSet<String> = workspace_members(&manifest()).into_iter().collect();
         let paths = workspace_dependency_paths(&manifest());
         assert!(
-            paths.len() > 20,
+            paths.len() > 15,
             "the dependency parse found only {paths:?}, so it is reading the wrong block"
         );
         let mut findings = Vec::new();

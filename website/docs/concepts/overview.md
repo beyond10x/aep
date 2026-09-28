@@ -53,7 +53,7 @@ The tree AEP ships covers software development (`adp/1`) and operations (`aop/1`
 | Area | Crates | Responsibility |
 |---|---|---|
 | `crates/govern/` | `aep-domain`, `aep-engine` | the typed vocabulary; resolution, evaluation, authorization and transitions |
-| `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client`, `aep-backend-*` | the storage contract, the suites a backend is held to, and the backends (Markdown/Git, memory, SQLite, PostgreSQL, Entity Runtime, hybrid) |
+| `crates/plan/` | `aep-contract`, `aep-conformance`, `aep-client`, `aep-backend-*` | the storage contract, the suites a backend is held to, and the backends (Markdown/Git, memory, SQLite, PostgreSQL, Entity Runtime) |
 | `crates/drive/` | `aep-driver-spec`, `aep-driver`, `aep-render` | step maps, the reference driver, and drawing a workflow or a run |
 | `crates/observe/` | `trace-domain`, `trace-spec`, `aep-ess-evidence` | transcript normalization and checking, and the optional ESS report adapter |
 | `crates/profile/` | `aep-profile-development`, `aep-profile-operations` | development and operations vocabulary |

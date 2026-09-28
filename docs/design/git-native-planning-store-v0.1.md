@@ -24,7 +24,7 @@ Sources:
 | the Markdown files | a projection, re-rendered in full on every write | the authority; a write changes the files it names and no other |
 | history | Entity Runtime records in Eventlog streams | Git history of each file, plus a `transitions` list the CLI appends to on every move |
 | audit (actor, executor, correlation, causation) | `aep.audit` and `aep.applied` entities, 2 per command | the transition entry, and commit trailers for edits that are not moves |
-| evidence | ER observations on the artifact | one immutable file per evidence record, `.engineering/evidence/<kind>/<name>/<instant>-<digest>.json` |
+| evidence | ER observations on the artifact | one immutable file per evidence record, `.engineering/evidence/<kind>/<name>/<instant>-<sequence>-<digest>.json` |
 | lifecycle decision | `entity-core` over definitions registered in the store | `entity-core` over definitions built from the protocol tree, unchanged |
 | query | complete snapshot rebuilt per command | read the artifact files (§ 7); a derived index only if the bench misses its target |
 | integrity | four layers (Git, event digests, protocol snapshot manifest, legacy-boundary joins), each re-checked in full per command | Git, plus a validator that checks the changed files once: at write, in the pre-commit hook and in CI |
@@ -104,7 +104,7 @@ New:
 .engineering/
   project.yaml                               aep.project/5
   planning/<kind>/<name>.md                  one artifact: YAML front matter + Markdown body
-  evidence/<kind>/<name>/<instant>-<digest>.json   one evidence record, never edited
+  evidence/<kind>/<name>/<instant>-<sequence>-<digest>.json   one evidence record, never edited
 ```
 
 Nothing else. `state/`, `blobs/`, `journal.jsonl` and `.aep-projection-ownership.json` are removed
@@ -209,7 +209,7 @@ artifact unless the type says otherwise.
 No step reads another artifact, except `relate` and `move` reading the target ids they name to
 check they exist.
 
-Evidence (`aep plan artifact evidence`): write one `<instant>-<digest>.json` under
+Evidence (`aep plan artifact evidence`): write one `<instant>-<sequence>-<digest>.json` under
 `.engineering/evidence/<kind>/<name>/`, schema by evidence kind, then, if the evidence is attached
 to a move, name its ULID in the transition's `evidence` field. The file is never rewritten; the
 validator refuses a changed evidence file by comparing it with its committed Git blob.
@@ -302,8 +302,15 @@ repositories are not changed; AEP stops depending on their event-log crates.
 | `aep plan store` verbs (`inspect`, `migrate`, `verify`, `rebuild`, `init-tree`, `export`, `install-hooks`, `writer-control`), including `migrate git` | they operate on the event-log store; adopters migrate with the commit that merged A (§ 13, R2) |
 | `artifact resolve`, `artifact render` | fork resolution and projection rendering of the tree store |
 
-Kept: `entity-core` (it decides lifecycles, invariant 9), `aep-backend-markdown` (the `/1` layout
-and the `/5` layout), `aep-backend-hybrid`, `aep-backend-sqlite`, `aep-backend-postgres`.
+Kept: `entity-core` (it decides lifecycles, invariant 9), `aep-backend-markdown` (the `/5` layout),
+`aep-backend-sqlite`, `aep-backend-postgres`.
+
+Removed later (`story:retire-legacy-planning-backends`, operator scope decision 2026-09-28):
+`aep-backend-hybrid` with its `divergences` and `catch-up` verbs, and the `aep.project/1` Markdown
+journal layout as a store (`journal.jsonl`, its hash chain, drift detection and reconciliation). A
+`/1` store is refused naming `aep plan store migrate git --verify`, which keeps a read-only journal
+reader. SQLite and PostgreSQL are selected from `aep.project/5` as `store: { sqlite: { path } }` and
+`store: { postgres: { url } }`.
 
 ## 11. Cross-repository effects
 

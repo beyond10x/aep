@@ -24,8 +24,10 @@
 //!
 //! This crate is the store, a **provider** and a **projection** — and the backend is the one
 //! adapter over both. [`provider::MarkdownProvider`] is the documents as an `entity_store::Store`:
-//! frontmatter as instance, body as a field, `journal.jsonl` as the event log, held to
-//! `entity-runtime`'s own provider suite. [`projection::MarkdownProjection`] is the plan's shape for
+//! frontmatter as instance, body as a field, a move as a transition in the document and an
+//! observation as one evidence file (`aep.project/5`), held to
+//! `entity-runtime`'s own provider suite in every case that does not read an event log back.
+//! [`projection::MarkdownProjection`] is the plan's shape for
 //! `aep_backend_entity::EntityBackend` — where an entity lands, what a document keeps that an
 //! entity does not carry, which ladder a status is checked against. [`backend::MarkdownBackend`]
 //! is `EntityBackend<MarkdownProvider, MarkdownProjection>` behind the same constructor as before;
@@ -86,10 +88,8 @@
 
 pub mod assembly;
 pub mod backend;
-pub mod chain;
 pub mod claim;
 pub mod document;
-pub mod drift;
 pub mod findings;
 pub mod frontmatter;
 pub mod journal;

@@ -2,15 +2,14 @@
 //!
 //! Wave G, story 1 of `docs/plan/archive/store-waves-f-g-h.md`: the markdown files under
 //! `.engineering/planning/` held to a storage suite written by somebody who has never seen them —
-//! `entity-runtime`'s — and passing it. After this, *"the markdown store is durable"* is a claim two
-//! independent suites support, and `MarkdownBackend` can be the one adapter over this provider
-//! (story 2) instead of a second hand-written durability layer.
+//! `entity-runtime`'s — and passing it. `MarkdownBackend` is the one adapter over this provider
+//! instead of a second hand-written durability layer.
 //!
 //! # The mapping
 //!
 //! ```text
-//! <root>/<entity>/<id>.md            the instance: frontmatter + body
-//! <root>/journal.jsonl               the event log, one DomainEvent per line, appended
+//! <root>/<entity>/<id>.md                         the instance: frontmatter + body
+//! <evidence>/<entity>/<id>/<instant>-<sequence>-<digest>.json one recorded observation, never rewritten
 //! ```
 //!
 //! | document | instance |
@@ -29,46 +28,28 @@
 //! floating point: `sprint: 42` reads as `42.0`.
 //!
 //! A document is read and written through [`PlanningDocument`], the same parser and renderer every
-//! `aep plan artifact` verb uses, so what this provider writes is byte for byte what the store would
-//! have written — which is what lets story 2 prove that nobody can tell. The frontmatter's own
-//! validation applies: a `kind` and a `status` are kebab-case words from an open vocabulary, so a
-//! conformance suite's `conformance-ticket` in state `open` is as valid a document as a `story`
-//! in `draft`.
+//! `aep plan artifact` verb uses. The frontmatter's own validation applies: a `kind` and a `status`
+//! are kebab-case words from an open vocabulary, so a conformance suite's `conformance-ticket` in
+//! state `open` is as valid a document as a `story` in `draft`.
 //!
-//! # The log, and where it begins
+//! # No log beside the documents (`aep.project/5`)
 //!
-//! `journal.jsonl` already holds this store's history in its 0.19.0 shape — one `Entry` per line:
-//! who, when, artifact, revision, what changed, provenance. Those lines are left exactly as they
-//! are and are read by `aep plan artifact history` as before. This provider appends
-//! [`DomainEvent`]s, one per line, and reads back only those; the boundary between the two shapes
-//! is the first event this provider ever wrote. A document a person wrote by hand, with no journal
-//! line at all, loads with an empty log — a plan that predates the provider is a normal condition,
-//! and refusing it would refuse this repository's own store.
+//! The documents are the authority. A commit whose event says `moved` appends a [`Transition`] to
+//! the document's `transitions` before writing it; one whose event says `evidence` writes one record
+//! through [`crate::journal::write_evidence`]; every other change is the document write alone.
+//! Documents are written as `aep.planning-md/3` and `events` answers nothing: what happened is read
+//! back from the documents and the evidence files by [`crate::journal::read_git`].
 //!
 //! # Single commits and command batches
 //!
-//! `commit` checks `Expect` against the document's `revision`, writes the document through the
+//! `commit` checks `Expect` against the document's `revision` and writes the document through the
 //! store's temporary-file-and-rename path (one temporary per writer, `sync_all` before the rename),
-//! and **then** appends the events. If the append fails, the document is at its new revision and
-//! the log stops one revision short: a reader finds a document ahead of its history, which is the
-//! same shape as an out-of-band edit and is what wave G's story 4 reports as drift. `rehydrate`
-//! over the log rebuilds the instance the events reach — the previous revision — and refuses
-//! nothing, because nothing in the log is wrong; what is missing is the line that never landed.
-//! The other order — events first — would leave a recorded fact whose document did not change,
-//! which reads as a lie in the one file people trust most, so this provider takes the first.
-//!
-//! # The Git layout
-//!
-//! [`MarkdownProvider::open_git`] keeps no journal (`aep.project/5`): the documents are the
-//! authority. A commit whose event says `moved` appends a [`Transition`] to the document's
-//! `transitions` before writing it; one whose event says `evidence` writes one record through
-//! [`crate::journal::write_evidence`]; every other change is the document write alone. Documents
-//! are written as `aep.planning-md/3` and `events` answers nothing.
+//! then its evidence records.
 //!
 //! The stronger [`AtomicBatchStore`] path writes the complete ordered command to
 //! [`.aep-batch.pending.json`](PENDING_BATCH) before applying any entry. If the process stops after
-//! one document or before its events, every state and event read completes that intent
-//! idempotently before answering. The pending record is removed only after the whole batch lands.
+//! one document, every state and event read completes that intent idempotently before answering.
+//! The pending record is removed only after the whole batch lands.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -87,7 +68,7 @@ use serde_json::{Map, Value};
 
 use crate::document::PlanningDocument;
 use crate::frontmatter::{PlanningFormat, PlanningFrontmatter};
-use crate::journal::{Change, Entry, Transition, JOURNAL};
+use crate::journal::{Change, Entry, Transition};
 use crate::store::MarkdownStore;
 
 /// The field a document's markdown body travels under.
@@ -139,14 +120,12 @@ impl From<PendingExpect> for Expect {
 
 /// A store shaped like a plan: kinds as entity types, names as ids, documents as instances.
 ///
-/// What [`crate::projection::MarkdownProjection`] hydrates from and writes to. [`MarkdownProvider`]
-/// is one; a hybrid of it and a replica (`aep-backend-hybrid`) is another, and the projection does
-/// not know which it has — every read goes through the `Store` traits, so a hybrid's declared read
-/// path governs hydration as it governs everything else. The two things a `Store` cannot say are
-/// asked here: which kinds there are (the SPI enumerates ids under one entity type, never the
-/// types), and where the documents are, for a message.
+/// What [`crate::projection::MarkdownProjection`] hydrates from and writes to; [`MarkdownProvider`]
+/// is the one this crate has. The two things a `Store` cannot say are asked here: which kinds there
+/// are (the SPI enumerates ids under one entity type, never the types), and where the documents
+/// are, for a message.
 pub trait PlanStore: Store {
-    /// The directory the plan's documents are in — the local side, for a hybrid.
+    /// The directory the plan's documents are in.
     fn root(&self) -> &Path;
 
     /// Every kind that has a directory, sorted.
@@ -180,7 +159,7 @@ impl PlanStore for MarkdownProvider {
                 continue;
             }
             // Evidence kept under the documents' own root is not a kind of document.
-            if matches!(&self.layout, Layout::Git { evidence } if *evidence == entry.path()) {
+            if self.evidence == entry.path() {
                 continue;
             }
             kinds.push(name.to_owned());
@@ -190,52 +169,24 @@ impl PlanStore for MarkdownProvider {
     }
 }
 
-/// Where a provider keeps what happened, beside the documents.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Layout {
-    /// `<root>/journal.jsonl`, one sealed `DomainEvent` per line; documents in `aep.planning-md/1`.
-    Journal,
-    /// No journal (`aep.project/5`): a move is a transition appended to the document it moved, and
-    /// an observation is one file under `evidence`; documents in `aep.planning-md/3`.
-    Git {
-        /// The directory evidence records are written under, `<kind>/<name>/<record>.json`.
-        evidence: PathBuf,
-    },
-}
-
 /// A directory of planning documents, answering as an `entity_store::Store`.
 #[derive(Debug, Clone)]
 pub struct MarkdownProvider {
     store: MarkdownStore,
-    layout: Layout,
+    /// The directory evidence records are written under, `<kind>/<name>/<record>.json`.
+    evidence: PathBuf,
 }
 
 impl MarkdownProvider {
-    /// The provider rooted at `root`, journal layout. The directory need not exist yet.
-    pub fn open(root: impl Into<PathBuf>) -> Self {
-        Self {
-            store: MarkdownStore::open(root),
-            layout: Layout::Journal,
-        }
-    }
-
-    /// The provider rooted at `root`, Git-native layout, writing evidence under `evidence`.
+    /// The provider rooted at `root`, writing evidence under `evidence`.
     ///
-    /// No journal is created or read. `commit` writes the document — with a status move appended
-    /// to its `transitions` — and, for an observation, one evidence file. Neither directory need
-    /// exist yet.
+    /// `commit` writes the document — with a status move appended to its `transitions` — and, for
+    /// an observation, one evidence file. Neither directory need exist yet.
     pub fn open_git(root: impl Into<PathBuf>, evidence: impl Into<PathBuf>) -> Self {
         Self {
             store: MarkdownStore::open(root),
-            layout: Layout::Git {
-                evidence: evidence.into(),
-            },
+            evidence: evidence.into(),
         }
-    }
-
-    /// Which layout it writes.
-    pub const fn layout(&self) -> &Layout {
-        &self.layout
     }
 
     /// The directory it reads and writes.
@@ -243,20 +194,18 @@ impl MarkdownProvider {
         self.store.root()
     }
 
-    /// For the Git layout, the instance a decision leaves on disk and the evidence records it
-    /// writes; `None` in the journal layout.
+    /// The directory it writes evidence records under.
+    pub fn evidence(&self) -> &Path {
+        &self.evidence
+    }
+
+    /// The instance a decision leaves on disk and the evidence records it writes.
     ///
     /// A `moved` change appends its [`Transition`](crate::journal::Transition) to the instance's
     /// `transitions` field — once: a transition already listed is not appended again, so completing
     /// an interrupted batch cannot double it. An `evidence` change becomes an [`Entry`]; every other
     /// change is the document write alone.
-    fn effective(
-        &self,
-        decision: &Decision,
-    ) -> Result<Option<(EntityInstance, Vec<Entry>)>, StoreError> {
-        if self.layout == Layout::Journal {
-            return Ok(None);
-        }
+    fn effective(decision: &Decision) -> Result<(EntityInstance, Vec<Entry>), StoreError> {
         let mut instance = decision.instance.clone();
         let mut transitions: Vec<Transition> = match instance.fields.get(TRANSITIONS_FIELD) {
             None => Vec::new(),
@@ -330,15 +279,13 @@ impl MarkdownProvider {
                 })?,
             );
         }
-        Ok(Some((instance, records)))
+        Ok((instance, records))
     }
 
     /// Writes each evidence record, where the Git layout keeps them. A record already written is
     /// left as it is.
     fn write_records(&self, records: &[Entry]) -> Result<(), StoreError> {
-        let Layout::Git { evidence } = &self.layout else {
-            return Ok(());
-        };
+        let evidence = &self.evidence;
         for record in records {
             crate::journal::write_evidence(evidence, record)
                 .map_err(|error| backend("writing evidence under", evidence, &error))?;
@@ -381,76 +328,16 @@ impl MarkdownProvider {
         fs::remove_file(&path).map_err(|error| backend("removing", &path, &error))
     }
 
-    /// Applies one intended entry, completing an event append if its document already landed.
+    /// Applies one intended entry, completing its evidence records if its document already landed.
     fn apply_recoverable(&mut self, decision: &Decision, expect: Expect) -> Result<(), StoreError> {
-        if let Some((effective, records)) = self.effective(decision)? {
-            let held = self
-                .read(&effective.entity, &effective.id)?
-                .map(|document| instance_of(&effective.entity, &effective.id, &document));
-            if held.as_ref() == Some(&effective) {
-                return self.write_records(&records);
-            }
-            return self.commit(decision, expect);
-        }
-        let instance = &decision.instance;
+        let (effective, records) = Self::effective(decision)?;
         let held = self
-            .read(&instance.entity, &instance.id)?
-            .map(|document| instance_of(&instance.entity, &instance.id, &document));
-        if held.as_ref() == Some(instance) {
-            let present = self.events_raw(&instance.entity, &instance.id)?;
-            let missing: Vec<DomainEvent> = decision
-                .events
-                .iter()
-                .filter(|event| !present.contains(event))
-                .cloned()
-                .collect();
-            return self.append_events(&missing);
+            .read(&effective.entity, &effective.id)?
+            .map(|document| instance_of(&effective.entity, &effective.id, &document));
+        if held.as_ref() == Some(&effective) {
+            return self.write_records(&records);
         }
         self.commit(decision, expect)
-    }
-
-    fn events_raw(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
-        // The Git layout keeps no event log, and never reads one somebody left behind.
-        if self.layout != Layout::Journal {
-            return Ok(Vec::new());
-        }
-        let path = self.store.root().join(JOURNAL);
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(backend("reading", &path, &error)),
-        };
-        Ok(text
-            .lines()
-            .filter(|line| !line.trim().is_empty())
-            .filter_map(|line| serde_json::from_str::<DomainEvent>(line).ok())
-            .filter(|event| event.entity == entity && event.id == id)
-            .collect())
-    }
-
-    /// Appends events to the journal, each sealed to the one before it.
-    ///
-    /// The seal is [`crate::chain`]'s and the two keys it adds are invisible here on the way back:
-    /// `DomainEvent` refuses no unknown field, so [`events_raw`](Self::events_raw) parses a sealed
-    /// line into exactly the event that was committed. That matters beyond tidiness —
-    /// [`apply_recoverable`](Self::apply_recoverable) decides which events are still missing by
-    /// comparing parsed events for equality, and a seal that survived that parse would make every
-    /// recovered batch append its events a second time.
-    fn append_events(&self, events: &[DomainEvent]) -> Result<(), StoreError> {
-        if events.is_empty() {
-            return Ok(());
-        }
-        let path = self.store.root().join(JOURNAL);
-        let mut records = Vec::with_capacity(events.len());
-        for event in events {
-            records.push(
-                serde_json::to_value(event).map_err(|error| {
-                    StoreError::Backend(format!("serialising an event: {error}"))
-                })?,
-            );
-        }
-        crate::chain::append_sealed(self.store.root(), &records)
-            .map_err(|error| backend("appending to", &path, &error))
     }
 }
 
@@ -810,27 +697,22 @@ impl StateProvider for MarkdownProvider {
 }
 
 impl EventProvider for MarkdownProvider {
-    fn events(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
+    /// Nothing: the documents are the authority and keep no event log. What happened is read back
+    /// from `transitions` and the evidence files by [`crate::journal::read_git`].
+    fn events(&self, _entity: &str, _id: &str) -> Result<Vec<DomainEvent>, StoreError> {
         self.recover_pending()?;
-        // Only the lines that are events. The journal's older entries are another shape, read by
-        // another reader (`crate::journal`), and a line that is neither is a half-written line from
-        // a killed process — skipped here as it is there, rather than making the log unreadable.
-        self.events_raw(entity, id)
+        Ok(Vec::new())
     }
 }
 
 impl Store for MarkdownProvider {
     fn commit(&mut self, decision: &Decision, expect: Expect) -> Result<(), StoreError> {
-        // In the Git layout the instance written carries the move's transition, and the records
-        // are the observations' evidence files; in the journal layout both are the decision's own.
-        let git = self.effective(decision)?;
-        let (instance, records) = match &git {
-            Some((effective, records)) => (effective, records.as_slice()),
-            None => (&decision.instance, &[][..]),
-        };
+        // The instance written carries the move's transition, and the records are the
+        // observations' evidence files.
+        let (instance, records) = Self::effective(decision)?;
         let (entity, id) = (instance.entity.as_str(), instance.id.as_str());
 
-        // Checked before anything is written, so a refusal leaves both files exactly as they were.
+        // Checked before anything is written, so a refusal leaves every file exactly as it was.
         let existing = self.read(entity, id)?;
         check(
             entity,
@@ -839,14 +721,12 @@ impl Store for MarkdownProvider {
             existing.as_ref().map(|held| held.frontmatter.revision),
         )?;
 
-        let mut document = document_of(instance)?;
-        if git.is_some() {
-            document.frontmatter.format = PlanningFormat::V3;
-            // An observation leaves its document as it was, and a write that changes nothing is
-            // not made: the record is the evidence file, not a rewritten document.
-            if existing.as_ref() == Some(&document) {
-                return self.write_records(records);
-            }
+        let mut document = document_of(&instance)?;
+        document.frontmatter.format = PlanningFormat::V3;
+        // An observation leaves its document as it was, and a write that changes nothing is not
+        // made: the record is the evidence file, not a rewritten document.
+        if existing.as_ref() == Some(&document) {
+            return self.write_records(&records);
         }
         let written = if existing.is_some() {
             self.store.update(&Self::relative(entity, id), &document)
@@ -854,12 +734,7 @@ impl Store for MarkdownProvider {
             self.store.create(&document)
         };
         written.map_err(|error| StoreError::Backend(error.to_string()))?;
-
-        if git.is_some() {
-            return self.write_records(records);
-        }
-        // Events after the document: see the module doc for what a failure here leaves.
-        self.append_events(&decision.events)
+        self.write_records(&records)
     }
 }
 

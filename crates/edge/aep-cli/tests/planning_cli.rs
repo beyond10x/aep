@@ -249,7 +249,7 @@ fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
     assert!(written.is_file(), "nothing was written to {written:?}");
     let text = std::fs::read_to_string(&written).expect("readable");
     assert!(
-        text.starts_with("---\nformat: aep.planning-md/1\n"),
+        text.starts_with("---\nformat: aep.planning-md/3\n"),
         "{text}"
     );
     assert!(
@@ -1969,7 +1969,7 @@ fn validate_answers_the_same_from_a_subdirectory_as_it_does_from_the_root() {
 
     write(
         &project.join(".engineering/project.yaml"),
-        "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+        "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\n\
          protocols: ../../tree\n",
     );
     // The manifest that declares the other repository. Found from the root before this fix, and
@@ -2026,7 +2026,7 @@ fn planning_documents_follow_the_protocol_tree_named_by_the_project() {
 
     write(
         &project.join(".engineering/project.yaml"),
-        "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+        "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\n\
          protocols: ../../tree\n",
     );
     // Resolving one configured path must not couple planning to unrelated project inputs.
@@ -2137,7 +2137,7 @@ fn a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache() 
     write(
         &project.join(".engineering/project.yaml"),
         &format!(
-            "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+            "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\n\
              protocols: '{source}'\n"
         ),
     );
@@ -2782,7 +2782,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
         stdout(&listed)
     );
 
-    // Not an edit that erases it: the journal still says it happened, and the rung is terminal, so
+    // Not an edit that erases it: its transitions still say it happened, and the rung is terminal, so
     // being stuck again is a new blocker with its own date rather than this one reopened.
     let history = aep(&[
         "plan",
@@ -2795,9 +2795,7 @@ fn a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing() {
         root,
     ]);
     let history = stdout(&history);
-    assert!(history.contains("created as open"), "{history}");
     assert!(history.contains("moved open -> cleared"), "{history}");
-    assert!(history.contains("blocks story:ci-evidence"), "{history}");
 
     let reopened = aep(&[
         "plan",
@@ -2915,45 +2913,6 @@ fn withheld_evidence_that_blocks_nothing_is_reported_by_validate() {
     );
 }
 
-/// The volatile fields of a journal line: when it was written, the event id that carries a clock
-/// in it, and the chain's two digests — which are taken over the whole record and are therefore a
-/// function of the instant inside it, as well as of every record before it in that store.
-/// Everything else is what the write *was*, and is what two spellings of one edge have to agree on.
-fn without_the_clock(line: &str) -> String {
-    let mut text = line.to_owned();
-    for key in [
-        "\"at\":",
-        "\"recorded_at\":",
-        "\"event_id\":",
-        "\"entry_hash\":",
-        "\"parent_hash\":",
-    ] {
-        let mut out = String::with_capacity(text.len());
-        let mut rest = text.as_str();
-        while let Some(start) = rest.find(key) {
-            out.push_str(&rest[..start]);
-            let after = &rest[start + key.len()..];
-            let end = after
-                .find(',')
-                .or_else(|| after.find('}'))
-                .unwrap_or(after.len());
-            rest = &after[end..];
-        }
-        out.push_str(rest);
-        text = out;
-    }
-    text
-}
-
-/// The last line of a store's journal, which is the write the verb under test just made.
-fn last_journal_line(store: &Path) -> String {
-    let text = std::fs::read_to_string(store.join("journal.jsonl")).expect("a journal");
-    text.lines()
-        .last()
-        .expect("the journal has an entry")
-        .to_owned()
-}
-
 /// **One spelling for an edge.** `relate <id> <relation>:<target>` is `relate <id> <relation>
 /// <target>`, down to the journal.
 ///
@@ -3013,21 +2972,6 @@ fn an_edge_written_as_one_word_is_the_edge_written_as_three() {
         document(&one_word).contains("depends_on: task:webauthn-ceremony"),
         "the edge is not in the document: {}",
         document(&one_word)
-    );
-
-    // 3. The same journal entry, once the two instants and the event id are taken out. This is
-    //    what "journal identically" means: a reader three months later cannot tell which spelling
-    //    was typed, because the store did not record a spelling — it recorded an edge.
-    assert_eq!(
-        without_the_clock(&last_journal_line(&one_word)),
-        without_the_clock(&last_journal_line(&three_words))
-    );
-    assert!(
-        last_journal_line(&one_word).contains(
-            r#""change":{"change":"related","relation":"depends_on","target":"task:webauthn-ceremony"}"#
-        ),
-        "{}",
-        last_journal_line(&one_word)
     );
 
     // 4. A relation naming no target at all is still refused, and says what to write.
@@ -3131,20 +3075,6 @@ fn an_edge_is_taken_back_by_the_words_that_made_it_and_leaves_the_others_alone()
         "the edge nobody asked to remove was removed too: {}",
         document(&three_words)
     );
-
-    // 3. The journal says an edge was taken back, in its own word for it — not `body_replaced`,
-    //    which is what a record describing something that did not happen would read as.
-    assert_eq!(
-        without_the_clock(&last_journal_line(&three_words)),
-        without_the_clock(&last_journal_line(&one_word))
-    );
-    assert!(
-        last_journal_line(&three_words).contains(
-            r#""change":{"change":"unrelated","relation":"depends_on","target":"task:webauthn-ceremony"}"#
-        ),
-        "{}",
-        last_journal_line(&three_words)
-    );
 }
 
 /// **The relation kind is part of what is removed, not decoration on it.** Two edges may point at
@@ -3213,8 +3143,6 @@ fn unrelating_an_edge_that_is_not_declared_is_refused_naming_the_ones_that_are()
 
     let document = store.join("task/assertion-verification.md");
     let before = std::fs::read_to_string(&document).expect("readable");
-    let journal = store.join("journal.jsonl");
-    let journal_before = std::fs::read_to_string(&journal).unwrap_or_default();
 
     let refused = aep(&[
         "plan",
@@ -3244,11 +3172,6 @@ fn unrelating_an_edge_that_is_not_declared_is_refused_naming_the_ones_that_are()
         std::fs::read_to_string(&document).expect("readable"),
         before,
         "a refused unrelate rewrote the document"
-    );
-    assert_eq!(
-        std::fs::read_to_string(&journal).unwrap_or_default(),
-        journal_before,
-        "a refused unrelate wrote to the journal"
     );
 }
 
@@ -3309,12 +3232,8 @@ fn a_section_and_an_append_are_body_verbs_rather_than_a_heredoc() {
             .ends_with("The authenticator may lie about its sign count."),
         "the appended prose is not at the end: {text}"
     );
-    // 2. Journalled as an update, which is what a heredoc does not do.
-    assert!(
-        last_journal_line(&store).contains(r#""change":{"change":"body_replaced"}"#),
-        "{}",
-        last_journal_line(&store)
-    );
+    // 2. Written as an update, which is what a heredoc does not do: the revision moved.
+    assert!(text.contains("revision: 3"), "{text}");
 
     let replacement = scratch_root.join("aep-plan-body-section.md");
     write(&replacement, "Verify the signature, and nothing else.\n");
@@ -3873,18 +3792,16 @@ fn strict_validate_fails_on_what_plain_validate_only_reports() {
         stdout(&strict)
     );
 
-    // 3. A document that predates the event log is the second class, and the committed fixture is
-    //    a store made entirely of them — read only, and clean to plain `validate`.
-    let committed = aep(&["plan", "artifact", "validate", "--store", FIXTURE]);
-    assert_eq!(code(&committed), 0, "{}", stdout(&committed));
-    let refused = aep(&[
+    // 3. The committed fixture holds none of the strict classes: `--strict` passes it as plain
+    //    `validate` does, read only.
+    let committed = aep(&[
         "plan", "artifact", "validate", "--strict", "--store", FIXTURE,
     ]);
-    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    assert_eq!(code(&committed), 0, "{}", stdout(&committed));
     assert!(
-        stdout(&refused).contains(&format!("{FIXTURE_ARTIFACTS} predating the event log")),
+        stdout(&committed).contains(&format!("{FIXTURE_ARTIFACTS} artifact(s)")),
         "{}",
-        stdout(&refused)
+        stdout(&committed)
     );
 }
 
@@ -4262,18 +4179,13 @@ fn a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one() {
         "{said}"
     );
 
-    // 2. Each hop is its own entry in the journal, and the document is where the walk ended.
-    let journal = std::fs::read_to_string(store.join("journal.jsonl")).expect("a journal");
-    let hops: Vec<&str> = journal
-        .lines()
-        .filter(|line| line.contains(r#""change":"moved""#) && line.contains(r#""id":"open""#))
-        .collect();
-    assert_eq!(
-        hops.len(),
-        2,
-        "a walk journals every rung it crossed: {journal}"
-    );
+    // 2. Each hop is its own transition in the document, and the document is where the walk ended.
     let text = std::fs::read_to_string(store.join("charter/open.md")).expect("readable");
+    assert_eq!(
+        text.matches("{from: ").count(),
+        2,
+        "a walk records every rung it crossed: {text}"
+    );
     assert!(text.contains("status: approved"), "{text}");
     assert!(text.contains("revision: 3"), "{text}");
 
@@ -6040,238 +5952,6 @@ fn review_value_falls_back_to_a_reviewer_key_when_the_review_has_no_owner() {
     assert_eq!(
         rows[0].get("findings").and_then(serde_json::Value::as_u64),
         Some(1)
-    );
-}
-
-/// Every non-empty line of a store's journal.
-fn journal_lines(store: &Path) -> Vec<String> {
-    std::fs::read_to_string(store.join("journal.jsonl"))
-        .expect("the store has a journal")
-        .lines()
-        .filter(|line| !line.trim().is_empty())
-        .map(ToOwned::to_owned)
-        .collect()
-}
-
-/// Replaces a store's journal with exactly these lines.
-fn rewrite_journal(store: &Path, lines: &[String]) {
-    std::fs::write(
-        store.join("journal.jsonl"),
-        format!("{}\n", lines.join("\n")),
-    )
-    .expect("the journal is writable");
-}
-
-/// A store built through the CLI, so its journal is sealed the way a real one is.
-fn chained_store(name: &str, stories: &[&str]) -> PathBuf {
-    let store = scratch(name);
-    for story in stories {
-        let created = aep(&[
-            "plan",
-            "artifact",
-            "new",
-            "story",
-            story,
-            "--store",
-            printable(&store),
-            "--title",
-            "A story",
-        ]);
-        assert_eq!(code(&created), 0, "{}", stderr(&created));
-    }
-    store
-}
-
-#[test]
-fn a_store_written_only_through_the_cli_reports_a_verified_chain_and_validates() {
-    let store = chained_store("aep-plan-chain-clean", &["one", "two", "three"]);
-
-    let output = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
-    let text = stdout(&output);
-    assert_eq!(code(&output), 0, "{text}");
-    assert!(
-        text.contains("journal chain: 3 record(s) sealed and verified, 0 line(s) predating"),
-        "a clean store says what it checked: {text}"
-    );
-    assert!(text.contains("valid"), "{text}");
-}
-
-/// **The gap register's own case, and the hole it left.** `docs/plan/gap-register.md:108` measured
-/// `revision: 99` written straight into a planning document with `validate` exiting 0. `drift`
-/// closed the half where only the document was edited. This is the other half: the forger also
-/// appends the matching event line, so the document and the log agree with each other, and every
-/// check that reconciles the two is satisfied. Measured on 2026-09-17 before the chain: `valid`,
-/// exit 0, `--strict` exit 0.
-#[test]
-fn a_revision_99_forged_into_the_document_and_the_journal_together_is_refused_by_name() {
-    let store = chained_store("aep-plan-chain-forged", &["forge"]);
-
-    // Half one: the document claims a revision no command produced.
-    let document = store.join("story/forge.md");
-    let forged = std::fs::read_to_string(&document)
-        .expect("readable")
-        .replace("revision: 1", "revision: 99");
-    std::fs::write(&document, forged).expect("the forger writes the file");
-
-    // Half two: a journal line saying that revision happened, built from the real one so it is
-    // well-formed in every way the store used to check. The forger copies the chain keys along
-    // with everything else, because nothing tells him they are not decoration.
-    let mut lines = journal_lines(&store);
-    let mut event: serde_json::Value = serde_json::from_str(&lines[0]).expect("a record");
-    event["revision"] = serde_json::json!(99);
-    event["type"] = serde_json::json!("aep.entity.update/v1");
-    event["from_state"] = serde_json::json!("draft");
-    event["changed"] = serde_json::json!({});
-    event["payload"]["event_id"] = serde_json::json!("story:forge@99#0~deadbeefdeadbeef");
-    lines.push(serde_json::to_string(&event).expect("serialisable"));
-    rewrite_journal(&store, &lines);
-
-    let output = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
-    let text = stdout(&output);
-    assert_eq!(
-        code(&output),
-        1,
-        "a forged revision the journal was edited to agree with is still forged: {text}"
-    );
-    assert!(
-        text.contains("the journal's hash chain breaks at line 2"),
-        "the finding names the exact record: {text}"
-    );
-    assert!(
-        text.contains("story:forge@99#0~deadbeefdeadbeef"),
-        "and names it by the id the forger gave it: {text}"
-    );
-    assert!(
-        text.contains("the record was edited after it was written"),
-        "and says what is wrong rather than only that something is: {text}"
-    );
-}
-
-#[test]
-fn a_journal_entry_edited_in_the_middle_is_named_and_the_records_after_it_are_counted() {
-    let store = chained_store("aep-plan-chain-middle", &["a", "b", "c", "d"]);
-
-    let mut lines = journal_lines(&store);
-    let before = lines[1].clone();
-    lines[1] = lines[1].replace("\"title\":\"A story\"", "\"title\":\"A story, retitled\"");
-    assert_ne!(lines[1], before, "the second record really was edited");
-    rewrite_journal(&store, &lines);
-
-    let output = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
-    let text = stdout(&output);
-    assert_eq!(code(&output), 1, "{text}");
-    assert!(
-        text.contains("the journal's hash chain breaks at line 2"),
-        "the second record, not the first and not the last: {text}"
-    );
-    assert!(
-        text.contains("2 later record(s) are unverified"),
-        "and what the break costs is counted rather than dropped: {text}"
-    );
-    assert!(
-        text.contains("journal chain: 1 record(s) sealed and verified"),
-        "the record before the break did hold: {text}"
-    );
-}
-
-#[test]
-fn a_journal_written_before_the_chain_existed_validates_and_is_not_reported_as_tampered() {
-    // Every planning store in this workspace on the day the chain landed — 1,782 unsealed lines in
-    // this repository's own. *The chain does not cover this* and *this was tampered with* are
-    // different answers, and a check that confused them would call six honest repositories forged.
-    let store = scratch("aep-plan-chain-legacy");
-    write(
-        &store.join("story/legacy.md"),
-        &story("story:legacy", "draft", "revision: 2\ntitle: A story\n"),
-    );
-    rewrite_journal(
-        &store,
-        &[
-            r#"{"at":"2026-08-01T09:00:00Z","actor":"operator","artifact":"story:legacy","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}"#.to_owned(),
-            r#"{"at":"2026-08-02T09:00:00Z","actor":"operator","artifact":"story:legacy","kind":"story","revision":2,"change":{"change":"moved","from":"draft","to":"draft"}}"#.to_owned(),
-        ],
-    );
-
-    let output = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
-    let text = stdout(&output);
-    assert_eq!(
-        code(&output),
-        0,
-        "a store older than the check is not broken: {text}"
-    );
-    assert!(
-        text.contains(
-            "journal chain: 0 record(s) sealed and verified, 2 line(s) predating the chain"
-        ),
-        "it is reported as not covered, by name: {text}"
-    );
-    assert!(!text.contains("hash chain breaks"), "{text}");
-    assert!(text.contains("valid"), "{text}");
-
-    // And `--strict`, which promotes every *reported* class, does not promote this one: the day
-    // this landed it would have refused every store in the workspace. It still refuses this
-    // fixture, on the older `predating the event log` class, which is exactly the point — the
-    // strict refusal names its classes, and the chain's coverage is not among them.
-    let strict = aep(&[
-        "plan",
-        "artifact",
-        "validate",
-        "--strict",
-        "--store",
-        printable(&store),
-    ]);
-    let said = stdout(&strict);
-    let refusing = said
-        .lines()
-        .find(|line| line.starts_with("--strict: refusing on"))
-        .unwrap_or_else(|| panic!("a strict run says what it refused on:\n{said}"));
-    assert!(
-        !refusing.contains("chain"),
-        "neither the chain's coverage nor a broken chain is among them: {refusing}"
-    );
-}
-
-#[test]
-fn a_chain_that_starts_on_a_legacy_journal_seals_the_lines_that_came_before_it() {
-    // How the chain begins on a store that already exists, and what that buys: the first sealed
-    // record names one digest over the whole unsealed prefix, so from that append onward editing a
-    // legacy line is detectable too — without any of those lines having been rewritten, which
-    // append-only forbids.
-    let store = scratch("aep-plan-chain-anchor");
-    let legacy = r#"{"at":"2026-08-01T09:00:00Z","actor":"operator","artifact":"story:legacy","kind":"story","revision":1,"change":{"change":"created","status":"draft"}}"#;
-    rewrite_journal(&store, &[legacy.to_owned()]);
-    let created = aep(&[
-        "plan",
-        "artifact",
-        "new",
-        "story",
-        "fresh",
-        "--store",
-        printable(&store),
-        "--title",
-        "A story",
-    ]);
-    assert_eq!(code(&created), 0, "{}", stderr(&created));
-
-    let clean = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
-    let text = stdout(&clean);
-    assert!(
-        text.contains("journal chain: 1 record(s) sealed and verified, 1 line(s) predating"),
-        "{text}"
-    );
-
-    // The legacy line, edited. Nothing seals that line; what seals it is being counted in the
-    // anchor the record after it names.
-    let mut lines = journal_lines(&store);
-    lines[0] = lines[0].replace("\"actor\":\"operator\"", "\"actor\":\"somebody-else\"");
-    rewrite_journal(&store, &lines);
-
-    let output = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
-    let text = stdout(&output);
-    assert_eq!(code(&output), 1, "{text}");
-    assert!(
-        text.contains("the journal's older lines were edited after this record froze them"),
-        "and it says the prefix changed, not that the sealed record did: {text}"
     );
 }
 

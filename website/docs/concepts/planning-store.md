@@ -15,7 +15,7 @@ all plain files you commit:
 .engineering/
   project.yaml                                        aep.project/5
   planning/<kind>/<name>.md                           one artifact (aep.planning-md/3)
-  evidence/<kind>/<name>/<instant>-<digest>.json      one evidence record, never rewritten
+  evidence/<kind>/<name>/<instant>-<sequence>-<digest>.json      one evidence record, never rewritten
 ```
 
 The store has no journal, event log, database or generated projection. The artifact files are the
@@ -117,7 +117,8 @@ appear in the working tree.
 | `project.yaml` says | This release |
 |---|---|
 | `aep.project/5` | reads and writes it |
-| `aep.project/1`, or a `planning/` directory with no `project.yaml` inside a Git repository | reads and writes it, prints a one-line upgrade notice on stderr, and migrates with `aep plan store migrate git --verify` |
+| `aep.project/1`, or no `version:` | refuses it and names `aep plan store migrate git --verify`, which this release runs |
+| no `project.yaml`, a `planning/` directory beside it | opens it as a Git-native store (`planning/` and `evidence/`); refuses it and names the migration while it still holds a `/1` `journal.jsonl` |
 | `aep.project/2`, `/3`, `/4` (event-log stores) | refuses it and names the migration path |
 
 See [Migrate an older store](../guides/migrate-an-older-store.md). The design record is

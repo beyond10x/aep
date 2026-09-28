@@ -1,48 +1,22 @@
-//! What happened to the plan, in the order it happened.
+//! What happened to the plan, in the order it happened, in one vocabulary.
 //!
-//! # The gap this closes, and the one it does not
+//! A Git-native store (`aep.project/5`) keeps no log beside its documents: a status move is a
+//! [`Transition`] appended to the document it moved, and a recorded observation is one immutable
+//! file under `evidence/<kind>/<name>/`. [`read_git`] and [`history_git`] read both back as
+//! [`Entry`]s, so `aep plan artifact history`, `explain` and the evidence gate have one type to read
+//! whatever produced the record.
 //!
-//! `docs/plan/gap-register.md:37` records three things the markdown store lacks: a journal, an
-//! audit join, and a history. This is the journal, and with it the history — *what happened to
-//! `story:x`, and when, and who said so* is answerable without reading a repository's whole log.
+//! The store-wide `journal.jsonl` of `aep.project/1` is gone: nothing here writes one, and the only
+//! reader left is the migration that rewrites such a store (`aep plan store migrate git`). Its lines
+//! were an [`Entry`] or an `entity_core::DomainEvent` carrying one under `payload.change`;
+//! [`entry_of`] is the reading of the second shape, public for that migration.
 //!
-//! It is **not** the audit join and it is not `CommandService`. Those need command envelopes,
-//! idempotent replay and revision conflicts, which is a larger change with an architectural
-//! question inside it: the contract's `execute` is async and this store is synchronous file IO.
-//! That question is worth answering deliberately rather than in passing, so the row stays open and
-//! says which third is closed.
+//! # Append-only
 //!
-//! # Why not git
-//!
-//! The crate's own description says *git as the log*, and git is a fine log for a human reading
-//! diffs. It is a poor one for a tool: a rename is a guess, a squash loses the moves, a rebase
-//! rewrites the times, and none of it answers *which of these was a status move* without parsing
-//! markdown out of a patch. The journal records the change the store actually made, in the shape
-//! the protocol reasons about.
-//!
-//! # Two shapes of line, one history
-//!
-//! Since wave G the plan's documents are an `entity-store` provider, and what a command does to a
-//! document is appended here as the runtime's `DomainEvent` — one JSON object per line, sealed in
-//! its payload with who and when, and carrying under `payload.change` exactly the [`Change`] this
-//! module would have written. [`read`] understands both shapes and answers [`Entry`]s for both, so
-//! `aep plan artifact history` prints a move made before the provider and one made after it the
-//! same way. The older lines are left exactly as they were: the boundary between the two is the
-//! first event the provider ever wrote.
-//!
-//! # Append-only, and what that costs
-//!
-//! Entries are appended and never rewritten. That is invariant 16 — *nothing is physically
-//! deleted* — applied to the record of what was done, and it means a mistake is corrected by a
-//! later entry rather than by editing an earlier one. The file grows; a plan that produces a
-//! thousand moves a year produces a file measured in tens of kilobytes, which is the right trade
-//! for a record nobody can quietly amend.
-//!
-//! *Nobody can quietly amend* was a claim about convention until [`crate::chain`]: every record
-//! this store appends now carries the digest of the record before it, so an edited line no longer
-//! agrees with its own seal and `aep plan artifact validate` names the line. What that does and
-//! does not detect — and in particular that it does **not** detect a log replaced wholesale, nor
-//! one truncated at the tail — is written out there rather than summarised here.
+//! Evidence files are written once and never again; a transition list only grows. A mistake is
+//! corrected by a later record rather than by editing an earlier one, which is invariant 16 —
+//! *nothing is physically deleted* — applied to the record of what was done. `aep plan artifact
+//! validate` compares each committed evidence file with its Git blob to hold that.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -53,8 +27,11 @@ use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactStatus, RelationKin
 use aep_domain::evidence::EvidenceKind;
 use aep_domain::review::ReviewOutcome;
 
-/// Where the journal lives, relative to the store root.
-pub const JOURNAL: &str = "journal.jsonl";
+/// The store-wide log an `aep.project/1` store kept beside its documents.
+///
+/// Nothing in this crate reads or writes it. It is named so an open can refuse a planning directory
+/// that still holds one, rather than treating a journal store as a Git-native one.
+pub const LEGACY_JOURNAL: &str = "journal.jsonl";
 
 /// One thing that happened to one artifact.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -129,7 +106,7 @@ pub enum Change {
     /// The subject is `Entry::artifact`, not a field here, and that is the whole point: evidence
     /// that does not name what it is about cannot be counted for anything, and a count with no
     /// subject is the gap this closes. Because the subject is the entry's own artifact,
-    /// [`history`] already shows it and already filters it.
+    /// [`history_git`] already shows it and already filters it.
     Evidence {
         /// What kind of observation it is.
         kind: EvidenceKind,
@@ -169,7 +146,7 @@ pub enum Change {
 /// provenance: not that every move is proven, but that no move can be *mistaken* for proven.
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Provenance {
-    /// Evidence found in this journal, naming this artifact.
+    /// Evidence the store holds, naming this artifact.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub recorded: BTreeMap<EvidenceKind, usize>,
     /// Evidence the caller asserted at the command line and nothing checks.
@@ -319,66 +296,13 @@ impl fmt::Display for Change {
     }
 }
 
-/// Appends an entry, creating the journal if this is the first thing that ever happened.
-///
-/// Sealed to the entry before it by [`crate::chain`], the same way the provider's event lines are.
-/// Both shapes share one file, so they share one chain: a chain that covered only half the lines
-/// would leave the other half editable, which is the hole it exists to close. The two keys the
-/// seal adds are `#[serde(default)]`-shaped in effect — [`Entry`] refuses no unknown field — so a
-/// sealed line reads back as exactly the entry that was written.
-///
-/// # Errors
-///
-/// Whatever the filesystem said, and a journal whose lock another writer holds. A write that
-/// failed is **not** swallowed: a journal that silently stops recording is worse than one that is
-/// not there, because the first looks like a plan where nothing happened.
-pub fn append(root: &Path, entry: &Entry) -> std::io::Result<()> {
-    let record = serde_json::to_value(entry).map_err(std::io::Error::other)?;
-    // Append, never rewrite. The lock is the chain's: sealing turns *read the head, then append*
-    // into one operation, and two writers interleaving it would fork the chain.
-    crate::chain::append_sealed(root, std::slice::from_ref(&record))
-}
-
-/// Every entry, oldest first.
-///
-/// A line that does not parse is **skipped rather than fatal**, and that is deliberate: a journal is
-/// append-only and long-lived, so a single corrupt line — a half-written entry from a killed
-/// process — must not make the whole history unreadable. The count of skipped lines is returned so
-/// a caller can say so rather than quietly reporting a shorter history.
-#[must_use]
-pub fn read(root: &Path) -> (Vec<Entry>, usize) {
-    let path: PathBuf = root.join(JOURNAL);
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return (Vec::new(), 0);
-    };
-    let mut entries = Vec::new();
-    let mut unreadable = 0;
-    for line in text.lines() {
-        if line.trim().is_empty() {
-            continue;
-        }
-        if let Ok(entry) = serde_json::from_str::<Entry>(line) {
-            entries.push(entry);
-            continue;
-        }
-        match serde_json::from_str::<entity_core::DomainEvent>(line)
-            .ok()
-            .and_then(|event| entry_of(&event))
-        {
-            Some(entry) => entries.push(entry),
-            None => unreadable += 1,
-        }
-    }
-    (entries, unreadable)
-}
-
 /// The entry an event line stands for, when it was written by the plan's own projection.
 ///
 /// The seal in the payload says who and when; `payload.change` says what, in this module's own
 /// vocabulary; the event's coordinates say which artifact. An event without those — a provider's
 /// event about something that is not a plan document — is not an entry, and reads as unreadable
 /// rather than as a guess.
-pub(crate) fn entry_of(event: &entity_core::DomainEvent) -> Option<Entry> {
+pub fn entry_of(event: &entity_core::DomainEvent) -> Option<Entry> {
     let payload = event.payload.as_object()?;
     let at = payload.get("recorded_at")?.as_str()?.to_owned();
     let actor = payload.get("actor")?.as_str()?.to_owned();
@@ -395,54 +319,16 @@ pub(crate) fn entry_of(event: &entity_core::DomainEvent) -> Option<Entry> {
     })
 }
 
-/// Every entry about one artifact, oldest first.
-#[must_use]
-pub fn history(root: &Path, artifact: &ArtifactId) -> (Vec<Entry>, usize) {
-    let (entries, unreadable) = read(root);
-    (
-        entries
-            .into_iter()
-            .filter(|entry| &entry.artifact == artifact)
-            .collect(),
-        unreadable,
-    )
-}
-
-/// How much evidence this journal holds **about one artifact**, by kind.
-///
-/// The counting rule is deliberately the dullest one available: one recorded entry is one piece of
-/// evidence. No deduplication by source, no expiry, no weighting. Each of those is a judgement about
-/// what makes evidence good, and this function's job is only to say what is there — a judgement
-/// belongs in a rung's `requires:`, where it is written down and can be argued with, not buried in a
-/// counter.
-///
-/// Evidence is **not** invalidated by a later move. A test result recorded before a story went to
-/// `implemented` still counts if it is moved back and forward again, and that is the append-only
-/// reading: the observation happened, and nothing that happened afterwards un-happens it. A rung
-/// that needs *fresh* evidence should say so with a time guard, which is a thing the ladder can
-/// already express.
-#[must_use]
-pub fn evidence_on_hand(root: &Path, artifact: &ArtifactId) -> BTreeMap<EvidenceKind, usize> {
-    let (entries, _) = history(root, artifact);
-    let mut counted = BTreeMap::new();
-    for entry in entries {
-        if let Change::Evidence { kind, .. } = entry.change {
-            *counted.entry(kind).or_default() += 1;
-        }
-    }
-    counted
-}
-
 /// Every entry a Git-native store holds, in the order they happened.
 ///
 /// There is no journal in that layout: a move is a transition in the document it moved, and an
 /// observation is one file under `evidence`. So this reads one [`Change::Moved`] per transition of
 /// every document under `root`, and one entry per evidence file under
 /// `evidence/<kind>/<name>/`, sorted by `at`, then artifact, then revision — the same [`Entry`]
-/// vocabulary [`read`] answers, so a caller needs no second type.
+/// vocabulary every history reader answers, so a caller needs no second type.
 ///
-/// A document or evidence file that does not parse is skipped and counted, for the reason [`read`]
-/// gives: one bad file must not make the whole history unreadable, and a caller can say so.
+/// A document or evidence file that does not parse is skipped and counted: one bad file must not
+/// make the whole history unreadable, and a caller can say so.
 #[must_use]
 pub fn read_git(root: &Path, evidence: &Path) -> (Vec<Entry>, usize) {
     let mut entries = Vec::new();
@@ -501,7 +387,8 @@ pub fn history_git(root: &Path, evidence: &Path, artifact: &ArtifactId) -> (Vec<
 
 /// How much evidence a Git-native store holds about one artifact, by kind.
 ///
-/// The counting rule is [`evidence_on_hand`]'s: one evidence file is one piece of evidence.
+/// One evidence file is one piece of evidence: no deduplication by source, no expiry, no weighting.
+/// Each of those is a judgement that belongs in a rung's `requires:`, not buried in a counter.
 #[must_use]
 pub fn evidence_on_hand_git(
     root: &Path,
@@ -520,7 +407,7 @@ pub fn evidence_on_hand_git(
 
 /// Writes one evidence record into a Git-native store and answers where it went.
 ///
-/// `<evidence>/<kind>/<name>/<compact at>-<first 12 hex of the SHA-256 of the file>.json`, where
+/// `<evidence>/<kind>/<name>/<compact at>-<three-digit sequence within that second>-<first 12 hex of the SHA-256 of the file>.json`, where
 /// the file is the entry as pretty JSON with a trailing newline. Written through a temporary file
 /// in the same directory and then linked into place, so a reader never sees half a record.
 ///
@@ -555,7 +442,7 @@ pub fn write_evidence_occurrence(
 
     let mut text = serde_json::to_string_pretty(entry).map_err(std::io::Error::other)?;
     text.push('\n');
-    let digest = crate::chain::hex(&Sha256::digest(text.as_bytes()));
+    let digest = hex(&Sha256::digest(text.as_bytes()));
     let mut compact: String = entry
         .at
         .chars()
@@ -565,13 +452,7 @@ pub fn write_evidence_occurrence(
         compact.push_str("undated");
     }
     let directory = evidence_directory(evidence, &entry.artifact);
-    let stem = if occurrence == 0 {
-        format!("{compact}-{}", &digest[..12])
-    } else {
-        format!("{compact}-{}-{occurrence}", &digest[..12])
-    };
-    let path = directory.join(format!("{stem}.json"));
-
+    let short = &digest[..12];
     let identical = |path: &Path| -> std::io::Result<PathBuf> {
         if std::fs::read(path)? == text.as_bytes() {
             Ok(path.to_path_buf())
@@ -585,6 +466,39 @@ pub fn write_evidence_occurrence(
             ))
         }
     };
+    // A record already written under any sequence number is the same record: writing it again
+    // (a recovered batch) answers that file instead of adding a second one.
+    // A file of that name holding other bytes is a record somebody rewrote, and is refused.
+    if occurrence == 0 {
+        if let Some(existing) = files_with(&directory, "json").into_iter().find(|path| {
+            path.file_stem()
+                .and_then(|stem| stem.to_str())
+                .is_some_and(|stem| {
+                    stem.starts_with(&format!("{compact}-")) && stem.ends_with(short)
+                })
+        }) {
+            return identical(&existing);
+        }
+    }
+    // Records made in the same second sort in the order they were made: the name carries how many
+    // records of that second the directory already holds. The digest alone would order them by
+    // hash, and a Git-native history would then disagree with every other backend about which of
+    // two same-second records came first.
+    let sequence = files_with(&directory, "json")
+        .iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(&format!("{compact}-")))
+        })
+        .count();
+    let stem = if occurrence == 0 {
+        format!("{compact}-{sequence:03}-{short}")
+    } else {
+        format!("{compact}-{sequence:03}-{short}-{occurrence}")
+    };
+    let path = directory.join(format!("{stem}.json"));
+
     if path.exists() {
         return identical(&path);
     }
@@ -683,136 +597,11 @@ fn sort_entries(entries: &mut [Entry]) {
     });
 }
 
-/// Where the journal and the files disagree about an artifact.
-///
-/// # The two ways a journal can be wrong, both of which happened on 2026-08-26
-///
-/// A store's files say what an artifact *is*; its journal says what *happened* to it. Either can be
-/// right while the other is wrong, and neither was visible:
-///
-/// * Six status moves ran through a `protocol` predating the journal. Each printed
-///   `moved draft -> proposed (revision 2)`; each wrote nothing. Two epics shipped at
-///   `status: implemented, revision: 4` with one `created` entry apiece.
-/// * Six journal entries in a neighbouring repository recorded the creation of *this* repository's
-///   artifacts, written a minute before the same six were created here. That store held none of
-///   them, and `validate` reported every file valid — because it reads the files, and the files
-///   were fine.
-///
-/// # Why findings and not refusals
-///
-/// A store that refused to be read because its history is incomplete is a store nobody can repair.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Drift {
-    /// The journal's last word about an artifact disagrees with the file.
-    Disagrees {
-        /// Which artifact.
-        artifact: ArtifactId,
-        /// What the file says.
-        file: String,
-        /// What the journal last recorded.
-        journal: String,
-    },
-    /// The journal names an artifact this store does not hold.
-    ///
-    /// Not the same as an archived one: this is an entry about something that was never here.
-    Orphan {
-        /// Which artifact the entry names.
-        artifact: ArtifactId,
-        /// How many entries name it.
-        entries: usize,
-    },
-}
-
-impl std::fmt::Display for Drift {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Disagrees {
-                artifact,
-                file,
-                journal,
-            } => write!(
-                formatter,
-                "{artifact} reads {file} in its file, and the journal's last word on it is \
-                 {journal}; a status nothing accounts for is a status nobody can audit"
-            ),
-            Self::Orphan { artifact, entries } => write!(
-                formatter,
-                "the journal holds {entries} entr{} naming {artifact}, which this store does not \
-                 hold — an entry about an artifact that was never here",
-                if *entries == 1 { "y" } else { "ies" }
-            ),
-        }
-    }
-}
-
-/// Compares the journal against what the store holds.
-///
-/// `held` is every artifact in the store, with the status and revision its file states.
-///
-/// An artifact with **no** journal entries at all is not drift: that is a store predating the
-/// journal, which is a known state rather than a defect. Drift is a journal that disagrees, not one
-/// that is absent.
-pub fn reconcile(root: &Path, held: &BTreeMap<ArtifactId, (ArtifactStatus, u64)>) -> Vec<Drift> {
-    let (entries, _) = read(root);
-    let mut last: BTreeMap<&ArtifactId, &Entry> = BTreeMap::new();
-    let mut counts: BTreeMap<&ArtifactId, usize> = BTreeMap::new();
-    for entry in &entries {
-        *counts.entry(&entry.artifact).or_default() += 1;
-        last.insert(&entry.artifact, entry);
-    }
-
-    let mut drift = Vec::new();
-
-    for (artifact, count) in &counts {
-        if !held.contains_key(*artifact) {
-            drift.push(Drift::Orphan {
-                artifact: (*artifact).clone(),
-                entries: *count,
-            });
-        }
-    }
-
-    for (artifact, (status, revision)) in held {
-        let Some(entry) = last.get(artifact) else {
-            continue;
-        };
-        // The last entry that **said** something about the status, not merely the last entry. An
-        // `evidence` or `related` entry says nothing about it, so taking only the newest left four
-        // of this repository's own artifacts with their status checked by nothing at all.
-        let recorded = entries
-            .iter()
-            .rev()
-            .filter(|entry| &entry.artifact == artifact)
-            .find_map(|entry| match &entry.change {
-                Change::Created { status } => Some(status.clone()),
-                Change::Moved { to, .. } => Some(to.clone()),
-                _ => None,
-            });
-        let status_disagrees = recorded.as_ref().is_some_and(|recorded| recorded != status);
-        if status_disagrees || entry.revision != *revision {
-            drift.push(Drift::Disagrees {
-                artifact: artifact.clone(),
-                file: format!("{status} at revision {revision}"),
-                journal: recorded.map_or_else(
-                    || format!("revision {}", entry.revision),
-                    |recorded| format!("{recorded} at revision {}", entry.revision),
-                ),
-            });
-        }
-    }
-
-    drift
-}
-
-/// [`reconcile`] for a Git-native store, which has no journal to drift from: always empty.
-///
-/// The documents are the authority there, and what [`reconcile`] finds — a file ahead of, or
-/// behind, a log beside it — cannot arise. What a Git-native store checks instead is each
-/// document's own transitions against its status, which its validation does on read.
-#[must_use]
-pub fn reconcile_git(
-    _root: &Path,
-    _held: &BTreeMap<ArtifactId, (ArtifactStatus, u64)>,
-) -> Vec<Drift> {
-    Vec::new()
+/// Lower-case hexadecimal of `bytes`, as an evidence file's name carries its digest.
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().fold(String::new(), |mut output, byte| {
+        use std::fmt::Write as _;
+        write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+        output
+    })
 }

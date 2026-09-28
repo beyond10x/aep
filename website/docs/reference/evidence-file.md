@@ -14,13 +14,14 @@ a different format, described under
 ## Where
 
 ```text
-.engineering/evidence/<kind>/<name>/<instant>-<digest>.json
+.engineering/evidence/<kind>/<name>/<instant>-<sequence>-<digest>.json
 ```
 
 | Part | Value |
 |---|---|
 | `<kind>/<name>` | the artifact's id, split at the colon: `story:pay-by-card` → `story/pay-by-card` |
 | `<instant>` | the record's `at`, with every character except letters and digits removed: `20260928T085501Z` |
+| `<sequence>` | three digits: how many records of that same second the directory already held, so records made in one second sort in the order they were made (files written before 0.65.0 have no sequence) |
 | `<digest>` | the first 12 hex characters of the SHA-256 of the file's own bytes |
 
 Identical copies of one record, which can come from a migrated journal, get `-1`, `-2`, … appended
