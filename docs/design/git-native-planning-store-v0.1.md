@@ -341,8 +341,8 @@ replaced, and the new one does not exist until step A6.
 | A5 | `planning validate` CI builds from the tree; `xtask` release check reads evidence files | done |
 | A6 | AEP's own store migrated to `/5`: 333 artifacts, 530 transitions, 254 evidence files, `--verify` equal | done 2026-09-28; merged in aep#52 as `9c0f1da4`, the migration commit for other adopters |
 | B1 | Eventlog removed from AEP: `aep-backend-eventlog`, `aep-planning-migration`, the `plan store` verbs, the eventlog dependencies. The Eventlog and Entity Runtime repositories are not changed | done 2026-09-28: 72,044 lines removed; no event-log crate in `Cargo.lock` |
-| R1 | release 0.62.0, after A6 and B1 | pending |
-| R2 | other adopters (eventlog, entity-runtime, ess, connectors, service-sdk, epistemic-knowledge-runtime) migrate with the commit that merged A, then install 0.62.0 | pending, theirs |
+| R1 | release 0.62.0, after A6 and B1 | done 2026-09-28: 0.62.0; followed by 0.63.0 (`/5` default, `/1` migration), 0.63.1 and 0.64.0 (snapshot stamps, validator gaps, `protocol` alias removed) |
+| R2 | other adopters (eventlog, entity-runtime, ess, connectors, service-sdk, epistemic-knowledge-runtime) migrate with the commit that merged A, then install 0.62.0 | open: `story:adopters-on-git-native-store` |
 
 ### 13.1 Measured after migration (2026-09-28, release build, CPU user time)
 

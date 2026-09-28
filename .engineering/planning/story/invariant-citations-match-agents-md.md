@@ -1,0 +1,24 @@
+---
+format: aep.planning-md/3
+id: story:invariant-citations-match-agents-md
+kind: story
+status: draft
+title: Code comments cite AGENTS.md invariants by name, not by a number that has moved
+relations:
+- serves: vision:O2
+revision: 1
+---
+## Problem
+
+0.64.0 deleted invariant 10 and renumbered 11–15 to 10–14. Code comments across `crates/**` cite
+numbers from older lists (up to 16), for example `write_surface.rs` calls invariant 14
+"one write path", which no current invariant is.
+
+## Outcome
+
+Every code comment that cites an AGENTS.md invariant cites it by name; a test fails on
+`invariant <number>` in a comment.
+
+## Acceptance
+
+- `git grep -n 'invariant [0-9]' -- crates` returns nothing, and a gate check keeps it that way.
