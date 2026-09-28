@@ -46,7 +46,7 @@ principle reads `change.public_contract` to decide whether it applies at all.
 
 ## What resolution derives
 
-Nine principles, ten obligations, twelve capability decisions — each with the document responsible
+Nine principles, eleven obligations, twelve capability decisions — each with the document responsible
 recorded. The capability half:
 
 ```text

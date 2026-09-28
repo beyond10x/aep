@@ -1,17 +1,30 @@
 ---
 title: Evidence and completion
 sidebar_position: 4
-description: Evidence records, the two times they carry, producers and independence, horizons and decay to Unknown, three-valued evaluation, ordering facts, and the join between AEP and ESS.
+description: The two places evidence lives — per-artifact records in the planning store and typed records submitted to the engine — the two times a record carries, producers and independence, horizons, three-valued evaluation, and the join with ESS.
 ---
 
 # Evidence and completion
 
-Completion in AEP is not a declaration. It is a predicate over recorded facts, and this page
-explains where those facts come from and how they are evaluated.
+In AEP, completion is not something you declare. It is decided from recorded observations. Evidence
+lives in two places, and they serve different deciders.
+
+| | Planning-store evidence | Engine evidence |
+|---|---|---|
+| **what it is** | one immutable JSON file about one artifact, under `.engineering/evidence/<kind>/<name>/` | a list of typed records in a YAML or JSON document |
+| **written by** | `aep plan artifact evidence <id> --kind … --source …` | a verifier, a harness, or `aep observe … evidence` |
+| **read by** | `aep plan artifact move`, which **counts** records of a kind against a rung's `requires:` | `aep govern evaluate --evidence`, which **evaluates** predicates over facts projected from the records |
+| **fields** | kind, source, reference, instant, actor, the artifact's revision | kind, the kind's own fields, `observed_at`, producer, subject, provenance |
+| **format** | [evidence files](../reference/evidence-file.md) | [evidence records](../reference/documents.md#evidence-records) |
+
+The planning store only answers *how many records of this kind are held for this artifact*. It
+cannot check that a run happened. It can make the claim specific, though: each record names what it
+is about, where it came from and when, so somebody can go and look. The rest of this page is about
+engine evidence, where the checks go further.
 
 ## Evidence records
 
-Evidence is a typed record submitted to the engine: a test result, a static-analysis run, a
+Engine evidence is a typed record submitted to the engine: a test result, a static-analysis run, a
 deployment result, an approval, a diff, a review, a verification, a conformance run. Each record
 carries:
 
@@ -85,7 +98,7 @@ A document whose every record is future-dated still fails.
 puts every record to the same comparison, so the two verbs answer identically about one file:
 
 ```shell-session
-$ aep observe evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
+$ aep observe evidence inspect examples/development-passkeys/evidence/01-red-test.yaml --at 2026-08-21
 test_result              2023-11-12 1013d old  -  verifier test-runner
 1 record(s), aged at 2026-08-21
 ```
@@ -232,14 +245,8 @@ citation rows — which quote the prompt, the model's reasoning and file content
 That is why the evidence verb has no `--redact` flag; there is nothing left in the record for one to
 remove. See [Check a transcript](../guides/check-a-transcript.md).
 
-**`provenance.command` is spelled with the canonical `protocol` name, whichever binary was
-invoked.** `aep trace evidence` and `protocol trace evidence` write the same record, byte for byte,
-including that line. The provenance says what was *asked for*, in the vocabulary of the verb, and
-that vocabulary has one spelling for the tool; which of the two names is on the operator's `PATH` is
-a fact about the machine and not about the observation. It is what makes a committed record
-regenerable by a reader who installed the other name — a `command` that followed the invoked binary
-would make one check produce two documents, and every record already in a repository would diff
-against a rerun of the command that wrote it.
+`provenance.command` records the verb that was asked for, with its arguments. It does not record the
+path of the binary that ran, so a committed record regenerates byte for byte on another machine.
 
 ---
 
@@ -249,5 +256,5 @@ against a rerun of the command that wrote it.
 crates); `crates/govern/aep-domain/src/predicate.rs` (the `Truth` type);
 `principles/verification/ess-conformance.yaml`; `examples/evidence-horizons-corpus/`;
 `examples/billing-conformance/`; `docs/design/evidence-horizons-design-v0.1.md`;
-`docs/guide/harness.md`; `AGENTS.md` § *Invariants* 5 and 7. Command output on this page was
-produced by `target/debug/protocol` at `0.10.0-horizons-dogfood-lab`.
+`docs/guide/harness.md`; `AGENTS.md` § *Invariants* ("Unknown differs from false", "Refusals change nothing"). Command output on this page was
+produced by `aep 0.63.1`.

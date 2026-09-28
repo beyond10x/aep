@@ -1,12 +1,13 @@
 ---
-title: "AEP: governing engineering work"
-sidebar_position: 2
+title: Governed tasks
+sidebar_position: 9
 description: The document types, how a task resolves into a plan, how capabilities compose, how a workflow advances on evidence, and what actually runs the steps.
 ---
 
-# AEP: governing engineering work
+# Governed tasks
 
-AEP turns engineering methodology into documents a program executes. This page explains the
+The engine half of AEP turns engineering methodology into documents a program executes: which
+capabilities an agent has on a task, what it owes, and when the task is complete. This page explains the
 document types and the resolution and evaluation model. For syntax, see the
 [document reference](../reference/documents.md); for hands-on use, see
 [Govern a task](../guides/govern-a-task.md).
@@ -97,18 +98,17 @@ A **step map** does: for each state, a list of steps, each of one of three kinds
 Two ship, one per shape of work this repository has. `drivers/development/default.yaml`
 (`development/default`) verifies with `cargo`; `drivers/development/checks.yaml`
 (`development/checks`) names no compiler and runs the checks a story carries, as one command. Both
-are written against `adp/default/1`, so a `aep drive run` with no `--map` is refused, naming
+are written against `adp/default/2`, so an `aep drive run` with no `--map` is refused, naming
 both rather than picking one.
 
 `aep drive run` walks command/operator maps. Model-backed maps use `metaharness aep drive run`;
-AEP 0.55.0 refuses their execution through its own CLI before allocating a run. Both hosts ask
+`aep drive run` refuses them before allocating a run. Both hosts ask
 the same neutral governor and retain AEP run records. The driver evaluates **no gate itself**.
 That restraint is the design: a driver that could decide whether a
 transition is permitted would be a second implementation of the protocol with none of the
 conformance suites behind it, and the first time the two disagreed, the one nobody tested would win.
 So the driver asks, the engine answers, and a blocked run prints the engine's reasons and exits
-non-zero — which is what happened the first time it was pointed at a real story, recorded in
-[Where this stands](../status/where-this-stands.md).
+non-zero.
 
 A driven run needs a shell to reach the planning store, which is why `development.driven` exists: it
 extends `development.standard` with exactly one capability, `command.execute`, and says in the
@@ -117,6 +117,10 @@ one simple `aep plan artifact` or `aep observe trace` invocation. The profile st
 is pattern-based and best-effort rather than claiming the capability is fully enforced.
 
 ## Everything is recorded, including refusals
+
+This section is about the engine and the storage contract its backends implement. The Git-native
+planning store is simpler: a refused command prints its reason and writes nothing, and a
+successful one changes one file.
 
 Every mutation of an engineering entity goes through one boundary — a command carrying actor and
 executor, correlation and causation, an idempotency key and an asserted revision. A retry is
@@ -151,5 +155,5 @@ date, and an old fact is not a wrong one.
 **Sources.** `docs/guide/adopting.md`; `docs/guide/harness.md`;
 `docs/plan/document-authoring-brief.md`; `drivers/development/default.yaml`,
 `drivers/development/checks.yaml` and `crates/drive/aep-driver-spec/src/map.rs` (the three step kinds);
-`profiles/development-driven.yaml`; `AGENTS.md` § *Invariants* 6, 10, 14–16;
+`profiles/development-driven.yaml`; `AGENTS.md` § *Invariants* ("Capability decisions default to deny", "The gate is offline except by an opted-in name", "A guard is mutation-tested before it is trusted");
 `protocols/aep/1.yaml` (`approval_floor`).

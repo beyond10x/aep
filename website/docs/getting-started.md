@@ -1,209 +1,237 @@
 ---
-title: Getting started
+title: Quickstart
 sidebar_position: 2
-description: Build the CLI, validate the document tree, resolve a task, and watch the protocol refuse an action — in about ten minutes.
+description: Install aep, adopt a Git repository, plan a story, move it on recorded evidence and validate the plan, in about ten minutes.
 ---
 
-# Getting started
+# Quickstart
 
-This page builds the reference CLI and runs it against the worked example that ships with the
-repository. At the end you will have seen the five operations everything else builds on: validating
-a document tree, resolving a task into a plan, asking whether an action is permitted, evaluating a
-task against evidence, and asking how old that evidence is.
+This page installs `aep` and uses it in an empty Git repository. By the end you will have:
 
-## Prerequisites
+1. a project file that says which rules apply;
+2. an epic and a story, each one Markdown file;
+3. a refused move, and the evidence record that makes the same move legal;
+4. a plan that `validate` accepts.
 
-| Tool | Needed for |
-|---|---|
-| Rust 1.91 or newer | the CLI in this guide; pure AEP libraries retain Rust 1.85 |
-| [go-task](https://taskfile.dev) | the repository's gate (`task check`) — optional for this page |
-| Node | the documentation-site step of the gate — not needed for this page |
+Every output below is copied from a real run of `aep 0.63.1`. Absolute paths are shortened to `…`.
 
-## Build
+## 1. Install
 
-```shell-session
-$ git clone https://github.com/beyond10x/aep
-$ cd aep
-$ cargo build -p aep-cli
-$ B=target/debug/aep
+Download the archive for your platform from
+[GitHub Releases](https://github.com/beyond10x/aep/releases), check it, and put `aep` on your
+`PATH`:
+
+```bash
+VERSION=0.63.1
+curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/SHA256SUMS
+sha256sum -c --ignore-missing SHA256SUMS
+tar xzf aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
+install -m 0755 aep-$VERSION-x86_64-unknown-linux-gnu/aep ~/.local/bin/aep
+aep --version
 ```
 
-The rest of this page uses `$B` for the binary.
+Archives exist for `x86_64` and `aarch64`, on Linux (`unknown-linux-gnu`) and macOS
+(`apple-darwin`). To build from source instead, with Rust 1.91 or newer:
 
-## 1. Validate the document tree
-
-```shell-session
-$ $B govern validate
-45 file(s): 3 protocol(s), 22 principle(s), 4 workflow(s), 6 profile(s), 8 lifecycle(s), 2 step map(s)
-valid
+```bash
+cargo install --locked --git https://github.com/beyond10x/aep --tag 0.63.1 aep-cli --bin aep
 ```
 
-`validate` is not a schema check. It refuses, among other things: a predicate that reads a fact no
-protocol declares observable, a workflow state nothing can reach or leave, and a rollback policy
-that cannot state its precondition — the ways a rule ends up looking enforced while doing nothing.
-Every refusal carries a stable code and all problems are reported in one run.
+## 2. Adopt a repository
 
-The step map is the newest document type: it says which program, model or person runs in each
-workflow state, and it is what the reference driver walks. Nothing else in this page needs it.
-
-## 2. Resolve a task into a plan
-
-The worked example is a feature task — adding passkey authentication — governed by the standard
-development profile. The task file names exactly two things: an objective and a profile.
+AEP needs two things from a repository: a `.engineering/project.yaml`, and a source for its
+governing documents (lifecycles, relations, templates, principles). Pin that source to a commit, so
+the rules cannot change underneath you without a commit in your own repository:
 
 ```shell-session
-$ $B govern resolve --task examples/development-passkeys/task.yaml
-inputs      . and examples/development-passkeys/task.yaml
-task        AUTH-142 (feature)
-objective   add-passkey-support
-protocol    adp/1
-profile     development.standard
-workflow    adp/default (initial: receive)
-principles  spec-driven, test-driven, static-analysis, least-privilege, provenance-tracking, contract-testing, property-based-testing, approval-gates, reversible-changes
-obligations 10
-capabilities
-  allowed            approval.request
-  allowed            artifact.read
-  allowed            artifact.write
-  requires_approval  deployment.create
-  requires_approval  deployment.create:production
-  requires_approval  network.write
-  requires_approval  production.write
-  allowed            repository.read
-  allowed            repository.write
-  allowed            review.request
-  denied             secret.read
-  allowed            tests.execute
+$ cd shop            # any Git repository
+$ aep plan reverse init --profile development.standard \
+    --protocols git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e
+…/shop/.engineering/project.yaml written
+  protocol source resolves to …/protocol-sources/cd43e0b7…/snapshots/88836a30f28ab2fddc3ab63d1ac54956973fa25e
+  profile development.standard
+  store: git (aep.project/5), planning_scope shop
 ```
 
-The nine principles, the workflow and the twelve capability decisions are all **derived** from the
-profile. Nothing in the task restates them, so nothing in the task can drift out of step with them.
+The commit above is the `0.63.1` release. `reverse init` fetches that revision once into a local
+cache and checks it before writing anything. The file it writes (its explanatory comment omitted):
 
-## 3. Ask whether an action is allowed
+```yaml
+version: aep.project/5
+protocol: adp/1
+profile: development.standard
+protocols: git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e
+planning_scope: "shop"
+store:
+  git: {}
+```
+
+`aep.project/5` is the Git-native store: the artifact files are the plan, and Git is its history.
+[The planning store](./concepts/planning-store.md) explains the layout, and
+[`project.yaml`](./reference/project-file.md) lists every field.
+
+## 3. Plan an epic and a story
 
 ```shell-session
-$ $B govern explain --task examples/development-passkeys/task.yaml --action production.write
-production.write denied
-  operation: change production state
-  reason:    principle approval-gates rule production-write-requires-approval
-  missing:   approval for capability production.write
-  state:     receive
+$ aep plan artifact new epic guest-checkout --title "Guest checkout"
+created epic:guest-checkout (draft) at …/.engineering/planning/epic/guest-checkout.md
+$ aep plan artifact new story pay-by-card --title "Pay by card as a guest" \
+    --relate decomposes:epic:guest-checkout
+created story:pay-by-card (draft) at …/.engineering/planning/story/pay-by-card.md
+```
+
+An id is `<kind>:<name>`, and the id decides the path. A new story starts with its kind's template
+as the body. Replace the body with your own text by passing a file (`-` reads standard input):
+
+```shell-session
+$ aep plan artifact body story:pay-by-card --from story.md
+story:pay-by-card body replaced (revision 2) at …/.engineering/planning/story/pay-by-card.md
+$ aep plan artifact list
+epic:guest-checkout  epic   draft  Guest checkout
+story:pay-by-card    story  draft  Pay by card as a guest
+```
+
+Every write goes through the CLI and bumps the artifact's `revision`. Edit the body by hand if you
+like. Leave `status`, `revision` and `transitions` to the CLI.
+
+## 4. Move it, and meet the ladder
+
+A story's lifecycle is `draft → proposed → active → implemented`. Jumping a rung is refused, and the
+refusal lists the statuses you can move to:
+
+```shell-session
+$ aep plan artifact move story:pay-by-card --to active
+story:pay-by-card is draft; a story may move to: proposed, archived
+$ aep plan artifact move story:pay-by-card --to active --via
+story:pay-by-card moved draft -> proposed (revision 3)
+story:pay-by-card moved proposed -> active (revision 4)
+```
+
+`--via` walks the intermediate rungs and records each one as its own move. It stops at any rung
+that needs evidence.
+
+`implemented` needs evidence. The story lifecycle requires at least one `test_result`:
+
+```shell-session
+$ aep plan artifact move story:pay-by-card --to implemented
+story:pay-by-card is active; implemented is on the ladder and not yet earned: reaching implemented needs at least 1 test_result record(s). no test_result record is held for this artifact — …
 $ echo $?
 1
 ```
 
-Each line does work: the **reason** names a principle and a rule inside it that a person can go and
-read, the **missing** line says what would unlock the action, and the **state** says where in the
-workflow the question was asked. Nobody wrote this denial into the task or the profile —
-`approval-gates` is in force because `development.standard` includes it.
+*On the ladder and not yet earned* is a different answer from *not on the ladder*. The first one
+tells you to go and record something.
 
-## 4. Evaluate against evidence
-
-Evidence is submitted as records — here, a test run that produced one failing test:
+## 5. Record the evidence, then move
 
 ```shell-session
-$ $B govern evaluate --task examples/development-passkeys/task.yaml \
-    --artifacts examples/development-passkeys/artifacts.yaml \
-    --evidence examples/development-passkeys/evidence/01-red-test.yaml \
-    --advance
-inputs      . and examples/development-passkeys/task.yaml
-state       implement (Implement)
-transitions
-  implement -> verify [blocked]
-      guard: diff.exists
-Task incomplete in `implement`:
-  ✗ (tests.unit.failed == 0 and static_analysis.errors == 0 and evidence.missing == 0)  [completion]
-      tests.unit.failed = 1; unobserved: static_analysis.errors; evidence.missing = 7
-  ? (specification.satisfied and contracts.failed == 0)           [completion]
-      unobserved: specification.satisfied; unobserved: contracts.failed
-  ? specification.satisfied                                       [principle spec-driven]
-      unobserved: specification.satisfied
-  ...
+$ aep plan artifact evidence story:pay-by-card --kind test_result \
+    --source "cargo test -p checkout" --ref https://ci.example.invalid/runs/1042
+story:pay-by-card: test_result recorded from cargo test -p checkout
+  on hand: test_result=1
+$ aep plan artifact move story:pay-by-card --to implemented
+story:pay-by-card moved active -> implemented (revision 5)
 ```
 
-One failing test plus an approved specification is enough to reach the `implement` state — and only
-a *failing* one, because the workflow enforces red-before-green as a fact about submission order.
+The record names what it is about, where it came from and where to look. It is one new file, and it
+is never rewritten:
 
-Note the two failure marks. They mean different things and want different responses:
+```json
+{
+  "at": "2026-09-28T08:55:01Z",
+  "actor": "human:alex",
+  "artifact": "story:pay-by-card",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p checkout",
+    "reference": "https://ci.example.invalid/runs/1042"
+  }
+}
+```
 
-| Mark | Meaning | Next move |
-|---|---|---|
-| `✗` | observed, and wrong | fix the code |
-| `?` | nothing has observed it | run the verifier that would |
+`actor` comes from `AEP_ACTOR` (`human:<name>`, `agent:<name>`, `service:<name>` or `system`). When
+that is unset, the actor is `human:$USER`.
 
-This is the protocol's three-valued evaluation: `Unknown` is not `False`, and only `True` permits a
-transition. See [Evidence and completion](./concepts/evidence.md).
-
-Submitting the example's remaining evidence files carries the task through to `complete`. The
-directory `examples/development-passkeys/evidence/` holds all five, and
-[Govern a task](./guides/govern-a-task.md) walks the full sequence.
-
-## 5. Ask how old the facts are
-
-Every evidence record states when somebody looked. `observed_at` is required, it is the caller's to
-supply, and an observation time in the future is refused (`observation_in_future`) rather than
-stored — a calendar date only once that day has begun in no timezone, an epoch value exactly. The
-refusal is per record and names the file and the position in it; the rest of the document is still
-submitted.
+## 6. Ask why it is where it is
 
 ```shell-session
-$ $B observe evidence inspect examples/development-passkeys/evidence/01-red-test.yaml
-test_result              2023-11-12 1013d old  -  verifier test-runner
-1 record(s), aged at 2026-08-21
+$ aep plan artifact explain story:pay-by-card
+story:pay-by-card in …/.engineering/planning: implemented, revision 5
+  draft -> proposed  2026-09-28T08:55:01Z  (revision 3)
+    no record: nothing was recorded about how this was decided
+  proposed -> active  2026-09-28T08:55:01Z  (revision 4)
+    no record: nothing was recorded about how this was decided
+  active -> implemented  2026-09-28T08:55:01Z  (revision 5)
+    test_result from cargo test -p checkout (https://ci.example.invalid/runs/1042), observed 2026-09-28T08:55:01Z, admitted at revision 4
+  next: archived needs no record
 ```
 
-That record is over a thousand days old, and the fixture says so on purpose. A requirement can
-declare a `horizon`; past it the requirement reads `Unknown` rather than `False`, because a lapsed
-check has not failed — nobody has run it. See
-[Evidence and completion](./concepts/evidence.md#the-two-times-on-a-record).
+The story's file now carries that history in its front matter. Each move appended one line:
 
-## 6. Look at the plan in a browser
+```markdown
+---
+format: aep.planning-md/3
+id: story:pay-by-card
+kind: story
+status: implemented
+title: Pay by card as a guest
+relations:
+- decomposes: epic:guest-checkout
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-28T08:55:01Z", actor: "human:alex", revision: 3}
+- {from: "proposed", to: "active", at: "2026-09-28T08:55:01Z", actor: "human:alex", revision: 4}
+- {from: "active", to: "implemented", at: "2026-09-28T08:55:01Z", actor: "human:alex", revision: 5, decided_on: {"recorded":{"test_result":1}}}
+---
+# Story: Pay by card as a guest
+…
+```
 
-Everything above is a terminal answering one question at a time. A plan is a shape, so there is one
-verb that draws it:
+## 7. Validate, commit, check the checkout
 
 ```shell-session
-$ $B plan serve
-aep serve — {"store":"…/.engineering/planning","artifacts":192,"unreadable":0}
-http://127.0.0.1:8899/?t=668452460264bfc484bc4480c1d39f27
+$ aep plan artifact validate
+2 file(s) in …/.engineering/planning: 2 artifact(s)
+valid
+$ git add .engineering && git commit -m "plan: guest checkout"
+$ aep doctor
+ok    binary-version: 0.63.1
+ok    project-file: ./.engineering/project.yaml parses: protocol adp/1, profile development.standard
+ok    protocol-source: the locator `git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e` is well-formed and its snapshot is cached at …
+ok    planning-store: ./.engineering/planning (store: git): 2 artifact(s), 1 evidence file(s), no problems
+warn  plugin-directory: none given: pass `--plugin-dir <path>` or set `AEP_DRIVE_PLUGIN_DIR`. AEP ships no plugin sources and guesses no path
+warn  release-tag: no bare-version tag is reachable from HEAD, so there is nothing to compare version 0.63.1 against — `git fetch --tags` first
 ```
 
-Open the URL it prints. You get the status columns `aep plan artifact board` prints, and clicking a
-card shows what `show` and `explain` print — the artifact's fields, its body, and the rungs it may
-take next **with what each costs**, so a rung you have not earned says `needs 1 test_result, held 0`
-rather than waiting to refuse you.
+`validate` exits `1` when it finds a problem, so it works as a CI gate as it is. See
+[Validate the plan in CI](./guides/validate-in-ci.md). `doctor` exits `1` on any `fail` line. The two
+`warn` lines here are about the agent-driver setup and about release tags, and this quickstart
+needs neither.
 
-Clicking a rung moves the artifact, through the same decision `aep plan artifact move` makes. If the
-ladder refuses, the refusal comes back with every status it *would* have permitted, each one a
-button — so the answer to the question a refusal creates is one click away.
+## What you have
 
-Three things worth knowing before you leave it open:
+```text
+shop/.engineering/
+  project.yaml
+  planning/epic/guest-checkout.md
+  planning/story/pay-by-card.md
+  evidence/story/pay-by-card/20260928T085501Z-8506536e056a.json
+```
 
-* **It binds `127.0.0.1` and no flag widens it.** Reach it from another machine with `ssh -L`.
-* **The token in the URL is not authentication.** It proves you read the terminal, which is what
-  stops another page in the same browser writing to your store. A move it makes is attributed to
-  whoever a terminal move would be.
-* **`--read-only` answers reads and refuses every transition**, if you only want to look.
+That is the whole store. There is no database, journal or cache to commit.
 
-The store is opened per request, so you can keep using the CLI in a terminal while the page is open
-and neither will show the other a stale answer.
+## Next
 
-## Machine output
-
-Every command above takes `--format json` or `--format yaml`. Refusals, decisions and evaluations
-all serialise; exit codes are stable (`0` success, `1` refused/invalid). Show the text to people and
-the JSON to programs.
-
-## Next steps
-
-* [Govern a task](./guides/govern-a-task.md) — put a task of your own under a profile.
-* [Write a principle](./guides/write-a-principle.md) — encode a rule of your team's.
-* [Integrate an agent harness](./guides/integrate-a-harness.md) — make these answers govern a real
-  agent, via the engine API rather than the CLI.
-* [Check a transcript](./guides/check-a-transcript.md) — judge what an agent run actually did
-  against a typed specification of what it was supposed to do.
-
-The CLI has twenty-four top-level verbs; this page used six of them. `aep drive` walks a
-workflow by running the steps a step map declares, and is the one that puts everything above
-together — [Where this stands](./status/where-this-stands.md) records what happened the first time
-it was pointed at a real story.
+- [Plan work](./guides/plan-work.md): relations, bodies, tags, blockers and the board.
+- [Gate a move on evidence](./guides/gate-a-move-on-evidence.md): write a lifecycle whose rungs
+  cost evidence, or open on a date.
+- [Review with findings](./guides/review-with-findings.md): record reviews as data and compare two
+  rounds.
+- [Govern a task](./guides/govern-a-task.md): the engine half, which decides what an agent may do
+  on a task and when the task is complete.
+- `aep plan serve` opens the same plan in a browser on `127.0.0.1`, with the legal next rungs as
+  buttons.

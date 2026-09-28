@@ -49,11 +49,11 @@ function HomepageHeader() {
         </Heading>
         <p className="hero__subtitle">{siteConfig.tagline}</p>
         <div className={styles.buttons}>
-          <Link className="button button--primary button--lg" to="/docs">
-            What this is
+          <Link className="button button--primary button--lg" to="/docs/getting-started">
+            Quickstart
           </Link>
-          <Link className="button button--secondary button--lg" to="/docs/examples/governed-task">
-            See it work
+          <Link className="button button--secondary button--lg" to="/docs">
+            What this is
           </Link>
         </div>
       </div>
@@ -70,15 +70,14 @@ function TheProblem() {
         that sounds compliant without leaving the facts the rule depends on.
       </p>
       <CodeBlock language="text">
-        {`"The tests pass."       → an assertion
-test_result.failed == 0 → a recorded fact
-
-"The design was approved." → an assertion
-approval.revision == design.revision → a checkable binding`}
+        {`"The story is done."   → an assertion
+$ aep plan artifact move story:pay-by-card --to implemented
+story:pay-by-card is active; implemented is on the ladder and not yet earned:
+reaching implemented needs at least 1 test_result record(s). …`}
       </CodeBlock>
       <p>
-        AEP turns the operative parts into validated data and leaves reasoning to the model. The
-        protocol decides from the evidence it was actually given.
+        AEP turns the operative parts into validated data and leaves reasoning to the model. A
+        status is decided from the evidence the store actually holds.
       </p>
     </PanelSection>
   );
@@ -88,21 +87,27 @@ function TheClaim() {
   return (
     <PanelSection ordinal="03" label="The claim" title="Completion is a decision over evidence" alt>
       <p>
-        Principles declare obligations and predicates. Workflows declare legal progress. Evidence
-        records say who observed what, when, and against which revision. The engine combines those
-        inputs deterministically and returns either a legal transition or a refusal that names what
-        is missing.
+        Lifecycles declare legal progress and what each rung costs. Evidence records say who observed
+        what, when, and about which artifact. The decision is deterministic: a legal move, or a
+        refusal that names what is missing. The plan itself is plain files in your repository, and
+        Git is its history.
       </p>
       <CodeBlock language="yaml">
-        {`requirements:
-  - evidence: test_result
-    predicate: tests.failed == 0
-    independent: true
-  - evidence: approval
-    predicate: approval.revision == artifact.revision`}
+        {`kind: story
+initial: draft
+transitions:
+  draft: [proposed, archived]
+  proposed: [draft, active, rejected]
+  active: [implemented, archived]
+requires:
+  implemented:
+    - evidence: test_result
+      at_least: 1`}
       </CodeBlock>
       <p className={styles.panelMore}>
-        <Link to="/docs/concepts/evidence">How evidence, provenance and freshness work →</Link>
+        <Link to="/docs/concepts/lifecycles">How lifecycles and rungs work →</Link>
+        {' · '}
+        <Link to="/docs/concepts/evidence">Evidence and completion →</Link>
       </p>
     </PanelSection>
   );
@@ -121,9 +126,8 @@ function HonestStatus() {
       }>
       <div className={styles.ledger}>
         <p className={styles.ledgerBuilt}>
-          AEP ships the protocol domains, backends, planning store, reference driver, trace checker,
-          schemas, and canonical <code>aep</code> command. The <code>protocol</code> name remains an
-          exact compatibility alias.
+          AEP ships the Git-native planning store, the governed-task engine, the reference driver,
+          the trace checker, the published schemas, and the <code>aep</code> command.
         </p>
         <p className={styles.ledgerNot}>
           Executable system modeling lives in ESS. Harness-specific skills and agents live in the
