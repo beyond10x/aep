@@ -456,7 +456,7 @@ pub fn horizon_growth(before: &ClaimScan, after: &ClaimScan) -> Vec<HorizonGrowt
 /// Groups a reading's records by the identity of the fact they state.
 ///
 /// A `BTreeMap` rather than a `HashMap` so the findings come out in the same order every run —
-/// invariant 9.
+/// invariant *Decisions are deterministic*.
 fn readings_by_claim(scan: &ClaimScan) -> BTreeMap<(&str, ObservedAt), Vec<&ClaimRecord>> {
     let mut readings: BTreeMap<(&str, ObservedAt), Vec<&ClaimRecord>> = BTreeMap::new();
     for record in &scan.records {

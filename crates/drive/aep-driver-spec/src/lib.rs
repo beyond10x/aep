@@ -49,16 +49,18 @@
 //! mandatory *in the published schema too*. `WorkflowRef::major` is an `Option`, its pattern makes
 //! the version group optional, and its `JsonSchema` writes that pattern verbatim — so a generated
 //! schema would have told an author `workflow: adp/default` was fine while the loader refused it.
-//! That is invariant 1 inverted, and review finding **F6** is what caught it.
+//! That is invariant *Rust types are the source of truth* inverted, and review finding **F6** is
+//! what caught it.
 //!
 //! # What is a document and what is a record
 //!
-//! Invariant 2 — *parse, then validate* — governs the **document**: [`RawStepMap`](map::RawStepMap)
-//! deserialises, [`StepMap`](map::StepMap) is obtained only by validating, and no validated type
-//! here implements `Deserialize`. The **records** are the other thing: a
-//! [`DriverCursor`](cursor::DriverCursor) is written by the driver and read back by the driver, so
-//! it round-trips through serde in both directions. It is not authored, has no schema and is not
-//! a protocol document — which is why it can do that without the invariant having an opinion.
+//! AGENTS.md invariant *Parse, then validate* governs the **document**:
+//! [`RawStepMap`](map::RawStepMap) deserialises, [`StepMap`](map::StepMap) is obtained only by
+//! validating, and no validated type here implements `Deserialize`. The **records** are the other
+//! thing: a [`DriverCursor`](cursor::DriverCursor) is written by the driver and read back by the
+//! driver, so it round-trips through serde in both directions. It is not authored, has no schema
+//! and is not a protocol document — which is why it can do that without the invariant having an
+//! opinion.
 
 pub mod cursor;
 pub mod digest;

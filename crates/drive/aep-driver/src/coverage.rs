@@ -23,17 +23,17 @@
 //! * **Applicability is the plan's, not this module's.** A principle scoped away by a fact the task
 //!   declared is already absent from the plan (`Principle::applies`), so nothing it wanted is
 //!   demanded here. An **undeclared** fact leaves the principle in force and its demands count in
-//!   full — invariant 5, and the reason a task saying nothing is refused where a task saying
-//!   `change.code: false` is not.
+//!   full — invariant *Unknown differs from false*, and the reason a task saying nothing is refused
+//!   where a task saying `change.code: false` is not.
 //! * **Reachability is `aep_engine::demanded_evidence`'s**, and it is applied to states and
 //!   transitions only. A requirement on a state nothing can walk into blocks nothing.
 //! * **Person-shaped demands are never a refusal.** A `human-approval` or `human-review` verifier,
 //!   and the `approval` and `review` kinds, are things the driver may not mint at all
-//!   (invariant 7 — `tests/evidence_scan.rs` enforces it), so *the map cannot produce this* is true
-//!   of every map ever written and says nothing about this one. A person supplies them, at an
-//!   `operator` step or between runs, and the pre-flight that owns that question is
-//!   [`crate::approval::reachable_approvals`]. Where the map has no `operator` step to ask at, this
-//!   is reported as a **warning** rather than a refusal.
+//!   (the rule that nothing but a verifier or a person produces evidence — `tests/evidence_scan.rs`
+//!   enforces it), so *the map cannot produce this* is true of every map ever written and says
+//!   nothing about this one. A person supplies them, at an `operator` step or between runs, and the
+//!   pre-flight that owns that question is [`crate::approval::reachable_approvals`]. Where the map
+//!   has no `operator` step to ask at, this is reported as a **warning** rather than a refusal.
 //!
 //! One further case is a warning for a different reason — it is undecidable rather than benign. A
 //! demand pinning a `verifier:` that no declaring step names may still be met, because a record's

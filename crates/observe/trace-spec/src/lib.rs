@@ -34,9 +34,9 @@
 //!
 //! # Determinism
 //!
-//! Same transcript plus same specification in, byte-identical report out (invariant 9). No clock
-//! is read: every duration and every cost comes out of the transcript. `BTreeMap` ordering
-//! throughout, and `tests/determinism.rs` checks both twice over.
+//! Same transcript plus same specification in, byte-identical report out (invariant *Decisions are
+//! deterministic*). No clock is read: every duration and every cost comes out of the transcript.
+//! `BTreeMap` ordering throughout, and `tests/determinism.rs` checks both twice over.
 //!
 //! # No model in the checker
 //!

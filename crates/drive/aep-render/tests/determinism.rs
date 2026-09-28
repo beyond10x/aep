@@ -1,4 +1,5 @@
-//! Invariant 9's scan for this crate: no unordered map, no clock, no randomness — and no floats.
+//! AGENTS.md invariant *Decisions are deterministic*, scanned for this crate: no unordered map, no
+//! clock, no randomness — and no floats.
 //!
 //! The renderer's acceptance criterion is stronger than "the same decision twice": the same
 //! workflow and the same `RunView` must produce **byte-identical** output, because a figure that is

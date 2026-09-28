@@ -31,9 +31,9 @@
 //!   the decision that makes the whole thing worth having: the alternative — treating an
 //!   unmeasurable requirement as met — would let a specification discharge `spec-driven` by being
 //!   vague, and vagueness is what a specification exists to remove.
-//! * **`False` and `Unknown` both fail to satisfy**, and they are reported differently. Invariant 5:
-//!   nobody looked is not the same finding as it is broken, and only one of them is fixed by
-//!   changing code.
+//! * **`False` and `Unknown` both fail to satisfy**, and they are reported differently. Invariant
+//!   *Unknown differs from false*: nobody looked is not the same finding as it is broken, and only
+//!   one of them is fixed by changing code.
 //!
 //! Considered and refused: a ticked task-list item (`- [x]`). It reads well and is worthless — the
 //! party that writes the specification is the party being checked, so a record built from ticks is
@@ -248,7 +248,8 @@ fn specifications(store: &Path) -> Result<Vec<(PathBuf, PlanningDocument)>> {
     };
 
     // Collected and sorted rather than taken in directory order: two machines must read the same
-    // store the same way, and `read_dir` promises no order at all (invariant 9).
+    // store the same way, and `read_dir` promises no order at all (invariant *Decisions are
+    // deterministic*).
     let mut paths: Vec<PathBuf> = entries
         .filter_map(std::result::Result::ok)
         .map(|entry| entry.path())
@@ -666,8 +667,9 @@ fn read_snapshot(path: &Path) -> Result<Snapshot> {
 
 /// Why a requirement is not satisfied, in the words the record hands back.
 ///
-/// Three reasons and they are not interchangeable: `Unknown` is not `False` (invariant 5), and a
-/// requirement nothing can decide is a different defect from one a run failed.
+/// Three reasons and they are not interchangeable: `Unknown` is not `False` (invariant *Unknown
+/// differs from false*), and a requirement nothing can decide is a different defect from one a run
+/// failed.
 fn unmet(requirement: &Requirement, decided_by: Option<&str>, verdict: Truth) -> Option<String> {
     let text = shortened(&requirement.text);
     match (decided_by, verdict) {
@@ -890,8 +892,9 @@ Some prose that states nothing checkable.\n\
         );
     }
 
-    /// Invariant 5 at the layer that would most like to collapse it: an empty fact store makes
-    /// every checkable requirement `Unknown`, and `Unknown` does not satisfy.
+    /// Invariant *Unknown differs from false* at the layer that would most like to collapse it: an
+    /// empty fact store makes every checkable requirement `Unknown`, and `Unknown` does not
+    /// satisfy.
     #[test]
     fn a_run_that_has_observed_nothing_satisfies_no_requirement() {
         let unsatisfied = decide(&requirements(BODY), &FactStore::new());

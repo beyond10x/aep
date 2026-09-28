@@ -48,8 +48,9 @@
 //! the gated move. `aep.status.move/v1` and `aep.evidence.record/v1` are those words.
 //!
 //! Consequently there is **no delete**, on any type here. Removing a plan item is a status move to
-//! `archived`, which is invariant 16 spelled for a file tree: an epic that was abandoned is a fact
-//! about how the work went, and a store that can drop it silently is a store whose history lies.
+//! `archived`, which is invariant *Audit is append-only* spelled for a file tree: an epic that was
+//! abandoned is a fact about how the work went, and a store that can drop it silently is a store
+//! whose history lies.
 //!
 //! # The frontmatter is this backend's format, not the protocol's
 //!

@@ -592,7 +592,7 @@ pub struct DemandedEvidence {
 /// A principle scoped away by a declared fact is already absent: `resolve` filtered it out through
 /// `Principle::applies`, so nothing it asks for appears here. An **undeclared** fact leaves the
 /// principle in force and its demands are returned in full — silence is not an exemption
-/// (invariant 5).
+/// (invariant *Unknown differs from false*).
 ///
 /// Inside a set, a conditional whose `when` evaluates **`False`** against the plan's pre-run facts
 /// is pruned along with everything below it, and that is the only pruning. `Unknown` is kept: it

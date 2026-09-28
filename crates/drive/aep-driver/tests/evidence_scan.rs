@@ -1,5 +1,5 @@
-//! Invariant 7 at the driver's layer: the driver never mints an approval, and never signs as a
-//! person.
+//! The rule that nothing manufactures evidence, at the driver's layer: the driver never mints an
+//! approval, and never signs as a person.
 //!
 //! # Why this has to be a rule with a scan behind it
 //!

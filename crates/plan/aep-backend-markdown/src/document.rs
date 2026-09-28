@@ -580,8 +580,9 @@ mod tests {
 
     #[test]
     fn rendering_twice_produces_the_same_bytes() {
-        // Determinism, invariant 9. A second rendering that differs would make every `git diff`
-        // over the plan noise, which is the thing keeping the plan in the repository buys.
+        // Invariant *Decisions are deterministic*. A second rendering that differs would make every
+        // `git diff` over the plan noise, which is the thing keeping the plan in the repository
+        // buys.
         let parsed = document(STORY);
         let once = parsed.render();
         let twice = PlanningDocument::parse(&once, None)

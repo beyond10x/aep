@@ -1,8 +1,9 @@
-//! Invariant 8, enforced rather than stated: the domain crate is clock-free and randomness-free.
+//! AGENTS.md invariant *Decisions are deterministic*, enforced rather than stated: the domain crate
+//! is clock-free and randomness-free.
 //!
 //! Replayability rests here. The engine takes a `Clock` precisely so that time is an input, and a
-//! decision is a function of validated state plus evidence (invariant 9) only while nothing in
-//! this crate can reach for `SystemTime::now`, an RNG, or a `HashMap` whose iteration order
+//! decision is a function of validated state plus evidence (the same invariant) only while nothing
+//! in this crate can reach for `SystemTime::now`, an RNG, or a `HashMap` whose iteration order
 //! changes between processes. Until this file the scan that would catch a violation covered
 //! `ess-compiler` only; `crates/govern/aep-domain/src` happened to be clean, which is a fact about today,
 //! not a guard.
@@ -91,7 +92,7 @@ fn the_domain_crate_reads_no_clock_no_randomness_and_no_unordered_map() {
     );
     assert!(
         violations.is_empty(),
-        "invariant 8: the domain crate is clock-free and randomness-free, and invariant 9 needs \
+        "invariant *Decisions are deterministic*: the domain crate is clock-free and randomness-free and needs \
          its iteration orders stable. Found:\n{}\nTime is an input here — take a timestamp as a \
          parameter, keep collections `BTreeMap`/`BTreeSet`",
         violations.join("\n")

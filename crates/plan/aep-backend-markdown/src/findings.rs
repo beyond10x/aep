@@ -251,8 +251,9 @@ impl Finding {
 
     /// Whether the two lines are close enough to be one place.
     ///
-    /// A line neither side wrote is not compared. Unknown is not far away — invariant 5 in the one
-    /// place a ledger would otherwise quietly turn a missing observation into a difference.
+    /// A line neither side wrote is not compared. Unknown is not far away — invariant *Unknown
+    /// differs from false* in the one place a ledger would otherwise quietly turn a missing
+    /// observation into a difference.
     fn within_tolerance(&self, other: &Self) -> bool {
         match (self.line, other.line) {
             (Some(here), Some(there)) => here.abs_diff(there) <= LINE_TOLERANCE,

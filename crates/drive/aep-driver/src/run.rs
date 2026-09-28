@@ -1222,7 +1222,8 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         let context = StepContext {
             task: self.task,
             // Off the options rather than off the task: a validated `Task` carries no path, by
-            // invariant 10, so the document it was read from is the caller's to state.
+            // the rule that document identity comes from content, so the document it was read from
+            // is the caller's to state.
             task_document: self.options.task_document.as_deref(),
             execution: &execution_id,
             state,

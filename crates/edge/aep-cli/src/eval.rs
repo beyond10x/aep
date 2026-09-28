@@ -20,10 +20,10 @@
 //!
 //! It computes no score, and that is a rule rather than an omission. A scalar would have to fold
 //! the third column into one of the other two — the only two ways to do it are to count an
-//! unobservable expectation as a pass, which is the lie invariant 5 exists to refuse, or as a
-//! failure, which blames an agent for a harness that stopped recording a field. There is no
-//! percentage, no ranking and no leaderboard in the output, and nothing in this module computes
-//! one.
+//! unobservable expectation as a pass, which is the lie invariant *Unknown differs from false*
+//! exists to refuse, or as a failure, which blames an agent for a harness that stopped recording a
+//! field. There is no percentage, no ranking and no leaderboard in the output, and nothing in this
+//! module computes one.
 //!
 //! # The record it reads is the check report, not the evidence record
 //!
@@ -247,9 +247,9 @@ impl Counts {
 
 /// Every way a pair of documents is refused at this boundary, by name.
 ///
-/// A code and a sentence, on the reasoning invariant 4 gives for `ValidationCode`: a test matching
-/// on `EVAL-MANIFEST-005` still passes when the sentence is rewritten, and a test matching on the
-/// sentence pins prose that nobody meant to freeze.
+/// A code and a sentence, on the reasoning invariant *Validation accumulates* gives for stable
+/// codes: a test matching on `EVAL-MANIFEST-005` still passes when the sentence is rewritten, and a
+/// test matching on the sentence pins prose that nobody meant to freeze.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Refusal {
     /// The document does not claim to be a run manifest.
@@ -566,7 +566,7 @@ pub fn refused(subject: &Path, refusals: &[Refusal]) -> anyhow::Error {
 ///
 /// Every field is optional here and required in [`RunManifest`], so that a missing one is refused
 /// **by name** with the other refusals beside it, rather than aborting the parse at the first
-/// (invariant 3: validation accumulates).
+/// (invariant *Validation accumulates*).
 ///
 /// `deny_unknown_fields`, unlike the record reader below, and the asymmetry is deliberate: this
 /// document is ours, so `plugin_digests:` is a typo that would otherwise be dropped silently and
@@ -707,8 +707,9 @@ where
 
 /// What a run manifest says, once it has been read through the rules.
 ///
-/// No `Deserialize`, by invariant 2: the only way to obtain one is [`TryFrom`], so there is no path
-/// into the matrix that skipped the arm vocabulary or the `plugin_digest` rule.
+/// No `Deserialize`, by invariant *Parse, then validate*: the only way to obtain one is
+/// [`TryFrom`], so there is no path into the matrix that skipped the arm vocabulary or the
+/// `plugin_digest` rule.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunManifest {
     /// Which arm.
@@ -1311,8 +1312,8 @@ pub struct Matrix {
 /// Assembles the matrix, or every reason it cannot be assembled.
 ///
 /// Sorted by construction: the pairs arrive sorted by path, and every aggregate is built in a
-/// `BTreeMap` whose key is the tuple it is grouped by (invariant 9 — no `HashMap` anywhere near an
-/// output ordering).
+/// `BTreeMap` whose key is the tuple it is grouped by (invariant *Decisions are deterministic* — no
+/// `HashMap` anywhere near an output ordering).
 pub fn assemble(pairs: Vec<(RunManifest, Record)>) -> Result<Matrix, Vec<Refusal>> {
     let mut refusals = Vec::new();
 
@@ -2811,7 +2812,8 @@ pub struct Session {
     /// How long it took, totalled over every session that said.
     ///
     /// A sum and not a span: the driver runs its sessions one after another, and nothing here reads
-    /// a clock to find out (invariant 9). Within one session it is the same fold as the other two.
+    /// a clock to find out (invariant *Decisions are deterministic*). Within one session it is the
+    /// same fold as the other two.
     pub wall_time_ms: Option<u64>,
 }
 
@@ -2925,7 +2927,7 @@ impl Session {
         }
 
         // Read before the emptiness check, so an unreadable cost joins the other refusals rather
-        // than being discovered after them (invariant 3: validation accumulates).
+        // than being discovered after them (invariant *Validation accumulates*).
         let Totals {
             cost,
             tokens,
@@ -2979,7 +2981,8 @@ pub struct Totals {
 ///
 /// The buckets arrive in stream order, one per `session.started`, and an empty one totals nothing.
 /// An unreadable cost is pushed as a refusal and the rest of the fold continues, because validation
-/// accumulates (invariant 3) rather than stopping at the first thing it cannot read.
+/// accumulates (invariant *Validation accumulates*) rather than stopping at the first thing it
+/// cannot read.
 pub fn totals_of(sessions: &[Vec<serde_json::Value>], refusals: &mut Vec<StreamRefusal>) -> Totals {
     let mut totals = Totals {
         cost: None,
@@ -3194,7 +3197,8 @@ pub fn cost_of(ended: &serde_json::Value) -> Result<Option<u64>, String> {
 /// [`None`]**, which is the actual defect this pair of functions was split to fix: `.ok()` on the
 /// strict reader turned *there is a number here I cannot convert* into *there is no number*, and a
 /// run that cost eighty cents entered the ledger at the assumed rate and its manifest with no cost
-/// at all. Unreadable is not unstated, on exactly invariant 5's reasoning one domain out.
+/// at all. Unreadable is not unstated, on exactly the reasoning of invariant *Unknown differs from
+/// false*, one domain out.
 pub fn micro_usd_stated(written: &str) -> Result<u64, String> {
     let text = written.trim();
     let (whole, fraction) = text.split_once('.').unwrap_or((text, ""));
@@ -3603,8 +3607,8 @@ pub fn ingest_recorded(
         .with_context(|| format!("reading the stream at {}", stream.display()))?;
     let events = stream_for(raw, args.redact, args.cwd.as_deref());
     // Judged **before** anything is written, so a refused ingest leaves the output directory as it
-    // found it (invariant 7). The runner already assembles every document before writing one; the
-    // redacted stream joins them rather than getting a head start.
+    // found it (invariant *Refusals change nothing*). The runner already assembles every document
+    // before writing one; the redacted stream joins them rather than getting a head start.
     let products = ingest(&plan, &events, &args.observed_at, args.redact)?;
     // Under `--redact` the redacted stream is a **product**, and this is the path that produces it:
     // a paid run recorded on the operator's machine is re-ingested here to get the documents a
@@ -3652,9 +3656,10 @@ pub fn launched_elsewhere(args: &RunArgs) -> Result<()> {
 
 /// Refuses a plugin arm whose treatment was not named explicitly, by either mechanism.
 ///
-/// Invariant 11 unchanged and widened by one word: no repository-local fallback chooses a plugin,
-/// and *a plugin* is now either a directory on this machine or a pinned marketplace coordinate.
-/// Both are the operator's explicit authority; neither is guessed from a path under this checkout.
+/// AGENTS.md invariant *Plugin authority is explicit* unchanged and widened by one word: no
+/// repository-local fallback chooses a plugin, and *a plugin* is now either a directory on this
+/// machine or a pinned marketplace coordinate. Both are the operator's explicit authority; neither
+/// is guessed from a path under this checkout.
 pub fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -> Result<()> {
     if args.arm == Arm::Plugin && args.plugin_dir.is_none() && plugins.is_empty() {
         return Err(refused_run(&args.out, &[RunRefusal::NoPluginTreatment]));
@@ -3669,7 +3674,7 @@ pub fn require_plugin_treatment(args: &RunArgs, plugins: &[MarketplacePlugin]) -
 ///
 /// **Before the tool is looked for and before the live flag is read**, so a spelling mistake costs
 /// nothing to find and does not depend on what is installed. Every refusal is collected rather than
-/// the first returned (invariant 3: validation accumulates) — an operator fixing two spellings
+/// the first returned (invariant *Validation accumulates*) — an operator fixing two spellings
 /// should be told about two.
 pub fn declared_plugins(args: &RunArgs) -> Result<Vec<MarketplacePlugin>> {
     let mut refusals = Vec::new();

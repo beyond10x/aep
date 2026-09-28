@@ -17,11 +17,11 @@
 //! # Why the property is the protocol's own algebra
 //!
 //! The property this repository can check without knowing anything about the task being driven is
-//! the one its own decisions rest on: invariant 5, *`Unknown` is not `False`*, expressed as the
-//! laws of strong Kleene three-valued logic over [`Truth`]. `Predicate::evaluate` folds a predicate
-//! tree in its own order, and every guard in every workflow is decided by that fold; if the algebra
-//! did not associate, distribute or negate uniformly, a run's verdict would depend on how somebody
-//! parenthesised a guard.
+//! the one its own decisions rest on: AGENTS.md invariant *Unknown differs from false*, expressed
+//! as the laws of strong Kleene three-valued logic over [`Truth`]. `Predicate::evaluate` folds a
+//! predicate tree in its own order, and every guard in every workflow is decided by that fold; if
+//! the algebra did not associate, distribute or negate uniformly, a run's verdict would depend on
+//! how somebody parenthesised a guard.
 //!
 //! `crates/govern/aep-domain/tests/truth_laws.rs` asserts the same laws under `proptest`. This is not a
 //! second copy of that suite pretending to be evidence — it is the **stronger** check of the two,
@@ -155,8 +155,9 @@ const LAWS: &[Law] = &[
                 && a.or(a.and(b)) == a
         },
     },
-    // Invariant 5 itself, as an algebraic fact: only `True` permits, and composition cannot
-    // manufacture permission. `Unknown` is not `False`, but neither of them satisfies.
+    // Invariant *Unknown differs from false* itself, as an algebraic fact: only `True` permits, and
+    // composition cannot manufacture permission. `Unknown` is not `False`, but neither of them
+    // satisfies.
     Law {
         name: "only True permits and composition cannot widen it",
         holds: |a, b, _| {

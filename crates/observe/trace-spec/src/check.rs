@@ -3027,9 +3027,9 @@ mod tests {
     #[test]
     fn a_regex_matcher_reads_three_valued_exactly_as_a_glob_does_and_absence_is_never_a_failure() {
         // The acceptance the `regex` adoption owed: a new matcher must not have bought a new
-        // truth table. `Unknown` is not `False` (invariant 5) — a field the transcript does not
-        // record is a question nobody can answer, and reading it as a failed match would let a
-        // harness that renamed a key look like an agent that misbehaved.
+        // truth table. `Unknown` is not `False` (invariant *Unknown differs from false*) — a field
+        // the transcript does not record is a question nobody can answer, and reading it as a
+        // failed match would let a harness that renamed a key look like an agent that misbehaved.
         let regex_over = |field: &str, pattern: &str| {
             let mut matcher = ResultMatcher::default();
             matcher.fields.insert(

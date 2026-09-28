@@ -362,7 +362,7 @@ fn the_digest_names_the_bytes_and_reading_them_twice_gives_the_same_ir() {
     );
     assert_ne!(first.transcript_digest, read(ONE_HU).transcript_digest);
 
-    // Invariant 9, over the whole IR and not just its digest.
+    // Invariant *Decisions are deterministic*, over the whole IR and not just its digest.
     let once = serde_json::to_vec(&first).expect("the IR serializes");
     let twice = serde_json::to_vec(&second).expect("the IR serializes");
     assert_eq!(once, twice, "same bytes in, byte-identical IR out");

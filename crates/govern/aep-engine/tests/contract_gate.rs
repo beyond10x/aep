@@ -235,9 +235,9 @@ fn a_breaking_record_does_not_reach_review_and_a_red_one_does() {
 
 #[test]
 fn a_run_that_never_heard_from_a_contract_runner_does_not_enter_review_by_saying_nothing() {
-    // The fail-closed direction, and invariant 5 in its narrowest form: the gate reads a count, an
-    // unobserved count is `Unknown`, and `Unknown` is not `True`. The substitution puts a
-    // `test_result` named `contract` in the record's place — which is what
+    // The fail-closed direction, and invariant *Unknown differs from false* in its narrowest form:
+    // the gate reads a count, an unobserved count is `Unknown`, and `Unknown` is not `True`. The
+    // substitution puts a `test_result` named `contract` in the record's place — which is what
     // `drivers/development/checks.yaml` actually submits, from `aep govern validate` — so
     // `tests.contract.failed == 0` is satisfied and the run walks to `adversarial_verify` exactly
     // as before. What no test runner can produce is `contracts.breaking_changes`, and that is the

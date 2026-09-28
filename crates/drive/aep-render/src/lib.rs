@@ -62,10 +62,11 @@
 //!
 //! # Determinism
 //!
-//! Invariant 9 applies here as an acceptance criterion rather than as a general principle: the same
-//! workflow and the same [`RunView`] produce **byte-identical** output, so a figure that is
-//! generated, committed and regenerated does not turn up in a diff. Every collection is ordered,
-//! every coordinate is an `i32`, and nothing reads ambient state.
+//! AGENTS.md invariant *Decisions are deterministic* applies here as an acceptance criterion rather
+//! than as a general principle: the same workflow and the same [`RunView`] produce
+//! **byte-identical** output, so a figure that is generated, committed and regenerated does not
+//! turn up in a diff. Every collection is ordered, every coordinate is an `i32`, and nothing reads
+//! ambient state.
 
 pub mod ansi;
 pub mod html;

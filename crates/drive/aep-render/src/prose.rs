@@ -51,7 +51,7 @@ pub struct Instruction {
     ///
     /// Derived from the workflow's declared id, so the file a workflow renders to is decided by the
     /// document's own identity and never by the name of the file it was read from — which is
-    /// invariant 10 reaching one directory further out.
+    /// the document-identity rule reaching one directory further out.
     pub path: String,
     /// The workflow's reference, as `<id>/<major>`.
     pub reference: String,

@@ -89,12 +89,12 @@ pub trait RequirementContext {
 
     /// When this evaluation is happening, when the context knows.
     ///
-    /// The domain crate never reads a clock (invariant 8), so an instant arrives here or not at
-    /// all. `None` **fails closed**: a context that cannot say what time it is cannot satisfy a
-    /// requirement that declares a [`Horizon`], and the requirement reads
-    /// [`Truth::Unknown`] — which permits nothing. The opposite polarity would mean a caller who
-    /// forgot to wire a clock silently got the undecayed answer, on the green path, where nobody
-    /// looks.
+    /// The domain crate never reads a clock (invariant *Decisions are deterministic*), so an
+    /// instant arrives here or not at all. `None` **fails closed**: a context that cannot say what
+    /// time it is cannot satisfy a requirement that declares a [`Horizon`], and the requirement
+    /// reads [`Truth::Unknown`] — which permits nothing. The opposite polarity would mean a caller
+    /// who forgot to wire a clock silently got the undecayed answer, on the green path, where
+    /// nobody looks.
     ///
     /// Defaulted, because a horizon-free requirement does not consult it and every context that
     /// existed before horizons did evaluates exactly as it did.
@@ -3126,8 +3126,8 @@ advisory:
 
     #[test]
     fn a_bound_requirement_reads_unknown_and_names_what_the_task_is_about() {
-        // `Unknown`, never `False` (invariant 5): the specification of this task has not been
-        // written yet, and waiting is what produces one.
+        // `Unknown`, never `False` (invariant *Unknown differs from false*): the specification of
+        // this task has not been written yet, and waiting is what produces one.
         let context = Context::new()
             .with_artifact(approved_specification(
                 "specification:theirs",
@@ -3217,9 +3217,10 @@ advisory:
 
     #[test]
     fn a_relation_target_nothing_binds_to_is_refused_by_name() {
-        // Refused at the parse stage (invariant 2), and recognisable by the variant and its
-        // `kind` rather than by the sentence (invariant 4's rule: match on the code, never on
-        // message text). A binding silently ignored is a guard its author believes is on.
+        // Refused at the parse stage (invariant *Parse, then validate*), and recognisable by the
+        // variant and its `kind` rather than by the sentence (invariant *Validation accumulates*:
+        // match on the code, never on message text). A binding silently ignored is a guard its
+        // author believes is on.
         let node: Node = serde_yaml::from_str(
             "kind: specification\nrelation:\n  kind: specifies\n  target: whatever\n",
         )

@@ -14,7 +14,8 @@
 //! `JsonSchema` implementation writes verbatim into `schemas/generated/driver-steps.schema.json`.
 //! So a validator-only rule would publish a schema that accepts `workflow: adp/default` while the
 //! loader refuses it: an editor telling an author their map is fine, and a loader disagreeing.
-//! That is invariant 1 inverted, and review finding **F6** is what caught it.
+//! That is invariant *Rust types are the source of truth* inverted, and review finding **F6** is
+//! what caught it.
 //!
 //! [`ProtocolRef`](aep_domain::version::ProtocolRef) is the type-level precedent and not merely a
 //! rhetorical one: it holds a non-optional major version and publishes a pattern with no optional

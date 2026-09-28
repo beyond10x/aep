@@ -70,8 +70,9 @@ pub const SPACE: &str = "store";
 /// # The decision, and why it is not "the entity becomes the document"
 ///
 /// A document's prose had to reach this backend somehow, and the alternatives were worse. Leaving
-/// the CLI to write bodies directly is a second write path, which is what invariant 14 forbids and
-/// what D-P1 is. Inventing a body here is prose nobody is accountable for.
+/// the CLI to write bodies directly is a second write path, which is what invariant *Planning
+/// status is decided as data* forbids and what D-P1 is. Inventing a body here is prose nobody is
+/// accountable for.
 ///
 /// So prose is data, under a reserved key, exactly as `status` and `title` already are. The fear it
 /// raised — *every status move now carries the whole body* — is not what happens: `UpdateEntity`

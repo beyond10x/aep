@@ -984,9 +984,9 @@ fn the_fixture_store_validates_clean() {
 
 #[test]
 fn listing_the_fixture_as_json_is_byte_identical_across_two_runs() {
-    // Invariant 9 at the command line. Nothing here reads a clock or a hash map, so two runs over
-    // one store have to produce one document — otherwise every `--format json` diff is noise and
-    // nobody can commit the output of this verb.
+    // Invariant *Decisions are deterministic* at the command line. Nothing here reads a clock or a
+    // hash map, so two runs over one store have to produce one document — otherwise every
+    // `--format json` diff is noise and nobody can commit the output of this verb.
     let once = aep(&[
         "plan", "artifact", "list", "--store", FIXTURE, "--format", "json",
     ]);
@@ -2328,7 +2328,8 @@ fn writes_behind_the_contract(line: &str) -> bool {
 fn no_planning_verb_writes_to_the_store_except_through_a_command() {
     // **D-P1, closed and pinned.** The store used to be written by the verbs directly, through its
     // own `create`/`update`, which is a second write path — a second place for idempotency,
-    // revision checks and the audit record to be forgotten, and what invariant 14 exists to forbid.
+    // revision checks and the audit record to be forgotten, and what invariant *Planning status is
+    // decided as data* exists to forbid.
     //
     // Every verb now issues a command and `MarkdownBackend` writes the file. A verb added next year
     // that called the store directly would compile, pass every test, and quietly reopen it.
@@ -3129,7 +3130,7 @@ fn only_the_named_kind_goes_when_two_edges_point_at_one_artifact() {
     );
 }
 
-/// **A refusal names the edges that are there.** Invariant 7: it changes nothing — not the
+/// **A refusal names the edges that are there.** Invariant *Refusals change nothing* — not the
 /// document, not the journal.
 ///
 /// An `unrelate` that answered "no such edge" and stopped sends the reader back to the file to

@@ -344,7 +344,7 @@ fn check_transcript(args: &CheckArgs) -> Result<ExitCode> {
 /// `aep observe trace evidence`
 ///
 /// The check runs here, and the conversion happens on the producing side —
-/// [`CheckReport::to_evidence`] in `trace-spec` — because invariant 7 is that the engine never
+/// [`CheckReport::to_evidence`] in `trace-spec` — because the rule is that the engine never
 /// manufactures evidence and this binary is not allowed to either. What this function does is read
 /// two files, hand the report over, and write the document down.
 fn mint_evidence(args: &EvidenceArgs) -> Result<ExitCode> {

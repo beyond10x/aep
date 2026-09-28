@@ -18,7 +18,7 @@
 //! # What the envelope is, and what it is not
 //!
 //! A record on its own states a payload. What `aep govern evaluate --evidence` reads is a payload
-//! **plus** when somebody looked, what produced it, and how — invariant 7's split, where the
+//! **plus** when somebody looked, what produced it, and how — the evidence rule's split, where the
 //! payload is the verifier's and the envelope is the caller's. This module supplies the envelope
 //! and refuses to compute any part of the payload.
 //!
@@ -182,9 +182,9 @@ mod tests {
         );
     }
 
-    /// Invariant 7 at the layer that stamps the envelope: there is no way to ask for any producer
-    /// other than a verifier, so a record this module writes can never claim a person's or an
-    /// agent's authority.
+    /// The rule against manufacturing evidence, at the layer that stamps the envelope: there is no
+    /// way to ask for any producer other than a verifier, so a record this module writes can never
+    /// claim a person's or an agent's authority.
     #[test]
     fn the_producer_is_a_verifier_and_no_argument_can_change_it() {
         let record = record();

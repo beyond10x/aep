@@ -173,7 +173,8 @@ pub fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
 }
 
 
-/// The one environment variable that may name a plugin directory (AGENTS.md invariant 11).
+/// The one environment variable that may name a plugin directory (AGENTS.md invariant *Plugin
+/// authority is explicit*).
 ///
 /// `pub(crate)` because `aep doctor` reports on the same directories this drives with, and a second
 /// spelling of the name is how a rename leaves the preflight checking a variable nothing reads.
@@ -651,7 +652,8 @@ pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitC
     for warning in &coverage.warnings {
         // Printed and never blocking. Each of these is a question nobody can answer from documents
         // — who will have produced a record when the step runs, or whether a person will hand one
-        // over between runs — and refusing on an undecided question is what invariant 5 forbids.
+        // over between runs — and refusing on an undecided question is what invariant *Unknown
+        // differs from false* forbids.
         outln!("note: {warning}");
     }
 
@@ -1700,7 +1702,7 @@ impl CommandStepExecutor for CliExecutors {
             Ok(output) => output,
             // Nothing was observed: a missing executable is not a failing suite. Submitting a
             // failing `TestResult` for a suite that never ran would fabricate an observation, which
-            // is invariant 7's failure one layer above the engine.
+            // is the rule against manufacturing evidence failing one layer above the engine.
             Err(error) => {
                 return StepOutcome::NoVerdict {
                     reason: format!("`{rendered}` could not be run: {error}"),
@@ -2662,9 +2664,10 @@ pub fn observed_now() -> ObservedAt {
 /// * **no document** — the program was to write one and did not, so nothing was observed;
 /// * **more than one record** — a step establishes one thing, and picking one of several would be
 ///   the driver choosing what the run is about;
-/// * **an approval, or anything a person is recorded as having produced** — invariant 7 at this
-///   layer. A run's own step must not be able to hand the engine a human's approval read out of a
-///   file; that record enters through a person and `aep govern evaluate --evidence`, never here.
+/// * **an approval, or anything a person is recorded as having produced** — the rule against
+///   manufacturing evidence at this layer. A run's own step must not be able to hand the engine a
+///   human's approval read out of a file; that record enters through a person and `aep govern
+///   evaluate --evidence`, never here.
 pub fn read_record(
     declared: &str,
     mapping: &EvidenceMapping,

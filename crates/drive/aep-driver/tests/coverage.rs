@@ -154,9 +154,10 @@ fn a_task_that_declares_no_code_change_is_not_refused_for_contract_or_property_e
 #[test]
 fn the_cargo_map_can_produce_every_kind_a_feature_tasks_plan_demands() {
     // `story:evidence-producers-for-the-driven-map`. The task declares nothing, so every principle
-    // the profile carries stays in force — invariant 5, and the harder of the two readings: this is
-    // the shape arm c of pilot 1 was refused in, with `contract_result`, `property_test_result`,
-    // `verification` and `specification` all owed and none of them declared.
+    // the profile carries stays in force — invariant *Unknown differs from false*, and the harder
+    // of the two readings: this is the shape arm c of pilot 1 was refused in, with
+    // `contract_result`, `property_test_result`, `verification` and `specification` all owed and
+    // none of them declared.
     let report = evidence_coverage(&driven_plan(""), &shipped("default.yaml"));
 
     assert_eq!(
@@ -503,8 +504,8 @@ fn a_requirement_on_a_state_nothing_can_walk_into_refuses_nothing() {
 fn a_conditional_the_task_ruled_out_demands_nothing_and_an_unobserved_one_still_does() {
     // Both conditionals sit in the same completion block, so the two answers differ only in what
     // the task said. `change.code: false` is written down, so its branch is `False` and pruned.
-    // `tests.unit.failed == 0` has never been observed, so it is `Unknown` — in force, invariant 5
-    // — and the `contract_result` under it is demanded and refused.
+    // `tests.unit.failed == 0` has never been observed, so it is `Unknown` — in force, invariant
+    // *Unknown differs from false* — and the `contract_result` under it is demanded and refused.
     let report = evidence_coverage(
         &fixture_plan(PROFILE, "test.standard", NO_CODE_CHANGE),
         &fixture_map(MAP),
@@ -540,9 +541,10 @@ fn a_conditional_the_task_ruled_out_demands_nothing_and_an_unobserved_one_still_
 
 #[test]
 fn a_record_only_a_person_can_produce_is_a_warning_and_never_a_refusal() {
-    // The driver mints no approval and signs as no person (invariant 7, `tests/evidence_scan.rs`),
-    // so `the map cannot produce this` is true of every map ever written and says nothing about
-    // this one. With no `operator` step it is worth saying; with one it is not even that.
+    // The driver mints no approval and signs as no person (the rule against manufacturing evidence,
+    // `tests/evidence_scan.rs`), so `the map cannot produce this` is true of every map ever written
+    // and says nothing about this one. With no `operator` step it is worth saying; with one it is
+    // not even that.
     let plan = fixture_plan(HUMAN_PROFILE, "test.human", "");
 
     let unasked = evidence_coverage(&plan, &fixture_map(MAP));

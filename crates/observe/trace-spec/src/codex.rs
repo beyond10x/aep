@@ -36,12 +36,12 @@
 //! **Correlation** is [`TraceIr::new`]'s, by `call_id`, exactly as it is for the other adapter. Two
 //! adapters correlating separately are two places for the pairing to disagree.
 //!
-//! **Opaque rather than dropped** is invariant 5, and it is the rule that makes a second adapter
-//! worth having. Codex emits event families this build has never seen — `token_count`,
-//! `exec_command_end`, `patch_apply_end`, `turn_context` — and a reader that discarded them would
-//! report *"the tool was never called"* when what happened is that it stopped being able to see
-//! tool calls. Every unrecognised line becomes an opaque record carrying its declared types and the
-//! digest of the line, so the expectations that depend on it read `unk`.
+//! **Opaque rather than dropped** is invariant *Unknown differs from false*, and it is the rule
+//! that makes a second adapter worth having. Codex emits event families this build has never seen —
+//! `token_count`, `exec_command_end`, `patch_apply_end`, `turn_context` — and a reader that
+//! discarded them would report *"the tool was never called"* when what happened is that it stopped
+//! being able to see tool calls. Every unrecognised line becomes an opaque record carrying its
+//! declared types and the digest of the line, so the expectations that depend on it read `unk`.
 //!
 //! # `operations` is deliberately empty
 //!

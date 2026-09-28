@@ -1,14 +1,14 @@
-//! Invariant 9's scan for this crate: no unordered map, no clock, no randomness, no ambient
-//! environment, no spawned process.
+//! AGENTS.md invariant *Decisions are deterministic*, scanned for this crate: no unordered map, no
+//! clock, no randomness, no ambient environment, no spawned process.
 //!
 //! § 4.1 makes a purity claim for the driver — *clock-free and randomness-free, the same discipline
-//! `aep-domain` holds under invariant 8* — and this is the half of it that can be checked
-//! mechanically. It is worth more here than in most crates because the thing being claimed is
-//! **replayability**: given the same snapshot and the same evidence, the same routing. A `HashMap`
-//! in the router would make the order two builds walk a state's steps in a coin flip, and a clock
-//! would make a run's routing depend on when it was started. An ambient environment read is the
-//! same defect wearing a third face: it makes a run's routing depend on the shell it was launched
-//! from, which no snapshot records and no replay can reproduce.
+//! `aep-domain` holds under the determinism invariant* — and this is the half of it that can be
+//! checked mechanically. It is worth more here than in most crates because the thing being claimed
+//! is **replayability**: given the same snapshot and the same evidence, the same routing. A
+//! `HashMap` in the router would make the order two builds walk a state's steps in a coin flip, and
+//! a clock would make a run's routing depend on when it was started. An ambient environment read is
+//! the same defect wearing a third face: it makes a run's routing depend on the shell it was
+//! launched from, which no snapshot records and no replay can reproduce.
 //!
 //! What the scan cannot see is placed rather than banned: a pid-liveness probe reads ambient OS
 //! state and uses none of these tokens, which is why the probe lives in `aep-cli` and this
@@ -38,7 +38,8 @@ use std::path::{Path, PathBuf};
 
 /// What this crate must not mention in code.
 ///
-/// Three groups. The collections, the clock and the RNG are invariant 9's original list.
+/// Three groups. The collections, the clock and the RNG are the original list of invariant
+/// *Decisions are deterministic*.
 ///
 /// The environment pair is Acceptance's third face of the same defect, and it is deliberately the
 /// **module** rather than a function family: `std::env` catches `use std::env;` and the qualified

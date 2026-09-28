@@ -44,8 +44,9 @@
 //! `aep observe trace evidence`. That verb defaults to now because the check runs in that process, in
 //! that second. Here the check ran in another process, on another machine, possibly last week, and
 //! the record carries no time of its own — so a default of *now* would be this binary stamping a
-//! freshness it did not witness, and evidence horizons exist precisely to catch that (invariant 7:
-//! a caller who has to write down when they looked cannot back-date by omission).
+//! freshness it did not witness, and evidence horizons exist precisely to catch that (the rule
+//! against manufacturing evidence: a caller who has to write down when they looked cannot back-date
+//! by omission).
 //!
 //! # What the record now gates
 //!

@@ -14,7 +14,7 @@
 //!   byte. A store that was *hydrated* — filled from a durable provider with identities another
 //!   process minted — holds ids the counter has not reached, so a mint that lands on a held id
 //!   moves on rather than reusing it. Nothing parses an id to find out where the counter should
-//!   be (invariant 13): the check is a lookup, and the cost is one extra tick per collision.
+//!   be (identity is opaque): the check is a lookup, and the cost is one extra tick per collision.
 
 use std::collections::{BTreeMap, BTreeSet};
 

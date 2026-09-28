@@ -13,7 +13,8 @@
 #   aep observe evidence inspect examples/evidence-horizons-corpus/writers-day.yaml --at 2026-09-01
 #
 # exits 1 and names records 3 and 4. Nothing here is clamped, defaulted or rewritten: a record
-# genuinely in the future stays refused, which is invariant 7.
+# genuinely in the future stays refused, which is the rule that the engine never decides when an
+# observation happened.
 
 # 1 — the reference day itself, written as a day. Admitted, and always was.
 - kind: test_result

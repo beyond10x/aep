@@ -49,11 +49,11 @@
 //!
 //! # Absent stays absent
 //!
-//! Invariant 5, and this wire makes it sharper than the vendor's does: metaharness serialises an
-//! absent payload field as an explicit `null` rather than omitting the key, so *every* optional
-//! field arrives as a present key. `null` is read as absence throughout — that is the one rule the
-//! crate's private `json` module exists to hold in one place — and nothing here turns an
-//! unrecorded quantity into a zero.
+//! Invariant *Unknown differs from false*, and this wire makes it sharper than the vendor's does:
+//! metaharness serialises an absent payload field as an explicit `null` rather than omitting the
+//! key, so *every* optional field arrives as a present key. `null` is read as absence throughout —
+//! that is the one rule the crate's private `json` module exists to hold in one place — and nothing
+//! here turns an unrecorded quantity into a zero.
 //!
 //! # Amendment a9, and why nothing about the rule above changed
 //!
@@ -90,13 +90,13 @@
 //! The format tag is checked on **every line**, not on the first, because that is what the tag is
 //! for: metaharness writes it per line so a truncated capture stays self-describing, and a reader
 //! that checked it once would happily read the second half of a file somebody concatenated.
-//! Refusals accumulate (invariant 3).
+//! Refusals accumulate (invariant *Validation accumulates*).
 //!
 //! # No clock, and no correlation here
 //!
-//! Timestamps are the vendor's `at`, passed through verbatim; nothing is measured (invariant 9).
-//! Correlating a result to its call is [`TraceIr::new`]'s job, as it is for the other adapter, so
-//! there is one owner of the pairing.
+//! Timestamps are the vendor's `at`, passed through verbatim; nothing is measured (invariant
+//! *Decisions are deterministic*). Correlating a result to its call is [`TraceIr::new`]'s job, as
+//! it is for the other adapter, so there is one owner of the pairing.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1305,7 +1305,7 @@ mod tests {
 
     #[test]
     fn four_bad_lines_are_four_refusals_rather_than_the_first_one() {
-        // Invariant 3, on a transcript.
+        // Invariant *Validation accumulates*, on a transcript.
         let errors = read_event_stream_str("a\nb\nc\nd\n").expect_err("nothing here is JSON");
         assert_eq!(errors.count(TraceCode::AdapterMalformedTranscript), 4);
     }

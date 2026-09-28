@@ -120,8 +120,8 @@ fn a_transcript_the_adapter_could_not_fully_read_is_undecided_rather_than_green(
 
 #[test]
 fn the_same_transcript_and_specification_produce_a_byte_identical_report() {
-    // Invariant 9, over the pair. No clock is read: every duration and every cost comes out of
-    // the transcript.
+    // Invariant *Decisions are deterministic*, over the pair. No clock is read: every duration and
+    // every cost comes out of the transcript.
     let render = |report: &CheckReport| {
         (
             serde_json::to_string(report).expect("a report serializes"),
