@@ -123,3 +123,6 @@ appear in the working tree.
 
 See [Migrate an older store](../guides/migrate-an-older-store.md). The design record is
 [git-native-planning-store-v0.1.md](https://github.com/beyond10x/aep/blob/main/docs/design/git-native-planning-store-v0.1.md).
+
+[Planning stores](../reference/planning-stores.md) lists every supported and removed backend with
+its migration path.

@@ -54,6 +54,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'reference/cli',
         'reference/project-file',
+        'reference/planning-stores',
         'reference/artifact-file',
         'reference/evidence-file',
         'reference/lifecycle-file',

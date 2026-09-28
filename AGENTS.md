@@ -123,6 +123,12 @@ Read the command's own exit status; never pipe the authoritative run through a c
 status replaces it. CI and the release workflow delegate to `task check` (`status-check` refuses
 drift). A change under `website/` is exercised by the `website` step.
 
+Run the gate that decides a merge or a release the way CI builds: with the Cargo target directory
+inside the checkout (the default `target/`, or `CARGO_TARGET_DIR=$PWD/target`). CI's fixtures then
+live inside the repository's Git work tree, and a test whose answer depends on that passes outside
+it and fails in CI; it happened twice in 0.64.x (a crate-path scan over untracked evidence, and
+history checks over a fixture store under `target/`).
+
 <!-- generated:gate-steps:begin — do not edit; run `cargo xtask status` -->
 `task check` runs **16 steps**, in this order: `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `postgres-check`, `doc-check`, `schema-check`, `msrv`, `website`.
 <!-- generated:gate-steps:end -->
