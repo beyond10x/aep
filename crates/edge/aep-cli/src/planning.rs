@@ -26,7 +26,9 @@ use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use aep_backend_markdown::{MarkdownStore, PlanningDocument, PlanningFrontmatter, StoreReport};
+use aep_backend_markdown::{
+    MarkdownStore, PlanningDocument, PlanningFormat, PlanningFrontmatter, StoreReport,
+};
 use aep_domain::artifact::{
     ArtifactGraph, ArtifactId, ArtifactKind, ArtifactLifecycle, ArtifactRef, ArtifactStatus,
     ExternalRef, RelationKind,
@@ -43,6 +45,8 @@ pub(crate) const OUTCOME_DAYS: u64 = 14;
 // file, no clock. Split out because `waves` is the one verb here that *computes* rather than reads
 // and renders, and a derivation nobody can unit-test without a directory is one nobody unit-tests.
 mod waves;
+// What Git has committed about a Git-native plan: the history `validate` compares against.
+mod git_record;
 
 /// The directory inside `.engineering` that holds the plan.
 const PLANNING_DIRECTORY: &str = "planning";
@@ -1041,7 +1045,7 @@ pub(crate) fn report_from_backend(backend: &PlanBackend) -> Result<StoreReport> 
         report.files_read += 1;
         report.documents.insert(
             id.clone(),
-            aep_backend_markdown::store::StoredDocument {
+            aep_backend_markdown::StoredDocument {
                 relative_path: relative_path_for(&id),
                 document,
             },
@@ -5832,10 +5836,13 @@ pub(crate) fn findings(
 ///
 /// * Each document's `transitions` is a legal walk of its kind's lifecycle — the registry `move`
 ///   decides against — starting at the initial state and ending in `status`, with each entry's
-///   revision above the one before it and not above the document's own. A document with no
-///   transitions predates the record (a migrated store keeps what it had) and is not walked.
+///   revision above the one before it and not above the document's own.
+/// * A document with no transitions has never been moved, so its `status` is where it was
+///   created: its kind's initial state — unless it predates the Git-native layout, which
+///   [`unmoved_problems`] decides from its history.
 /// * Every file under `<evidence>/<kind>/<name>/` is a JSON evidence record about exactly the
-///   artifact its directory names.
+///   artifact its directory names, and a committed one is unchanged since its commit.
+/// * A `review-result` says what it said in its first committed Git-native version.
 fn git_findings(
     root: &Path,
     evidence: &Path,
@@ -5847,14 +5854,166 @@ fn git_findings(
         .iter()
         .map(ToString::to_string)
         .collect();
+    let mut unmoved = Vec::new();
+    let mut reviews = Vec::new();
     for stored in report.documents.values() {
         let front = &stored.document.frontmatter;
-        if front.transitions.is_empty() {
-            continue;
+        let ladder = registry.lifecycles().for_kind(&front.kind);
+        if front.kind == ArtifactKind::ReviewResult {
+            reviews.push(stored);
         }
-        problems.extend(walk_problems(front, registry.lifecycles().for_kind(&front.kind)));
+        if !front.transitions.is_empty() {
+            problems.extend(walk_problems(front, ladder));
+        } else if let Some(ladder) = ladder.filter(|ladder| ladder.initial != front.status) {
+            unmoved.push((stored, ladder.initial.clone()));
+        }
+    }
+
+    // One history read for both families that need one.
+    let paths: BTreeSet<&str> = unmoved
+        .iter()
+        .map(|(stored, _)| stored.relative_path.as_str())
+        .chain(reviews.iter().map(|stored| stored.relative_path.as_str()))
+        .collect();
+    let paths: Vec<&str> = paths.into_iter().collect();
+    if let Some(history) = git_record::committed_versions(root, &paths) {
+        problems.extend(unmoved_problems(&unmoved, &history));
+        problems.extend(review_problems(&reviews, &history));
     }
     problems.extend(evidence_problems(evidence));
+    problems.extend(
+        git_record::changed_evidence(evidence)
+            .into_iter()
+            .map(|path| {
+                format!(
+                    "{path}: a committed evidence file differs from its committed blob — evidence \
+                     is written once and never rewritten; record a new file instead"
+                )
+            }),
+    );
+    problems
+}
+
+/// One committed version of a document: whether it is in the Git-native format, and the document
+/// when it still parses under this build.
+struct Version {
+    git_native: bool,
+    document: Option<PlanningDocument>,
+}
+
+/// The committed versions of one document, oldest first.
+///
+/// The format is read from the `format:` line rather than from a parse, because an old version
+/// this build no longer parses is still evidence that the artifact predates the Git-native layout.
+fn versions_of(versions: Option<&Vec<Vec<u8>>>) -> Vec<Version> {
+    let tag = format!("format: {}", PlanningFormat::V3.as_str());
+    versions
+        .into_iter()
+        .flatten()
+        .map(|bytes| {
+            let text = String::from_utf8_lossy(bytes);
+            Version {
+                git_native: text
+                    .lines()
+                    .skip(1)
+                    .take_while(|line| line.trim_end() != "---")
+                    .any(|line| line.trim_end() == tag),
+                document: PlanningDocument::parse(&text, None).ok(),
+            }
+        })
+        .collect()
+}
+
+/// Why a document with no transitions stands somewhere a move would have had to take it.
+///
+/// Only documents whose `status` is not their kind's initial state are passed in. Such a status is
+/// honest in one case: the artifact **predates the Git-native layout** — it was written by an older
+/// store that did not keep its moves in the file, and the migration carried its status over
+/// without transitions. Git says which: that artifact's first committed version, since the commit
+/// that added it, is in an older format (`aep.planning-md/1` or `/2`), whereas an artifact
+/// `aep plan artifact new` created in an `aep.project/5` store is born `aep.planning-md/3`, at its
+/// initial state.
+///
+/// A predating artifact is still held to its status: it must equal the one its first committed
+/// Git-native version carried (what the migration wrote), or, while the migration is not yet
+/// committed, its last committed version's. An uncommitted new document, and one whose history
+/// begins in the Git-native format, must stand at the initial state.
+fn unmoved_problems(
+    unmoved: &[(&aep_backend_markdown::StoredDocument, ArtifactStatus)],
+    history: &BTreeMap<String, Vec<Vec<u8>>>,
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    for (stored, initial) in unmoved {
+        let front = &stored.document.frontmatter;
+        let id = &front.id;
+        let versions = versions_of(history.get(&stored.relative_path));
+        let predates = versions.first().is_some_and(|first| !first.git_native);
+        if !predates {
+            problems.push(format!(
+                "{id}: `status: {}` with no transitions — an artifact that was never moved stands \
+                 at its kind's initial state `{initial}`; a status is changed by a move, not by \
+                 editing the line",
+                front.status
+            ));
+            continue;
+        }
+        let carried = versions
+            .iter()
+            .find(|version| version.git_native)
+            .or_else(|| versions.last())
+            .and_then(|version| version.document.as_ref())
+            .map(|document| &document.frontmatter.status);
+        if let Some(carried) = carried.filter(|carried| **carried != front.status) {
+            problems.push(format!(
+                "{id}: `status: {}` with no transitions, and its history carries `{carried}` — a \
+                 status is changed by a move, not by editing the line",
+                front.status
+            ));
+        }
+    }
+    problems
+}
+
+/// Every `review-result` whose title or body is not what its first committed Git-native version
+/// said.
+///
+/// A review result is immutable (`artifacts/lifecycles/review-result.yaml`): a second look is a
+/// second review. Its machine fields — `status`, `revision`, `transitions` — still change through
+/// `move`, which is how it is retired, so only what the review *says* is compared. The baseline is
+/// the first committed `aep.planning-md/3` version, because the migrations into the Git-native
+/// layout rewrote older versions (a redaction pass changed bodies before it) and those were never
+/// Git-native records. An uncommitted review has no baseline yet and is not compared.
+fn review_problems(
+    reviews: &[&aep_backend_markdown::StoredDocument],
+    history: &BTreeMap<String, Vec<Vec<u8>>>,
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    for stored in reviews {
+        let versions = versions_of(history.get(&stored.relative_path));
+        let Some(first) = versions
+            .iter()
+            .find(|version| version.git_native)
+            .and_then(|version| version.document.as_ref())
+        else {
+            continue;
+        };
+        let now = &stored.document;
+        let mut changed = Vec::new();
+        if first.frontmatter.title != now.frontmatter.title {
+            changed.push("title");
+        }
+        if first.body != now.body {
+            changed.push("body");
+        }
+        if !changed.is_empty() {
+            problems.push(format!(
+                "{}: its {} differs from its first committed version — a review-result is \
+                 immutable after the commit that created it; record a second review instead",
+                now.frontmatter.id,
+                changed.join(" and ")
+            ));
+        }
+    }
     problems
 }
 
