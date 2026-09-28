@@ -5044,6 +5044,94 @@ fn validate_reports_a_review_result_with_no_findings_block_without_failing() {
     );
 }
 
+/// The warning `validate` prints for a review with no findings block.
+const PROSE_ONLY: &str = "states its findings as prose only";
+
+#[test]
+fn validate_accepts_an_approve_review_whose_findings_block_is_empty() {
+    let store = scratch("aep-plan-findings-empty-block");
+    let drafts = scratch("aep-plan-findings-empty-block-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "approve-empty",
+        "epic:objectives",
+        "approve\n\nNothing to report.\n\n```findings\n[]\n```\n",
+    );
+
+    let validated = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&validated), 0, "{}", stderr(&validated));
+    assert!(
+        !stdout(&validated).contains(PROSE_ONLY),
+        "an empty block was reported as no block: {}",
+        stdout(&validated)
+    );
+    let strict = aep(&[
+        "plan",
+        "artifact",
+        "validate",
+        "--strict",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&strict), 0, "{}", stdout(&strict));
+}
+
+#[test]
+fn validate_accepts_an_approve_review_created_with_empty_findings_given_apart() {
+    let store = scratch("aep-plan-findings-empty-apart");
+    let drafts = scratch("aep-plan-findings-empty-apart-drafts");
+    subject_epic(&store);
+    let findings = drafts.join("findings.json");
+    write(&findings, "[]\n");
+
+    let created = new_review_with_findings(
+        &store,
+        &drafts,
+        "approve-apart",
+        "approve\n\nNothing to report.\n",
+        printable(&findings),
+        None,
+    );
+    assert_eq!(code(&created), 0, "{}", stderr(&created));
+
+    let validated = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&validated), 0, "{}", stderr(&validated));
+    assert!(
+        !stdout(&validated).contains(PROSE_ONLY),
+        "`--findings []` wrote a block validate reads as none: {}",
+        stdout(&validated)
+    );
+}
+
+#[test]
+fn validate_still_reports_a_review_with_no_findings_block_in_one_unbroken_sentence() {
+    let store = scratch("aep-plan-findings-absent-wording");
+    let drafts = scratch("aep-plan-findings-absent-wording-drafts");
+    subject_epic(&store);
+    review_of(
+        &store,
+        &drafts,
+        "approve-prose",
+        "epic:objectives",
+        "approve\n\nNothing to report.\n",
+    );
+
+    let validated = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&validated), 0, "{}", stderr(&validated));
+    let said = stdout(&validated);
+    let line = said
+        .lines()
+        .find(|line| line.contains("review-result:approve-prose"))
+        .unwrap_or_else(|| panic!("the review with no block is not reported: {said}"));
+    assert!(line.contains(PROSE_ONLY), "{line}");
+    assert!(
+        !line.trim_start().contains("  "),
+        "the warning carries a run of spaces: {line:?}"
+    );
+}
+
 #[test]
 fn the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried() {
     let store = scratch("aep-plan-findings-ledger");

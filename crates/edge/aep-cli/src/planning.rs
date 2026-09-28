@@ -5354,19 +5354,21 @@ pub(crate) fn findings(
 
     // The findings block, on the kind that is supposed to carry one. A block that does not parse is
     // a **problem**: `new` refuses one, so a broken block in the store was hand-written past the
-    // command, which is the same class as drift. A block that is simply absent is reported.
+    // command, which is the same class as drift. A block that is simply absent is reported; a block
+    // of `[]` is a review that found nothing, which is what an `approve` writes, and is not.
     let mut without_findings = Vec::new();
     for stored in report.documents.values() {
         if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
             continue;
         }
         let id = &stored.document.frontmatter.id;
-        match aep_backend_markdown::findings::parse(&stored.document.body) {
+        match aep_backend_markdown::findings::recorded(&stored.document.body) {
             Err(error) => problems.push(format!("{id}: {error}")),
-            Ok(found) if found.is_empty() => without_findings.push(format!(
-                "{id} states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere"
+            Ok(None) => without_findings.push(format!(
+                "{id} states its findings as prose only — nothing can enumerate what it found, so \
+                 the next review starts from nowhere"
             )),
-            Ok(_) => {}
+            Ok(Some(_)) => {}
         }
     }
 
