@@ -36,7 +36,7 @@ fn write_store(project: &Path, target: &str) {
     std::fs::create_dir_all(project.join("protocols")).expect("protocol source");
     std::fs::write(
         engineering.join("project.yaml"),
-        "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
+        "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\nprotocols: ../protocols\n",
     )
     .expect("legacy selector");
     std::fs::write(engineering.join("workspace.yaml"), DECLARATION).expect("declaration");

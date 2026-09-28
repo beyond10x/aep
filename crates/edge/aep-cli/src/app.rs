@@ -158,7 +158,8 @@ enum ConformanceBackend {
     /// The in-memory reference implementation. The default, so no existing invocation changes
     /// meaning; it keeps nothing, so it takes no `--store`.
     Memory,
-    /// The markdown planning store, `aep-backend-markdown`, at `--store <dir>` — or a scratch
+    /// The Git-native Markdown planning store, `aep-backend-markdown`, at `--store <dir>` with its
+    /// evidence in the `evidence` directory beside it — or a scratch
     /// directory when none is given, because the suites write.
     Markdown,
     /// The SQLite backend, `aep-backend-sqlite`, at `--store <file>` — or an in-memory database
@@ -167,14 +168,9 @@ enum ConformanceBackend {
     /// The Postgres backend, `aep-backend-postgres`, at `--store <url>` — required, because there
     /// is no scratch server to invent. The suites write; give it a database of their own.
     Postgres,
-    /// The hybrid, `aep-backend-hybrid`: the markdown plan at `--store <dir>` — or a scratch
-    /// directory — with an in-memory SQLite replica, the markdown side the authority, divergences
-    /// recorded. The composite held to the same sixteen suites (`story:hybrid-backend`).
-    Hybrid,
     /// The kind of store the project this is run in configured (`store:` in `project.yaml`), held
-    /// to the suites on a scratch instance of it: a scratch directory for `markdown`, an in-memory
-    /// database for `sqlite`, a schema of its own on the configured server for `postgres`, a
-    /// scratch directory with an in-memory replica under the project's own policy for `hybrid`.
+    /// to the suites on a scratch instance of it: a scratch directory for `git`, an in-memory
+    /// database for `sqlite`, a schema of its own on the configured server for `postgres`.
     /// The suites write, and the project's plan is not theirs to write into.
     Project,
 }
@@ -390,7 +386,7 @@ enum PlanCommand {
     /// this verb was hard-coded to `memory` for two releases while a story ticked "runs against the
     /// markdown store". `--store` says where a durable backend lives. **The suites write**, so a
     /// durable backend given no `--store` gets a scratch store, and one pointed at a plan you keep
-    /// will append the suites' commands to that plan's journal.
+    /// will write the suites' documents into that plan.
     ///
     /// `--inject` deliberately breaks one property, to show that the suite responsible for it
     /// actually fails — a suite that passes everything tells you nothing.
@@ -995,9 +991,6 @@ fn govern(command: GovernCommand) -> Result<ExitCode> {
 
 /// `aep plan` — and every one of its verbs by its flat spelling.
 fn plan(command: PlanCommand) -> Result<ExitCode> {
-    if !matches!(command, PlanCommand::Store { .. }) {
-        planning::suggest_the_git_store();
-    }
     match command {
         PlanCommand::Store { command } => store_command::run(command),
         PlanCommand::Artifact { command } => planning::run(command),
@@ -1109,7 +1102,6 @@ fn conformance(
         backend,
         store,
         scratch_schema,
-        hybrid_policy,
     } = conformance_target(backend, store)?;
     let store = store.as_deref();
 
@@ -1174,14 +1166,6 @@ fn conformance(
             run_against(backend, fault, level, suite)?
                 .ran_against(format!("markdown ({})", root.display()))
         }
-        ConformanceBackend::Hybrid => {
-            let (backend, root, policy) =
-                hybrid_conformance_backend(store, hybrid_policy.as_ref())?;
-            run_against(backend, fault, level, suite)?.ran_against(format!(
-                "hybrid ({}, in-memory SQLite replica, authority {policy})",
-                root.display()
-            ))
-        }
         ConformanceBackend::Project => {
             unreachable!("`project` was resolved to the store the project names above")
         }
@@ -1204,8 +1188,8 @@ fn conformance(
     Ok(exit_code(report.passed()))
 }
 
-/// The markdown backend the suites run against: at `store`, or a scratch directory when none was
-/// given, because the suites write.
+/// The Git-native Markdown backend the suites run against: at `store`, or a scratch directory when
+/// none was given, because the suites write. Its evidence is the `evidence` directory beside it.
 ///
 /// Permissive ladders and no workspace members: the suites are about the contract and durability,
 /// not about any particular ladder, and a real ladder would refuse moves the suites are entitled to
@@ -1214,8 +1198,10 @@ fn markdown_conformance_backend(
     store: Option<&Path>,
 ) -> Result<(aep_backend_markdown::backend::MarkdownBackend, PathBuf)> {
     let root = scratch_or(store)?;
-    let backend = aep_backend_markdown::backend::MarkdownBackend::open(
+    let evidence = planning::evidence_beside(&root);
+    let backend = aep_backend_markdown::backend::MarkdownBackend::open_git(
         &root,
+        &evidence,
         aep_domain::workspace::Membership::default(),
         planning::clock_at_the_edge(),
         planning::command_actor()?,
@@ -1256,7 +1242,6 @@ fn conformance_target(
             backend,
             store: store.map(Path::to_path_buf),
             scratch_schema: None,
-            hybrid_policy: None,
         });
     };
     if let Some(path) = store {
@@ -1270,19 +1255,14 @@ fn conformance_target(
         backend: ConformanceBackend::Markdown,
         store: None,
         scratch_schema: None,
-        hybrid_policy: None,
     };
     match planning::Plan::discovered()? {
-        planning::Plan::Markdown { .. } | planning::Plan::Git { .. } => {}
+        planning::Plan::Git { .. } => {}
         planning::Plan::Sqlite { .. } => target.backend = ConformanceBackend::Sqlite,
         planning::Plan::Postgres { url } => {
             target.backend = ConformanceBackend::Postgres;
             target.store = Some(PathBuf::from(url));
             target.scratch_schema = Some(format!("aep_conformance_{}", std::process::id()));
-        }
-        planning::Plan::Hybrid { policy, .. } => {
-            target.backend = ConformanceBackend::Hybrid;
-            target.hybrid_policy = Some(policy);
         }
     }
     Ok(target)
@@ -1295,46 +1275,6 @@ struct ConformanceTarget {
     store: Option<PathBuf>,
     /// A Postgres schema of this process's own, when the project's server is being borrowed.
     scratch_schema: Option<String>,
-    /// The project's four words, for a hybrid.
-    hybrid_policy: Option<aep_domain::project::HybridPolicy>,
-}
-
-/// The hybrid the suites run against: the markdown plan at `store` or a scratch directory, an
-/// in-memory SQLite replica, under `policy` or — when none was configured — the markdown side as
-/// the authority with divergences recorded. Returns the authority word for the report.
-fn hybrid_conformance_backend(
-    store: Option<&Path>,
-    policy: Option<&aep_domain::project::HybridPolicy>,
-) -> Result<(
-    aep_backend_hybrid::HybridBackend<entity_sqlite::SqliteStore>,
-    PathBuf,
-    String,
-)> {
-    let root = scratch_or(store)?;
-    let default = aep_domain::project::HybridPolicy {
-        authority: "local".to_owned(),
-        read: "local-first".to_owned(),
-        on_unreachable: "refuse".to_owned(),
-        on_divergence: "record".to_owned(),
-    };
-    let configured = policy.unwrap_or(&default);
-    let policy =
-        aep_backend_hybrid::policy_from(configured).map_err(|error| anyhow::anyhow!("{error}"))?;
-    let authority = configured.authority.clone();
-    let replica =
-        entity_sqlite::SqliteStore::in_memory().map_err(|error| anyhow::anyhow!("{error}"))?;
-    let backend = aep_backend_hybrid::HybridBackend::open(
-        &root,
-        replica,
-        policy,
-        aep_domain::workspace::Membership::default(),
-        planning::clock_at_the_edge(),
-        planning::command_actor()?,
-        aep_domain::artifact::LifecycleRegistry::default(),
-    )
-    .map_err(|error| anyhow::anyhow!("{error}"))
-    .with_context(|| format!("opening the hybrid plan at {}", root.display()))?;
-    Ok((backend, root, authority))
 }
 
 /// `store`, or a scratch directory of this process's own, because the suites write.
@@ -1342,7 +1282,9 @@ fn scratch_or(store: Option<&Path>) -> Result<PathBuf> {
     if let Some(path) = store {
         return Ok(path.to_path_buf());
     }
-    let scratch = std::env::temp_dir().join(format!("protocol-conformance-{}", std::process::id()));
+    let scratch = std::env::temp_dir()
+        .join(format!("protocol-conformance-{}", std::process::id()))
+        .join(aep_domain::project::GIT_PLANNING_DIRECTORY);
     std::fs::create_dir_all(&scratch)
         .with_context(|| format!("creating a scratch store at {}", scratch.display()))?;
     Ok(scratch)
@@ -1350,9 +1292,9 @@ fn scratch_or(store: Option<&Path>) -> Result<PathBuf> {
 
 /// What is wrong with the `project.yaml` of the project this was run in, when there is one.
 ///
-/// `aep govern validate` is where a project's configuration is refused as a whole — a `store: hybrid`
-/// missing one of its four policy words names the word here (`aep.project/1`, runtime R-106
-/// enforced at our edge), rather than at the first verb that happened to open the plan. No project
+/// `aep govern validate` is where a project's configuration is refused as a whole — a `store:`
+/// selector of the wrong shape names the key here, and an `aep.project/1` file names its
+/// migration, rather than at the first verb that happened to open the plan. No project
 /// found is no problem: the document tree is what was asked about.
 fn project_file_problems() -> Vec<String> {
     let Ok(here) = std::env::current_dir() else {

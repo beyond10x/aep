@@ -89,8 +89,9 @@ fn this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_bac
 
     // The markdown backend over the same plan, same instant, same actor: the two seeds issue the
     // same commands in the same order, so the identities and the history must agree.
-    let markdown = MarkdownBackend::open(
+    let markdown = MarkdownBackend::open_git(
         &planning,
+        root.join(".engineering/evidence"),
         membership,
         at,
         actor,
@@ -98,21 +99,12 @@ fn this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_bac
     )
     .expect("the markdown backend opens");
 
-    // A document this repository has since written through the contract has a journal of its own —
-    // the events of its `new`, `move`, `relate` — which no seed can replay: the seed knows the
-    // document as it stands, not how it got there. Those are compared by what they hold; the ones
-    // that predate the log are compared by history too, and there must be enough of them for the
-    // comparison to still be evidence.
-    let mut predating = 0;
+    // The Git-native layout keeps no event log, so every document is compared by history: both
+    // seeds issue the same commands in the same order.
+    let mut compared = 0;
     for (artifact, id) in &seeded.by_id {
         let reference = EntityRef::new(id.clone());
-        if !aep_backend_markdown::journal::history(&planning, artifact)
-            .0
-            .is_empty()
-        {
-            continue;
-        }
-        predating += 1;
+        compared += 1;
         let ours = block_on(reopened.history(&reference)).expect("history from SQLite");
         let theirs = block_on(markdown.history(&reference))
             .unwrap_or_else(|error| panic!("{artifact}: the markdown backend holds {id}: {error}"));
@@ -130,8 +122,8 @@ fn this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_bac
     }
 
     assert!(
-        predating >= 20,
-        "only {predating} documents predate the event log; the comparison has stopped being evidence"
+        compared >= 20,
+        "only {compared} documents compared; the comparison has stopped being evidence"
     );
 
     // Written down for the story rather than asserted: a threshold here would turn a slow CI box

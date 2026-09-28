@@ -117,7 +117,8 @@ appear in the working tree.
 | `project.yaml` says | This release |
 |---|---|
 | `aep.project/5` | reads and writes it |
-| `aep.project/1`, or a `planning/` directory with no `project.yaml` inside a Git repository | reads and writes it, prints a one-line upgrade notice on stderr, and migrates with `aep plan store migrate git --verify` |
+| `aep.project/1`, or no `version:` | refuses it and names `aep plan store migrate git --verify`, which this release runs |
+| no `project.yaml`, a `planning/` directory beside it | opens it as a Git-native store (`planning/` and `evidence/`); refuses it and names the migration while it still holds a `/1` `journal.jsonl` |
 | `aep.project/2`, `/3`, `/4` (event-log stores) | refuses it and names the migration path |
 
 See [Migrate an older store](../guides/migrate-an-older-store.md). The design record is

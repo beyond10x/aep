@@ -1,11 +1,16 @@
 //! `aep plan store migrate git`: an `aep.project/1` Markdown store rewritten as a Git-native one
 //! (`aep.project/5`, git-native design § 8).
 //!
-//! The old store is its documents plus the store-wide `journal.jsonl`. Both are read once and the
-//! whole new store is computed in memory before anything is written. A document the Git layout
-//! would refuse — a `status` its last journalled move did not go to, a `revision` no higher than
-//! its move count — or a journal entry about an artifact that has no document refuses the whole
-//! migration, naming every such artifact, and writes nothing.
+//! The old store is its documents plus the store-wide `journal.jsonl`. This build opens no such
+//! store any more; this command is the one reader of it left, through [`legacy`]. Both are read
+//! once and the whole new store is computed in memory before anything is written. A document the
+//! Git layout would refuse — a `status` its last journalled move did not go to, a `revision` no
+//! higher than its move count — or a journal entry about an artifact that has no document refuses
+//! the whole migration, naming every such artifact, and writes nothing.
+//!
+//! A document whose journal records no move but whose `status` is not its kind's initial state is
+//! carried with one imported transition from that initial state to its status, so `validate` holds
+//! it to its transitions like every other artifact rather than to the format of its first commit.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -14,14 +19,54 @@ use std::process::ExitCode;
 
 use aep_backend_markdown::journal::{self, Change, Entry, Transition};
 use aep_backend_markdown::{MarkdownStore, PlanningDocument, PlanningFormat};
-use aep_domain::artifact::{ArtifactId, ArtifactRelation, ArtifactStatus};
+use aep_domain::artifact::{ArtifactId, ArtifactRelation, ArtifactStatus, LifecycleRegistry};
 use aep_domain::evidence::EvidenceKind;
 use aep_domain::project::{
-    ProjectVersion, StoreConfig, GIT_EVIDENCE_DIRECTORY, GIT_PLANNING_DIRECTORY, PROJECT_FILE,
-    PROJECT_VERSION, PROJECT_VERSION_V5,
+    ProjectConfig, EVENT_LOG_PROJECT_VERSIONS, GIT_EVIDENCE_DIRECTORY, GIT_PLANNING_DIRECTORY,
+    PROJECT_FILE, PROJECT_VERSION_V1, PROJECT_VERSION_V5,
 };
 use anyhow::{Context, Result};
 use clap::Args;
+
+/// The read-only reader of an `aep.project/1` store's journal: all this build keeps of that layout.
+pub(crate) mod legacy {
+    use std::path::Path;
+
+    use aep_backend_markdown::journal::Entry;
+
+    /// The store-wide log, relative to the planning directory.
+    pub(crate) const JOURNAL: &str = aep_backend_markdown::journal::LEGACY_JOURNAL;
+    /// The lock a `/1` writer held while appending to the journal.
+    pub(crate) const LOCK: &str = "journal.lock";
+
+    /// Every entry of the journal under `root`, oldest first, and how many lines did not read.
+    ///
+    /// A line is an [`Entry`] (written before 0.19.0's provider) or an `entity_core::DomainEvent`
+    /// carrying one under `payload.change`; any sealing keys a line carries are ignored. A line that
+    /// is neither is skipped and counted rather than fatal: a half-written line from a killed
+    /// process must not make the whole history unreadable.
+    pub(crate) fn read(root: &Path) -> (Vec<Entry>, usize) {
+        let Ok(text) = std::fs::read_to_string(root.join(JOURNAL)) else {
+            return (Vec::new(), 0);
+        };
+        let mut entries = Vec::new();
+        let mut unreadable = 0;
+        for line in text.lines().filter(|line| !line.trim().is_empty()) {
+            if let Ok(entry) = serde_json::from_str::<Entry>(line) {
+                entries.push(entry);
+                continue;
+            }
+            match serde_json::from_str::<entity_core::DomainEvent>(line)
+                .ok()
+                .and_then(|event| aep_backend_markdown::journal::entry_of(&event))
+            {
+                Some(entry) => entries.push(entry),
+                None => unreadable += 1,
+            }
+        }
+        (entries, unreadable)
+    }
+}
 
 /// The arguments of `aep plan store migrate git`.
 #[derive(Debug, Clone, Args)]
@@ -60,11 +105,56 @@ fn unconfigured_selector(args: &GitArgs, selector_path: &Path) -> Result<String>
     };
     let quote = |value: &str| serde_json::to_string(value).unwrap_or_default();
     Ok(format!(
-        "version: {PROJECT_VERSION}\nprotocol: {}\nprofile: {}\nprotocols: {}\n",
+        "version: {PROJECT_VERSION_V1}\nprotocol: {}\nprofile: {}\nprotocols: {}\n",
         quote(&args.protocol),
         quote(profile),
         quote(protocols)
     ))
+}
+
+/// Refuses a selector this command does not migrate: anything but a Markdown `aep.project/1`.
+///
+/// Read as plain YAML, because the project reader of this build refuses `/1` outright.
+fn require_a_v1_markdown_selector(text: &str, selector_path: &Path) -> Result<()> {
+    let value: serde_json::Value =
+        serde_yaml::from_str(text).context("the project selector does not read as YAML")?;
+    let map = value
+        .as_object()
+        .context("the project selector is not a mapping")?;
+    let version = match map.get("version") {
+        None => PROJECT_VERSION_V1,
+        Some(version) => version
+            .as_str()
+            .context("the project selector's `version` is not text")?,
+    };
+    if EVENT_LOG_PROJECT_VERSIONS.contains(&version) {
+        anyhow::bail!("{}", aep_domain::project::event_log_store_refusal(version));
+    }
+    if version == PROJECT_VERSION_V5 {
+        anyhow::bail!(
+            "{} already selects `{PROJECT_VERSION_V5}`; there is nothing to migrate",
+            selector_path.display()
+        );
+    }
+    if version != PROJECT_VERSION_V1 {
+        anyhow::bail!(
+            "{} is `{version}`; this build migrates `{PROJECT_VERSION_V1}` to \
+             `{PROJECT_VERSION_V5}`",
+            selector_path.display()
+        );
+    }
+    match map.get("store") {
+        None => Ok(()),
+        Some(serde_json::Value::String(word)) if word == "markdown" => Ok(()),
+        Some(_) => anyhow::bail!(
+            "{} keeps its plan in a `store:` other than markdown; only a Markdown \
+             `{PROJECT_VERSION_V1}` store migrates to `{PROJECT_VERSION_V5}` — a SQLite or \
+             Postgres project is rewritten by hand as `{PROJECT_VERSION_V5}` with a \
+             `planning_scope` and `store: {{ sqlite: {{ path: <path> }} }}` or \
+             `store: {{ postgres: {{ url: <url> }} }}`",
+            selector_path.display()
+        ),
+    }
 }
 
 /// What the old store answered about one artifact, kept to compare the new store against.
@@ -92,9 +182,18 @@ struct Plan {
     answered: BTreeMap<ArtifactId, Answered>,
     evidence: Vec<Entry>,
     transitions: usize,
+    /// Artifacts the journal never moved that stand past their initial state, each carried with
+    /// one imported transition.
+    carried: usize,
     dropped: BTreeMap<&'static str, usize>,
     unreadable: usize,
     violations: Vec<String>,
+}
+
+/// Who and when an imported transition that no journalled move backs is attributed to.
+struct Carrier {
+    at: String,
+    actor: String,
 }
 
 /// The `.engineering/` directory `--engineering` names, or the discovered project's.
@@ -115,6 +214,18 @@ fn engineering_of(args: &GitArgs) -> Result<PathBuf> {
     anyhow::bail!("no project found; pass `--engineering <dir>`")
 }
 
+/// The lifecycles the migrated project's protocol tree declares, for each kind's initial state.
+fn lifecycles_of(config: &ProjectConfig, engineering: &Path) -> Result<LifecycleRegistry> {
+    let tree = aep_project::project::resolve_protocols(&config.protocols, engineering)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .context("resolving the project's protocol source")?;
+    Ok(crate::load(&tree)
+        .with_context(|| format!("loading the lifecycles under {}", tree.display()))?
+        .lifecycles()
+        .clone())
+}
+
+#[allow(clippy::too_many_lines)] // One ordered sequence: every refusal before the first write.
 pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
     let engineering = engineering_of(args)?;
     let selector_path = engineering.join(PROJECT_FILE);
@@ -130,23 +241,7 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
     } else {
         unconfigured_selector(args, &selector_path)?
     };
-    // `/2`–`/4` are refused here with the instruction that names the build which migrates them.
-    let config =
-        aep_schema::parse::project(&selector_text, Some(&selector_path.display().to_string()))
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
-    if config.version == ProjectVersion::V5 {
-        anyhow::bail!(
-            "{} already selects `{PROJECT_VERSION_V5}`; there is nothing to migrate",
-            selector_path.display()
-        );
-    }
-    if config.store != StoreConfig::Markdown {
-        anyhow::bail!(
-            "{} keeps its plan in a `store:` other than markdown; only a Markdown \
-             `{PROJECT_VERSION}` store migrates to `{PROJECT_VERSION_V5}`",
-            selector_path.display()
-        );
-    }
+    require_a_v1_markdown_selector(&selector_text, &selector_path)?;
     let project_root = engineering
         .parent()
         .context("the `.engineering` directory has no parent")?;
@@ -175,7 +270,16 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
         );
     }
 
-    let plan = compute(&planning);
+    // The new selector is built, and read back as the store it plans, before anything is written;
+    // its protocol source supplies each kind's initial state.
+    let (selector, config) = selector_v5(&selector_text, &scope)?;
+    let lifecycles = lifecycles_of(&config, &engineering)?;
+    let carrier = Carrier {
+        at: crate::planning::clock_at_the_edge().iso_8601(),
+        actor: crate::planning::command_actor()?.to_string(),
+    };
+
+    let plan = compute(&planning, &lifecycles, &carrier);
     print_plan(&plan, &scope, args.dry_run);
     if !plan.violations.is_empty() {
         eprintln!(
@@ -190,15 +294,14 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
         return Ok(ExitCode::SUCCESS);
     }
 
-    let selector = selector_v5(&selector_text, &scope)?;
     write(&plan, &planning, &evidence)?;
     fs::write(&selector_path, selector)
         .with_context(|| format!("writing {}", selector_path.display()))?;
     let removed = remove_all(
         [
-            journal::JOURNAL,
+            legacy::JOURNAL,
             aep_backend_markdown::provider::PENDING_BATCH,
-            aep_backend_markdown::chain::LOCK,
+            legacy::LOCK,
         ]
         .into_iter()
         .map(|name| planning.join(name)),
@@ -283,9 +386,10 @@ fn transition_of(entry: &Entry) -> Option<Transition> {
 }
 
 /// Reads the old store once — its documents and its journal — and plans the new one.
-fn compute(planning: &Path) -> Plan {
+#[allow(clippy::too_many_lines)] // One pass over the old store: every rule the new one must hold.
+fn compute(planning: &Path, lifecycles: &LifecycleRegistry, carrier: &Carrier) -> Plan {
     let store = MarkdownStore::open(planning.to_owned()).load();
-    let (entries, unreadable) = journal::read(planning);
+    let (entries, unreadable) = legacy::read(planning);
     let mut plan = Plan {
         unreadable,
         ..Plan::default()
@@ -354,15 +458,37 @@ fn compute(planning: &Path) -> Plan {
         }
         if !front.transitions.is_empty() {
             plan.violations.push(format!(
-                "{id}: the document already carries `transitions`, which an `{PROJECT_VERSION}` \
-                 document does not have"
+                "{id}: the document already carries `transitions`, which an \
+                 `{PROJECT_VERSION_V1}` document does not have"
             ));
+        }
+        // Never moved by the journal, and not where its kind starts: the status is carried as one
+        // imported move, so the new store's own record accounts for it. A move is a write, so a
+        // document still at its first revision is raised to its second.
+        let mut revision = front.revision;
+        if moves.is_empty() {
+            if let Some(ladder) = lifecycles
+                .for_kind(&front.kind)
+                .filter(|ladder| ladder.initial != front.status)
+            {
+                revision = revision.max(2);
+                moves.push(Transition {
+                    at: carrier.at.clone(),
+                    actor: carrier.actor.clone(),
+                    revision,
+                    from: ladder.initial.clone(),
+                    to: front.status.clone(),
+                    decided_on: journal::Provenance::default(),
+                    imported: true,
+                });
+                plan.carried += 1;
+            }
         }
         plan.answered.insert(
             id.clone(),
             Answered {
                 status: front.status.clone(),
-                revision: front.revision,
+                revision,
                 title: front.title.clone(),
                 relations: front.relations.iter().cloned().collect(),
                 body: stored.document.body.clone(),
@@ -373,6 +499,7 @@ fn compute(planning: &Path) -> Plan {
         plan.transitions += moves.len();
         let mut document = stored.document.clone();
         document.frontmatter.format = PlanningFormat::V3;
+        document.frontmatter.revision = revision;
         document.frontmatter.transitions = moves;
         plan.documents.insert(
             id.clone(),
@@ -408,6 +535,13 @@ fn print_plan(plan: &Plan, scope: &str, dry_run: bool) {
             dropped.join(", ")
         }
     );
+    if plan.carried > 0 {
+        outln!(
+            "{} artifact(s) the journal never moved stand past their initial state; each carries one \
+             imported transition to its status, at its second revision or later",
+            plan.carried
+        );
+    }
     if plan.unreadable > 0 {
         outln!(
             "{} journal line(s) did not read and are not carried",
@@ -445,8 +579,9 @@ fn write(plan: &Plan, planning: &Path, evidence: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The selector as `aep.project/5`: every key kept, `store` replaced, `planning_scope` added.
-fn selector_v5(text: &str, scope: &str) -> Result<String> {
+/// The selector as `aep.project/5`: every key kept, `store` replaced, `planning_scope` added —
+/// with the configuration this build reads it back as.
+fn selector_v5(text: &str, scope: &str) -> Result<(String, ProjectConfig)> {
     let json = text.trim_start().starts_with('{');
     let mut value: serde_json::Value =
         serde_yaml::from_str(text).context("the project selector does not read as YAML")?;
@@ -465,9 +600,9 @@ fn selector_v5(text: &str, scope: &str) -> Result<String> {
         written.push('\n');
     }
     // The file is written only if this build reads it back as the store it just planned.
-    aep_schema::parse::project(&written, None)
+    let config = aep_schema::parse::project(&written, None)
         .map_err(|error| anyhow::anyhow!("the rewritten project file does not read: {error}"))?;
-    Ok(written)
+    Ok((written, config))
 }
 
 /// Removes each file, answering those that were there.
@@ -496,8 +631,8 @@ fn verify(
     for failure in &report.failures {
         differences.push(format!("{failure}"));
     }
-    if planning.join(journal::JOURNAL).exists() {
-        differences.push(format!("{} is still there", journal::JOURNAL));
+    if planning.join(legacy::JOURNAL).exists() {
+        differences.push(format!("{} is still there", legacy::JOURNAL));
     }
     for id in report.documents.keys() {
         if !answered.contains_key(id) {
@@ -565,7 +700,7 @@ mod tests {
 
     #[test]
     fn a_v1_selector_becomes_v5_keeping_every_other_key() {
-        let written = selector_v5(
+        let (written, _) = selector_v5(
             "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
              protocols: ..\nsummary: kept\n",
             "demo",
@@ -581,7 +716,7 @@ mod tests {
 
     #[test]
     fn an_explicit_markdown_store_key_is_replaced_by_git() {
-        let written = selector_v5(
+        let (written, _) = selector_v5(
             "{\"version\":\"aep.project/1\",\"protocol\":\"adp/1\",\
              \"profile\":\"development.standard\",\"store\":\"markdown\"}",
             "demo",

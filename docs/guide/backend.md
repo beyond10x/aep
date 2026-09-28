@@ -350,8 +350,7 @@ are **one shape**: the adapter
 [`aep-backend-markdown`](../../crates/plan/aep-backend-markdown/) is the same adapter over the plan's
 own provider — the markdown files under `.engineering/planning/` as a `Store`, one artifact per
 file; in an `aep.project/5` store each move is a `transitions` entry in the artifact's front matter
-and each evidence record a file under `.engineering/evidence/`, and an older `aep.project/1` store
-keeps `journal.jsonl` as its event log — with a *projection* that keeps what a plan keeps and an
+and each evidence record a file under `.engineering/evidence/` — with a *projection* that keeps what a plan keeps and an
 entity does not carry: the prose, the edges in frontmatter, the ladder a status is checked against.
 This repository plans its own work in it. [`aep-backend-postgres`](../../crates/plan/aep-backend-postgres/)
 is the adapter over `entity_postgres::PostgresStore` — the store an organisation actually runs, two
@@ -362,8 +361,9 @@ same adapter over the next provider.
 The sixteen suites run against both, each beside a **deliberately faulty** version of itself — a
 suite that has never failed is not evidence that it can. The adapter runs them over `SqliteStore`
 and over the runtime's `MemoryStore` too, which is what makes "any provider" a tested sentence; and
-the markdown provider passes `entity-runtime`'s own provider suite, a suite written by somebody who
-has never seen a planning document.
+the markdown provider passes every case of `entity-runtime`'s own provider suite that does not read an
+event log back, a suite written by somebody who has never seen a planning document: the Git-native
+layout keeps no event log, by design.
 
 **Neither reimplements the contract.** Each hands every command to `aep-backend-memory` and adds
 durability around it. Idempotency, revision conflicts, "a refusal still leaves an audit record",
@@ -384,37 +384,38 @@ plan is not theirs to write into.
 ## Choosing the store
 
 An `aep.project/5` project — what `aep plan reverse init` writes and `aep plan store migrate git`
-produces — keeps its plan in the Git-native store and accepts only `store: { git: {} }`. The
-selectors below are `aep.project/1` ones, kept for projects that have not migrated.
+produces — keeps its plan in the Git-native store unless its `store:` names a database. An
+`aep.project/1` file is refused by every verb and names the migration.
 
 One line in `.engineering/project.yaml` says where the plan is kept, and every `aep plan artifact`
 verb, `aep drive` and `aep plan conformance --backend project` open through it
 (`story:store-selection-in-project-yaml`):
 
 ```yaml
-store: markdown                    # the default: one document per artifact under planning/
-store: { sqlite: plan.sqlite3 }    # one file, relative to .engineering/ like every project path
-store: { postgres: "postgres://user:secret@db.internal/plans" }
+store: { git: {} }                          # the default: one document per artifact under planning/
+store: { sqlite: { path: plan.sqlite3 } }   # one file, relative to .engineering/ like every path
+store: { postgres: { url: "postgres://user:secret@db.internal/plans" } }
 ```
 
-Nothing else about the project changes. `--store <dir>` stays the override for the markdown form.
+Nothing else about the project changes. `--store <dir>` stays the override for the Git-native form.
 The verbs answer alike whichever store is named — `crates/edge/aep-cli/tests/store_selection.rs`
 runs every one of them, each as its own process, over `examples/planning-passkeys/` on files and on
 `project.sqlite.yaml`, and compares the output — with one difference recorded rather than hidden:
 
 | What | Markdown | SQLite, Postgres | Where it is written down |
 |---|---|---|---|
-| `validate` | on `/1`, also reconciles the documents against the journal (on `/5`, checks each artifact's `transitions` instead): drift, a forged revision (a `revision:` above anything the log records — reported, never refused), deletions, how many predate it | there is no second record to reconcile; the line is absent | `story:out-of-band-edit-is-drift` |
+| `validate` | checks each artifact's `transitions` against its ladder and status, and each evidence file against its commit | there is no second record to check; the lines are absent | `docs/design/git-native-planning-store-v0.1.md` § 6 |
+| `history` | moves and evidence records: a creation, an edge and a body are in the document and in Git | every command, from the event log | `store_selection.rs` compares the records both keep |
 
 An edge used to be a second difference — a markdown document's revision moved when a relation was
 written into its frontmatter, an entity's did not — until every store counted it the contract's way:
 a relation is a record of its own, the source's document changes at its **current** revision, and the
 event says `depends_on …` at that revision (`story:relation-bumps-a-document-revision-but-not-an-entity`).
 
-A SQLite or Postgres plan keeps what the journal keeps as the runtime's events: who, when, which
+A SQLite or Postgres plan keeps its history as the runtime's events: who, when, which
 revision, and — because the command travels as the event's `args` (`entity-runtime` R-110) — what
-changed. `aep plan artifact history` reads them back as journal entries, so the history printed over
-one store is the history printed over another. Evidence recorded about an artifact and an edge
+changed. `aep plan artifact history` reads them back in the same entry vocabulary a Git-native store
+answers from its transitions and evidence files. Evidence recorded about an artifact and an edge
 starting at one are *observations*: an event on that entity at its unchanged revision, which is what
 lets a second process count the evidence on hand from the log alone, and what `entity-runtime`
 0.12.2's providers were fixed to accept.
@@ -459,7 +460,7 @@ about three percent of everything that run did.
 Two things it is careful about. The body is printed **verbatim**, because a verb that summarised it
 would be a second and worse `explain`; and an id the plan does not hold is refused, naming it, the
 way `explain` and `history` refuse one. It reads through the contract like every other read, so the
-markdown, SQLite, Postgres and hybrid answers are one answer — held to that by
+markdown, SQLite and Postgres answers are one answer — held to that by
 `show_prints_one_artifact_with_its_body_verbatim_in_every_store` in
 `crates/edge/aep-cli/tests/store_selection.rs`. What it does not print is `extra`, the frontmatter
 keys this format does not name: they are a markdown document's own, and a plan that keeps no
@@ -490,44 +491,9 @@ exactly where it was.
 A status reached with no record is marked rather than left blank, in the words `validate` uses —
 `asserted — no record: the evidence was claimed, not held` for a move on a bare `--evidence` count,
 `no record: nothing was recorded about how this was decided` for a rung that asked for nothing. It
-reads through the contract in every store, so the answer over markdown, SQLite, Postgres and a
-hybrid is one answer. `--format json` carries the same fields. `aep govern explain` is a different
+reads through the contract in every store, so the answer over markdown, SQLite and Postgres is one
+answer. `--format json` carries the same fields. `aep govern explain` is a different
 question — how a policy decided — and this is deliberately not it.
-
-### The plan kept twice
-
-`store: hybrid` keeps the plan in markdown for pull requests **and** in a replica for tooling, under
-four words nobody may leave out — a missing one is refused by name at `aep govern validate`:
-
-```yaml
-store:
-  hybrid:
-    authority: local          # or replica: whose copy is the record of truth
-    read: local-first         # or replica-first, replica-only: where a read goes first
-    on_unreachable: refuse    # or serve-stale: what a silent replica does
-    on_divergence: record     # or refuse: what a write one side would not take becomes
-    local: markdown
-    replica: { sqlite: replica.sqlite3 }     # or { postgres: "postgres://…" }
-```
-
-This is [`aep-backend-hybrid`](../../crates/plan/aep-backend-hybrid/): the same adapter, the plan's own
-projection, over `entity-runtime`'s `Hybrid<MarkdownProvider, R>` (`story:hybrid-backend`). The
-atomicity guarantee is the runtime's, cited rather than chosen (`store-v0.1.md` § 10): a write one
-side took and the other refused is a **divergence**, recorded and never swallowed; under
-`on_divergence: refuse` the replica is asked first so a refusal there leaves the authority untouched;
-`catch_up` replays what the authority holds now and merges nothing. The rejected alternative — a
-two-phase commit with a durable intent log — is rejected there, for the reason its module doc gives.
-
-Two verbs are ours. `aep plan artifact divergences` lists what one side took and the other did not,
-says which side is authoritative, and exits 1 while anything is outstanding. `aep plan artifact
-catch-up` replays them at the side that missed them and writes back what it could not — a replica
-that moved on its own stays listed, for a person. Because every `aep plan artifact` verb is its own
-process, divergences live in `divergences.jsonl` beside the plan: written after every command, read
-back on the next open. The sixteen suites run against the composite with either side as authority
-(`aep plan conformance --backend hybrid`), and `store_selection.rs` runs every verb over the hybrid
-example (`examples/planning-passkeys/.engineering/project.hybrid.yaml`) beside the other two stores —
-and makes the replica refuse a write, lists the divergence from a second process, catches it up from
-a third.
 
 ## The reference to diff against
 

@@ -163,8 +163,8 @@ fn a_completed_explicit_store_write_leaves_no_fence_file_in_the_working_tree() {
     );
     let status = git(&main, &["status", "--porcelain", "--untracked-files=all"]);
     assert_eq!(
-        status, "?? .engineering/planning/journal.jsonl\n?? .engineering/planning/task/a.md",
-        "the write must add its artifact and its journal record and nothing else"
+        status, "?? .engineering/planning/task/a.md",
+        "the write must add its artifact and nothing else"
     );
     let _ = std::fs::remove_dir_all(main.parent().expect("scratch root"));
 }
@@ -175,7 +175,7 @@ fn a_completed_project_write_leaves_no_fence_file_in_the_working_tree() {
     std::fs::create_dir_all(main.join("protocols")).expect("protocol root");
     std::fs::write(
         main.join(".engineering/project.yaml"),
-        "{\"protocol\":\"adp/1\",\"profile\":\"development.standard\",\"protocols\":\"../protocols\"}\n",
+        "{\"version\":\"aep.project/5\",\"planning_scope\":\"fixture\",\"protocol\":\"adp/1\",\"profile\":\"development.standard\",\"protocols\":\"../protocols\"}\n",
     )
     .expect("project selector");
 

@@ -4,9 +4,9 @@
 //! applying a command, sealing its event and committing to a provider; what it does not know is
 //! that a plan is one document per artifact with its prose in the body and its edges in frontmatter,
 //! that a `status` arriving on a plain update has to be checked against the kind's ladder, or that
-//! this store's journal spells a move, an edge and a recorded observation in its own words. That is
+//! this store's history spells a move, an edge and a recorded observation in its own words. That is
 //! this type — the `Projection` the adapter runs with over [`crate::provider::MarkdownProvider`],
-//! or over any store shaped like a plan ([`PlanStore`]) — a hybrid of it and a replica.
+//! or over any store shaped like a plan ([`PlanStore`]).
 //!
 //! # What is projected, and what is not
 //!
@@ -484,11 +484,11 @@ impl MarkdownProjection {
 
 /// Every document a plan-shaped store holds, read through its `Store` traits.
 ///
-/// Public for the shell that reads a hybrid plan without opening the contract over it — the
-/// driver's per-iteration rebuild, a read-only verb — and wants what the declared read path answers.
+/// Public for a shell that wants the documents a plan-shaped store answers without opening the
+/// contract over it.
 ///
 /// The report a `MarkdownStore::load` would build over the same directory, without touching the
-/// directory: for a hybrid, what this reads is what its read path answers. `files_read` counts the
+/// directory. `files_read` counts the
 /// instances read; there are no failures, because a document that does not read refuses the whole
 /// hydration here rather than being set aside — the adapter cannot open a plan it can only half
 /// read.
@@ -533,7 +533,7 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
     /// because commands created them, which is what the audit trail then says.
     ///
     /// Read through the store's own traits — kinds, then ids, then each instance — and not from the
-    /// files directly, so a hybrid plan hydrates by its declared read path. A document that does not
+    /// files directly. A document that does not
     /// read is a refusal naming it, as an unclean `MarkdownStore` was.
     fn hydrate(&mut self, store: &S, inner: &MemoryBackend) -> Result<(), CommandError> {
         let report = documents_of(store)?;

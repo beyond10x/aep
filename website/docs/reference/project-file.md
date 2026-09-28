@@ -18,7 +18,7 @@ profile: development.standard          # the profile whose rules apply
 protocols: git+https://github.com/beyond10x/aep#58433bd85a1ccf939566c53d5543df86c3852b19
 planning_scope: shop                   # required by aep.project/5
 store:
-  git: {}                              # the Git-native store; the only store /5 accepts
+  git: {}                              # the Git-native store, the default
 summary: The web shop.                 # optional, for people
 providers:                             # optional: link patterns for external references
   jira: https://tracker.example/browse/{key}
@@ -29,12 +29,12 @@ providers:                             # optional: link patterns for external re
 
 | Field | Required | Default | Meaning |
 |---|---|---|---|
-| `version` | no | `aep.project/1` | `aep.project/5` for the Git-native store. `aep.project/2`–`/4` are refused with the migration path. |
+| `version` | yes | | `aep.project/5`. `aep.project/1` (also what a file with no `version` is) and `aep.project/2`–`/4` are refused with the migration path. |
 | `protocol` | yes | | the protocol reference, such as `adp/1` |
 | `profile` | yes | | the profile, such as `development.standard` |
 | `protocols` | no | `..` | where the governing documents come from: a path relative to `.engineering/`, or a `git+ssh://`, `git+https://` or `git+file://` URL pinned to a 40-hex commit after `#` |
 | `planning_scope` | with `/5` | | the store's name, 1–255 bytes; `reverse init` and `migrate git` set it to the repository directory's name |
-| `store` | no | `git: {}` under `/5` | where the plan is kept; see below |
+| `store` | no | `git: {}` | where the plan is kept; see below |
 | `summary` | no | | one line for people; nothing reads it |
 | `providers` | no | | a URL pattern per external system, each containing `{key}`; a pattern without `{key}` is refused |
 | `artifacts` | no | `artifacts.yaml` | the artifact manifest for [governed tasks](../concepts/governance.md) |
@@ -59,11 +59,19 @@ would be a gate whose meaning changes silently.
 
 ## `store`
 
-| `version` | Accepted `store` | Plan lives in |
-|---|---|---|
-| `aep.project/5` | `git: {}` (or absent) | `.engineering/planning/` and `.engineering/evidence/`, see [the planning store](../concepts/planning-store.md) |
-| `aep.project/1` | absent or `markdown` | `.engineering/planning/` plus `journal.jsonl`; migrate with `aep plan store migrate git --verify` |
-| `aep.project/1` | `sqlite: <file>`, `postgres: <url>`, `hybrid: {…}` | a database backend, or Markdown with a replica under a divergence policy |
+| `store` | Plan lives in |
+|---|---|
+| `git: {}` (or absent) | `.engineering/planning/` and `.engineering/evidence/`, see [the planning store](../concepts/planning-store.md) |
+| `sqlite: { path: <file> }` | one SQLite database, the path relative to `.engineering/` |
+| `postgres: { url: <url> }` | a PostgreSQL database; the password is never printed |
+
+Any other form — a bare word such as `markdown`, a misspelt key — is refused naming it. The SQLite
+and PostgreSQL stores keep no files: their history is the database's own event log.
+
+An `aep.project/1` file (`store: markdown`, `sqlite: <file>`, `postgres: <url>` or `hybrid:`) is
+refused by every command. A Markdown `/1` store migrates with
+`aep plan store migrate git --verify`; a SQLite or PostgreSQL one is rewritten by hand as `/5` with a
+`planning_scope` and the nested form above.
 
 `planning_tenant` and `planning_identity` named event-log identities. Both are refused today.
 

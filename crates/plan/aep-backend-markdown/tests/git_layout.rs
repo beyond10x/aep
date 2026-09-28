@@ -191,7 +191,7 @@ fn a_move_writes_only_its_document_and_appends_one_transition() {
         text.contains("\ntransitions:\n- {from: \"draft\", to: \"active\", "),
         "one flow mapping per transition line:\n{text}"
     );
-    assert!(!store.planning.join(journal::JOURNAL).exists());
+    assert!(!store.planning.join(journal::LEGACY_JOURNAL).exists());
 }
 
 #[test]
@@ -245,7 +245,7 @@ fn three_moves_give_three_transitions_and_three_moved_entries_in_history() {
         all, history,
         "one artifact's history is the whole store's here"
     );
-    assert!(!store.planning.join(journal::JOURNAL).exists());
+    assert!(!store.planning.join(journal::LEGACY_JOURNAL).exists());
 }
 
 #[test]
@@ -278,8 +278,8 @@ fn recording_evidence_writes_one_evidence_file_and_it_is_counted() {
         matches!(&history[..], [Entry { change: Change::Evidence { reference: Some(reference), .. }, .. }] if reference == "run-1"),
         "{history:?}"
     );
-    assert!(!store.planning.join(journal::JOURNAL).exists());
-    assert!(!store.root.join(journal::JOURNAL).exists());
+    assert!(!store.planning.join(journal::LEGACY_JOURNAL).exists());
+    assert!(!store.root.join(journal::LEGACY_JOURNAL).exists());
 }
 
 #[test]
@@ -289,15 +289,13 @@ fn the_git_layout_keeps_no_event_log() {
     move_to(&backend, "active", "move", 1_700_000_001_000);
     record_evidence(&backend, "evidence", 1_700_000_002_000);
     // A journal somebody left behind is not read either.
-    std::fs::write(store.planning.join(journal::JOURNAL), "not a log\n").expect("a stray file");
+    std::fs::write(store.planning.join(journal::LEGACY_JOURNAL), "not a log\n")
+        .expect("a stray file");
     let provider = MarkdownProvider::open_git(&store.planning, &store.evidence);
     assert_eq!(
         provider.events("story", "one").expect("answers"),
         Vec::new(),
         "no events are answered in the Git layout"
-    );
-    assert!(
-        journal::reconcile_git(&store.planning, &std::collections::BTreeMap::default()).is_empty()
     );
 }
 
@@ -393,5 +391,5 @@ fn an_interrupted_batch_is_completed_once_and_its_transition_is_not_doubled() {
             "{attempt}: one move, one transition"
         );
     }
-    assert!(!store.planning.join(journal::JOURNAL).exists());
+    assert!(!store.planning.join(journal::LEGACY_JOURNAL).exists());
 }

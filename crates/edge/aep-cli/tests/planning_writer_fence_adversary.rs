@@ -80,7 +80,7 @@ fn project_repository(root: &Path) -> PathBuf {
     std::fs::write(main.join(".engineering/planning/story/seeded.md"), STORY).expect("seed story");
     std::fs::write(
         main.join(".engineering/project.yaml"),
-        "{\"protocol\":\"adp/1\",\"profile\":\"development.standard\",\"protocols\":\"../protocols\"}\n",
+        "{\"version\":\"aep.project/5\",\"planning_scope\":\"fixture\",\"protocol\":\"adp/1\",\"profile\":\"development.standard\",\"protocols\":\"../protocols\"}\n",
     )
     .expect("project selector");
     git(&main, &["init", "--quiet"]);
@@ -247,7 +247,8 @@ fn every_write_verb_in_a_repository_changes_nothing_outside_its_store() {
         );
         for line in status.lines() {
             let path = line.split_whitespace().last().unwrap_or_default();
-            if !path.starts_with(".engineering/planning/")
+            if !(path.starts_with(".engineering/planning/")
+                || path.starts_with(".engineering/evidence/"))
                 || Path::new(path)
                     .extension()
                     .is_some_and(|extension| extension == "lock")
@@ -283,7 +284,8 @@ fn every_write_verb_in_a_repository_changes_nothing_outside_its_store() {
     );
     for line in status.lines() {
         let path = line.split_whitespace().last().unwrap_or_default();
-        if !path.starts_with(".engineering/planning/")
+        if !(path.starts_with(".engineering/planning/")
+            || path.starts_with(".engineering/evidence/"))
             || Path::new(path)
                 .extension()
                 .is_some_and(|extension| extension == "lock")

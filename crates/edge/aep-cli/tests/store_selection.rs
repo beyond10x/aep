@@ -1,19 +1,16 @@
 //! One line in `project.yaml` decides where the plan is kept, and no verb can tell the difference.
 //!
-//! `story:store-selection-in-project-yaml` and `story:hybrid-backend`. Three copies of
-//! `examples/planning-passkeys/` — on `project.yaml` (markdown, the default), on
-//! `project.sqlite.yaml`, and on `project.hybrid.yaml` (markdown with a SQLite replica) — each with
-//! the same seven artifacts seeded through the contract, and every `aep plan artifact` verb run in
-//! all three, each as its own process, with its output compared after the one thing that
-//! legitimately differs (where the store is) is written as `<store>`. A `hybrid` missing a policy
-//! word is refused by name; `aep plan conformance --backend project` holds the configured kind of
-//! store to the suites without writing into the plan; and a hybrid whose replica refuses a write
-//! records the divergence for the next process to list and catch up.
+//! `story:store-selection-in-project-yaml`. Two copies of `examples/planning-passkeys/` — on
+//! `project.yaml` (the Git-native Markdown store, the default) and on `project.sqlite.yaml` — each
+//! with the same seven artifacts seeded through the contract, and every `aep plan artifact` verb
+//! run in both, each as its own process, with its output compared after the one thing that
+//! legitimately differs (where the store is) is written as `<store>`; and `aep plan conformance
+//! --backend project` holds the configured kind of store to the suites without writing into the
+//! plan.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use aep_backend_hybrid::HybridBackend;
 use aep_backend_markdown::backend::{MarkdownBackend, ORGANISATION, SPACE};
 use aep_backend_markdown::store::MarkdownStore;
 use aep_backend_memory::seed;
@@ -21,7 +18,6 @@ use aep_backend_sqlite::SqliteBackend;
 use aep_domain::artifact::LifecycleRegistry;
 use aep_domain::entity::ActorRef;
 use aep_domain::time::Timestamp;
-use entity_sqlite::SqliteStore;
 
 /// The repository root: the protocol tree both projects point at.
 fn root() -> PathBuf {
@@ -41,9 +37,6 @@ fn aep_in(project: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(args)
         .current_dir(project)
-        // Only the `aep.project/1` Markdown project gets the upgrade suggestion; this file
-        // compares what the stores answer, not how each suggests its own layout.
-        .env("AEP_NO_UPGRADE_NOTICE", "1")
         .output()
         .expect("the protocol binary runs")
 }
@@ -107,30 +100,20 @@ fn scratch_project(name: &str, variant: &str) -> PathBuf {
     project
 }
 
-/// The four words the hybrid example declares, as the runtime spells them.
-const HYBRID_POLICY: aep_backend_hybrid::Policy = aep_backend_hybrid::Policy::new(
-    aep_backend_hybrid::Authority::Local,
-    aep_backend_hybrid::ReadPath::LocalFirst,
-    aep_backend_hybrid::WhenUnreachable::Refuse,
-    aep_backend_hybrid::OnDivergence::RecordDivergence,
-);
-
-/// The three projects, each seeded with the example's seven artifacts through the contract — the
-/// markdown one by `MarkdownBackend`, the SQLite one by `SqliteBackend`, the hybrid one by
-/// `HybridBackend`, same instant, same actor, same commands in the same order — so that what differs
+/// The two projects, each seeded with the example's seven artifacts through the contract — the
+/// markdown one by `MarkdownBackend`, the SQLite one by `SqliteBackend`,
+/// same instant, same actor, same commands in the same order — so that what differs
 /// afterwards is the store and nothing else. The example's own files are the source and are read
 /// once; the SQLite project keeps none of them, so nothing could answer from a file by mistake.
 struct Pair {
     markdown: PathBuf,
     sqlite: PathBuf,
-    hybrid: PathBuf,
 }
 
 impl Pair {
     fn new(name: &str) -> Self {
         let markdown = scratch_project(&format!("{name}-markdown"), "project.yaml");
         let sqlite = scratch_project(&format!("{name}-sqlite"), "project.sqlite.yaml");
-        let hybrid = scratch_project(&format!("{name}-hybrid"), "project.hybrid.yaml");
 
         let report = MarkdownStore::open(example().join(".engineering/planning")).load();
         assert!(report.is_clean(), "the example reads cleanly");
@@ -141,8 +124,9 @@ impl Pair {
         let planning = markdown.join(".engineering/planning");
         std::fs::remove_dir_all(&planning).expect("the copied files go");
         std::fs::create_dir_all(&planning).expect("an empty store");
-        let files = MarkdownBackend::open(
+        let files = MarkdownBackend::open_git(
             &planning,
+            markdown.join(".engineering/evidence"),
             aep_domain::workspace::Membership::default(),
             at,
             actor.clone(),
@@ -162,35 +146,7 @@ impl Pair {
         assert_eq!(seeded.entities, graph.len());
         drop(database);
 
-        let planning = hybrid.join(".engineering/planning");
-        std::fs::remove_dir_all(&planning).expect("the copied files go");
-        std::fs::create_dir_all(&planning).expect("an empty store");
-        let replica =
-            SqliteStore::open(hybrid.join(".engineering/replica.sqlite3")).expect("a replica");
-        let both = HybridBackend::open(
-            &planning,
-            replica,
-            HYBRID_POLICY,
-            aep_domain::workspace::Membership::default(),
-            at,
-            actor.clone(),
-            LifecycleRegistry::default(),
-        )
-        .expect("the hybrid backend opens");
-        let seeded = seed::from_manifest(&both, &graph, ORGANISATION, SPACE, at, &actor)
-            .expect("the plan seeds into both");
-        assert_eq!(seeded.entities, graph.len());
-        assert!(
-            both.divergences().is_empty(),
-            "the replica took every write"
-        );
-        drop(both);
-
-        Self {
-            markdown,
-            sqlite,
-            hybrid,
-        }
+        Self { markdown, sqlite }
     }
 
     /// One verb in the markdown and the SQLite project, its output made comparable.
@@ -217,22 +173,53 @@ impl Pair {
 
     /// Asserts a verb answers alike in every store, running it once in each; the markdown answer.
     fn alike(&self, args: &[&str]) -> Answer {
-        let (markdown, sqlite) = self.both(args);
+        let (mut markdown, mut sqlite) = self.both(args);
+        if args.get(2) == Some(&"history") {
+            markdown = the_record_both_keep(markdown);
+            sqlite = the_record_both_keep(sqlite);
+        }
         assert_eq!(
             markdown,
             sqlite,
             "`aep {}` differs between markdown and SQLite",
             args.join(" ")
         );
-        let hybrid = Answer::of(&self.hybrid, args);
-        assert_eq!(
-            markdown,
-            hybrid,
-            "`aep {}` differs between markdown and the hybrid",
-            args.join(" ")
-        );
         markdown
     }
+}
+
+/// A `history` answer cut to the records both kinds of store keep: moves and evidence.
+///
+/// The Git-native store records a move as a transition in its document and an observation as an
+/// evidence file, and nothing else — a creation, an edge and a body are in the document and in Git.
+/// A SQLite plan's event log holds every command. What both hold must read the same.
+fn the_record_both_keep(answer: Answer) -> Answer {
+    let stdout = if answer.stdout.trim_start().starts_with('[') {
+        let entries: Vec<serde_json::Value> =
+            serde_json::from_str(&answer.stdout).expect("a JSON history");
+        let kept: Vec<serde_json::Value> = entries
+            .into_iter()
+            .filter(|entry| {
+                matches!(
+                    entry["change"]["change"].as_str(),
+                    Some("moved" | "evidence")
+                )
+            })
+            .collect();
+        serde_json::to_string_pretty(&kept).expect("JSON")
+    } else {
+        let mut kept = String::new();
+        for line in answer
+            .stdout
+            .lines()
+            .filter(|line| line.contains(" moved ") || line.contains(" recorded from "))
+        {
+            kept.push_str(line);
+            kept.push('\n');
+        }
+        kept
+    };
+    Answer { stdout, ..answer }
 }
 
 /// What one invocation answered, with the store's location and the seed's import written out.
@@ -265,13 +252,8 @@ fn normalise(project: &Path, text: &str) -> String {
         "the SQLite store {}",
         engineering.join("plan.sqlite3").display()
     );
-    let replica = format!(
-        " with its replica in the SQLite store {}",
-        engineering.join("replica.sqlite3").display()
-    );
     let mut out = String::new();
     for line in text.lines() {
-        let line = line.replace(&replica, "");
         let line = line.replace(&format!("{markdown_root}/"), "<store>/");
         let line = line.replace(&markdown_root, "<store>");
         let line = line.replace(&sqlite, "<store>");
@@ -289,39 +271,8 @@ fn normalise(project: &Path, text: &str) -> String {
             _ => line,
         };
         let line = blank_instants(&line);
-        if line.starts_with("journal chain:") {
-            continue;
-        }
-        let line = without_the_journals_chain(&line);
         out.push_str(&line);
         out.push('\n');
-    }
-    out
-}
-
-/// `line` with the journal's hash-chain coverage blanked.
-///
-/// The one fact on this report that a SQLite or Postgres plan **cannot** have an equal of, for the
-/// same reason `validate` reconciles no journal for one: a plan without files keeps its history in
-/// the store, and the contract answers it — there is no second record, so there is nothing to
-/// chain. Comparing the counts would demand a database grow a `journal.jsonl` to stay equivalent,
-/// which is backwards. What the verbs must still agree on is everything the *plan* is, and every
-/// other number here is compared, revisions included.
-///
-/// The text rendering's whole line is dropped by the caller; this takes the two JSON counts out of
-/// the object, which is always written because a report that omits a count is a report a consumer
-/// has to branch on.
-fn without_the_journals_chain(line: &str) -> String {
-    let mut out = line.to_owned();
-    for key in ["\"chain_verified\":", "\"chain_uncovered\":"] {
-        if let Some(start) = out.find(key) {
-            let after = &out[start + key.len()..];
-            let end = after
-                .find(',')
-                .or_else(|| after.find('\n'))
-                .unwrap_or(after.len());
-            out = format!("{}{key}{}", &out[..start], &after[end..]);
-        }
     }
     out
 }
@@ -608,7 +559,7 @@ fn an_edge_is_taken_back_alike_in_every_store() {
     // document that appends a line — so the two disagree about the **order** of an artifact's
     // relations after a removal. That is a real divergence and it is not this story's to decide, so
     // it is written down here instead of being hidden behind a comparison of one store with itself.
-    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+    for project in [&pair.markdown, &pair.sqlite] {
         let back = Answer::of(
             project,
             &["plan", "artifact", "show", "task:assertion-verification"],
@@ -643,7 +594,7 @@ const SHOWN_BODY: &str = "# Audit trail\n\nEvery ceremony,  verbatim.\n\n";
 /// every time. The artifact is created and given its prose here rather than taken from the example,
 /// because a body seeded from the manifest exists only in the markdown copy.
 /// `story:passkey-audit-trail`, with a title, a summary, a tag, an edge and [`SHOWN_BODY`], written
-/// into all three stores through the contract so that what `show` prints back is comparable.
+/// into both stores through the contract so that what `show` prints back is comparable.
 fn a_story_carrying_prose(pair: &Pair) {
     let body = Path::new(env!("CARGO_TARGET_TMPDIR")).join("store-selection-show-body.md");
     std::fs::write(&body, SHOWN_BODY).expect("body written");
@@ -750,11 +701,7 @@ fn show_prints_one_artifact_with_its_body_verbatim_in_every_store() {
     // An id the plan does not hold is refused, naming it, in every store — the way `explain` and
     // `history` refuse one. The wording differs by store because the stores name themselves
     // differently; that the id is in it does not.
-    for (label, project) in [
-        ("markdown", &pair.markdown),
-        ("sqlite", &pair.sqlite),
-        ("hybrid", &pair.hybrid),
-    ] {
+    for (label, project) in [("markdown", &pair.markdown), ("sqlite", &pair.sqlite)] {
         let output = aep_in(
             project,
             &["plan", "artifact", "show", "story:not-in-this-plan"],
@@ -794,51 +741,11 @@ fn the_sqlite_plan_is_read_from_the_database_and_not_from_files() {
 }
 
 #[test]
-fn a_hybrid_missing_a_policy_word_is_refused_naming_the_word() {
-    let project = scratch_project("hybrid-missing-word", "project.yaml");
-    let engineering = project.join(".engineering");
-    let config = std::fs::read_to_string(engineering.join("project.yaml")).expect("readable");
-    std::fs::write(
-        engineering.join("project.yaml"),
-        format!(
-            "{config}\nstore:\n  hybrid:\n    authority: local\n    read: local-first\n    \
-             on_unreachable: fail\n    local: markdown\n    replica: {{ sqlite: replica.sqlite3 }}\n"
-        ),
-    )
-    .expect("project.yaml written");
-
-    for args in [
-        &["plan", "artifact", "list"][..],
-        &[
-            "govern",
-            "validate",
-            "--root",
-            root().to_str().expect("printable"),
-        ],
-    ] {
-        let output = aep_in(&project, args);
-        let (stdout, stderr) = (text(&output.stdout), text(&output.stderr));
-        assert_ne!(
-            output.status.code(),
-            Some(0),
-            "`aep {}` accepted a hybrid with no `on_divergence`: {stdout}",
-            args.join(" ")
-        );
-        assert!(
-            format!("{stdout}{stderr}").contains("on_divergence"),
-            "`aep {}` refused without naming the missing word:\n{stdout}{stderr}",
-            args.join(" ")
-        );
-    }
-}
-
-#[test]
 fn conformance_against_the_project_holds_the_configured_kind_of_store_to_the_suites() {
     let pair = Pair::new("conformance");
     for (project, expected) in [
         (&pair.markdown, "markdown ("),
         (&pair.sqlite, "sqlite (in-memory database)"),
-        (&pair.hybrid, "hybrid ("),
     ] {
         let output = aep_in(
             project,
@@ -883,102 +790,11 @@ fn conformance_against_the_project_holds_the_configured_kind_of_store_to_the_sui
 }
 
 #[test]
-fn a_hybrid_records_a_write_its_replica_refused_and_the_next_process_catches_it_up() {
-    use std::os::unix::fs::PermissionsExt as _;
-
-    let pair = Pair::new("divergence");
-    let project = &pair.hybrid;
-    let replica = project.join(".engineering/replica.sqlite3");
-
-    // Nothing outstanding to begin with, and the verb says so with exit 0.
-    let output = aep_in(project, &["plan", "artifact", "divergences"]);
-    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-    assert!(text(&output.stdout).contains("no divergences recorded; authority: local"));
-
-    // The replica stops taking writes: its file is read-only. The authority takes the story.
-    let writable = std::fs::metadata(&replica).expect("metadata").permissions();
-    let mut read_only = writable.clone();
-    read_only.set_mode(0o444);
-    std::fs::set_permissions(&replica, read_only).expect("read-only");
-    let output = aep_in(
-        project,
-        &[
-            "plan",
-            "artifact",
-            "new",
-            "story",
-            "passkey-attestation",
-            "--title",
-            "Attestation is verified",
-        ],
-    );
-    std::fs::set_permissions(&replica, writable).expect("writable again");
-    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-    assert!(
-        project
-            .join(".engineering/planning/story/passkey-attestation.md")
-            .is_file(),
-        "the authority holds the document"
-    );
-
-    // The next process lists what diverged — and says which side is authoritative.
-    let output = aep_in(
-        project,
-        &["plan", "artifact", "divergences", "--format", "json"],
-    );
-    assert_eq!(output.status.code(), Some(1), "a divergence is a problem");
-    let report: serde_json::Value =
-        serde_json::from_str(&text(&output.stdout)).expect("a JSON report");
-    assert_eq!(report["authority"], "local");
-    assert_eq!(report["divergences"].as_array().map(Vec::len), Some(1));
-    assert_eq!(report["divergences"][0]["entity"], "story");
-    assert_eq!(report["divergences"][0]["id"], "passkey-attestation");
-    assert!(
-        project
-            .join(".engineering/planning/divergences.jsonl")
-            .is_file(),
-        "written beside the plan"
-    );
-
-    // Every other verb still works over the plan while it is diverged.
-    let output = aep_in(project, &["plan", "artifact", "list"]);
-    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-    assert_eq!(text(&output.stdout).lines().count(), 8);
-
-    // Catch-up replays it at the replica; the replica then holds the story.
-    let output = aep_in(project, &["plan", "artifact", "catch-up"]);
-    assert_eq!(output.status.code(), Some(0), "{}", text(&output.stderr));
-    assert!(
-        text(&output.stdout).contains("1 divergence(s) found, 1 replayed, 0 outstanding"),
-        "{}",
-        text(&output.stdout)
-    );
-    assert!(!project
-        .join(".engineering/planning/divergences.jsonl")
-        .exists());
-    let output = aep_in(project, &["plan", "artifact", "divergences"]);
-    assert_eq!(output.status.code(), Some(0));
-    let held = {
-        use entity_store::StateProvider as _;
-        SqliteStore::open(&replica)
-            .expect("the replica opens")
-            .load("story", "passkey-attestation")
-            .expect("answers")
-    };
-    assert!(held.is_some(), "the replica now holds the story");
-
-    // A plan that is not a hybrid has no divergences to speak of.
-    let output = aep_in(&pair.sqlite, &["plan", "artifact", "divergences"]);
-    assert_ne!(output.status.code(), Some(0));
-    assert!(text(&output.stderr).contains("not a hybrid plan"));
-}
-
-#[test]
 fn evidence_without_at_is_recorded_at_the_instant_the_edge_read() {
     // `story:evidence-verb-refuses-its-own-default-instant`: the default was produced to the second
     // and refused by the reader that only knew a date — every recording had to type `--at`.
     let pair = Pair::new("evidence-now");
-    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+    for project in [&pair.markdown, &pair.sqlite] {
         let output = aep_in(
             project,
             &[
@@ -1076,7 +892,7 @@ fn what_made_a_story_done_names_the_revision_each_record_was_admitted_at() {
     // on the day it was written and be a lie every day after, because a later edit would silently
     // re-date every old record onto the new body.
     let pair = Pair::new("explain-revisions");
-    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+    for project in [&pair.markdown, &pair.sqlite] {
         closed_on_two_records(project, "run-4711");
 
         let output = aep_in(
@@ -1148,7 +964,7 @@ fn a_joined_record_outlives_the_file_its_reference_names() {
     std::fs::write(&log, "1 suite, 0 failures\n").expect("the run's log is written");
     let reference = log.to_str().expect("a printable path").to_owned();
 
-    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+    for project in [&pair.markdown, &pair.sqlite] {
         closed_on_two_records(project, &reference);
     }
 
@@ -1158,7 +974,7 @@ fn a_joined_record_outlives_the_file_its_reference_names() {
     std::fs::remove_file(&log).expect("the log goes");
     assert!(!log.exists(), "and now names one that does not");
 
-    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+    for project in [&pair.markdown, &pair.sqlite] {
         let output = aep_in(
             project,
             &["plan", "artifact", "explain", "story:passkey-login"],
@@ -1182,7 +998,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
     // runner is down on the day it matters most — and what it must not be is indistinguishable
     // from one the store holds a record for.
     let pair = Pair::new("explain-assertions");
-    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+    for project in [&pair.markdown, &pair.sqlite] {
         // A rung that asks for nothing: nothing was recorded about how it was decided.
         let output = aep_in(
             project,
@@ -1247,7 +1063,7 @@ fn a_status_reached_without_a_record_says_which_kind_of_claim_it_rested_on() {
 #[test]
 fn explaining_an_artifact_no_store_holds_is_refused_naming_it() {
     let pair = Pair::new("explain-unknown");
-    for project in [&pair.markdown, &pair.sqlite, &pair.hybrid] {
+    for project in [&pair.markdown, &pair.sqlite] {
         let output = aep_in(
             project,
             &["plan", "artifact", "explain", "story:no-such-story"],

@@ -16,8 +16,26 @@ fn scratch(name: &str) -> PathBuf {
         .join("conformance")
         .join(name);
     let _ = std::fs::remove_dir_all(&root);
+    let _ = std::fs::remove_dir_all(evidence_of(&root));
     std::fs::create_dir_all(&root).expect("a scratch directory");
     root
+}
+
+/// Where the evidence of the store at `root` is kept: beside it, as `aep.project/5` keeps it.
+fn evidence_of(root: &Path) -> PathBuf {
+    root.with_extension("evidence")
+}
+
+/// The Git-native store at `root`, with its evidence beside it.
+fn open_store(
+    root: impl AsRef<Path>,
+    membership: aep_domain::workspace::Membership,
+    at: Timestamp,
+    actor: ActorRef,
+    lifecycles: aep_domain::artifact::LifecycleRegistry,
+) -> Result<MarkdownBackend, aep_contract::error::CommandError> {
+    let root = root.as_ref();
+    MarkdownBackend::open_git(root, evidence_of(root), membership, at, actor, lifecycles)
 }
 
 /// The ladders these tests hold a store to.
@@ -30,7 +48,7 @@ fn ladders() -> aep_domain::artifact::LifecycleRegistry {
 }
 
 fn backend(name: &str) -> MarkdownBackend {
-    MarkdownBackend::open(
+    open_store(
         scratch(name),
         aep_domain::workspace::Membership::default(),
         Timestamp::from_epoch_millis(1_700_000_000_000),
@@ -145,7 +163,7 @@ fn a_command_that_moves_a_story_survives_a_reopen() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(
+    let store = open_store(
         &root,
         aep_domain::workspace::Membership::default(),
         at,
@@ -191,14 +209,14 @@ fn a_command_that_moves_a_story_survives_a_reopen() {
          would delete every Outcome and Acceptance in the store:\n{written}"
     );
 
-    // And the journal, which is what D-P3 was about.
-    let (entries, unreadable) = aep_backend_markdown::journal::read(&root);
+    // And the move, recorded in the document it moved, which is what D-P3 was about.
+    let (entries, unreadable) = aep_backend_markdown::journal::read_git(&root, &evidence_of(&root));
     assert_eq!(unreadable, 0);
     assert!(
         entries
             .iter()
             .any(|entry| entry.artifact.to_string() == "story:one"),
-        "the move is in the journal, answerable without reading git"
+        "the move is in the transitions, answerable without reading git"
     );
 }
 
@@ -215,7 +233,7 @@ fn a_created_entity_becomes_a_document_this_store_holds() {
     let root = scratch("created");
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(
+    let store = open_store(
         &root,
         aep_domain::workspace::Membership::default(),
         at,
@@ -260,12 +278,11 @@ fn a_created_entity_becomes_a_document_this_store_holds() {
     assert!(written.contains("status: draft"), "{written}");
     assert!(written.contains("title: A new story"), "{written}");
 
-    let (entries, _) = aep_backend_markdown::journal::read(&root);
     assert!(
-        entries
-            .iter()
-            .any(|entry| entry.artifact.to_string() == "story:new-one"),
-        "and the creation is in the journal"
+        !root
+            .join(aep_backend_markdown::journal::LEGACY_JOURNAL)
+            .exists(),
+        "and nothing beside the document records it: the Git-native layout keeps no log"
     );
 }
 
@@ -276,7 +293,7 @@ fn an_entity_this_store_is_not_addressed_for_gets_no_invented_file() {
     // wrote into somebody's plan. They are reported instead.
     let root = scratch("unprojected");
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
-    let store = MarkdownBackend::open(
+    let store = open_store(
         &root,
         aep_domain::workspace::Membership::default(),
         at,
@@ -315,7 +332,7 @@ fn a_relation_command_becomes_an_edge_in_the_frontmatter() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(
+    let store = open_store(
         &root,
         aep_domain::workspace::Membership::default(),
         at,
@@ -400,7 +417,7 @@ fn a_status_off_the_ladder_is_refused_however_it_arrives() {
 
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(
+    let store = open_store(
         &root,
         aep_domain::workspace::Membership::default(),
         at,
@@ -463,7 +480,7 @@ fn a_command_can_carry_the_document_prose_and_absence_leaves_it_alone() {
     let root = scratch("prose");
     let at = Timestamp::from_epoch_millis(1_700_000_000_000);
     let actor = ActorRef::parse("human:operator").expect("an actor");
-    let store = MarkdownBackend::open(
+    let store = open_store(
         &root,
         aep_domain::workspace::Membership::default(),
         at,

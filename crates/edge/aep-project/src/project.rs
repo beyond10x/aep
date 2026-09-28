@@ -363,6 +363,12 @@ pub fn resolve_member(member: &Member, engineering: &Path) -> Result<PathBuf, St
     resolve_protocol_source(&member.source, engineering)
 }
 
+/// Resolves a project's protocol source against its `.engineering` directory, as loading the
+/// project would, for a caller holding a configuration that is not on disk yet.
+pub fn resolve_protocols(source: &ProtocolSource, engineering: &Path) -> Result<PathBuf, String> {
+    resolve_protocol_source(source, engineering)
+}
+
 /// Resolves a local tree immediately or materializes an immutable repository source in the cache.
 fn resolve_protocol_source(source: &ProtocolSource, engineering: &Path) -> Result<PathBuf, String> {
     match source {
@@ -1229,7 +1235,7 @@ mod tests {
         write(
             &root.join(".engineering/project.yaml"),
             &format!(
-                "protocol: adp/1\nprofile: development.standard\nprotocols: {}\n",
+                "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\nprotocols: {}\n",
                 relative_tree(&root)
             ),
         );
@@ -1289,7 +1295,7 @@ mod tests {
         write(
             &root.join(".engineering/project.yaml"),
             &format!(
-                "protocol: adp/1\nprofile: house.standard\nprotocols: {}\n",
+                "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: house.standard\nprotocols: {}\n",
                 relative_tree(&root)
             ),
         );
@@ -1345,7 +1351,7 @@ mod tests {
         write(
             &root.join(".engineering/project.yaml"),
             &format!(
-                "protocol: adp/1\nprofile: house.reckless\nprotocols: {}\n",
+                "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: house.reckless\nprotocols: {}\n",
                 relative_tree(&root)
             ),
         );
