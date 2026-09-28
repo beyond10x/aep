@@ -1,8 +1,9 @@
-//! Equality of already-admitted suite/4 definitions inherited by coverage suite/5.
+//! Equality of already-admitted scenario definitions across an exact parent chain.
 //!
 //! This is a comparison view, never a wire-admission route or a replacement for original bytes.
 //! Defaults and Node values follow their declared ESS scenario owners. Ordered metadata and u64
 //! fields remain exact; arbitrary payload object members are never treated as optional fields.
+//! Suite/29 retains every field and scalar lexeme without the legacy default normalization.
 use std::collections::BTreeMap;
 
 use aep_domain::{Node, Predicate};
@@ -23,9 +24,23 @@ impl Definitions {
                 .map_err(|error| value.error("InvalidShape", error.to_string()))
         }
         let fields = value.object()?;
+        let provenance: Provenance = decode(&fields["provenance"])?;
+        let scenarios = if provenance.suite_version == "ess-conformance/29" {
+            fields["scenarios"]
+                .object()?
+                .iter()
+                .map(|(id, value)| (id.clone(), Scenario::Direct(value.exact())))
+                .collect()
+        } else {
+            let legacy: BTreeMap<String, LegacyScenario> = decode(&fields["scenarios"])?;
+            legacy
+                .into_iter()
+                .map(|(id, value)| (id, Scenario::Legacy(value)))
+                .collect()
+        };
         Ok(Self {
-            provenance: decode(&fields["provenance"])?,
-            scenarios: decode(&fields["scenarios"])?,
+            provenance,
+            scenarios,
         })
     }
 }
@@ -41,8 +56,14 @@ pub(super) struct Provenance {
     component: Option<String>,
 }
 
+#[derive(PartialEq, Eq)]
+pub(super) enum Scenario {
+    Legacy(LegacyScenario),
+    Direct(crate::count_json::ExactJson),
+}
+
 #[derive(Deserialize, PartialEq, Eq)]
-pub(super) struct Scenario {
+pub(super) struct LegacyScenario {
     purpose: String,
     steps: Vec<Step>,
     // Keep complete dependency occurrence/order metadata as the coverage contract requires.

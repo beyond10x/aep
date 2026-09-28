@@ -1,0 +1,17 @@
+format: ess/17
+system: library
+version: v1
+domain: library.api
+types:
+  - name: library.api.Document
+    kind: newtype
+    of: String
+commands:
+  - name: library.api.Read
+    response:
+      - {name: value, type: library.api.Document}
+      - {name: ok, type: Boolean}
+      - {name: revision, type: Integer}
+    outcomes:
+      - name: returned
+        returns: true

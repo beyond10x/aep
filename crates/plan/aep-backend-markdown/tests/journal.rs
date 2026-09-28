@@ -78,6 +78,7 @@ fn provenance_totals_without_losing_where_each_part_came_from() {
     let provenance = Provenance {
         recorded: BTreeMap::from([(EvidenceKind::TestResult, 2)]),
         asserted: BTreeMap::from([(EvidenceKind::TestResult, 1), (EvidenceKind::Approval, 1)]),
+        ..Provenance::default()
     };
     assert_eq!(
         provenance.total(),
@@ -92,10 +93,36 @@ fn provenance_totals_without_losing_where_each_part_came_from() {
         !Provenance {
             recorded: BTreeMap::from([(EvidenceKind::TestResult, 1)]),
             asserted: BTreeMap::new(),
+            ..Provenance::default()
         }
         .leans_on_an_assertion(),
         "a move decided entirely on the record leans on nothing"
     );
+}
+
+#[test]
+fn coverage_eligibility_retains_the_original_record_kind_and_separate_basis() {
+    let provenance = Provenance {
+        recorded: BTreeMap::from([(EvidenceKind::EssConformanceCoverageV1, 4)]),
+        ess_conformance_from_coverage: 1,
+        ..Provenance::default()
+    };
+    assert_eq!(provenance.total()[&EvidenceKind::EssConformance], 1);
+    assert!(!provenance
+        .recorded
+        .contains_key(&EvidenceKind::EssConformance));
+    assert!(!provenance.leans_on_an_assertion());
+    let wire = serde_json::to_value(&provenance).unwrap();
+    assert_eq!(wire["ess_conformance_from_coverage"], 1);
+    let restored: Provenance = serde_json::from_value(wire).unwrap();
+    assert_eq!(restored.total(), provenance.total());
+    let legacy: Provenance = serde_json::from_str(r#"{"recorded":{"ess_conformance":1}}"#).unwrap();
+    assert_eq!(legacy.ess_conformance_from_coverage, 0);
+    assert_eq!(legacy.total()[&EvidenceKind::EssConformance], 1);
+    assert!(serde_json::to_value(legacy)
+        .unwrap()
+        .get("ess_conformance_from_coverage")
+        .is_none());
 }
 
 /// A journal written before provenance existed still reads, and does not acquire a claim.
@@ -175,6 +202,7 @@ fn every_change_round_trips() {
             decided_on: Provenance {
                 recorded: BTreeMap::from([(EvidenceKind::TestResult, 1)]),
                 asserted: BTreeMap::from([(EvidenceKind::Approval, 2)]),
+                ..Provenance::default()
             },
         },
         Change::Related {

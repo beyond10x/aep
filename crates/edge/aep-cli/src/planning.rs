@@ -859,6 +859,39 @@ impl Opened {
         }
     }
 
+    /// A separate eligibility count: original record kinds never change or acquire an alias.
+    fn coverage_conformance_eligibility(&self, id: &ArtifactId, now: aep_domain::time::Timestamp) -> Result<usize> {
+        use aep_backend_markdown::journal::Change;
+        let Some(stored) = self.report.documents.get(id) else { return Ok(0); };
+        let front = &stored.document.frontmatter;
+        if front.kind != ArtifactKind::ExecutableSystemSpecification {
+            return Ok(0);
+        }
+        let entries = match self.log() {
+            Some((entries, _)) => entries,
+            None => entries_from_events(self.backend()?, id)?,
+        };
+        let mut latest = None;
+        let mut candidates = Vec::new();
+        for entry in &entries {
+            if &entry.artifact != id { continue; }
+            let Change::Evidence { kind: aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1, source, .. } = &entry.change else { continue; };
+            let Ok(sources) = aep_ess_evidence::read_planning_coverage_source(source) else { continue; };
+            let data = sources.reading().expect("re-admitted source").data();
+            if front.model_digest.as_ref() != Some(&data.spec_digest) { continue; }
+            if latest.is_none_or(|at| data.completed_at > at) {
+                latest = Some(data.completed_at);
+                candidates.clear();
+            }
+            if latest == Some(data.completed_at) { candidates.push((source, &entry.at)); }
+        }
+        // The newest observation decides; equally timed contradictory runs cannot outvote each
+        // other, and repeating a passing report never mints another eligibility unit.
+        Ok(usize::from(!candidates.is_empty() && candidates.iter().all(|(source, at)| {
+            aep_ess_evidence::qualify_planning_coverage(source, front.model_digest.as_ref(), at, now).is_ok()
+        })))
+    }
+
     /// Everything the plan's own record holds, oldest first, and how many records did not read:
     /// the journal of a markdown or hybrid plan, the transitions and evidence files of a Git-native
     /// plan. `None` for a plan whose record is its backend's.
@@ -1067,6 +1100,16 @@ fn evidence_from_events(
     id: &ArtifactId,
 ) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
     use aep_backend_markdown::journal::Change;
+    let mut counted = aep_backend_markdown::kernel::EvidenceOnHand::new();
+    for entry in entries_from_events(backend, id)? {
+        if let Change::Evidence { kind, .. } = entry.change {
+            *counted.entry(kind).or_default() += 1;
+        }
+    }
+    Ok(counted)
+}
+
+fn entries_from_events(backend: &PlanBackend, id: &ArtifactId) -> Result<Vec<aep_backend_markdown::journal::Entry>> {
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::entity::EntityLocator;
@@ -1080,13 +1123,7 @@ fn evidence_from_events(
     .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
     let target = block_on(backend.resolve(&locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
-    let mut counted = aep_backend_markdown::kernel::EvidenceOnHand::new();
-    for entry in backend.entries_of(&target, id)?.0 {
-        if let Change::Evidence { kind, .. } = entry.change {
-            *counted.entry(kind).or_default() += 1;
-        }
-    }
-    Ok(counted)
+    Ok(backend.entries_of(&target, id)?.0)
 }
 
 /// What can be done with the plan.
@@ -2695,6 +2732,7 @@ fn decide_and_move(
     let decided_on = aep_backend_markdown::journal::Provenance {
         recorded: opened.evidence_on_hand(id)?,
         asserted,
+        ess_conformance_from_coverage: if to == "conforming" { opened.coverage_conformance_eligibility(id, instant(now)?)? } else { 0 },
     };
     let evidence = decided_on.total();
 
@@ -3000,6 +3038,9 @@ fn report_moves(
                     moved.to,
                     moved.revision
                 );
+            }
+            if decided_on.ess_conformance_from_coverage > 0 {
+                outln!("  derived ess_conformance eligibility from {} admitted current complete ess_conformance_coverage_v1 record(s)", decided_on.ess_conformance_from_coverage);
             }
             if decided_on.leans_on_an_assertion() {
                 let asserted: Vec<String> = decided_on
@@ -6819,13 +6860,12 @@ struct Recorded {
 fn coverage_input_from_raw_suite(original: &str) -> Result<Option<String>> {
     // This probe chooses a versioned reader only. Admission re-reads the complete original.
     let probe = serde_json::from_str::<serde_json::Value>(original).ok();
-    if probe
+    let version = probe
         .as_ref()
         .and_then(|value| value.get("provenance"))
         .and_then(|p| p.get("suite_version"))
-        .and_then(serde_json::Value::as_str)
-        == Some("ess-conformance/5")
-    {
+        .and_then(serde_json::Value::as_str);
+    if matches!(version, Some("ess-conformance/5" | "ess-conformance/29")) {
         return Ok(Some(aep_ess_evidence::wrap_coverage_suite(original)?));
     }
     Ok(None)
@@ -6991,15 +7031,9 @@ fn recorded_coverage(
     if !entity_core::is_valid_timestamp(&recorded_at) {
         anyhow::bail!("PlanningTimestampUnsupported: valid report completed_at {} renders as {recorded_at}, which the planning event backend cannot record; original source time is unchanged", data.completed_at.epoch_millis());
     }
-    let source = serde_json::json!({
-        "format":"ess-conformance-report/2", "report_input":path.display().to_string(), "suite_input":input_path.display().to_string(), "input_transport":transport,
-        "specification":data.specification, "implementation":data.implementation, "spec_digest":data.spec_digest,
-        "producer_profile":data.producer_profile.as_str(), "suite":data.suite, "selection":data.coverage.selection,
-        "execution_status":data.execution_status.as_str(), "conformance_status":data.conformance_status.as_str(),
-        "coverage":data.coverage, "policy":"complete-selection/1", "selected_ids":reading.selected_ids(),
-        "counts":{"total":data.counts.total,"passed":data.counts.passed,"failed":data.counts.failed,"error":data.counts.error,"unsupported":data.counts.unsupported,"skipped":data.counts.skipped},
-        "completed_at":data.completed_at.epoch_millis().to_string()
-    }).to_string();
+    let source = aep_ess_evidence::planning_coverage_source(
+        sources, &path.display().to_string(), &input_path.display().to_string(), transport,
+    )?;
     Ok(Recorded {
         kind: aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1,
         source,

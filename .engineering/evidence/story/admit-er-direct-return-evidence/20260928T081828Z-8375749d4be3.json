@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-28T08:18:28Z",
+  "actor": "human:timo",
+  "artifact": "story:admit-er-direct-return-evidence",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check; closed reader, CLI, domain, MSRV and website checks passed; digest mutation caught and restored",
+    "reference": "docs/evidence/direct-return-reader/task-check.log"
+  }
+}

@@ -1,0 +1,143 @@
+{
+  "provenance": {
+    "suite_version": "ess-conformance/28",
+    "system": "library",
+    "specification_version": "v1",
+    "spec_digest": "094633d19226f603425bfbf72f00f15362477c03b79295a1054f7abd6a4bea90",
+    "contract_digest": "0b8a12c490f5e6ee01f8fe580c1bc8fb8ee5674d7af54e6c7d07c707c1298b24"
+  },
+  "scenarios": {
+    "library.api.Read/outcome/returned": {
+      "purpose": "`library.api.Read` answers `returned` for an input no other branch's guard claims",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "library.api.Read"
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          }
+        },
+        {
+          "step": "expect_direct_response",
+          "response": {
+            "command": "library.api.Read",
+            "outcome": {
+              "command": "library.api.Read",
+              "outcome": "returned"
+            },
+            "fields": [
+              {
+                "name": "value",
+                "type": "library.api.Document"
+              },
+              {
+                "name": "ok",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              }
+            ],
+            "declarations": {
+              "library.api.Document": {
+                "kind": "newtype",
+                "of": "String"
+              }
+            },
+            "expected": {}
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "command",
+          "name": "library.api.Read"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          }
+        }
+      ]
+    },
+    "library.api/authored/pure-return": {
+      "purpose": "A scalar library return preserves a lossless document and an exact integer.",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "library.api.Read"
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          }
+        },
+        {
+          "step": "expect_direct_response",
+          "response": {
+            "command": "library.api.Read",
+            "outcome": {
+              "command": "library.api.Read",
+              "outcome": "returned"
+            },
+            "fields": [
+              {
+                "name": "value",
+                "type": "library.api.Document"
+              },
+              {
+                "name": "ok",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              }
+            ],
+            "declarations": {
+              "library.api.Document": {
+                "kind": "newtype",
+                "of": "String"
+              }
+            },
+            "expected": {
+              "ok": true,
+              "revision": 9007199254740993,
+              "value": "{\"number\":9007199254740993}"
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "domain",
+          "name": "library.api"
+        },
+        {
+          "kind": "type",
+          "name": "library.api.Document"
+        },
+        {
+          "kind": "command",
+          "name": "library.api.Read"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          }
+        }
+      ]
+    }
+  }
+}

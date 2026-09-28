@@ -1,4 +1,4 @@
-//! Closed values for the ESS suite/5 selection and inventory contract.
+//! Closed values for the ESS suite/5 and suite/29 selection and inventory contract.
 use std::collections::BTreeMap;
 
 use crate::ess_conformance_v2::{lower_kebab, qualified_name, EssAdmissionError, ScenarioId};
@@ -45,7 +45,7 @@ pub fn original_digest(value: &str) -> bool {
     })
 }
 
-/// Checked exact suite/5 reference. It does not broaden the frozen count reference.
+/// Checked exact suite/5 or suite/29 reference, separate from ordinary count evidence.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SuiteReference {
@@ -67,7 +67,7 @@ impl SuiteReference {
         digest_profile: String,
         digest: String,
     ) -> Result<Self, EssAdmissionError> {
-        if version != "ess-conformance/5" {
+        if !matches!(version.as_str(), "ess-conformance/5" | "ess-conformance/29") {
             return Err(EssAdmissionError::new(
                 "UnsupportedSuiteVersion",
                 "$.suite.version",
@@ -94,7 +94,7 @@ impl SuiteReference {
             digest,
         })
     }
-    /// Exactly ess-conformance/5.
+    /// Exactly ess-conformance/5 or ess-conformance/29.
     pub fn version(&self) -> &str {
         &self.version
     }

@@ -1,0 +1,23 @@
+   Compiling aep-cli v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-cli)
+    Finished `test` profile [unoptimized] target(s) in 1.07s
+     Running tests/ess_conformance_coverage.rs (target/debug/deps/ess_conformance_coverage-921ce063e4b7b27c)
+
+running 1 test
+test current_complete_coverage_earns_specification_conformance_without_inventing_a_record ... FAILED
+
+failures:
+
+---- current_complete_coverage_earns_specification_conformance_without_inventing_a_record stdout ----
+
+thread 'current_complete_coverage_earns_specification_conformance_without_inventing_a_record' (2552735) panicked at crates/edge/aep-cli/tests/ess_conformance_coverage.rs:442:5:
+stdout=executable-system-specification:complete is validated; conforming is on the ladder and not yet earned: reaching conforming needs at least 1 ess_conformance record(s). no ess_conformance record is held for this artifact — `protocol artifact evidence <id> --kind ess_conformance --source <where it came from>` records one
+ stderr=
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    current_complete_coverage_earns_specification_conformance_without_inventing_a_record
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 21 filtered out; finished in 1.12s
+
+error: test failed, to rerun pass `-p aep-cli --test ess_conformance_coverage`

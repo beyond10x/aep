@@ -1,0 +1,11 @@
+--- a/crates/observe/aep-ess-evidence/src/planning_coverage.rs
++++ b/crates/observe/aep-ess-evidence/src/planning_coverage.rs
+@@ -118,7 +118,7 @@
+             "the specification has no current model digest",
+         )
+     })?;
+-    if model != &data.spec_digest {
++    if false && model != &data.spec_digest {
+         return Err(refusal(
+             "ModelDigestMismatch",
+             "the current specification differs from the admitted run",

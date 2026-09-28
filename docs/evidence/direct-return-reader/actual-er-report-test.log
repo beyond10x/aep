@@ -1,0 +1,9 @@
+   Compiling aep-ess-evidence v0.63.1 ($HOME/.local/state/worktree/trees/b10x/aep/er-suite-evidence-admission/crates/observe/aep-ess-evidence)
+    Finished `test` profile [unoptimized] target(s) in 2.65s
+     Running tests/er_library_report.rs (target/debug/deps/er_library_report-2b0d652d96fb97de)
+
+running 1 test
+test the_complete_entity_runtime_library_run_is_admitted_without_rewriting_its_sources ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.31s
+

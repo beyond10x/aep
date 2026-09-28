@@ -1,0 +1,1374 @@
+task: [fmt-check] cargo xtask fmt --check
+task: [status-check] cargo xtask status --check
+delivered-waves record is up to date (93 tags)
+AGENTS.md gate-step list is up to date (16 steps)
+the website's currency stamps are up to date (0.63.1)
+task: [plan-check] cargo run -q -p aep-cli --bin protocol -- plan artifact validate
+336 file(s) in <AEP_WORKTREE>/.engineering/planning: 336 artifact(s)
+4 closed on an assertion:
+  - story:guard-tests reached implemented on an assertion rather than a record — the evidence was claimed, not held
+  - story:changelog-claims-are-checked reached implemented on an assertion rather than a record — the evidence was claimed, not held
+  - story:journal-reconciliation reached implemented on an assertion rather than a record — the evidence was claimed, not held
+  - story:sqlite-backend-adapter reached implemented on an assertion rather than a record — the evidence was claimed, not held
+5 review(s) recorded no findings block:
+  - review-result:er-direct-return-reader-review states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere
+  - review-result:ess-conformance-coverage-source-adversary-pass-2 states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere
+  - review-result:ess-conformance-v2-counts-adversary-pass-1 states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere
+  - review-result:planning-migration-command-contract-pass-1 states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere
+  - review-result:planning-migration-command-contract-pass-2 states its findings as prose only — nothing can enumerate what it found, so                  the next review starts from nowhere
+valid
+task: [audit-check] bash .engineering/checks/run.sh table-shape open-cells closed-cells followups citations layered-rows scan-loop
+
+== table-shape  (task:ova-table-shape) ==
+PASS  T8   the table parser is defined once in lib.sh, and every sibling reads through it
+PASS  T1   the audit contains exactly one markdown table
+PASS  T2   its header is the seven column names, in order, cell for cell after trimming
+PASS  T3   every data row has exactly seven cells
+PASS  T4   every Verdict cell is exactly open or closed — no third value, no hedge
+        · 15 open, 4 closed, 19 data row(s)
+PASS  T5   at least one row is open and at least one is closed
+        · floor: 12 candidate(s) from the scan
+PASS  T6   the data row count is at least the candidate count the scan emits
+PASS  T7   emptying the table turns T5 and T6 red — the quantified rows are not vacuous
+
+== open-cells  (task:ova-open-cells) ==
+PASS  O1   every open row's Guarantee is exactly the em dash
+PASS  O2   every open row's Reason for adopters at is exactly the em dash
+PASS  O3   every open row's Follow-up is exactly the em dash
+PASS  O4   empty, whitespace, -, n/a, none and TBD are each red in an open row
+PASS  O5   at least one open row exists, so O1-O3 are not vacuously true
+PASS  O6   every violation names the row's Declaration and the offending column
+PASS  O7   rows inspected equals the number of open verdicts the table carries
+
+== closed-cells  (task:ova-closed-cells) ==
+PARTITION	settled	166	Relation names a relations document may use
+PARTITION	settled	167	Capability value names the engine accepts
+PARTITION	settled	168	Evidence kind names the engine accepts
+PARTITION	settled	169	Predicate operators in mapping form
+PASS  K1   every closed row's Guarantee is the literal none or a non-empty statement
+PASS  K2   every Reason for adopters at is none, or a corpus path (with optional anchor) that exists
+PASS  K3   a Reason for adopters at that exists but is outside the corpus is red
+        · 4 settled, 0 unsettled, of 4 closed row(s)
+PASS  K4   every closed row is printed as settled or unsettled, with a count of each
+PASS  K5   a guarantee of none flips a settled row to unsettled — the partition rule discriminates
+PASS  K6   at least one closed row exists, so K1-K4 are not vacuous
+PASS  K7   rows partitioned equals the number of closed verdicts the table carries
+PASS  K8   no row here fails for being closed: an all-settled table passes
+        · 4 anchored reason(s) resolved against their file's headings
+PASS  K9   an anchor in a Reason for adopters at resolves to a heading in the file it names
+PASS  K10  no closed row points its reason at this audit — a cell is not somewhere else
+
+== followups  (task:ova-followups) ==
+PASS  F8   the partition is read from check-closed-cells.sh, not recomputed here
+PASS  F1   every unsettled closed row's Follow-up is a story: or architecture-decision-record: id
+PASS  F2   each such id appears in protocol artifact list --format json
+PASS  F3   every settled closed row's Follow-up is exactly the em dash
+PASS  F4   an id that is not in the store is reported by name — F2 discriminates
+PASS  F5   each named artifact's title carries the Declaration cell of the row that produced it
+PASS  F6   each named artifact is related to story:open-vocabulary-audit in the store's graph
+PASS  F7   each named artifact is in its kind's initial status — none was moved
+PASS  F9   rows examined equals the number of closed rows in the table
+
+== citations  (task:ova-citations) ==
+PASS  I1   every Invited at cell parses as a path, a line number and a quoted fragment
+PASS  I2   each such path is a member of the corpus, re-derived from the globs
+PASS  I3   each quoted fragment occurs verbatim in the file it cites
+PASS  I4   each cited line number is within that file's length
+PASS  I5   every Decided by cell is a path in one of the two permitted forms
+PASS  I6   for the file:line form, the file exists and has at least that many lines
+PASS  I7   for the file:key form, the key occurs as a declaration, not as prose
+PASS  I8   no Decided by cell is prose: an unresolvable cell is red and named
+        · mutated a copy of website/docs/reference/vocabulary.md (cited by 'A protocol document's `capabilities:` block'), fragment removed
+PASS  I9   deleting a cited fragment on a copy turns I3 red — the fragment really is a detector
+PASS  I10  cells checked equals the table's row count: no row is skipped for being unparseable
+        · 19 fragment(s) at their cited line; 4 closed and 3 open crates/ citation(s)
+PASS  I11  each quoted fragment occurs at the line the cell cites, not merely somewhere in the file
+PASS  I12  a closed row's crates/ file:line is an item declaration, never a use site
+        · 3 open row(s) decide a verdict inside crates/ — each needs the escape hatch on the cited line
+PASS  I13  an open row's crates/ file:line is the variant that admits a free value, not the enum head
+
+== layered-rows  (task:ova-layered-rows) ==
+        · document layer: 'A relation document under `artifacts/relations/`' · value layer: 'Relation names a relations document may use'
+PASS  L1   the table carries two relation rows, distinguished by the layer each describes
+PASS  L2   one is open, decided under artifacts/relations/; the other closed, decided in artifact.rs
+        · crates/govern/aep-domain/src/artifact.rs:1180 carries 'pub enum RelationKind'
+PASS  L3   both Decided by paths exist, and the closed one's cited line carries the enum declaration
+PASS  L4   no Declaration appears twice with the same Verdict — a duplicate must differ by verdict
+PASS  L5   the audit states the one-row-per-layer rule and names both relation rows
+PASS  L6   merging the two rows into one on a copy turns L1 red
+PASS  L7   the closed row's line is resolved at check time, so moving the enum turns L3 red
+
+== scan-loop  (task:ova-scan-loop) ==
+PASS  P1   every candidate the scan emits has a row naming it in Declaration or Decided by
+        · removing docs/guide/open-vocabulary.md:154 orphans candidate 'approval_floor', as P1 requires
+PASS  P2   deleting such a row on a copy turns P1 red, naming the orphaned candidate
+PASS  P3   every row the scan does not emit carries an Invited at that resolves
+PARTITION	scan-backed	12
+PARTITION	reading-backed	7
+        · 12 scan-backed + 7 reading-backed = 19 data row(s)
+PASS  P4   the partition is printed and scan-backed plus reading-backed equals the row count
+PASS  P5   the audit states that the scan cannot find a closed surface, in its own words
+        · floors: 12 candidate(s), 7 reading-backed row(s) — both must be ≥ 1
+PASS  P6   neither rule is vacuous: an empty scan reddens P1, an empty reading partition reddens P3
+PASS  P7   every candidate is accounted for exactly once; a candidate matched twice is reported
+
+== W4-2 verifiers ==
+
+RESULT  UNIT                OWNS                          DECIDES
+------  ------------------  ----------------------------  ----------------------------
+PASS    table-shape         task:ova-table-shape          exactly one table, the seven columns in order, every verdict open or closed, a non-vacuous floor
+PASS    open-cells          task:ova-open-cells           every open row's three trailing cells hold an em dash, never a blank or a hedge
+PASS    closed-cells        task:ova-closed-cells         every closed row states a guarantee and an anchor an adopter can follow somewhere other than here
+PASS    followups           task:ova-followups            every unsettled closed row names a planning artifact that resolves in the store
+PASS    citations           task:ova-citations            every Invited at fragment is at the line it cites, and every Decided by line settles its verdict
+PASS    layered-rows        task:ova-layered-rows         the relation vocabulary gets one row per layer, never one averaged verdict
+PASS    scan-loop           task:ova-scan-loop            every scan candidate has a row, every non-scanned row has a resolving citation, and the limit is stated
+
+61 pass, 0 fail, 0 broken check(s), 0 undeclared check(s)
+units: <AEP_WORKTREE>/.engineering/checks/units.tsv
+task: [version-check] cargo xtask version
+version 0.63.1 matches the newest release tag
+task: [dep-check] cargo xtask deps
+entity-runtime is pinned once: entity-core, entity-postgres, entity-query, entity-remote, entity-sqlite, entity-store at 0.25.0 (git+https://github.com/beyond10x/entity-runtime?rev=44c14c05f68025085f4a3a89b6c9f5e544f7921e#44c14c05f68025085f4a3a89b6c9f5e544f7921e)
+task: [guard-check] cargo xtask guards
+2006 test body/bodies compared, 0 duplicated across crates, 5 excused (the three parallel command vocabularies)
+task: [claim-check] cargo xtask claims
+59 claim(s) checked against the previous release, 100 unverifiable, 1 excused, 0 finding(s)
+task: [clippy] cargo clippy --workspace --all-targets -- -D warnings
+    Checking aep-backend-markdown v0.63.1 (<AEP_WORKTREE>/crates/plan/aep-backend-markdown)
+    Checking aep-ess-evidence v0.63.1 (<AEP_WORKTREE>/crates/observe/aep-ess-evidence)
+    Checking aep-schema v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-schema)
+    Checking aep-driver v0.63.1 (<AEP_WORKTREE>/crates/drive/aep-driver)
+    Checking aep-project v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-project)
+    Checking aep-backend-hybrid v0.63.1 (<AEP_WORKTREE>/crates/plan/aep-backend-hybrid)
+    Checking aep-cli v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-cli)
+    Checking aep-engine v0.63.1 (<AEP_WORKTREE>/crates/govern/aep-engine)
+    Checking xtask v0.63.1 (<AEP_WORKTREE>/xtask)
+    Finished `dev` profile [unoptimized] target(s) in 15.73s
+task: [test] cargo test --workspace
+   Compiling aep-backend-markdown v0.63.1 (<AEP_WORKTREE>/crates/plan/aep-backend-markdown)
+   Compiling aep-ess-evidence v0.63.1 (<AEP_WORKTREE>/crates/observe/aep-ess-evidence)
+   Compiling aep-schema v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-schema)
+   Compiling aep-driver v0.63.1 (<AEP_WORKTREE>/crates/drive/aep-driver)
+   Compiling aep-project v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-project)
+   Compiling aep-backend-hybrid v0.63.1 (<AEP_WORKTREE>/crates/plan/aep-backend-hybrid)
+   Compiling aep-cli v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-cli)
+   Compiling aep-engine v0.63.1 (<AEP_WORKTREE>/crates/govern/aep-engine)
+   Compiling xtask v0.63.1 (<AEP_WORKTREE>/xtask)
+    Finished `test` profile [unoptimized] target(s) in 31.81s
+     Running unittests src/lib.rs (target/debug/deps/aep_backend_entity-5337bbb8e3766a02)
+
+running 5 tests
+test identity_tests::provider_reserved_identities_do_not_discard_the_configured_lifecycles ... ok
+test kernel::tests::a_ladder_the_kernel_cannot_hold_is_a_verdict_not_a_panic ... ok
+test definition::tests::an_artifact_is_created_with_typed_fields_and_a_wrong_type_is_refused ... ok
+test kernel::tests::a_readable_ladder_still_decides_and_describes ... ok
+test definition::tests::an_edit_replaces_the_content_in_place_and_a_move_off_the_ladder_is_refused ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/atomic_commands.rs (target/debug/deps/atomic_commands-06728395cba9e1ff)
+
+running 2 tests
+test a_failed_provider_batch_publishes_neither_durable_nor_local_prefix ... ok
+test a_writer_hydrated_before_a_newer_commit_cannot_overwrite_it ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/conformance.rs (target/debug/deps/conformance-4cbc5c5c2fee2467)
+
+running 5 tests
+test a_failed_batch_leaves_the_adapter_clean_and_readable ... ok
+test the_adapter_over_a_memory_store_conforms ... ok
+test the_adapter_over_a_sqlite_store_conforms ... ok
+test the_suites_that_pass_over_a_memory_store_catch_an_adapter_that_is_wrong ... ok
+test the_suites_that_pass_over_a_sqlite_store_catch_an_adapter_that_is_wrong ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+     Running tests/events.rs (target/debug/deps/events-6c9a81c219dac069)
+
+running 4 tests
+test legacy_aep_audit_events_do_not_claim_kernel_verified_replay ... ok
+test each_accepted_command_is_one_event_in_the_file_read_through_a_second_handle ... ok
+test a_replayed_command_writes_no_event_as_it_writes_no_instance ... ok
+test a_refused_command_writes_no_event_and_the_file_says_so ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/hydration.rs (target/debug/deps/hydration-82c0ce7721052b74)
+
+running 5 tests
+test a_replay_across_processes_is_recognised ... ok
+test a_second_process_sees_everything_the_first_wrote_with_the_same_identities ... ok
+test a_row_this_backend_cannot_read_back_refuses_the_open_by_name ... ok
+test a_removed_relation_stays_removed_after_reopen ... ok
+test a_second_process_mints_identities_past_the_first_ones ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+     Running tests/planning_definitions.rs (target/debug/deps/planning_definitions-ca5a726688a87bac)
+
+running 1 test
+test every_shipped_ladder_is_an_entity_type_with_its_moves_and_an_edit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/debug/deps/aep_backend_hybrid-85535d83ea773747)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/conformance.rs (target/debug/deps/conformance-0d50e219019eb091)
+
+running 3 tests
+test the_composite_conforms ... ok
+test the_replica_is_the_authority_too ... ok
+test the_suites_that_pass_here_catch_a_backend_that_is_wrong ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/divergence.rs (target/debug/deps/divergence-16ab35ca6184acf1)
+
+running 2 tests
+test a_write_the_replica_refused_is_recorded_beside_the_plan_and_caught_up_by_the_next_process ... ok
+test a_replica_that_moved_on_its_own_stays_outstanding_for_a_person ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.15s
+
+     Running unittests src/lib.rs (target/debug/deps/aep_backend_markdown-a6fbbfce9761f16d)
+
+running 110 tests
+test chain::tests::a_journal_with_no_seals_at_all_is_uncovered_and_is_not_reported_as_broken ... ok
+test chain::tests::a_sealed_record_still_parses_as_the_runtime_event_it_was ... ok
+test claim::tests::a_body_stops_at_a_bare_quote_line ... ok
+test claim::tests::a_date_the_calendar_does_not_have_is_refused_with_a_reason ... ok
+test chain::tests::the_lock_is_released_when_the_append_returns ... ok
+test claim::tests::a_body_stops_at_every_line_a_reader_would_call_a_new_one ... ok
+test claim::tests::a_claim_stated_twice_at_one_date_is_reported_ambiguous_rather_than_paired ... ok
+test chain::tests::a_half_written_line_is_debris_and_the_next_append_re_anchors_across_it ... ok
+test claim::tests::a_malformed_record_renders_its_source_rather_than_its_default ... ok
+test claim::tests::a_fourteen_day_horizon_written_by_hand_is_not_malformed ... ok
+test chain::tests::an_appended_record_that_forges_a_revision_cannot_be_sealed_by_copying_a_neighbour ... ok
+test claim::tests::a_hyphen_separator_is_not_an_annotation_and_is_not_raw_counted ... ok
+test claim::tests::a_space_after_the_opening_paren_leaves_a_record_carrying_the_stated_default ... ok
+test claim::tests::a_token_in_capitals_or_with_inner_spaces_still_parses ... ok
+test claim::tests::a_well_formed_record_renders_the_canonical_line ... ok
+test chain::tests::the_first_sealed_record_freezes_the_legacy_lines_before_it ... ok
+test claim::tests::an_annotation_ending_a_table_cell_with_no_break_is_found ... ok
+test claim::tests::an_annotation_inside_inline_code_is_found_without_its_backticks ... ok
+test claim::tests::an_observation_dated_after_the_reference_date_is_refused_rather_than_recorded ... ok
+test claim::tests::an_observation_exactly_its_horizon_old_is_not_expired ... ok
+test chain::tests::a_journal_this_store_wrote_verifies_and_reports_every_record_as_covered ... ok
+test claim::tests::one_day_past_the_horizon_is_expired_by_one_day ... ok
+test claim::tests::the_raw_count_sees_an_annotation_the_parser_is_given_no_chance_at ... ok
+test claim::tests::prose_inside_the_token_does_not_parse ... ok
+test claim::tests::horizon_growth_ignores_a_pair_whose_observation_date_moved ... ok
+test chain::tests::a_record_removed_from_the_middle_leaves_the_next_one_naming_a_parent_that_is_not_there ... ok
+test claim::tests::the_second_of_two_consecutive_break_rows_keeps_its_own_date_and_horizon ... ok
+test claim::tests::two_adjacent_annotations_are_two_records ... ok
+test document::tests::a_document_with_no_fence_is_refused_by_variant ... ok
+test chain::tests::stripping_the_seals_off_the_tail_is_a_break_and_not_a_downgrade_to_legacy ... ok
+test document::tests::a_fence_that_never_closes_is_refused_rather_than_read_to_the_end ... ok
+test document::tests::a_refusal_serialises_with_its_reason_and_every_legal_target ... ok
+test document::tests::a_crlf_document_is_read_and_its_body_kept ... ok
+test document::tests::a_relation_that_is_already_declared_does_not_bump_the_revision ... ok
+test document::tests::an_undated_rung_names_the_flag ... ok
+test document::tests::an_invalid_document_reports_validation_errors_not_a_syntax_error ... ok
+test chain::tests::a_middle_record_that_was_edited_is_named_by_its_own_event_id ... ok
+test document::tests::an_unobservable_rung_names_the_verb_not_the_rules_address ... ok
+test document::tests::an_unreadable_ladder_is_a_refusal_about_the_kernel ... ok
+test chain::tests::two_records_swapped_break_the_chain_even_though_neither_was_edited ... ok
+test document::tests::each_refusal_reason_carries_its_own_tag_and_what_it_read ... ok
+test document::tests::replacing_the_body_preserves_frontmatter_and_bumps_one_revision ... ok
+test document::tests::replacing_a_body_with_the_same_bytes_changes_nothing ... ok
+test document::tests::the_body_survives_a_round_trip_byte_for_byte ... ok
+test drift::tests::a_document_with_no_events_predates_the_log_and_is_not_forged ... ok
+test document::tests::rendering_twice_produces_the_same_bytes ... ok
+test findings::tests::a_block_written_as_json_reads_messages_carrying_colons_quotes_and_apostrophes ... ok
+test drift::tests::a_forged_revision_beside_an_edited_status_is_two_findings_and_not_one ... ok
+test document::tests::a_terminal_status_says_so_rather_than_listing_nothing ... ok
+test document::tests::an_illegal_move_names_every_legal_target ... ok
+test findings::tests::a_body_with_no_block_has_no_findings_and_is_not_an_error ... ok
+test drift::tests::a_document_at_the_revision_its_events_record_is_not_forged ... ok
+test drift::tests::a_document_at_the_revision_of_a_write_that_changed_nothing_is_not_drift ... ok
+test drift::tests::a_revision_above_every_event_is_forged_and_is_not_reported_as_ordinary_drift ... ok
+test findings::tests::a_block_that_does_not_parse_is_refused_at_one_body_line_quoting_it_with_a_json_hint ... ok
+test findings::tests::a_line_neither_side_wrote_is_not_a_difference ... ok
+test findings::tests::a_fence_of_either_character_hides_the_findings_fence_it_quotes ... ok
+test findings::tests::a_message_is_compared_without_its_case_or_its_wrapping ... ok
+test findings::tests::a_position_either_parser_prints_is_taken_out_of_the_detail ... ok
+test drift::tests::more_events_than_the_revision_is_not_forged_because_an_evidence_record_writes_nothing ... ok
+test findings::tests::a_reader_error_is_positioned_at_the_body_line_holding_its_offset ... ok
+test findings::tests::a_key_this_format_does_not_have_is_refused ... ok
+test findings::tests::a_value_not_found_on_any_line_is_reported_at_its_entry_and_says_so ... ok
+test findings::tests::an_empty_block_is_refused_with_the_accepted_spelling_of_no_findings ... ok
+test findings::tests::a_finding_that_moved_two_lines_is_carried_and_one_that_moved_four_is_not ... ok
+test findings::tests::an_empty_sequence_is_a_review_with_no_findings ... ok
+test findings::tests::a_value_outside_the_vocabulary_is_refused_at_the_line_it_is_written_on ... ok
+test findings::tests::a_value_outside_the_vocabulary_is_refused_with_its_own_line_quoted ... ok
+test findings::tests::an_unterminated_block_is_refused_rather_than_read_to_the_end_of_the_body ... ok
+test drift::tests::a_list_a_command_emptied_is_not_reported_as_an_edit_outside_a_command ... ok
+test findings::tests::findings_input_that_is_not_json_is_refused_at_its_line_with_the_text_quoted ... ok
+test findings::tests::an_escaped_value_in_a_json_block_is_located_by_what_it_decodes_to ... ok
+test findings::tests::every_key_of_an_entry_is_read_and_an_unwritten_origin_is_undecided ... ok
+test findings::tests::findings_given_as_json_are_read_against_the_same_entry_schema ... ok
+test frontmatter::tests::a_document_without_a_format_key_is_read_as_the_current_format ... ok
+test frontmatter::tests::a_document_wrong_about_two_things_reports_both ... ok
+test frontmatter::tests::a_format_version_this_build_does_not_read_is_refused_by_code ... ok
+test frontmatter::tests::a_kind_alias_is_accepted_and_canonicalised ... ok
+test findings::tests::one_earlier_finding_answers_for_at_most_one_later_finding ... ok
+test findings::tests::each_verdict_spelling_of_both_vocabularies_is_read ... ok
+test document::tests::an_unknown_key_is_still_there_after_a_status_move ... ok
+test frontmatter::tests::a_document_in_the_tree_projection_format_is_read_and_written_back_in_it ... ok
+test frontmatter::tests::an_unknown_key_survives_validation ... ok
+test findings::tests::rendered_findings_read_back_from_a_body_as_the_same_findings ... ok
+test frontmatter::tests::revision_zero_is_refused_because_no_write_produced_it ... ok
+test frontmatter::tests::a_status_the_last_transition_did_not_move_to_is_refused ... ok
+test frontmatter::tests::every_malformed_reference_is_reported_and_not_just_the_first ... ok
+test frontmatter::tests::the_artifact_it_maps_to_is_located_at_its_file_and_carries_no_timestamp ... ok
+test frontmatter::tests::one_path_declared_twice_is_refused_naming_the_path ... ok
+test store::tests::a_document_is_filed_under_its_namespace ... ok
+test frontmatter::tests::a_v3_document_with_transitions_renders_back_byte_for_byte ... ok
+test document::tests::a_kind_with_no_lifecycle_anywhere_may_move_freely ... ok
+test store::tests::a_file_in_the_wrong_directory_is_reported_rather_than_re_derived ... ok
+test frontmatter::tests::a_scope_round_trips_and_keeps_the_confidence_each_entry_was_written_with ... ok
+test frontmatter::tests::without_transitions_the_rendering_is_the_serialize_rendering ... ok
+test frontmatter::tests::both_written_forms_of_a_reference_read_and_only_the_mapping_is_written_back ... ok
+test store::tests::a_clean_store_becomes_a_graph_whose_artifacts_are_located_at_their_files ... ok
+test store::tests::an_absent_store_is_an_empty_plan_rather_than_a_failure ... ok
+test store::tests::a_file_whose_stem_is_not_its_name_is_reported_with_where_it_belongs ... ok
+test store::tests::a_directory_named_by_an_alias_of_the_kind_is_accepted ... ok
+test store::tests::creating_over_an_existing_document_is_refused ... ok
+test store::tests::the_graph_refuses_an_edge_pointing_at_nothing ... ok
+test store::tests::every_broken_file_is_reported_with_its_path ... ok
+test frontmatter::tests::a_model_digest_is_kept_on_a_compiled_kind_and_refused_by_name_on_every_other ... ok
+test frontmatter::tests::a_withheld_evidence_kind_survives_a_round_trip_and_a_misspelling_does_not ... ok
+test store::tests::updating_a_document_that_is_not_there_is_refused ... ok
+test store::tests::an_update_writes_where_the_document_was_read_from ... ok
+test store::tests::two_files_claiming_one_id_are_both_named ... ok
+test findings::tests::every_character_a_message_can_hold_reads_back_unchanged_from_a_rendered_block ... ok
+test chain::tests::an_append_refuses_while_another_writer_holds_the_lock ... ok
+
+test result: ok. 110 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+     Running tests/assembly.rs (target/debug/deps/assembly-fff46db864142ca7)
+
+running 12 tests
+test an_unresolved_crossing_contributes_no_edge_and_so_no_cycle ... ok
+test a_relation_qualified_with_its_own_member_name_is_not_a_crossing_either ... ok
+test a_relation_that_stays_inside_its_member_is_not_a_crossing ... ok
+test a_member_whose_store_is_not_there_reads_as_empty_rather_than_failing ... ok
+test a_cycle_inside_one_member_is_found_through_the_assembly_too ... ok
+test a_cycle_that_only_exists_once_two_members_are_read_together_is_found ... ok
+test a_crossing_into_a_member_nobody_checked_out_is_reported_and_not_an_error ... ok
+test a_relation_into_another_member_resolves_and_says_which_member ... ok
+test a_broken_file_is_reported_against_the_member_that_holds_it ... ok
+test an_artifact_keeps_the_member_it_came_from ... ok
+test a_reference_into_a_member_that_does_not_hold_it_finds_nothing_rather_than_the_other_member ... ok
+test one_name_in_two_members_is_two_artifacts_and_an_unqualified_reference_to_it_is_refused ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/conformance.rs (target/debug/deps/conformance-c2977cc5eeb064df)
+
+running 11 tests
+test the_scan_sees_a_write_it_should_refuse ... ok
+test a_status_off_the_ladder_is_refused_however_it_arrives ... ok
+test the_only_write_path_out_of_this_crate_is_a_command ... ok
+test the_markdown_store_conforms ... ok
+test an_entity_this_store_is_not_addressed_for_gets_no_invented_file ... ok
+test the_suites_run_are_the_sixteen_and_not_a_subset ... ok
+test the_suites_that_pass_here_catch_a_backend_that_is_wrong ... ok
+test a_relation_command_becomes_an_edge_in_the_frontmatter ... ok
+test a_created_entity_becomes_a_document_this_store_holds ... ok
+test a_command_that_moves_a_story_survives_a_reopen ... ok
+test a_command_can_carry_the_document_prose_and_absence_leaves_it_alone ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.94s
+
+     Running tests/entity_runtime_equivalence.rs (target/debug/deps/entity_runtime_equivalence-efe5f36b1755a075)
+
+running 6 tests
+test the_pinned_copy_is_the_bytes_this_pin_records ... ok
+test each_definition_declares_exactly_the_states_our_transitions_map_declares ... ok
+test each_definition_starts_where_our_ladder_starts ... ok
+test every_ladder_we_ship_has_a_definition_there_except_the_ones_named_here ... ok
+test each_definition_is_named_for_the_kind_whose_ladder_it_maps ... ok
+test each_definition_yields_exactly_the_edges_our_transitions_map_yields ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/evidence.rs (target/debug/deps/evidence-55931dea60eace51)
+
+running 13 tests
+test a_slipped_obligation_can_still_be_met_and_met_is_the_end ... ok
+test a_sent_claim_cannot_be_unsent_and_a_wrong_one_only_moves_forward ... ok
+test an_artifact_with_no_such_date_cannot_pass_a_dated_rung ... ok
+test no_instant_supplied_is_unobservable_and_names_the_argument ... ok
+test evidence_does_not_buy_a_move_the_ladder_does_not_declare ... ok
+test a_ladder_that_requires_nothing_behaves_exactly_as_it_did ... ok
+test a_requirement_guards_only_the_rung_it_is_declared_on ... ok
+test a_guarded_rung_tells_nobody_looked_from_it_does_not_hold ... ok
+test an_unreadable_instant_is_unobservable_rather_than_a_date_that_has_not_passed ... ok
+test a_dated_rung_opens_when_the_date_the_artifact_records_has_passed ... ok
+test a_specification_reaches_conforming_only_on_a_report_that_a_suite_actually_ran ... ok
+test the_shipped_ladders_cost_what_this_repository_thinks_they_cost ... ok
+test nothing_a_ladder_can_declare_lets_an_obligation_block_a_commit ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/evidence_horizons_corpus.rs (target/debug/deps/evidence_horizons_corpus-8009bd706e0c61e6)
+
+running 13 tests
+test an_annotation_dated_after_the_reference_date_is_refused_rather_than_recorded ... ok
+test a_hyphen_separator_is_neither_a_record_nor_a_raw_occurrence ... ok
+test a_horizon_that_grew_while_its_observation_date_stood_still_is_reported ... ok
+test the_two_traps_classify_ok_and_nothing_is_invented ... ok
+test a_backticked_annotation_after_prose_is_found_and_a_fenced_one_is_not ... ok
+test the_near_miss_token_is_still_a_record_and_carries_the_flag ... ok
+test a_malformed_record_refuses_to_normalise ... ok
+test every_annotation_in_the_corpus_is_found ... ok
+test every_record_the_reference_also_finds_agrees_with_expected_json ... ok
+test no_record_swallowed_a_neighbouring_annotation ... ok
+test every_file_reports_full_coverage_of_its_own_raw_count ... ok
+test every_well_formed_record_survives_a_round_trip ... ok
+test the_positions_the_reference_is_blind_to_are_found ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/findings_adversary.rs (target/debug/deps/findings_adversary-a53e1564734f360d)
+
+running 9 tests
+test a_findings_fence_quoted_inside_a_longer_fence_does_not_open_a_block ... ok
+test a_json_block_holding_an_escaped_solidus_is_read ... ok
+test a_json_block_indented_with_tabs_is_read ... ok
+test a_refusal_for_a_control_character_carries_one_coordinate_and_quotes_the_offending_line ... ok
+test a_json_block_holding_a_surrogate_pair_escape_is_read_as_the_character_it_spells ... ok
+test a_vocabulary_refusal_in_json_input_is_positioned_at_the_line_a_serializer_escaped ... ok
+test the_findings_a_review_states_are_not_the_example_its_prose_quotes ... ok
+test the_json_block_cli_md_documents_is_read ... ok
+test every_message_parse_json_accepts_reads_back_unchanged_from_the_block_render_block_writes ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/git_layout.rs (target/debug/deps/git_layout-40a1792165e6bc72)
+
+running 6 tests
+test an_interrupted_batch_is_completed_once_and_its_transition_is_not_doubled ... ok
+test writing_the_same_evidence_twice_is_a_no_op_and_a_different_file_is_refused ... ok
+test a_move_writes_only_its_document_and_appends_one_transition ... ok
+test recording_evidence_writes_one_evidence_file_and_it_is_counted ... ok
+test the_git_layout_keeps_no_event_log ... ok
+test three_moves_give_three_transitions_and_three_moved_entries_in_history ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.09s
+
+     Running tests/history.rs (target/debug/deps/history-a6b5cf9b652ea1cc)
+
+running 2 tests
+test a_document_that_predates_the_provider_still_has_the_history_it_had ... ok
+test a_second_process_answers_the_history_the_first_wrote ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.55s
+
+     Running tests/journal.rs (target/debug/deps/journal-4ec6fa3b1ee65e61)
+
+running 11 tests
+test a_move_written_before_provenance_existed_claims_nothing ... ok
+test coverage_eligibility_retains_the_original_record_kind_and_separate_basis ... ok
+test an_artifact_with_no_journal_entries_at_all_is_not_drift ... ok
+test provenance_totals_without_losing_where_each_part_came_from ... ok
+test an_entry_naming_an_artifact_this_store_does_not_hold_is_drift ... ok
+test a_status_the_journal_does_not_account_for_is_drift ... ok
+test evidence_counts_only_for_the_artifact_it_names ... ok
+test one_unreadable_line_does_not_cost_the_history ... ok
+test a_status_is_checked_even_when_the_newest_entry_says_nothing_about_it ... ok
+test a_move_made_by_a_driven_session_is_journalled_as_the_agents_and_not_the_operators ... ok
+test every_change_round_trips ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests/kernel_equivalence.rs (target/debug/deps/kernel_equivalence-c031dabb78cd16bd)
+
+running 5 tests
+test every_ladder_this_repository_ships_is_named_by_the_fixture ... ok
+test the_ladders_refuse_most_moves_so_agreement_is_not_vacuous ... ok
+test a_custom_kind_is_governed_by_the_ladder_its_lineage_reaches ... ok
+test the_permissive_fallback_still_permits_every_move ... ok
+test the_kernel_and_the_ladder_agree_on_every_move_of_every_kind_either_store_holds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/provider.rs (target/debug/deps/provider-f6bd4627c23d0704)
+
+running 9 tests
+test a_document_a_person_wrote_by_hand_loads_with_an_empty_log ... ok
+test a_refused_commit_changes_neither_the_document_nor_the_journal ... ok
+test a_torn_write_leaves_the_document_ahead_of_its_log_and_says_so ... ok
+test a_commit_leaves_no_temporary_behind ... ok
+test the_markdown_provider_commits_atomic_batches ... ok
+test a_pending_batch_is_completed_before_a_read ... ok
+test this_repositorys_own_store_loads_and_every_document_round_trips_byte_for_byte ... ok
+test the_markdown_provider_conforms ... ok
+test a_broken_copy_of_the_provider_is_caught ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running unittests src/lib.rs (target/debug/deps/aep_backend_memory-94c7083c5315a1d5)
+
+running 9 tests
+test seed::tests::an_identifier_is_derived_from_the_artifact_id_and_stays_addressable ... ok
+test seed::tests::a_relation_target_the_manifest_does_not_declare_is_reported ... ok
+test command::tests::neither_an_accepted_nor_a_refused_command_copies_the_store ... ok
+test command::tests::a_refusal_after_a_mutation_is_undone_completely ... ok
+test seed::tests::every_artifact_becomes_an_entity_of_its_kinds_type ... ok
+test seed::tests::tags_travel_with_the_artifact ... ok
+test seed::tests::a_relation_to_an_artifact_declared_later_still_resolves ... ok
+test seed::tests::seeding_twice_replays_rather_than_duplicating ... ok
+test seed::linearity::seeding_does_not_copy_the_store_per_command ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/failure_atomicity.rs (target/debug/deps/failure_atomicity-a25f69013577374f)
+
+running 1 test
+test accepting_an_adr_with_a_missing_superseded_target_changes_only_the_rejection_audit ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/scenario.rs (target/debug/deps/scenario-c706299a0e163a43)
+
+running 7 tests
+test a_type_can_be_described_without_hard_coding_it ... ok
+test a_read_demanding_an_unknown_write_is_refused_rather_than_silently_satisfied ... ok
+test reusing_an_idempotency_key_for_a_different_command_is_refused ... ok
+test nothing_is_ever_deleted ... ok
+test a_locator_resolves_to_identity_and_is_unique ... ok
+test retiring_a_review_result_is_a_transition_and_not_the_edit_its_immutability_forbids ... ok
+test the_reference_scenario ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/debug/deps/aep_backend_postgres-616792a6a54b3edc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/conformance.rs (target/debug/deps/conformance-ae6b3c610dc1f989)
+
+running 3 tests
+test the_postgres_backend_conforms_and_the_suites_catch_a_faulty_one ... ok
+test each_session_command_reads_only_its_dependencies_and_replay_intent ... ok
+test two_processes_writing_one_artifact_resolve_to_one_accepted_and_one_refusal_naming_the_revision ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/aep_backend_sqlite-083f6ffbf34a2e18)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/conformance.rs (target/debug/deps/conformance-58d7b85f703725e4)
+
+running 3 tests
+test the_newtype_forwards_the_whole_contract ... ok
+test what_the_contract_accepted_is_in_the_database ... ok
+test a_second_run_reads_the_first_back_and_continues_past_it ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running unittests src/lib.rs (target/debug/deps/aep_cli-85c2766773bba80c)
+
+running 163 tests
+test cli_reference::a_verb_the_reference_does_not_spell_is_reported_by_name ... ok
+test contract::tests::a_count_stated_as_null_is_refused_by_the_name_of_the_count ... ok
+test contract::tests::a_count_the_record_never_states_is_refused_rather_than_defaulted_to_zero ... ok
+test contract::tests::a_lone_hyphen_is_the_pipe_and_everything_else_is_a_file ... ok
+test contract::tests::a_failing_contract_run_is_read_rather_than_refused ... ok
+test contract::tests::a_record_claiming_more_breaking_changes_than_failures_is_refused ... ok
+test contract::tests::a_record_of_another_kind_is_refused_by_the_kind_it_states ... ok
+test contract::tests::a_record_that_checked_nothing_is_refused_with_the_reason_named ... ok
+test contract::tests::a_record_whose_failures_are_all_breaking_is_accepted ... ok
+test contract::tests::the_provenance_digest_describes_the_bytes_the_runner_printed ... ok
+test doctor::tests::a_slugged_or_prefixed_tag_is_not_a_bare_version_and_cannot_win ... ok
+test contract::tests::the_providers_own_bytes_are_the_payload_this_repository_defines ... ok
+test doctor::tests::a_plugin_directory_without_a_manifest_fails_naming_both_manifests_it_looked_for ... ok
+test doctor::tests::a_snapshot_path_is_addressed_by_repository_and_revision_together ... ok
+test drive::tests::a_command_step_naming_this_cli_is_resolved_to_the_binary_this_process_is ... ok
+test drive::tests::a_failing_command_mints_a_record_that_says_so_and_a_failed_diff_mints_nothing ... ok
+test drive::tests::a_metacharacter_inside_quotes_is_an_argument_and_outside_them_it_composes ... ok
+test drive::tests::an_llm_sessions_launch_declares_the_run_as_its_actor_and_that_actor_cannot_approve_the_run ... ok
+test eval::native_arm_tests::the_fourth_arm_is_a_word_the_manifest_reads_and_writes ... ok
+test drive::tests::the_write_scope_words_are_the_ones_the_step_map_is_written_in ... ok
+test drive::tests::a_person_the_system_a_service_and_the_run_itself_are_refused_as_approvers_before_the_run ... ok
+test drive::tests::the_task_placeholder_is_the_document_this_run_was_started_from ... ok
+test eval::tests::a_manifest_that_describes_another_run_than_its_record_is_refused ... ok
+test eval::tests::a_document_that_does_not_claim_the_format_is_refused_before_its_fields_are_believed ... ok
+test eval::tests::a_case_whose_subject_names_the_ess_skill_says_it_needs_ess ... ok
+test drive::tests::a_record_that_is_missing_or_does_not_read_submits_nothing_and_says_why ... ok
+test eval::tests::a_marketplace_plugin_is_a_treatment_and_a_run_with_one_needs_no_directory_digest ... ok
+test eval::tests::a_marketplace_plugin_on_arm_raw_is_refused_for_the_reason_a_digest_is ... ok
+test drive::tests::a_driver_that_cannot_name_itself_refuses_a_map_whose_commands_say_protocol ... ok
+test drive::tests::an_approval_read_out_of_a_file_is_refused_however_well_formed_it_is ... ok
+test eval::tests::a_marketplace_plugin_whose_digest_is_not_one_is_refused_by_the_field_that_is_wrong ... ok
+test eval::tests::a_missing_field_is_refused_by_its_own_name_and_every_other_refusal_is_reported_beside_it ... ok
+test eval::tests::a_model_that_is_written_and_empty_is_refused_rather_than_read_as_unstated ... ok
+test eval::tests::a_person_typing_an_amount_is_still_held_to_an_exact_one ... ok
+test drive::tests::a_record_a_verifier_wrote_is_submitted_as_that_verifiers_and_never_minted_here ... ok
+test eval::tests::a_stated_cost_this_reader_cannot_convert_is_refused_rather_than_read_as_no_cost ... ok
+test eval::tests::a_null_plugin_digest_on_arm_plugin_is_refused_because_the_plugin_is_the_subject ... ok
+test eval::tests::a_usage_key_written_null_contributes_nothing_and_does_not_erase_the_total ... ok
+test eval::tests::an_amount_becomes_millionths_by_integer_arithmetic_and_never_by_a_float ... ok
+test eval::tests::a_plugin_digest_on_arm_raw_is_refused_because_arm_raw_is_the_arm_without_one ... ok
+test eval::tests::an_amount_this_reader_cannot_convert_exactly_is_refused_rather_than_rounded ... ok
+test eval::tests::a_table_holding_a_native_cell_says_how_to_read_it_and_one_without_stays_silent ... ok
+test eval::tests::an_arm_this_evaluation_does_not_have_is_refused_by_name ... ok
+test eval::tests::arm_plugin_that_names_neither_mechanism_is_still_refused ... ok
+test eval::tests::one_transcript_cannot_arrive_twice_because_one_run_would_be_counted_twice ... ok
+test eval::tests::the_arms_sort_in_the_order_the_experiment_runs_them ... ok
+test eval::tests::an_omitted_plugin_digest_is_refused_and_an_explicit_null_is_not ... ok
+test eval::tests::arm_driven_may_answer_either_way_because_the_enforcer_is_not_the_plugin ... ok
+test eval::tests::the_arms_the_refusal_lists_are_every_arm_the_type_has ... ok
+test eval::tests::no_rendering_of_a_matrix_contains_a_score ... ok
+test eval::tests::the_terminal_events_cost_is_read_from_its_own_decimal_text ... ok
+test evidence_doc::tests::the_producer_is_a_verifier_and_no_argument_can_change_it ... ok
+test eval::tests::the_honest_manifest_is_read_so_every_mutation_below_reaches_its_rule ... ok
+test eval::tests::the_manifest_the_runner_assembles_is_one_the_matrixs_own_reader_reads ... ok
+test eval::tests::both_spellings_of_the_ess_plugin_trip_the_preflight ... ok
+test evidence_doc::tests::text_renders_the_document_rather_than_a_summary_of_it ... ok
+test evidence_doc::tests::what_is_written_is_what_the_evidence_reader_parses ... ok
+test command_tree::the_first_level_is_the_four_areas_and_doctor ... ok
+test command_tree::every_flat_spelling_the_last_release_answered_still_resolves_and_is_hidden ... ok
+test flow::tests::a_bound_the_caller_names_is_the_bound_that_is_written ... ok
+test eval::native_arm_tests::a_native_run_is_refused_a_spawn_and_told_what_does_launch_it ... ok
+test eval::native_arm_tests::every_arm_has_a_code_of_its_own_and_none_is_reused ... ok
+test eval::native_arm_tests::the_arms_still_sort_in_the_order_the_experiment_runs_them ... ok
+test eval::tests::one_specification_at_two_digests_is_refused_because_the_rows_share_a_name_only ... ok
+test eval::tests::a_cells_resource_total_says_how_many_runs_it_covers ... ok
+test eval::tests::a_digest_that_is_not_a_digest_is_refused ... ok
+test command_tree::every_verb_an_area_groups_is_also_a_top_level_alias_for_the_same_subtree ... ok
+test drive::tests::an_approver_is_parsed_as_an_actor_and_needs_a_run_that_can_stop ... ok
+test flow::tests::a_map_pinned_to_another_version_is_refused_in_the_words_the_driver_refuses_it_in ... ok
+test eval::tests::one_session_that_wrote_two_terminal_records_is_charged_once ... ok
+test drive::tests::a_flag_a_refusal_names_is_a_flag_a_drive_verb_parses ... ok
+test flow::tests::a_projection_without_a_map_is_the_document_it_always_was ... ok
+test money::tests::typed_dollar_amounts_are_exact_or_refused ... ok
+test planning::tests::an_edge_argument_splits_at_the_first_colon_only ... ok
+test planning::waves::tests::a_collision_with_one_inferred_side_is_marked_inferred ... ok
+test planning::waves::tests::a_cycle_is_reported_once_from_its_lowest_id_and_nothing_is_placed ... ok
+test planning::waves::tests::a_dependency_on_something_outside_the_selection_does_not_hold_a_story_back ... ok
+test planning::waves::tests::a_dependency_through_an_unassessed_story_still_orders_the_two_that_are_placed ... ok
+test planning_writer_fence::tests::a_paused_writer_excludes_a_peer_until_release ... ok
+test planning::tests::a_declared_actor_is_who_the_write_is_from_and_an_undeclared_one_is_the_logged_in_person ... ok
+test planning_writer_fence::tests::explicit_writer_excludes_project_and_failed_acquisition_releases_project_lock ... ok
+test flow::tests::the_document_says_what_it_dropped_rather_than_dropping_it_quietly ... ok
+test property::tests::the_record_names_the_property_the_case_count_and_a_verifier_that_is_not_the_agent ... ok
+test property::tests::the_run_is_exhaustive_over_the_whole_space_rather_than_a_sample_of_it ... ok
+test flow::tests::a_state_the_map_is_silent_about_keeps_the_payload_it_always_had ... ok
+test redaction::tests::a_git_author_is_removed_where_the_user_name_would_not_have_been ... ok
+test cli_reference::every_verb_the_cli_answers_has_an_entry_in_the_reference ... ok
+test flow::tests::the_three_retreats_become_one_repeating_group_because_they_span_one_stretch ... ok
+test flow::tests::every_state_that_runs_lands_somewhere_and_the_terminals_do_not ... ok
+test redaction::tests::an_operator_named_user_does_not_make_the_placeholder_match_itself ... ok
+test planning::waves::tests::a_collision_moves_a_story_to_the_first_wave_with_room_and_not_to_the_end ... ok
+test redaction::tests::redaction_is_idempotent_so_a_stream_can_be_cleaned_twice ... ok
+test redaction::tests::redaction_removes_both_spellings_of_the_home_and_then_the_name ... ok
+test render::tests::a_watch_stops_at_a_completed_run_and_keeps_looking_at_a_blocked_one ... ok
+test planning_writer_fence::tests::project_writer_excludes_explicit_store_without_blocking_another_store ... ok
+test property::tests::a_law_that_does_not_hold_is_named_with_the_assignment_that_broke_it ... ok
+test flow::tests::what_this_verb_emits_is_a_document_the_harness_plans ... ok
+test flow::tests::without_a_map_a_node_says_which_state_it_is_and_nothing_more ... ok
+test reverse::relations::tests::a_composition_that_states_one_shape_is_read_as_that_shape ... ok
+test redaction::tests::a_user_name_is_replaced_as_a_word_and_never_inside_another_one ... ok
+test render::tests::every_driver_status_has_a_rendering_status_and_none_of_them_is_unknown ... ok
+test planning::tests::a_malformed_declared_actor_is_refused_naming_the_variable_and_never_defaulted ... ok
+test reverse::relations::tests::a_composition_that_states_two_shapes_leaves_cardinality_unmapped ... ok
+test reverse::tests::a_call_shaped_marker_is_bounded_only_at_its_front ... ok
+test reverse::relations::tests::a_camel_case_id_field_is_read_the_same_way ... ok
+test reverse::tests::a_timestamp_becomes_the_day_it_names ... ok
+test reverse::relations::tests::a_ref_to_a_schema_that_becomes_an_entity_references_one_of_it ... ok
+test reverse::tests::every_listed_extension_is_findable ... ok
+test reverse::tests::a_wire_name_is_kebab_case ... ok
+test reverse::tests::the_language_table_is_sorted ... ok
+test reverse::tests::truncation_cuts_on_a_character_boundary ... ok
+test serve::api::tests::a_host_this_server_does_not_answer_to_is_refused ... ok
+test serve::api::tests::a_path_this_server_does_not_answer_is_a_not_found_rather_than_a_guess ... ok
+test serve::api::tests::a_transition_is_refused_by_name_when_the_server_is_read_only ... ok
+test redaction::tests::an_operator_with_nothing_to_remove_leaves_the_stream_byte_identical ... ok
+test serve::api::tests::a_write_from_another_origin_is_refused ... ok
+test serve::http::tests::a_body_is_read_to_its_stated_length_and_no_further ... ok
+test serve::api::tests::a_served_mutation_uses_the_shared_new_build_writer_fence ... ok
+test serve::api::tests::the_page_is_served_at_the_root_and_carries_no_remote_reference ... ok
+test serve::http::tests::a_chunked_body_is_refused_with_the_header_that_would_have_worked ... ok
+test serve::http::tests::a_header_name_is_matched_however_the_client_spelled_it ... ok
+test serve::http::tests::a_body_longer_than_the_cap_is_refused_before_it_is_allocated ... ok
+test serve::http::tests::a_method_this_server_does_not_answer_is_refused_naming_the_two_it_does ... ok
+test serve::http::tests::a_query_string_is_parsed_and_percent_decoded ... ok
+test serve::http::tests::a_version_this_server_does_not_speak_is_refused_by_name ... ok
+test serve::tests::a_run_token_is_long_enough_to_be_worth_having_and_differs_between_runs ... ok
+test serve::http::tests::a_request_line_without_a_version_is_refused_rather_than_guessed ... ok
+test reverse::tests::a_marker_has_to_stand_on_its_own ... ok
+test specification::tests::a_quoted_filename_does_not_outrank_the_comparison_beside_it ... ok
+test redaction::tests::a_common_one_word_git_name_is_left_alone_rather_than_corrupting_the_stream ... ok
+test specification::tests::a_requirement_whose_spans_are_all_prose_names_what_was_tried ... ok
+test specification::tests::a_requirement_is_a_list_item_under_a_requirements_or_acceptance_heading ... ok
+test specification::tests::a_run_that_has_observed_nothing_satisfies_no_requirement ... ok
+test specification::tests::a_requirement_is_unmet_unless_its_own_predicate_is_observed_true ... ok
+test reverse::relations::tests::an_array_of_that_ref_references_many_of_it ... ok
+test specification::tests::a_requirement_wrapped_over_two_lines_is_one_requirement ... ok
+test specification::tests::a_specification_that_states_no_requirement_does_not_satisfy_the_principle ... ok
+test reverse::relations::tests::an_id_field_matching_an_entitys_identity_leaves_ownership_unmapped ... ok
+test specification::tests::a_task_that_declares_no_story_is_matched_by_a_specification_of_the_task_itself ... ok
+test specification::tests::an_artifact_named_on_the_command_line_may_be_a_draft_of_this_tasks_work ... ok
+test specification::tests::an_artifact_named_on_the_command_line_still_has_to_specify_this_task ... ok
+test specification::tests::another_storys_approved_specification_is_not_this_tasks ... ok
+test specification::tests::only_a_specification_in_force_is_one_a_task_may_be_implemented_against ... ok
+test specification::tests::the_predicate_is_the_span_that_parses_rather_than_the_first_one ... ok
+test reverse::relations::tests::a_schema_whose_properties_are_all_scalars_has_no_relations ... ok
+test specification::tests::with_no_task_in_reach_the_stores_one_in_force_specification_is_still_decided ... ok
+test serve::api::tests::a_request_without_the_run_token_is_refused_even_from_localhost ... ok
+test specification::tests::the_specification_decided_is_the_one_that_specifies_this_tasks_work ... ok
+test specification::tests::two_specifications_of_this_tasks_work_are_refused_and_both_are_named ... ok
+test reverse::relations::tests::no_signal_is_no_relation ... ok
+test store_command::migrate_git::tests::an_explicit_markdown_store_key_is_replaced_by_git ... ok
+test reverse::tests::a_tracker_key_may_carry_digits_but_a_standard_is_not_a_ticket ... ok
+test store_command::migrate_git::tests::a_v1_selector_becomes_v5_keeping_every_other_key ... ok
+test specification::tests::the_rule_this_verb_selects_by_is_the_one_the_shipped_principles_declare ... ok
+test flow::tests::the_scope_of_a_step_is_written_in_the_order_the_map_wrote_it ... ok
+test flow::tests::a_state_with_one_llm_step_carries_the_prompt_the_scope_and_the_harness ... ok
+test flow::tests::the_header_names_the_map_and_the_workflow_it_is_pinned_to ... ok
+test flow::tests::a_state_with_several_steps_becomes_a_group_chained_in_the_order_the_map_wrote_them ... ok
+test flow::tests::a_command_step_carries_its_argv_and_the_evidence_running_it_establishes ... ok
+test flow::tests::every_state_is_a_section_so_a_governor_asked_at_every_section_is_asked_at_every_state ... ok
+test flow::tests::an_operator_step_carries_what_it_asks_and_a_state_of_one_step_is_a_section_of_one ... ok
+test flow::tests::a_projection_with_a_map_is_still_a_document_the_harness_plans ... ok
+test command_tree::every_leaf_is_reachable_by_its_grouped_path_and_by_its_flat_spelling ... ok
+
+test result: ok. 163 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s
+
+     Running unittests src/aep.rs (target/debug/deps/aep-8dca18af5020570d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/protocol.rs (target/debug/deps/protocol-a48c962284854a09)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli.rs (target/debug/deps/cli-54018e8ae38148f5)
+
+running 39 tests
+test conformance_fails_when_a_property_is_deliberately_broken ... ok
+test an_evidence_document_without_an_observation_time_is_refused_by_name ... ok
+test a_scan_that_is_blind_to_an_annotation_fails_strict_and_says_which_file ... ok
+test a_workspace_member_nobody_checked_out_is_reported_rather_than_fatal ... ok
+test a_repository_with_no_workspace_file_is_not_an_error ... ok
+test a_workspace_list_names_the_member_every_artifact_came_from ... ok
+test an_expired_claim_fails_only_the_flag_that_exists_to_judge_it ... ok
+test a_reference_two_members_both_hold_is_refused_with_both_spellings ... ok
+test conformance_rejects_an_unknown_level_or_fault ... ok
+test inspect_accepts_a_record_observed_on_the_reference_date_itself ... ok
+test inspect_admits_a_date_that_is_today_at_utc_plus_fourteen_and_refuses_one_nowhere_yet ... ok
+test inspect_refuses_an_observation_that_has_not_happened_yet ... ok
+test outside_a_project_the_missing_task_is_explained ... ok
+test inspect_reports_when_each_submitted_record_was_observed ... ok
+test conformance_runs_the_suites_against_the_reference_backend ... ok
+test conformance_refuses_a_store_for_the_backend_that_keeps_nothing ... ok
+test output_survives_a_reader_that_stops_reading ... ok
+test the_corpus_case_admits_two_spellings_and_refuses_the_two_it_names ... ok
+test validate_reports_a_broken_document_with_its_path_and_fails ... ok
+test the_scan_finds_every_annotation_the_corpus_holds_and_says_so_in_one_line ... ok
+test explain_allows_what_the_profile_grants ... ok
+test evaluate_advances_with_the_examples_evidence ... ok
+test explain_refuses_a_production_change_and_names_the_rule ... ok
+test schema_lists_and_prints_generated_schemas ... ok
+test evaluate_and_inspect_answer_identically_about_one_file ... ok
+test evaluate_reports_the_state_and_why_a_transition_is_blocked ... ok
+test evaluate_reads_every_evidence_file_in_the_example ... ok
+test an_unparseable_workspace_file_is_refused_naming_the_file_and_the_reason ... ok
+test a_document_whose_every_record_is_future_dated_still_fails ... ok
+test validate_checks_an_artifact_manifest_against_the_lifecycles ... ok
+test resolve_prints_the_plan ... ok
+test resolve_fails_when_the_task_names_a_profile_that_does_not_exist ... ok
+test validate_accepts_the_repositorys_own_documents ... ok
+test one_future_record_refuses_itself_by_position_and_the_document_is_still_evaluated ... ok
+test json_output_is_machine_readable ... ok
+test inspect_lists_documents_and_shows_one ... ok
+test workflow_flow_makes_every_state_a_section ... ok
+test a_project_is_discovered_so_no_arguments_are_needed ... ok
+test conformance_runs_against_the_backend_the_caller_names_and_the_report_says_which ... ok
+
+test result: ok. 39 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running tests/command_equivalence.rs (target/debug/deps/command_equivalence-023111b16f78ba08)
+
+running 12 tests
+test the_canonical_command_and_alias_match_on_a_usage_error_inside_an_area ... ok
+test the_canonical_command_and_alias_match_on_a_usage_error ... ok
+test the_canonical_command_and_alias_match_on_the_first_level_help ... ok
+test the_canonical_command_and_alias_match_on_an_accepted_operation ... ok
+test the_canonical_command_and_alias_match_on_a_usage_error_under_a_flat_spelling ... ok
+test the_canonical_command_and_alias_match_on_a_domain_refusal ... ok
+test the_canonical_command_and_alias_both_identify_as_aep ... ok
+test the_canonical_command_and_alias_match_on_unrelate_at_both_spellings ... ok
+test the_canonical_command_and_alias_match_on_a_preflight_that_reports_failures ... ok
+test the_canonical_command_and_alias_match_on_a_preflight_rendered_as_json ... ok
+test the_canonical_command_and_alias_match_on_an_accepted_operation_at_both_spellings ... ok
+test the_canonical_command_and_alias_match_on_a_domain_refusal_at_the_grouped_spelling ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/count_reader_pass1.rs (target/debug/deps/count_reader_pass1-edbeb9808d3ec46b)
+
+running 3 tests
+test typed_batch_preserves_crlf_and_unicode_bytes_and_refuses_either_bad_position ... ok
+test actual_inspect_aliases_keep_full_u64_and_refuse_malformed_batch_without_partial_output ... ok
+test exact_high_time_horizon_restore_and_changed_source_refusals_preserve_execution ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/describe_type.rs (target/debug/deps/describe_type-11e21e247692dcc8)
+
+running 2 tests
+test every_backend_reports_the_same_ladder_for_every_planning_kind ... ok
+test the_descriptor_edges_are_what_protocol_artifact_lifecycle_prints ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running tests/doctor_cli.rs (target/debug/deps/doctor_cli-2a18b3551cfd2798)
+
+running 11 tests
+test a_root_that_is_not_a_git_checkout_warns_rather_than_failing ... ok
+test the_binary_version_line_agrees_with_what_the_version_flag_prints ... ok
+test a_protocol_source_path_that_is_not_there_fails_naming_where_it_resolved_to ... ok
+test two_runs_over_one_tree_print_identical_bytes ... ok
+test a_pinned_protocol_source_warns_until_its_snapshot_is_cached_and_never_fetches_it ... ok
+test the_environment_supplies_a_plugin_directory_only_when_the_command_line_named_none ... ok
+test the_json_rendering_carries_the_same_codes_and_verdicts_as_the_text_one ... ok
+test a_project_file_that_is_absent_or_unparseable_fails_naming_the_file_and_the_defect ... ok
+test a_plugin_directory_without_a_manifest_fails_and_no_directory_at_all_only_warns ... ok
+test a_planning_store_that_is_absent_or_invalid_fails_with_the_finding_artifact_validate_reports ... ok
+test a_newest_release_tag_that_disagrees_with_the_binary_is_named_and_does_not_fail ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/drift.rs (target/debug/deps/drift-4c6fcd975553a371)
+
+running 6 tests
+test a_forged_revision_on_a_document_with_no_events_is_still_only_a_document_predating_the_log ... ok
+test a_document_removed_with_rm_is_reported_as_deleted ... ok
+test a_revision_no_write_produced_is_reported_as_forged_and_not_as_an_edit ... ok
+test a_document_that_matches_its_log_is_not_drift_and_a_plan_before_the_log_is_not_either ... ok
+test a_document_with_more_events_than_its_revision_is_not_forged ... ok
+test a_document_edited_in_an_editor_is_drift_naming_the_field_and_the_event ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s
+
+     Running tests/drive_cli.rs (target/debug/deps/drive_cli-a60f6f334b651020)
+
+running 42 tests
+test a_holder_cursor_that_will_not_parse_is_a_refusal_and_never_a_crash ... ok
+test a_command_step_naming_another_program_is_resolved_as_written ... ok
+test a_blocked_run_prints_the_engine_reasons_without_rewording_them ... ok
+test a_lock_naming_another_host_is_refused_at_the_binary_and_take_lock_does_not_pass_it ... ok
+test a_pause_is_the_lock_released_and_the_pointer_kept ... ok
+test a_run_advances_on_command_step_evidence_and_ends_with_the_engine_speaking ... ok
+test a_map_that_is_both_uncoverable_and_unspawnable_reports_the_defect_that_travels ... ok
+test a_command_step_that_says_protocol_runs_the_build_that_is_driving_it ... ok
+test a_headless_start_refuses_what_only_a_person_can_answer_and_the_flag_is_the_route_through ... ok
+test a_relation_the_workspace_declares_does_not_stop_a_run_before_it_starts ... ok
+test a_resume_gets_the_iterations_it_was_given_rather_than_what_the_run_has_left ... ok
+test a_driven_planning_mutation_observes_the_shared_writer_fence ... ok
+test a_resume_that_supersedes_a_lock_records_that_theft_over_an_earlier_one ... ok
+test a_resume_that_stole_nothing_leaves_a_theft_already_in_the_record ... ok
+test a_resume_against_another_live_runs_lock_is_refused_and_writes_nothing ... ok
+test a_run_that_took_nobodys_lock_writes_no_took_lock_from_key ... ok
+test a_holder_whose_cursor_cannot_be_read_is_refused_with_state_unknown ... ok
+test a_run_that_supersedes_a_lock_and_stops_without_a_step_still_records_the_theft ... ok
+test a_run_and_a_resume_that_stole_nothing_write_no_took_lock_from_key ... ok
+test a_resume_expands_the_task_document_the_run_was_started_from ... ok
+test a_map_that_cannot_produce_demanded_evidence_is_refused_before_the_first_step ... ok
+test a_second_driver_is_refused_by_name_and_writes_nothing ... ok
+test a_stolen_lock_is_in_the_taking_runs_cursor_and_status_prints_it ... ok
+test adversary_a_run_that_failed_after_taking_the_lock_does_not_leave_it_behind ... ok
+test every_verb_can_be_asked_for_help ... ok
+test a_command_step_binds_the_specification_verb_to_the_task_the_run_was_started_from ... ok
+test a_refusal_names_what_the_holding_run_is_doing ... ok
+test adversary_a_refused_second_driver_leaves_the_tree_byte_for_byte_as_it_found_it ... ok
+test adversary_the_refusal_names_the_host_beside_the_pid_rather_than_anywhere_in_the_output ... ok
+test the_cargo_map_starts_a_feature_run_without_the_evidence_gap_flag ... ok
+test the_checks_map_plans_against_the_repositorys_own_task ... ok
+test two_maps_fit_the_workflow_so_the_driver_refuses_to_choose_and_names_both ... ok
+test the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed ... ok
+test a_second_project_aimed_at_one_store_holds_its_own_lock_and_is_not_refused ... ok
+test a_run_stopped_by_its_iteration_bound_resumes_where_it_stopped ... ok
+test status_reports_the_run_and_whether_the_lock_is_free ... ok
+test adversary_a_second_run_of_one_task_allocates_a_new_directory_and_leaves_the_firsts_record_alone ... ok
+test adversary_a_run_paused_for_a_person_released_the_lock_and_resumes ... ok
+test model_start_and_resume_refuse_without_changing_the_project ... ok
+test the_resume_line_the_driver_prints_works_with_nothing_else_on_it ... ok
+test a_run_of_one_task_is_not_numbered_by_the_current_pointer_of_another ... ok
+test adversary_a_run_directory_that_was_removed_is_not_handed_out_to_a_second_run ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running tests/entity_cli.rs (target/debug/deps/entity_cli-c337fcb0533b83c7)
+
+running 11 tests
+test describe_says_a_design_accepts_an_approval ... ok
+test entity_get_by_locator_prints_the_design_the_manifest_declares ... ok
+test audit_lists_the_commands_that_seeded_the_manifest ... ok
+test audit_rejected_is_empty_when_nothing_was_refused ... ok
+test entity_relations_incoming_answers_what_points_at_this ... ok
+test json_output_is_machine_readable ... ok
+test entity_list_narrows_to_one_type ... ok
+test entity_relations_shows_what_the_design_designs ... ok
+test entity_list_shows_one_line_per_artifact_in_the_manifest ... ok
+test entity_history_shows_the_seeding_and_nothing_else ... ok
+test entity_get_by_an_unknown_locator_refuses_rather_than_printing_nothing ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/ess_conformance_coverage.rs (target/debug/deps/ess_conformance_coverage-92e0dc143d354432)
+
+running 24 tests
+test coverage_horizon_equality_and_no_implicit_ttl_share_requirement_evaluation ... ok
+test coverage_complete_record_matches_every_independent_qualification_input ... ok
+test coverage_outside_refusal_qualifies_only_the_independently_selected_component ... ok
+test coverage_requirement_diagnostics_name_the_separate_kind ... ok
+test coverage_typed_envelopes_preserve_legacy_observation_lexemes_but_require_exact_report_instants ... ok
+test coverage_cli_inspection_admits_complete_original_input_and_exact_time ... ok
+test adversary_pass2_current_named_model_controls_both_decisions_after_graph_refresh_and_replay ... ok
+test coverage_json_yaml_original_lineage_and_full_time_survive_both_reader_configuration ... ok
+test coverage_unknown_refused_and_empty_are_descriptive_even_when_all_executed_cases_pass ... ok
+test coverage_terminal_failures_inconclusive_runs_and_separate_records_never_join_into_qualification ... ok
+test adversary_coverage_engine_re_admits_clones_and_preserves_both_reader_orders ... ok
+test coverage_both_decision_routes_and_replay_share_the_exact_record_with_atomic_refusals ... ok
+test adversary_coverage_actual_inspection_refuses_original_nested_duplicates_for_both_aliases ... ok
+test coverage_qualification_requires_every_independent_identity_and_envelope_control ... ok
+test coverage_actual_driver_reads_typed_record_and_re_admits_on_status_and_resume ... ok
+test coverage_direct_record_without_reader_refuses_before_publishing_state ... ok
+test coverage_planning_pair_dispatch_refuses_before_store_and_aliases_are_identical ... ok
+test coverage_opt_in_profile_composes_without_inheriting_count_requirements ... ok
+test coverage_planning_wraps_exact_unfiltered_bytes_and_escapes_full_descriptive_diagnostics ... ok
+test coverage_planning_admits_original_input_as_descriptive_history ... ok
+test direct_return_planning_dispatches_raw_suite_and_carrier_to_the_coverage_reader ... ok
+test descriptive_coverage_records_cannot_earn_specification_conformance ... ok
+test current_complete_coverage_earns_specification_conformance_without_inventing_a_record ... ok
+test a_newer_or_equally_timed_failed_coverage_run_prevents_old_success_earning_conformance ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.80s
+
+     Running tests/ess_conformance_v2.rs (target/debug/deps/ess_conformance_v2-b76880fa02e3e060)
+
+running 14 tests
+test envelope_forgery_alias_duplicates_and_rounded_times_cannot_admit ... ok
+test horizon_boundary_and_independent_constraints_survive_typed_task_readback ... ok
+test raw_wrong_kind_empty_and_terminal_records_keep_distinct_qualification_reasons ... ok
+test qualifier_checks_independent_subject_model_suite_selection_producer_and_time_reasons ... ok
+test real_driver_ingests_original_pair_and_re_admits_it_on_status_and_resume ... ok
+test actual_policy_composes_and_valid_same_record_reaches_unknown_coverage ... ok
+test cross_record_fact_overwrites_and_event_claims_never_repair_qualification ... ok
+test refused_submission_and_restore_leave_nonempty_execution_unchanged ... ok
+test current_reader_rechecks_cached_sources_on_submission_direct_record_and_restore ... ok
+test core_without_reader_and_direct_record_without_time_refuse_even_cached_admission ... ok
+test cli_inspect_evaluate_aliases_and_pair_flag_refusals_use_the_actual_reader ... ok
+test unrepresentable_planning_dates_refuse_before_opening_or_mutating_the_store ... ok
+test typed_json_yaml_full_u64_and_raw_snapshot_readback_re_admit_original_bytes ... ok
+test real_planning_pair_preserves_full_u64_diagnostics_and_refusals_do_not_open_store ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.48s
+
+     Running tests/eval_corpus.rs (target/debug/deps/eval_corpus-3fc52e95edbfb50e)
+
+running 5 tests
+test a_case_may_declare_what_it_is_about_and_a_typo_inside_it_is_refused ... ok
+test the_two_development_cases_are_judged_by_one_document ... ok
+test every_case_is_three_files_and_says_what_it_is_about ... ok
+test every_case_gates_on_something ... ok
+test every_case_replays_to_the_verdict_it_declares ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/eval_dry_run.rs (target/debug/deps/eval_dry_run-10c4f73da68e806e)
+
+running 4 tests
+test the_manifests_the_runner_wrote_are_the_documents_the_matrix_refuses_to_guess_at ... ok
+test the_digest_every_manifest_carries_comes_from_the_instruments_row ... ok
+test the_dry_run_reaches_both_harnesses_all_three_arms_and_a_contradiction ... ok
+test the_whole_pipeline_runs_on_committed_streams_and_assembles_the_matrix_byte_for_byte ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/eval_matrix.rs (target/debug/deps/eval_matrix-313795a4ab4edd21)
+
+running 12 tests
+test a_directory_with_no_runs_in_it_is_refused_rather_than_rendered_as_a_clean_sheet ... ok
+test a_manifest_with_no_record_beside_it_is_refused_rather_than_skipped ... ok
+test a_plugin_digest_on_arm_raw_is_refused_where_the_manifest_enters ... ok
+test a_record_with_no_manifest_beside_it_is_refused_rather_than_dropped ... ok
+test an_arm_this_evaluation_does_not_have_is_refused_by_name ... ok
+test an_incomplete_manifest_is_refused_by_name_and_no_matrix_is_written ... ok
+test the_matrix_is_a_report_and_not_a_gate ... ok
+test a_row_the_record_does_not_mention_at_all_is_the_same_answer_as_a_null_one ... ok
+test a_manifest_whose_transcript_is_not_the_records_transcript_is_refused ... ok
+test the_matrix_reports_every_arm_of_every_harness_and_all_three_answers ... ok
+test a_null_verdict_is_counted_unobservable_and_never_held ... ok
+test the_committed_pairs_assemble_into_the_matrix_byte_for_byte ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/eval_run.rs (target/debug/deps/eval_run-9d57fe0b139baab2)
+
+running 27 tests
+test naming_neither_a_case_nor_a_workflow_is_refused_rather_than_running_the_whole_corpus ... ok
+test live_evaluation_names_the_new_host_before_creating_output ... ok
+test a_declared_plugin_the_attestation_does_not_list_is_refused_rather_than_written_down ... ok
+test a_session_whose_hermetic_row_is_missing_is_refused_by_the_field_that_is_missing ... ok
+test an_attested_plugin_with_no_digest_is_refused_because_the_manifest_cannot_say_which_bytes ... ok
+test a_run_that_pins_no_model_writes_no_model_requested_key ... ok
+test a_stream_that_stops_before_the_session_ends_is_refused_rather_than_reported_as_a_whole_run ... ok
+test a_wire_that_names_no_model_assembles_a_manifest_that_says_so ... ok
+test one_recorded_stream_is_one_run_and_naming_two_cases_is_refused ... ok
+test a_session_that_states_no_harness_version_is_refused_and_no_manifest_is_written ... ok
+test arm_plugin_over_a_stream_that_attests_no_plugin_is_refused_by_name ... ok
+test a_cost_the_wire_writes_as_null_leaves_the_manifest_silent_and_never_says_zero ... ok
+test a_model_is_refused_by_name_on_the_harnesses_whose_adapters_take_none ... ok
+test a_conformant_replay_still_exits_zero ... ok
+test a_stream_of_another_harness_than_the_run_claims_is_refused ... ok
+test a_contradicted_replay_exits_with_the_code_its_own_verdict_line_prints ... ok
+test an_undecided_replay_exits_three_rather_than_reporting_a_replayed_transcript ... ok
+test a_session_that_omits_the_model_key_altogether_is_still_refused ... ok
+test arm_raw_over_a_stream_that_attests_a_plugin_is_refused_by_name ... ok
+test arm_plugin_may_be_a_marketplace_plugin_alone_and_the_manifest_says_so ... ok
+test a_run_of_arm_driven_is_read_even_though_it_is_not_launched_here ... ok
+test redact_takes_the_operators_home_and_name_out_of_the_stream_it_writes ... ok
+test without_redact_the_operators_own_stream_is_left_exactly_as_it_was ... ok
+test the_plugin_digest_in_the_manifest_is_the_one_the_session_attested_byte_for_byte ... ok
+test the_manifest_records_what_was_asked_for_beside_what_the_attestation_reported ... ok
+test the_manifests_digest_is_over_the_redacted_bytes_so_the_written_stream_replays ... ok
+test the_digest_is_read_from_the_instruments_row_and_not_from_the_vendors_echo ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/evidence_producers.rs (target/debug/deps/evidence_producers-a39bf3f5d00d6eb6)
+
+running 7 tests
+test protocol_property_evidence_writes_a_property_record_with_the_case_count_it_measured ... ok
+test a_tree_that_does_not_validate_still_produces_a_record_and_it_says_failed ... ok
+test protocol_specification_evidence_writes_the_requirement_by_requirement_verdict ... ok
+test a_store_holding_two_specifications_of_this_tasks_work_is_refused_rather_than_guessed_at ... ok
+test every_evidence_producer_writes_the_same_record_through_either_binary_name ... ok
+test protocol_validate_writes_a_verification_record_the_driver_can_submit ... ok
+test no_producer_writes_a_record_a_person_is_recorded_as_having_produced ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/git_store.rs (target/debug/deps/git_store-c3212435e124a20f)
+
+running 7 tests
+test doctor_reports_a_git_store_as_ok ... ok
+test a_move_writes_exactly_the_artifacts_file_and_nothing_else ... ok
+test a_hand_edited_status_that_breaks_the_walk_fails_validate_naming_the_artifact ... ok
+test aep_and_protocol_list_a_git_store_identically ... ok
+test list_and_validate_answer_over_a_git_store ... ok
+test three_moves_are_three_moves_in_history ... ok
+test recorded_evidence_is_one_file_and_admits_the_rung_that_requires_it ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.76s
+
+     Running tests/golden_plan.rs (target/debug/deps/golden_plan-a0563f6d32a56889)
+
+running 2 tests
+test the_read_verbs_print_exactly_what_was_recorded ... ok
+test the_write_verbs_leave_exactly_the_documents_recorded ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+     Running tests/grouped_and_flat_spellings.rs (target/debug/deps/grouped_and_flat_spellings-6fb9c8d8606cda3f)
+
+running 4 tests
+test the_help_a_reader_sees_offers_the_four_areas_and_doctor_and_no_flat_spelling ... ok
+test the_grouped_path_and_the_flat_spelling_answer_identically_under_aep ... ok
+test the_grouped_path_and_the_flat_spelling_answer_identically_under_protocol ... ok
+test every_case_reaches_its_verb_rather_than_a_usage_error ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.71s
+
+     Running tests/guide_console_blocks_are_what_the_command_prints.rs (target/debug/deps/guide_console_blocks_are_what_the_command_prints-399611bc10b0e4b2)
+
+running 1 test
+test every_quoted_trace_report_on_the_transcript_guide_is_what_the_command_prints ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/instructions.rs (target/debug/deps/instructions-5e7aaf8c429b9e58)
+
+running 3 tests
+test a_workflow_that_moved_renders_different_bytes_and_leaves_its_neighbours_alone ... ok
+test the_committed_instruction_documents_are_what_the_verb_writes ... ok
+test two_runs_of_the_verb_write_the_same_bytes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/metaharness_contract_result.rs (target/debug/deps/metaharness_contract_result-ea87b3b91679a143)
+
+running 6 tests
+test a_record_whose_breaking_changes_exceed_its_failures_is_refused_before_a_document_exists ... ok
+test the_observation_time_is_required_because_this_process_did_not_watch_the_run ... ok
+test a_record_that_checked_nothing_is_refused_before_a_document_exists ... ok
+test the_record_can_arrive_on_a_pipe_and_the_loop_still_closes ... ok
+test every_captured_adapter_record_becomes_evidence_the_engine_reads ... ok
+test a_breaking_change_is_the_number_the_evaluation_turns_on ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+     Running tests/metaharness_frame_contract.rs (target/debug/deps/metaharness_frame_contract-377156650fafd95a)
+
+running 11 tests
+test bytes_that_are_not_a_json_object_are_refused_before_the_tag_is_looked_for ... ok
+test the_minted_golden_carries_the_exact_tag_the_consumer_looks_for ... ok
+test a_frame_document_without_a_tag_it_knows_is_refused_as_untagged ... ok
+test the_minted_golden_holds_exactly_the_fields_the_frame_struct_has ... ok
+test the_minted_golden_lists_its_operations_in_wire_name_order ... ok
+test a_single_flipped_byte_in_a_minted_frame_breaks_the_digest ... ok
+test a_frame_document_that_was_never_sealed_is_refused_by_the_same_check ... ok
+test the_minted_golden_is_accepted_by_the_rules_that_would_refuse_it ... ok
+test a_frame_document_that_is_not_a_frames_shape_is_refused_as_misshapen ... ok
+test the_transcribed_reader_accepts_a_frame_the_golden_does_not_cover ... ok
+test a_scoped_frame_survives_projection_and_its_scope_participates_in_the_digest ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/planning_cli.rs (target/debug/deps/planning_cli-7d0b20ba4868b8a1)
+
+running 100 tests
+test a_malformed_ladder_document_does_not_silently_empty_the_board ... ok
+test a_conformance_report_is_read_into_the_record_rather_than_typed_at_it ... ok
+test a_lifecycle_is_printed_from_the_documents_the_tree_declares ... ok
+test a_body_that_is_empty_after_trimming_is_refused_naming_the_flag ... ok
+test a_listing_says_no_relations_with_an_empty_list_rather_than_by_omission ... ok
+test a_body_handed_to_new_on_standard_input_is_the_body_the_store_holds ... ok
+test a_journal_written_before_the_chain_existed_validates_and_is_not_reported_as_tampered ... ok
+test a_findings_block_in_the_body_and_findings_given_apart_are_refused_as_ambiguous ... ok
+test a_column_takes_its_description_from_the_ladder_that_governs_it ... ok
+test a_body_replacement_preserves_machine_owned_frontmatter ... ok
+test a_report_of_no_scenarios_is_refused_because_it_asserts_nothing ... ok
+test a_findings_block_that_does_not_parse_is_refused_at_one_body_line_quoting_it_with_a_json_hint ... ok
+test a_legal_move_rewrites_the_document_and_bumps_the_revision ... ok
+test a_pinned_git_protocol_source_is_materialized_once_and_then_read_from_cache ... ok
+test a_body_and_findings_both_on_standard_input_are_refused ... ok
+test a_paused_explicit_store_writer_excludes_a_second_cli_process ... ok
+test a_new_story_is_written_where_its_id_says_and_validates_clean ... ok
+test a_malformed_findings_block_is_refused_at_new_with_the_line_it_is_wrong_on ... ok
+test a_chain_that_starts_on_a_legacy_journal_seals_the_lines_that_came_before_it ... ok
+test a_ladders_column_order_survives_a_second_kind_that_shares_its_rung_names ... ok
+test a_store_that_cannot_be_read_whole_is_never_written_to ... ok
+test a_reference_given_at_new_is_written_to_the_document ... ok
+test a_walk_refused_at_its_last_rung_still_reports_the_hop_it_made ... ok
+test a_revision_99_forged_into_the_document_and_the_journal_together_is_refused_by_name ... ok
+test a_rung_on_no_cycle_is_not_printed_before_the_rung_that_leads_to_it ... ok
+test a_findings_block_written_as_json_keeps_messages_with_colons_quotes_and_apostrophes ... ok
+test a_walk_crosses_unguarded_rungs_and_stops_at_a_guarded_one ... ok
+test a_refused_evidence_kind_names_the_nearest_two_that_exist ... ok
+test a_move_that_would_leave_the_store_invalid_is_refused_with_the_finding ... ok
+test a_title_and_a_summary_may_begin_with_a_dash ... ok
+test a_new_epic_story_and_specification_are_seeded_with_a_classified_ambiguities_section ... ok
+test a_section_and_an_append_are_body_verbs_rather_than_a_heredoc ... ok
+test a_review_results_findings_block_is_parsed_at_new_and_returned_by_show_as_an_array ... ok
+test a_reference_reaches_the_file_and_a_query_finds_it ... ok
+test a_journal_entry_edited_in_the_middle_is_named_and_the_records_after_it_are_counted ... ok
+test an_edge_to_an_artifact_the_store_does_not_hold_is_refused ... ok
+test an_explicit_canonical_store_contends_with_the_project_writer_fence ... ok
+test an_edge_written_as_one_word_is_the_edge_written_as_three ... ok
+test a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story ... ok
+test findings_given_apart_are_refused_on_a_kind_that_carries_none ... ok
+test adversary_prose_quoting_an_example_block_in_a_longer_fence_is_not_ambiguous_with_findings ... ok
+test no_planning_verb_writes_to_the_store_except_through_a_command ... ok
+test an_event_log_store_is_refused_naming_how_to_migrate_it ... ok
+test every_verb_can_be_built_and_asked_for_help ... ok
+test outside_a_project_the_missing_store_says_what_to_pass ... ok
+test kinds_lists_the_ladders_a_store_declares_and_the_open_blocker_family ... ok
+test listing_narrows_by_kind_and_by_status ... ok
+test reading_a_record_and_typing_one_are_not_combined ... ok
+test planning_documents_follow_the_protocol_tree_named_by_the_project ... ok
+test review_value_falls_back_to_a_reviewer_key_when_the_review_has_no_owner ... ok
+test every_artifact_the_board_lists_lands_in_a_column ... ok
+test review_value_says_in_eval_matrixs_own_words_why_it_computes_no_score ... ok
+test creating_the_same_artifact_twice_is_refused_rather_than_overwriting_it ... ok
+test an_edge_is_taken_back_by_the_words_that_made_it_and_leaves_the_others_alone ... ok
+test an_illegal_move_exits_one_and_names_every_legal_target ... ok
+test findings_input_outside_the_entry_schema_is_refused_and_nothing_is_written ... ok
+test a_review_outcome_naming_a_review_of_something_else_is_refused ... ok
+test show_body_only_prints_the_bytes_body_from_would_write_back ... ok
+test blocked_says_when_no_ladder_declares_a_blocker_at_all ... ok
+test the_command_only_scan_sees_a_write_it_should_refuse ... ok
+test listing_the_fixture_as_json_is_byte_identical_across_two_runs ... ok
+test the_entity_surface_counts_the_fixtures_artifacts ... ok
+test a_review_outcome_is_recorded_against_the_reviewed_artifact_and_printed_on_the_review ... ok
+test the_evidence_help_names_the_review_outcome_kind_and_what_it_needs ... ok
+test the_entity_surface_refuses_both_sources_and_neither ... ok
+test a_review_result_is_authored_whole_retired_by_its_ladder_and_edited_never ... ok
+test the_board_groups_the_fixture_into_status_columns ... ok
+test a_store_written_only_through_the_cli_reports_a_verified_chain_and_validates ... ok
+test the_graph_draws_every_artifact_and_every_edge ... ok
+test only_the_named_kind_goes_when_two_edges_point_at_one_artifact ... ok
+test new_review_result_takes_its_findings_as_a_json_array_from_a_file ... ok
+test the_graph_renders_as_mermaid_with_ids_a_diagram_can_carry ... ok
+test new_review_result_takes_its_findings_as_a_json_array_from_standard_input ... ok
+test the_board_renders_as_a_markdown_page_a_site_can_publish_unedited ... ok
+test the_vocabulary_verbs_answer_without_a_store ... ok
+test the_fixture_store_validates_clean ... ok
+test validate_answers_the_same_from_a_subdirectory_as_it_does_from_the_root ... ok
+test the_store_defaults_to_the_planning_directory_of_the_project_it_is_run_in ... ok
+test replacing_a_body_with_identical_bytes_does_not_invent_a_revision ... ok
+test unrelating_an_edge_that_is_not_declared_is_refused_naming_the_ones_that_are ... ok
+test validate_lists_every_problem_in_a_broken_store ... ok
+test review_value_since_a_date_leaves_out_what_was_recorded_before_it ... ok
+test the_new_kinds_have_the_ladder_the_store_needs ... ok
+test set_changes_a_frontmatter_field_and_refuses_the_four_it_does_not_own ... ok
+test the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried ... ok
+test validate_reports_a_review_result_with_no_findings_block_without_failing ... ok
+test validate_holds_agreed_work_to_an_objective_once_the_store_declares_one ... ok
+test explain_ends_with_what_each_legal_next_rung_costs ... ok
+test the_findings_verb_refuses_a_review_that_does_not_review_the_artifact ... ok
+test the_findings_verb_takes_the_two_reviews_it_is_told_and_exits_zero_with_one_review ... ok
+test the_board_has_a_column_for_a_rung_only_a_lifecycle_document_names ... ok
+test the_compiled_order_still_separates_two_known_rungs_when_a_kind_declares_no_ladder ... ok
+test a_blocker_is_typed_by_what_clears_it_and_says_so_in_every_listing ... ok
+test withheld_evidence_that_blocks_nothing_is_reported_by_validate ... ok
+test the_outcome_flags_and_the_review_outcome_kind_require_each_other ... ok
+test strict_validate_fails_on_what_plain_validate_only_reports ... ok
+test review_value_counts_per_reviewer_and_says_unknown_where_no_manifest_named_a_cost ... ok
+test validate_reports_a_review_with_no_outcome_without_failing_and_the_age_is_a_flag ... ok
+test one_ladders_column_order_does_not_depend_on_another_kind_being_in_the_store ... ok
+test the_board_prints_a_terminal_rung_after_the_rungs_that_lead_to_it ... ok
+
+test result: ok. 100 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.84s
+
+     Running tests/planning_writer_fence_adversary.rs (target/debug/deps/planning_writer_fence_adversary-64daf3c810fef05c)
+
+running 6 tests
+test a_peer_holding_the_legacy_in_tree_project_fence_still_excludes_a_writer_in_a_repository ... ok
+test a_peer_holding_the_legacy_in_tree_store_fence_still_excludes_an_explicit_writer_in_a_repository ... ok
+test a_read_only_git_directory_refuses_the_write_and_changes_nothing ... ok
+test a_relative_path_worktree_store_named_through_a_symlink_contends_with_its_canonical_spelling ... ok
+test a_store_inside_a_submodule_is_fenced_in_the_submodules_git_directory ... ok
+test every_write_verb_in_a_repository_changes_nothing_outside_its_store ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/planning_writer_fence_location.rs (target/debug/deps/planning_writer_fence_location-79cf8d09cc68ac8a)
+
+running 4 tests
+test a_stray_git_directory_that_names_no_repository_does_not_capture_the_fence ... ok
+test a_completed_project_write_leaves_no_fence_file_in_the_working_tree ... ok
+test a_completed_explicit_store_write_leaves_no_fence_file_in_the_working_tree ... ok
+test writers_to_one_store_from_two_linked_worktrees_contend_on_one_fence_under_the_common_directory ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/render_cli.rs (target/debug/deps/render_cli-dcda9bf3772e53c5)
+
+running 13 tests
+test png_without_the_rasteriser_names_the_program_and_what_to_install ... ok
+test a_frame_written_to_a_file_carries_no_control_characters ... ok
+test a_workflow_the_tree_does_not_declare_is_refused_by_name ... ok
+test watch_is_refused_on_a_format_that_writes_a_document_once ... ok
+test a_snapshot_on_its_own_draws_the_path_and_refuses_to_guess_a_status ... ok
+test the_html_page_is_written_whole_and_fetches_nothing ... ok
+test a_run_id_with_no_directory_behind_it_is_refused_by_path ... ok
+test a_run_directory_paints_the_overlay_and_prints_its_reasons_verbatim ... ok
+test png_without_an_output_file_is_refused_and_names_the_flag_that_fixes_it ... ok
+test watch_without_a_run_is_refused_because_there_would_be_nothing_to_follow ... ok
+test a_workflow_renders_to_a_standalone_svg_document_on_standard_output ... ok
+test the_same_workflow_renders_to_the_same_bytes_twice ... ok
+test every_committed_workflow_renders ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running tests/reverse_cli.rs (target/debug/deps/reverse_cli-7c8a336c38338ae8)
+
+running 19 tests
+test an_absolute_protocol_source_is_refused_and_the_repository_is_left_as_it_was ... ok
+test a_document_that_is_not_openapi_is_refused ... ok
+test an_unpinned_git_source_is_refused_and_nothing_is_written ... ok
+test a_test_that_never_runs_is_told_apart_from_one_that_is_opted_into ... ok
+test a_relative_source_resolves_through_a_directory_that_did_not_exist_yet ... ok
+test a_draft_names_every_decision_it_could_not_take ... ok
+test build_output_and_machine_state_are_not_part_of_a_repository_plan ... ok
+test a_scan_reads_what_the_fixture_says_and_not_what_it_does_not ... ok
+test a_language_call_named_todo_is_not_unfinished_work ... ok
+test an_unsupported_source_scheme_is_refused ... ok
+test a_directory_with_no_history_says_so_in_one_sentence ... ok
+test every_citation_a_scan_emits_resolves_to_a_real_line ... ok
+test every_verb_can_be_built_and_asked_for_help ... ok
+test one_tree_scans_to_the_same_bytes_twice ... ok
+test a_history_reports_what_the_commits_say ... ok
+test a_marked_line_is_dated_from_the_commit_that_wrote_it_and_not_from_today ... ok
+test a_history_of_one_tree_is_the_same_bytes_twice ... ok
+test init_writes_a_project_the_next_command_can_read ... ok
+test a_vision_cannot_be_implemented_and_a_story_can ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s
+
+     Running tests/reverse_openapi_relations.rs (target/debug/deps/reverse_openapi_relations-6c1d4a6e8eab4925)
+
+running 2 tests
+test the_drafted_domain_is_the_recorded_bytes ... ok
+test a_schema_with_no_relation_signal_carries_no_relations_block ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/serve_cli.rs (target/debug/deps/serve_cli-45aaf117b54026bf)
+
+running 6 tests
+test response_framing_names_exactly_how_many_body_bytes_must_arrive ... ok
+test a_read_only_server_answers_reads_and_refuses_every_move ... ok
+test the_board_is_answered_over_a_socket_and_only_to_the_token_it_printed ... ok
+test an_illegal_move_is_a_conflict_carrying_every_legal_target ... ok
+test explain_answers_the_rungs_a_page_would_draw_and_what_each_costs ... ok
+test a_legal_move_is_written_and_the_next_read_sees_it ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.60s
+
+     Running tests/specification_task_binding.rs (target/debug/deps/specification_task_binding-b86d5ffbd982d1f5)
+
+running 3 tests
+test a_task_no_specification_in_the_store_is_about_is_refused_and_nothing_is_written ... ok
+test an_artifact_named_on_the_command_line_does_not_lift_the_binding ... ok
+test one_store_decides_two_tasks_differently_and_each_record_names_its_own_specification ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/sqlite_plan.rs (target/debug/deps/sqlite_plan-f0a31d62fe8352b8)
+
+running 1 test
+test this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_backends_history has been running for over 60 seconds
+test this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_backends_history ... FAILED
+
+failures:
+
+---- this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_backends_history stdout ----
+
+thread 'this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_backends_history' (2899717) panicked at crates/edge/aep-cli/tests/sqlite_plan.rs:119:9:
+assertion `left == right` failed: review-result:er-direct-return-reader-review: history differs between the two backends
+  left: [RevisionRecord { revision: EntityRevision(1), at: Timestamp(1700000000000), actor: ActorRef(human:conformance), executor: None, command_id: Some(CommandId("seed-review-result-er-direct-return-reader-review")), audit_id: None }]
+ right: [RevisionRecord { revision: EntityRevision(1), at: Timestamp(1700000000000), actor: ActorRef(human:conformance), executor: None, command_id: Some(CommandId("seed-review-result-current-coverage-lifecycle-adversary")), audit_id: None }]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    this_repositorys_plan_round_trips_through_sqlite_and_answers_the_markdown_backends_history
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 168.17s
+
+error: test failed, to rerun pass `-p aep-cli --test sqlite_plan`
+task: Failed to run task "check": task: Failed to run task "check-source": task: Failed to run task "test": exit status 101

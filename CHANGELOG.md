@@ -9,6 +9,18 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- The optional ESS evidence reader admits direct library returns in ordinary suite/28 and
+  inventory suite/29 for String, Boolean, Integer, optional strings, optional string lists and
+  transparent nominal aliases. It keeps exact suite bytes, numeric spellings, coverage inventory
+  and original parent associations. Other
+  direct-response types are explicitly refused; existing suite/1–5 admission is unchanged.
+- Specification lifecycle moves can use an imported report/2 coverage record after its retained
+  originals are re-admitted against the current model. Only the latest complete, whole-system,
+  all-origin, nonempty and entirely passing selection earns eligibility. The coverage record
+  keeps its kind; the move records the derived eligibility separately from legacy evidence.
+
 ### Removed
 
 - The `protocol` alias binary. The CLI has one name: use `aep`. Release archives, `task install`

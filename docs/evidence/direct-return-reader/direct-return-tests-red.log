@@ -1,0 +1,79 @@
+   Compiling aep-ess-evidence v0.63.1 ($HOME/.local/state/worktree/trees/b10x/aep/er-suite-evidence-admission/crates/observe/aep-ess-evidence)
+    Finished `test` profile [unoptimized] target(s) in 0.31s
+     Running tests/direct_returns.rs (target/debug/deps/direct_returns-86550ec92e2f4fa6)
+
+running 10 tests
+test direct_return_ordinary_suite_remains_nonqualifying_count_evidence ... FAILED
+test direct_return_inventory_preserves_original_bytes_counts_and_exact_integers ... FAILED
+test direct_return_inventory_is_not_inferred_from_passing_counts ... FAILED
+test direct_return_requires_the_preceding_invocation_and_matching_outcome ... FAILED
+test direct_return_pairing_and_report_integrity_remain_required ... FAILED
+test direct_return_reader_keeps_unknown_fields_and_variants_closed ... FAILED
+test direct_return_expected_values_must_match_the_complete_authority ... FAILED
+test direct_return_parent_comparison_does_not_round_integer_literals ... FAILED
+test direct_return_type_profile_is_explicitly_narrow ... FAILED
+test direct_return_extension_does_not_reinterpret_allocated_intermediate_versions ... ok
+
+failures:
+
+---- direct_return_ordinary_suite_remains_nonqualifying_count_evidence stdout ----
+
+thread 'direct_return_ordinary_suite_remains_nonqualifying_count_evidence' (608012) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:63:59:
+called `Result::unwrap()` on an `Err` value: EssAdmissionError { issues: [EssAdmissionIssue { reason: "UnsupportedSuiteVersion", path: "$.suite.version", detail: "ess-conformance/28" }] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- direct_return_inventory_preserves_original_bytes_counts_and_exact_integers stdout ----
+
+thread 'direct_return_inventory_preserves_original_bytes_counts_and_exact_integers' (608011) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:50:53:
+called `Result::unwrap()` on an `Err` value: EssAdmissionError { issues: [EssAdmissionIssue { reason: "UnsupportedSuiteVersion", path: "$suite.provenance.suite_version", detail: "coverage requires suite/5" }] }
+
+---- direct_return_inventory_is_not_inferred_from_passing_counts stdout ----
+
+thread 'direct_return_inventory_is_not_inferred_from_passing_counts' (608010) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:44:5:
+expected CoverageCountMismatch, got UnsupportedSuiteVersion at $suite.provenance.suite_version: coverage requires suite/5
+
+---- direct_return_requires_the_preceding_invocation_and_matching_outcome stdout ----
+
+thread 'direct_return_requires_the_preceding_invocation_and_matching_outcome' (608016) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:44:5:
+expected ResponseCommandMismatch, got UnsupportedSuiteVersion at $suite.provenance.suite_version: coverage requires suite/5
+
+---- direct_return_pairing_and_report_integrity_remain_required stdout ----
+
+thread 'direct_return_pairing_and_report_integrity_remain_required' (608013) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:106:82:
+UnsupportedSuiteVersion at $suite.provenance.suite_version: coverage requires suite/5
+
+---- direct_return_reader_keeps_unknown_fields_and_variants_closed stdout ----
+
+thread 'direct_return_reader_keeps_unknown_fields_and_variants_closed' (608015) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:44:5:
+expected UnknownField, got UnsupportedSuiteVersion at $suite.provenance.suite_version: coverage requires suite/5
+
+---- direct_return_expected_values_must_match_the_complete_authority stdout ----
+
+thread 'direct_return_expected_values_must_match_the_complete_authority' (608008) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:44:5:
+expected InvalidResponseValue, got UnsupportedSuiteVersion at $suite.provenance.suite_version: coverage requires suite/5
+
+---- direct_return_parent_comparison_does_not_round_integer_literals stdout ----
+
+thread 'direct_return_parent_comparison_does_not_round_integer_literals' (608014) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:123:97:
+called `Result::unwrap()` on an `Err` value: EssAdmissionError { issues: [EssAdmissionIssue { reason: "UnsupportedSuiteVersion", path: "$suite.provenance.suite_version", detail: "coverage requires suite/5" }] }
+
+---- direct_return_type_profile_is_explicitly_narrow stdout ----
+
+thread 'direct_return_type_profile_is_explicitly_narrow' (608017) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:44:5:
+expected UnsupportedResponseType, got UnsupportedSuiteVersion at $suite.provenance.suite_version: coverage requires suite/5
+
+
+failures:
+    direct_return_expected_values_must_match_the_complete_authority
+    direct_return_inventory_is_not_inferred_from_passing_counts
+    direct_return_inventory_preserves_original_bytes_counts_and_exact_integers
+    direct_return_ordinary_suite_remains_nonqualifying_count_evidence
+    direct_return_pairing_and_report_integrity_remain_required
+    direct_return_parent_comparison_does_not_round_integer_literals
+    direct_return_reader_keeps_unknown_fields_and_variants_closed
+    direct_return_requires_the_preceding_invocation_and_matching_outcome
+    direct_return_type_profile_is_explicitly_narrow
+
+test result: FAILED. 1 passed; 9 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p aep-ess-evidence --test direct_returns`

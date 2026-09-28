@@ -1,0 +1,49 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling libc v0.2.189
+   Compiling getrandom v0.3.4
+   Compiling cfg-if v1.0.5
+   Compiling syn v3.0.6
+   Compiling serde_core v1.0.229
+   Compiling zerocopy v0.8.58
+   Compiling zmij v1.0.23
+   Compiling typenum v1.20.1
+   Compiling autocfg v1.5.1
+   Compiling num-traits v0.2.19
+   Compiling hybrid-array v0.4.15
+   Compiling rand_core v0.9.5
+   Compiling syn v2.0.119
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling serde_derive_internals v0.29.1
+   Compiling serde_derive v1.0.229
+   Compiling ppv-lite86 v0.2.21
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.3
+   Compiling thiserror v2.0.21
+   Compiling schemars v0.8.22
+   Compiling rand_chacha v0.9.0
+   Compiling schemars_derive v0.8.22
+   Compiling rand_xorshift v0.4.0
+   Compiling rand v0.9.5
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+   Compiling thiserror-impl v2.0.21
+   Compiling bitflags v2.13.2
+   Compiling unarray v0.1.4
+   Compiling const-oid v0.10.2
+   Compiling dyn-clone v1.0.20
+   Compiling regex-syntax v0.8.11
+   Compiling digest v0.11.3
+   Compiling cpufeatures v0.3.1
+   Compiling sha2 v0.11.0
+   Compiling proptest v1.11.0
+   Compiling aep-domain v0.63.1 ($HOME/.local/state/worktree/trees/b10x/aep/er-suite-evidence-admission/crates/govern/aep-domain)
+   Compiling aep-ess-evidence v0.63.1 ($HOME/.local/state/worktree/trees/b10x/aep/er-suite-evidence-admission/crates/observe/aep-ess-evidence)
+    Finished `dev` profile [unoptimized] target(s) in 16.96s
+     Running `target/debug/examples/local_er_evidence_probe`
+
+thread 'main' (489206) panicked at crates/observe/aep-ess-evidence/examples/local_er_evidence_probe.rs:7:60:
+passing original ER pair is admissible: EssAdmissionError { issues: [EssAdmissionIssue { reason: "UnsupportedSuiteVersion", path: "$suite.provenance.suite_version", detail: "coverage requires suite/5" }] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

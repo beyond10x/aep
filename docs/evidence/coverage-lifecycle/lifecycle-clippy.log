@@ -1,0 +1,4 @@
+    Checking aep-ess-evidence v0.63.1 (<AEP_WORKTREE>/crates/observe/aep-ess-evidence)
+    Checking aep-backend-markdown v0.63.1 (<AEP_WORKTREE>/crates/plan/aep-backend-markdown)
+    Checking aep-cli v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-cli)
+    Finished `dev` profile [unoptimized] target(s) in 9.05s

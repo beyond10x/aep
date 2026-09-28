@@ -1,0 +1,176 @@
+{
+  "coverage": {
+    "authored": [
+      "library.api/authored/pure-return"
+    ],
+    "authored_sources": {
+      "direct-scenario.yaml": {
+        "digest": "sha256:eb69bd0991d95fa1ab71ccf04027bd6794f545033f7b55fb027ab7852470679d",
+        "disposition": "accepted",
+        "scenario": "library.api/authored/pure-return"
+      }
+    },
+    "counts": {
+      "authored": 1,
+      "generated": 1,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "library.api.Read/outcome/returned"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated_and_authored",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "0b8a12c490f5e6ee01f8fe580c1bc8fb8ee5674d7af54e6c7d07c707c1298b24",
+    "spec_digest": "094633d19226f603425bfbf72f00f15362477c03b79295a1054f7abd6a4bea90",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/29",
+    "system": "library"
+  },
+  "scenarios": {
+    "library.api.Read/outcome/returned": {
+      "purpose": "`library.api.Read` answers `returned` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "library.api.Read"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "command": "library.api.Read",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "library.api.Read",
+            "declarations": {
+              "library.api.Document": {
+                "kind": "newtype",
+                "of": "String"
+              }
+            },
+            "expected": {},
+            "fields": [
+              {
+                "name": "value",
+                "type": "library.api.Document"
+              },
+              {
+                "name": "ok",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              }
+            ],
+            "outcome": {
+              "command": "library.api.Read",
+              "outcome": "returned"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "library.api/authored/pure-return": {
+      "purpose": "A scalar library return preserves a lossless document and an exact integer.",
+      "source": [
+        {
+          "kind": "domain",
+          "name": "library.api"
+        },
+        {
+          "kind": "type",
+          "name": "library.api.Document"
+        },
+        {
+          "kind": "command",
+          "name": "library.api.Read"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "command": "library.api.Read",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "library.api.Read",
+            "outcome": "returned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "library.api.Read",
+            "declarations": {
+              "library.api.Document": {
+                "kind": "newtype",
+                "of": "String"
+              }
+            },
+            "expected": {
+              "ok": true,
+              "revision": 9007199254740993,
+              "value": "{\"number\":9007199254740993}"
+            },
+            "fields": [
+              {
+                "name": "value",
+                "type": "library.api.Document"
+              },
+              {
+                "name": "ok",
+                "type": "Boolean"
+              },
+              {
+                "name": "revision",
+                "type": "Integer"
+              }
+            ],
+            "outcome": {
+              "command": "library.api.Read",
+              "outcome": "returned"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    }
+  }
+}

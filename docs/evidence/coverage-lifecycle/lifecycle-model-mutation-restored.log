@@ -1,0 +1,135 @@
+   Compiling aep-ess-evidence v0.63.1 (<AEP_WORKTREE>/crates/observe/aep-ess-evidence)
+    Finished `test` profile [unoptimized] target(s) in 2.69s
+     Running unittests src/lib.rs (target/debug/deps/aep_ess_evidence-1e5c25154c2cb1e5)
+
+running 6 tests
+test count_json::tests::unsigned_scalars_cover_full_u64_without_large_outcome_allocations ... ok
+test tests::a_passing_report_with_a_failed_scenario_is_refused ... ok
+test tests::a_report_field_added_without_a_format_change_is_refused ... ok
+test tests::a_standalone_report_becomes_the_existing_aep_evidence_shape ... ok
+test direct_response::tests::integer_spellings_are_checked_exactly_without_binary64_rounding ... ok
+test tests::an_unknown_report_version_is_refused_before_fields_are_interpreted ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/count_reader_pass1.rs (target/debug/deps/count_reader_pass1-3ed91c839be8167e)
+
+running 4 tests
+test decoded_duplicate_keys_refuse_in_report_and_arbitrary_nested_payload ... ok
+test closed_scenario_values_and_shapes_do_not_close_literal_payload_keys ... ok
+test count_tokens_remain_strict_while_legacy_payload_numbers_keep_their_grammar ... ok
+test structural_and_textual_predicate_depth_share_the_frozen_limit ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/counts.rs (target/debug/deps/counts-33cf24577f3b64d8)
+
+running 11 tests
+test detailed_run_and_future_suite_refuse_before_interpreting_their_body ... ok
+test source_readback_cannot_restore_or_retain_a_failed_admission ... ok
+test duplicate_and_unknown_closed_fields_refuse_even_inside_unused_metadata ... ok
+test unsupported_format_profile_policy_and_coverage_reasons_are_distinct ... ok
+test exact_original_suite_bytes_and_selected_membership_are_required ... ok
+test original_suite_pairs_admit_with_exact_time_and_unknown_coverage ... ok
+test zero_and_mixed_terminal_selections_keep_each_profile_aggregate_truthful ... ok
+test category_arithmetic_lists_and_producer_aggregates_are_checked ... ok
+test report_completion_tokens_are_exact_and_lexically_unsigned ... ok
+test frozen_predicate_depth_and_quantified_metadata_are_admitted_without_rewriting_bytes ... ok
+test complete_frozen_step_shape_view_and_dependency_vocabulary_is_read_for_every_legacy_major ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/coverage.rs (target/debug/deps/coverage-a9fa4e7f60a9bd67)
+
+running 19 tests
+test coverage_complete_original_selection_admits_as_passed_for_both_profiles ... ok
+test coverage_admission_retains_every_exact_unsigned_completion_boundary ... ok
+test coverage_hashes_original_inner_bytes_and_preserves_open_payload_data ... ok
+test coverage_outside_component_witness_is_complete_and_checked_without_erasing_refusal ... ok
+test coverage_inventory_membership_counts_origins_and_component_agree ... ok
+test coverage_report_scalars_profiles_counts_and_terminal_ids_refuse_contradictions ... ok
+test coverage_inherits_checked_suite_four_steps_predicates_and_dependencies ... ok
+test coverage_filter_cannot_promote_unknown_erase_refusals_or_round_large_survivor_integers ... ok
+test coverage_refusal_occurrences_are_retained_and_never_counted_as_executions ... ok
+test coverage_exact_scalars_counts_and_terminal_ids_refuse_contradictions ... ok
+test planning_source_retains_originals_and_binds_model_and_full_completion_time ... ok
+test coverage_complete_multi_generation_lineage_is_admitted_before_the_child ... ok
+test coverage_parent_comparison_covers_surviving_steps_dependencies_provenance_and_inventory ... ok
+test coverage_closed_original_transport_detects_duplicates_unknown_fields_and_versions ... ok
+test planning_source_cannot_be_established_by_text_summary_or_forged_cached_claims ... ok
+test planning_coverage_refuses_each_nonpassing_outcome_and_each_incomplete_selection ... ok
+test coverage_refusal_mapping_identity_scope_and_occurrence_order_are_checked ... ok
+test coverage_authored_source_ownership_keeps_rejected_known_ids_and_all_causes ... ok
+test coverage_flat_parent_lineage_has_no_artificial_chain_length_limit ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/coverage_adversary_pass1.rs (target/debug/deps/coverage_adversary_pass1-fa44af867a6b4450)
+
+running 4 tests
+test parent_lineage_accepts_omitted_provenance_default ... ok
+test parent_lineage_accepts_omitted_nested_defaults ... ok
+test parent_lineage_compares_payloads_in_inherited_number_domain ... ok
+test parent_lineage_preserves_real_changes_and_original_byte_controls ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/coverage_adversary_pass2.rs (target/debug/deps/coverage_adversary_pass2-385953f90b63312b)
+
+running 4 tests
+test comparison_view_cannot_admit_unknown_or_new_modeled_vocabulary ... ok
+test comparison_cannot_drop_predicate_children_or_quantified_conditions ... ok
+test comparison_follows_inherited_scalar_parser_through_boolean_and_quantified_forms ... ok
+test comparison_retains_fields_of_every_remaining_step_and_shape_variant ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/coverage_lineage.rs (target/debug/deps/coverage_lineage-5c573cbd7604b56e)
+
+running 9 tests
+test lineage_checks_unknown_fields_and_both_original_byte_references_before_comparison ... ok
+test lineage_preserves_elapsed_metadata_and_nonliteral_scenario_values ... ok
+test lineage_predicate_operands_follow_their_parser_inside_quantifiers ... ok
+test lineage_preserves_predicate_types_order_operators_and_quantifier_identity ... ok
+test lineage_keeps_integer_metadata_exact_at_every_numeric_owner ... ok
+test lineage_preserves_meaningful_changes_at_every_default_boundary ... ok
+test lineage_applies_every_inherited_optional_default_in_both_directions ... ok
+test lineage_uses_node_numbers_at_every_payload_owner_and_nested_container ... ok
+test lineage_keeps_payload_map_membership_values_types_and_sequence_order ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/direct_returns.rs (target/debug/deps/direct_returns-86550ec92e2f4fa6)
+
+running 15 tests
+test direct_return_ordinary_suite_remains_nonqualifying_count_evidence ... ok
+test direct_return_step_is_not_admitted_under_legacy_suite_versions ... ok
+test direct_return_inventory_preserves_original_bytes_counts_and_exact_integers ... ok
+test direct_return_requires_the_preceding_invocation_and_matching_outcome ... ok
+test direct_return_declarations_are_exact_reachable_and_finite ... ok
+test direct_return_expected_values_must_match_the_complete_authority ... ok
+test direct_return_pairing_and_report_integrity_remain_required ... ok
+test direct_return_type_profile_is_explicitly_narrow ... ok
+test direct_return_extension_does_not_reinterpret_allocated_intermediate_versions ... ok
+test direct_return_inventory_is_not_inferred_from_passing_counts ... ok
+test direct_return_parent_comparison_does_not_round_integer_literals ... ok
+test direct_return_reader_keeps_unknown_fields_and_variants_closed ... ok
+test genuine_scalar_producer_suites_are_read_without_rewriting_their_bytes ... ok
+test er_optional_text_and_text_lists_keep_null_and_ordered_duplicate_literals ... ok
+test direct_return_literals_are_bounded_without_reusing_legacy_float_conversion ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.25s
+
+     Running tests/er_library_report.rs (target/debug/deps/er_library_report-2b0d652d96fb97de)
+
+running 1 test
+test the_complete_entity_runtime_library_run_is_admitted_without_rewriting_its_sources ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.30s
+
+   Doc-tests aep_ess_evidence
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

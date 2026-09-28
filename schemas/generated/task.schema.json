@@ -594,7 +594,7 @@
       "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*:[A-Za-z0-9]([A-Za-z0-9]|[./_-][A-Za-z0-9])*$"
     },
     "SuiteReference": {
-      "description": "Exact original-suite identity; only the frozen count-stage profile is admitted.",
+      "description": "Exact original-suite identity for legacy count suites/1–4 and direct-return suite/28.",
       "type": "object",
       "required": [
         "digest",
@@ -615,7 +615,7 @@
       "additionalProperties": false
     },
     "SuiteReference2": {
-      "description": "Checked exact suite/5 reference. It does not broaden the frozen count reference.",
+      "description": "Checked exact suite/5 or suite/29 reference, separate from ordinary count evidence.",
       "type": "object",
       "required": [
         "digest",

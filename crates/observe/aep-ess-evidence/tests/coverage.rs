@@ -62,6 +62,175 @@ fn altered(text: &str, change: impl FnOnce(&mut Value)) -> String {
     value.to_string()
 }
 
+fn planning_source(report: &str, input: &str) -> String {
+    let adapted = adapt_json_coverage(report, input).unwrap();
+    let aep_domain::Evidence::EssConformanceCoverageV1(sources) = adapted.evidence() else {
+        panic!("coverage");
+    };
+    aep_ess_evidence::planning_coverage_source(
+        sources,
+        "report.json",
+        "input.json",
+        "original_input",
+    )
+    .unwrap()
+}
+
+fn planning_refusal(source: &str, expected: &str) {
+    let digest = aep_domain::SpecDigest::new(fixtures::MODEL).unwrap();
+    let error = aep_ess_evidence::qualify_planning_coverage(
+        source,
+        Some(&digest),
+        "1970-01-01T00:00:00Z",
+        aep_domain::time::Timestamp::from_epoch_millis(2),
+    )
+    .unwrap_err();
+    assert_eq!(error.issues[0].reason, expected, "{error}");
+}
+
+#[test]
+fn planning_source_retains_originals_and_binds_model_and_full_completion_time() {
+    use aep_domain::time::Timestamp;
+    let (report, input) = fixtures::pair(1);
+    let source = planning_source(&report, &input);
+    let retained = aep_ess_evidence::read_planning_coverage_source(&source).unwrap();
+    assert_eq!(retained.report_json(), report);
+    assert_eq!(retained.suite_input_json(), input);
+    let digest = aep_domain::SpecDigest::new(fixtures::MODEL).unwrap();
+    let qualify = |model, at, now| {
+        aep_ess_evidence::qualify_planning_coverage(
+            &source,
+            model,
+            at,
+            Timestamp::from_epoch_millis(now),
+        )
+    };
+    qualify(Some(&digest), "1970-01-01T00:00:00Z", 2).unwrap();
+    assert_eq!(
+        qualify(None, "1970-01-01T00:00:00Z", 2).unwrap_err().issues[0].reason,
+        "MissingModelDigest"
+    );
+    let wrong = aep_domain::SpecDigest::new("a".repeat(64)).unwrap();
+    assert_eq!(
+        qualify(Some(&wrong), "1970-01-01T00:00:00Z", 2)
+            .unwrap_err()
+            .issues[0]
+            .reason,
+        "ModelDigestMismatch"
+    );
+    assert_eq!(
+        qualify(Some(&digest), "1970-01-01T00:00:01Z", 2)
+            .unwrap_err()
+            .issues[0]
+            .reason,
+        "ObservationMismatch"
+    );
+    assert_eq!(
+        qualify(Some(&digest), "1970-01-01T00:00:00Z", 0)
+            .unwrap_err()
+            .issues[0]
+            .reason,
+        "FutureObservation"
+    );
+}
+
+#[test]
+fn planning_source_cannot_be_established_by_text_summary_or_forged_cached_claims() {
+    let (report, input) = fixtures::pair(1);
+    let source = planning_source(&report, &input);
+    planning_refusal("suite passed", "InvalidDocument");
+    planning_refusal(
+        &altered(&source, |v| {
+            v.as_object_mut().unwrap().remove("originals");
+        }),
+        "MissingField",
+    );
+    planning_refusal(
+        &altered(&source, |v| v["future"] = true.into()),
+        "UnknownField",
+    );
+    planning_refusal(
+        &altered(&source, |v| v["originals"]["verified"] = true.into()),
+        "UnknownField",
+    );
+    planning_refusal(
+        &altered(&source, |v| v["counts"]["passed"] = 999.into()),
+        "CoverageSourceMismatch",
+    );
+    planning_refusal(
+        &altered(&source, |v| v["completed_at"] = "0".into()),
+        "CoverageSourceMismatch",
+    );
+    planning_refusal(
+        &altered(&source, |v| v["originals"]["report_json"] = "{}".into()),
+        "MissingField",
+    );
+    let bad_report = altered(&report, |v| {
+        v["suite"]["digest"] = format!("sha256:{}", "0".repeat(64)).into();
+    });
+    planning_refusal(
+        &altered(&source, |v| {
+            v["originals"]["report_json"] = bad_report.into();
+        }),
+        "SuiteDigestMismatch",
+    );
+}
+
+#[test]
+fn planning_coverage_refuses_each_nonpassing_outcome_and_each_incomplete_selection() {
+    let (report, input) = fixtures::pair(1);
+    for outcome in ["failed", "error", "unsupported", "skipped"] {
+        let status = if matches!(outcome, "failed" | "unsupported") {
+            "failed"
+        } else {
+            "inconclusive"
+        };
+        let report = altered(&report, |v| {
+            if outcome == "skipped" {
+                v["producer_profile"] = "go-scenario-status/1".into();
+            }
+            v["counts"]["passed"] = 0.into();
+            v["counts"][outcome] = 1.into();
+            v["outcomes"]["passed"] = json!([]);
+            v["outcomes"][outcome] = json!([fixtures::SELECTED]);
+            v["execution_status"] = status.into();
+            v["conformance_status"] = status.into();
+        });
+        planning_refusal(&planning_source(&report, &input), "NonPassingCoverage");
+    }
+    let mut suite = fixtures::suite();
+    suite["coverage"]["knowledge"] = "unknown".into();
+    let (report, input) = fixtures::pair_for(&suite, &[fixtures::SELECTED], "inconclusive", &[]);
+    planning_refusal(&planning_source(&report, &input), "UnknownCoverage");
+    let mut suite = fixtures::suite();
+    suite["coverage"]["selection"]["origins"] = "generated".into();
+    let (report, input) = fixtures::pair_for(&suite, &[fixtures::SELECTED], "passed", &[]);
+    planning_refusal(&planning_source(&report, &input), "PartialSelection");
+    let suite = fixtures::outside_suite();
+    let (report, input) = fixtures::pair_for(&suite, &[fixtures::SELECTED], "passed", &[]);
+    planning_refusal(&planning_source(&report, &input), "PartialSelection");
+    let parent = fixtures::suite();
+    let child = fixtures::child(&parent, &[fixtures::SELECTED]);
+    let (report, input) = fixtures::pair_for(
+        &child,
+        &[fixtures::SELECTED],
+        "passed",
+        &[parent.to_string()],
+    );
+    planning_refusal(&planning_source(&report, &input), "PartialSelection");
+    let mut suite = fixtures::suite();
+    suite["coverage"]["refused"] = json!([fixtures::refusal()]);
+    suite["coverage"]["counts"]["refused"] = 1.into();
+    let (report, input) = fixtures::pair_for(&suite, &[fixtures::SELECTED], "inconclusive", &[]);
+    planning_refusal(&planning_source(&report, &input), "SynthesisRefusal");
+    let mut suite = fixtures::suite();
+    suite["scenarios"] = json!({});
+    suite["coverage"]["generated"] = json!([]);
+    suite["coverage"]["counts"]["generated"] = 0.into();
+    let (report, input) = fixtures::pair_for(&suite, &[], "inconclusive", &[]);
+    planning_refusal(&planning_source(&report, &input), "EmptySelection");
+}
+
 #[test]
 fn coverage_report_scalars_profiles_counts_and_terminal_ids_refuse_contradictions() {
     let (report, input) = fixtures::pair(1);

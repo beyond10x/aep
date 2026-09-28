@@ -1,6 +1,7 @@
-//! Closed transcription of ESS ba43fda scenario.rs and its referenced value vocabulary.
+//! Closed transcription of legacy ESS ba43fda scenario.rs and the direct-return extension.
 //!
-//! This checks the complete legacy suite, including unused metadata/dependencies. It does not
+//! Suite/28 adds only the admitted ER direct-response profile. This checks complete admitted
+//! suites, including unused metadata/dependencies. It does not
 //! execute steps, infer inventory, or reinterpret a major according to the fields it happens to use.
 use aep_domain::ess_conformance_v2::{lower_kebab, qualified_name, ScenarioId};
 use aep_domain::evidence::SpecDigest;
@@ -26,7 +27,11 @@ pub(crate) fn admit(value: &Json) -> Result<AdmittedSuite> {
     let version = marker.text()?;
     if !matches!(
         version,
-        "ess-conformance/1" | "ess-conformance/2" | "ess-conformance/3" | "ess-conformance/4"
+        "ess-conformance/1"
+            | "ess-conformance/2"
+            | "ess-conformance/3"
+            | "ess-conformance/4"
+            | "ess-conformance/28"
     ) {
         return Err(marker.error("UnsupportedSuiteVersion", version));
     }
@@ -54,7 +59,7 @@ pub(crate) fn admit(value: &Json) -> Result<AdmittedSuite> {
     };
     let spec_digest = digest(&p["spec_digest"])?;
     digest(&p["contract_digest"])?;
-    let ids = admit_scenarios(&root["scenarios"])?;
+    let ids = admit_scenarios_with_direct(&root["scenarios"], version == "ess-conformance/28")?;
     Ok(AdmittedSuite {
         version: version.into(),
         spec_digest,
@@ -64,6 +69,13 @@ pub(crate) fn admit(value: &Json) -> Result<AdmittedSuite> {
 
 // Suite/5 inherits exactly this execution vocabulary; its envelope and admission stay separate.
 pub(crate) fn admit_scenarios(scenarios: &Json) -> Result<Vec<ScenarioId>> {
+    admit_scenarios_with_direct(scenarios, false)
+}
+
+pub(crate) fn admit_scenarios_with_direct(
+    scenarios: &Json,
+    direct: bool,
+) -> Result<Vec<ScenarioId>> {
     let mut ids = Vec::new();
     for (id, scenario) in scenarios.object()? {
         ids.push(
@@ -81,8 +93,19 @@ pub(crate) fn admit_scenarios(scenarios: &Json) -> Result<Vec<ScenarioId>> {
                 "purpose must be one nonempty line of at most 200 characters",
             ));
         }
+        let mut preceding = None;
         for step in s["steps"].array()? {
-            step_value(step)?;
+            let object = step.object()?;
+            let tag = object.get("step").map(Json::text).transpose()?;
+            if direct && tag == Some("expect_direct_response") {
+                let response = step.closed(&["step", "response"], &[])?;
+                crate::direct_response::admit(&response["response"], preceding)?;
+            } else {
+                step_value(step)?;
+            }
+            if tag == Some("execute_command") {
+                preceding = Some(object["command"].text()?);
+            }
         }
         for reference in s["source"].array()? {
             semantic_reference(reference)?;

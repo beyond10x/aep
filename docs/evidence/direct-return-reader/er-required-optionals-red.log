@@ -1,0 +1,22 @@
+   Compiling aep-ess-evidence v0.63.1 ($HOME/.local/state/worktree/trees/b10x/aep/er-suite-evidence-admission/crates/observe/aep-ess-evidence)
+    Finished `test` profile [unoptimized] target(s) in 0.27s
+     Running tests/direct_returns.rs (target/debug/deps/direct_returns-86550ec92e2f4fa6)
+
+running 1 test
+test er_optional_text_and_text_lists_keep_null_and_ordered_duplicate_literals ... FAILED
+
+failures:
+
+---- er_optional_text_and_text_lists_keep_null_and_ordered_duplicate_literals stdout ----
+
+thread 'er_optional_text_and_text_lists_keep_null_and_ordered_duplicate_literals' (1070692) panicked at crates/observe/aep-ess-evidence/tests/direct_returns.rs:148:46:
+called `Result::unwrap()` on an `Err` value: EssAdmissionError { issues: [EssAdmissionIssue { reason: "UnsupportedResponseType", path: "$suite.scenarios.demo.api.Read/outcome/returned.steps[2].response.declarations.demo.api.Document.of", detail: "only String, Boolean, Integer and transparent nominal aliases are admitted" }] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    er_optional_text_and_text_lists_keep_null_and_ordered_duplicate_literals
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p aep-ess-evidence --test direct_returns`

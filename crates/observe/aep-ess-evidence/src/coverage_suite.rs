@@ -84,11 +84,6 @@ pub(crate) fn wrap_suite(original: &str) -> Result<String> {
 }
 
 fn admit_suite(original: &str) -> Result<AdmittedSuite> {
-    let reference = SuiteReference::new(
-        "ess-conformance/5".into(),
-        "sha256-json-bytes/1".into(),
-        digest(original),
-    )?;
     let document = Json::parse(original, "$suite")?;
     let fields = document.closed(&["provenance", "scenarios", "coverage"], &[])?;
     let provenance = fields["provenance"].closed(
@@ -101,10 +96,18 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
         ],
         &["component"],
     )?;
-    if provenance["suite_version"].text()? != "ess-conformance/5" {
-        return Err(provenance["suite_version"]
-            .error("UnsupportedSuiteVersion", "coverage requires suite/5"));
+    let version = provenance["suite_version"].text()?;
+    if !matches!(version, "ess-conformance/5" | "ess-conformance/29") {
+        return Err(provenance["suite_version"].error(
+            "UnsupportedSuiteVersion",
+            "coverage requires supported suite/5 or suite/29",
+        ));
     }
+    let reference = SuiteReference::new(
+        version.into(),
+        "sha256-json-bytes/1".into(),
+        digest(original),
+    )?;
     provenance["system"].text()?;
     provenance["specification_version"].text()?;
     let parse_digest = |value: &Json| {
@@ -113,7 +116,11 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
     };
     let spec_digest = parse_digest(&provenance["spec_digest"])?;
     parse_digest(&provenance["contract_digest"])?;
-    let ids = crate::count_suite::admit_scenarios(&fields["scenarios"])?;
+    let ids = if version == "ess-conformance/29" {
+        crate::count_suite::admit_scenarios_with_direct(&fields["scenarios"], true)?
+    } else {
+        crate::count_suite::admit_scenarios(&fields["scenarios"])?
+    };
     let inventory = crate::coverage_wire::inventory(&fields["coverage"])?;
     let component = provenance
         .get("component")
