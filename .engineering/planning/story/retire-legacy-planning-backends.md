@@ -2,11 +2,14 @@
 format: aep.planning-md/3
 id: story:retire-legacy-planning-backends
 kind: story
-status: draft
+status: active
 title: The /1 journal, SQLite, Postgres and hybrid planning backends are deprecated, then removed
 relations:
 - serves: vision:O2
-revision: 1
+revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-28T13:06:14Z", actor: "human:timo", revision: 2}
+- {from: "proposed", to: "active", at: "2026-09-28T13:06:14Z", actor: "human:timo", revision: 3}
 ---
 ## Problem
 
@@ -27,3 +30,12 @@ its store-wide `journal.jsonl`, `aep-backend-sqlite`, `aep-backend-postgres` and
 
 - After removal, `cargo tree -i entity-sqlite` finds nothing and every gate step passes.
 - `aep-service` (depends on `aep-backend-postgres` at tag 0.53.0) is named in the deprecation note.
+
+## Scope decision, 2026-09-28 (operator)
+
+- Keep a simple SQLite backend and a simple Postgres backend: they will be needed soon.
+- Remove the hybrid backend and the `aep.project/1` Markdown journal layout (`journal.jsonl`, hash
+  chain, drift, reconcile). A `/1` store is refused with the migration instruction; the
+  `/1` → `/5` migration keeps only the read-only journal reader it needs.
+- Acceptance changes accordingly: `entity-remote` leaves the lockfile; `entity-sqlite`,
+  `entity-postgres` and `entity-query` stay while the simple SQLite and Postgres backends use them.

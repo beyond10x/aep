@@ -4,7 +4,7 @@
 //! the test that reads it, for a reason that file states: a scanner is the tool that would carry a
 //! real repository's domain language into a public one. This test keeps the same rule — the document
 //! under `fixtures/reverse-openapi/` is invented — and breaks the other half of it deliberately, the
-//! way `golden_plan.rs` does: the expected draft is recorded on disk, so a change to a single
+//! way a golden test does: the expected draft is recorded on disk, so a change to a single
 //! rendered byte shows up as a diff a reviewer reads rather than as a predicate that stopped
 //! holding.
 //!

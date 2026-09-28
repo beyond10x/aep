@@ -52,7 +52,7 @@ use anyhow::{Context, Result};
 use clap::{Args, ValueEnum};
 use sha2::{Digest as _, Sha256};
 
-use crate::planning::{Plan, Replica};
+use crate::planning::Plan;
 
 /// What `aep --version` prints, which is the workspace version this binary was built from.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -447,10 +447,19 @@ fn planning_store(
     tree: Option<&Path>,
 ) -> Check {
     if config.is_none() && engineering.join(PROJECT_FILE).exists() {
+        // The reason, when opening the plan gives one: for an `aep.project/1` file it is the
+        // migration command, which is the one thing this line can usefully say.
+        let reason = Plan::for_project(engineering)
+            .err()
+            .map(|error| format!(" ({error:#})"))
+            .unwrap_or_default();
         return Check::new(
             PLANNING_STORE,
             Status::Warn,
-            "not checked: the project file did not parse, so nothing here says where the plan is",
+            format!(
+                "not checked: the project file did not parse{reason}, so nothing here says where \
+                 the plan is"
+            ),
         );
     }
     let plan = match Plan::for_project(engineering) {
@@ -493,30 +502,11 @@ fn planning_store(
         Plan::Git { evidence, .. } => Some(evidence_files(evidence)),
         _ => None,
     };
-    // An `aep.project/1` Markdown plan works, so it is a `warn`, never a `fail`: the line says the
-    // Git-native store exists and which command moves the plan there.
-    let legacy = config.is_some_and(|config| {
-        config.version == aep_domain::project::ProjectVersion::V1
-            && config.store == aep_domain::project::StoreConfig::Markdown
-    });
     match crate::planning::store_findings(plan, root, document_root) {
         Err(error) => Check::new(
             PLANNING_STORE,
             Status::Fail,
             format!("{describe} could not be read: {error:#}"),
-        ),
-        Ok(summary) if summary.problems.is_empty() && legacy => Check::new(
-            PLANNING_STORE,
-            Status::Warn,
-            format!(
-                "{}: {} artifact(s), no problems; the store is {} — `{}` moves it to {}, the \
-                 Git-native store",
-                summary.store,
-                summary.artifacts,
-                aep_domain::project::PROJECT_VERSION,
-                crate::planning::MIGRATE_GIT_COMMAND,
-                aep_domain::project::PROJECT_VERSION_V5
-            ),
         ),
         Ok(summary) if summary.problems.is_empty() => Check::new(
             PLANNING_STORE,
@@ -574,11 +564,7 @@ fn evidence_files(evidence: &Path) -> usize {
 /// only a connection answers, and [`reaches_a_network`] is what reports that instead.
 fn absent(plan: &Plan) -> Option<String> {
     match plan {
-        Plan::Markdown { root } | Plan::Git { root, .. } | Plan::Hybrid { root, .. }
-            if !root.is_dir() =>
-        {
-            Some(root.display().to_string())
-        }
+        Plan::Git { root, .. } if !root.is_dir() => Some(root.display().to_string()),
         Plan::Sqlite { path } if !path.is_file() => Some(path.display().to_string()),
         _ => None,
     }
@@ -586,13 +572,12 @@ fn absent(plan: &Plan) -> Option<String> {
 
 /// Would reading this plan open a connection?
 ///
-/// `doctor` opens none, so a plan that keeps its documents in PostgreSQL — on its own or as the
-/// replica half of a hybrid — is reported as not checked rather than checked over the network.
+/// `doctor` opens none, so a plan that keeps its documents in PostgreSQL is reported as not
+/// checked rather than checked over the network.
 fn reaches_a_network(plan: &Plan) -> bool {
     match plan {
         Plan::Postgres { .. } => true,
-        Plan::Hybrid { replica, .. } => matches!(replica, Replica::Postgres(_)),
-        Plan::Markdown { .. } | Plan::Git { .. } | Plan::Sqlite { .. } => false,
+        Plan::Git { .. } | Plan::Sqlite { .. } => false,
     }
 }
 

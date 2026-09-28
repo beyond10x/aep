@@ -2,11 +2,14 @@
 format: aep.planning-md/3
 id: story:migrated-in-one-commit-stays-valid
 kind: story
-status: draft
+status: active
 title: A /1 store committed for the first time together with its migration still validates
 relations:
 - serves: vision:O2
-revision: 1
+revision: 3
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-28T14:02:57Z", actor: "human:timo", revision: 2}
+- {from: "proposed", to: "active", at: "2026-09-28T14:02:57Z", actor: "human:timo", revision: 3}
 ---
 ## Problem
 

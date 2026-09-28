@@ -7,7 +7,6 @@ members = [
     "crates/plan/aep-conformance",
     "crates/plan/aep-client",
     "crates/plan/aep-backend-entity",
-    "crates/plan/aep-backend-hybrid",
     "crates/plan/aep-backend-markdown",
     "crates/plan/aep-backend-memory",
     "crates/plan/aep-backend-postgres",
@@ -38,7 +37,6 @@ aep-domain = { path = "crates/govern/aep-domain", version = "0.64.0" }
 aep-contract = { path = "crates/plan/aep-contract", version = "0.64.0" }
 aep-client = { path = "crates/plan/aep-client", version = "0.64.0" }
 aep-backend-entity = { path = "crates/plan/aep-backend-entity", version = "0.64.0" }
-aep-backend-hybrid = { path = "crates/plan/aep-backend-hybrid", version = "0.64.0" }
 aep-backend-markdown = { path = "crates/plan/aep-backend-markdown", version = "0.64.0" }
 aep-backend-memory = { path = "crates/plan/aep-backend-memory", version = "0.64.0" }
 aep-backend-postgres = { path = "crates/plan/aep-backend-postgres", version = "0.64.0" }
@@ -79,7 +77,6 @@ entity-store = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c
 entity-query = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 entity-sqlite = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 entity-postgres = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
-entity-remote = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 entity-executor = { git = "https://github.com/beyond10x/entity-runtime", rev = "44c14c05f68025085f4a3a89b6c9f5e544f7921e" }
 
 [workspace.lints.rust]

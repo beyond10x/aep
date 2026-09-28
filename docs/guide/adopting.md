@@ -166,10 +166,10 @@ verdict everywhere. Every other path in the file — `artifacts`, `task`, `princ
 Two ways to name a tree that is not inside your repository: a relative path that climbs out of it,
 or a pinned locator. Prefer the locator for anything other people will clone.
 
-`store:` names where the plan is kept, and every `aep plan artifact` verb opens through it. Under
-`aep.project/5` the only value is `git: {}`. An older `aep.project/1` file may still name
-`markdown`, `sqlite: <file>`, `postgres: <url>` or `hybrid:`; `aep plan store migrate git` moves a
-Markdown `/1` plan to `/5`. See
+`store:` names where the plan is kept, and every `aep plan artifact` verb opens through it:
+`git: {}` (the default), `sqlite: { path: <file> }` or `postgres: { url: <url> }`. An
+`aep.project/1` file is refused by every verb and names `aep plan store migrate git --verify`, which
+moves a Markdown `/1` plan to `/5`. See
 [`backend.md` § Choosing the store](backend.md#choosing-the-store).
 
 `schemas:` names the project's own JSON Schema registry, also relative to `.engineering/`; it
@@ -209,6 +209,8 @@ as one governed tree, and point the project at it. The shortest local form is `p
 makes the project directory itself the tree:
 
 ```yaml
+version: aep.project/5
+planning_scope: your-repo
 protocol: adp/1
 profile: acme.knowledge
 protocols: .                # the tree is .engineering/ itself

@@ -25,19 +25,12 @@ aep-backend-sqlite.workspace = true
 # `aep plan conformance --backend postgres --store <url>`: the suites against the store an
 # organisation actually runs, from the command line (`story:postgres-backend`).
 aep-backend-postgres.workspace = true
-# `store: hybrid` — the plan in markdown and in a replica under a declared policy — and the two verbs
-# that are ours over it, `aep plan artifact divergences` and `catch-up` (`story:hybrid-backend`).
-aep-backend-hybrid.workspace = true
 # A SQLite or Postgres plan's `aep plan artifact history` is its event log read back through the
 # adapter (`story:store-selection-in-project-yaml`): the runtime's event type, and the provider
 # trait its `events` sits on. Same tag as every `entity-*` crate, declared once in the workspace.
 aep-backend-entity.workspace = true
 entity-core.workspace = true
 entity-store.workspace = true
-# A hybrid plan's replica is one of the runtime's providers, opened here from what `project.yaml`
-# names (`replica: { sqlite: … }` or `replica: { postgres: … }`).
-entity-sqlite.workspace = true
-entity-postgres.workspace = true
 aep-conformance.workspace = true
 aep-contract.workspace = true
 aep-domain.workspace = true
@@ -87,6 +80,8 @@ sha2 = "0.11"
 workspace = true
 
 [dev-dependencies]
+# Tests that hold the SQLite provider beside the others (`tests/describe_type.rs`).
+entity-sqlite.workspace = true
 postgres.workspace = true
 rusqlite.workspace = true
 time = "0.3"

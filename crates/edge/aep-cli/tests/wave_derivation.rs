@@ -203,21 +203,6 @@ fn scope_add_writes_a_typed_entry_and_bumps_the_revision_once() {
         "a path recorded without `--inferred` is one somebody read: {document}"
     );
 
-    // The journal records it like any other mutation, which is the whole reason the write goes
-    // through a command rather than through a frontmatter splitter.
-    let history = make(&[
-        "plan",
-        "artifact",
-        "history",
-        "story:surface",
-        "--store",
-        at,
-    ]);
-    assert!(
-        history.lines().count() >= 2,
-        "the write is in the journal: {history}"
-    );
-
     // An `--add` of what the document already says is not a write, so it is not a revision.
     let again = make(&[
         "plan",

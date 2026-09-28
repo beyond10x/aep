@@ -15,7 +15,7 @@ read the [planning store](../../.engineering/planning/).
 | Missing | Consequence for you |
 |---|---|
 | A durable backend of your own | Three exist and all are one adapter — [`aep-backend-entity`](../../crates/plan/aep-backend-entity/) over a provider from `entity-runtime`: markdown files, SQLite, PostgreSQL. A project's plan is always the Git-native markdown store (`aep.project/5`, `store: { git: {} }`); SQLite and PostgreSQL are libraries held to the same suites, not a `project.yaml` choice. The next is the same adapter over the next provider; [`backend.md`](backend.md) is about writing one and proving it. |
-| A remote conformance runner | `aep plan conformance --backend memory\|markdown\|sqlite\|postgres\|hybrid\|project` runs the suites from the command line; proving a backend the CLI does not know means calling `aep_conformance::run` from your own test suite. |
+| A remote conformance runner | `aep plan conformance --backend memory\|markdown\|sqlite\|postgres\|project` runs the suites from the command line; proving a backend the CLI does not know means calling `aep_conformance::run` from your own test suite. |
 | Federated artifact graphs | An artifact manifest describes one project. Cross-repository architecture ([`consolidated-design-v0.2.md`](../design/consolidated-design-v0.2.md) §92) resolves references by hand today. |
 | An attestation behind `independent: true` | The engine checks that the producer is not the agent under review. Nothing signs the record, so which producers you let write one is your harness's decision, not the protocol's. |
 

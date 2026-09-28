@@ -411,12 +411,21 @@ fn real_planning_pair_preserves_full_u64_diagnostics_and_refusals_do_not_open_st
         assert!(text.contains("external:display-only"));
         assert!(text.contains("suite_input") && text.contains("report_input"));
         assert!(text.contains("inconclusive") && text.contains("unknown"));
-        let journal = std::fs::read_to_string(store.join("journal.jsonl")).unwrap();
-        let event: serde_json::Value =
-            serde_json::from_str(journal.lines().last().unwrap()).unwrap();
-        assert_eq!(event["payload"]["at"].as_u64(), Some(time));
+        // The record just written: the newest evidence file about the artifact, in the store.
+        let records = store.join("evidence/story/counts");
+        let mut written: Vec<_> = std::fs::read_dir(&records)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+        written.sort();
+        let newest = written
+            .iter()
+            .max_by_key(|path| std::fs::metadata(path).unwrap().modified().unwrap())
+            .unwrap();
+        let record: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(newest).unwrap()).unwrap();
         let source: serde_json::Value =
-            serde_json::from_str(event["payload"]["change"]["source"].as_str().unwrap()).unwrap();
+            serde_json::from_str(record["change"]["source"].as_str().unwrap()).unwrap();
         assert_eq!(source["completed_at"], time.to_string());
         assert_eq!(
             source["counts"],

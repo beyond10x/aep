@@ -50,8 +50,8 @@ const DOCUMENT_TYPES: &[(&str, &str)] = &[
     ("RawWorkspace", "Workspace"),
     ("RawMember", "Member"),
     ("RawGit", "StoreConfig"),
-    // Wave H: a hybrid store's four policy words, typed, never defaulted.
-    ("RawHybrid", "HybridPolicy"),
+    ("RawSqlite", "StoreConfig"),
+    ("RawPostgres", "StoreConfig"),
 ];
 
 /// Every `.rs` file of the crate, as `(file name, contents)`, in a stable order.

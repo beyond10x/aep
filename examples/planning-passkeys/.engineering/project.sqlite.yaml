@@ -1,4 +1,5 @@
-version: aep.project/1
+version: aep.project/5
+planning_scope: planning-passkeys
 
 # The same project, keeping its plan in SQLite instead of under `planning/`. Copy this file over
 # `project.yaml` and every `aep plan artifact` verb opens the database — one line decides the
@@ -11,7 +12,8 @@ profile: development.standard
 protocols: ../../..
 
 store:
-  sqlite: plan.sqlite3
+  sqlite:
+    path: plan.sqlite3
 
 summary: >-
   The passkeys work, planned in the repository: one initiative, one epic, three stories and two

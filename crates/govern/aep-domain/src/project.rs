@@ -5,7 +5,8 @@
 //! Everything else is discovered from it.
 //!
 //! ```yaml
-//! version: aep.project/1
+//! version: aep.project/5
+//! planning_scope: payments
 //! protocol: adp/1
 //! profile: development.standard
 //! protocols: git+ssh://git@github.com/beyond10x/aep.git#0123456789abcdef0123456789abcdef01234567
@@ -39,8 +40,12 @@ use crate::version::{ProfileVersionedRef, ProtocolRef};
 pub const PROJECT_DIRECTORY: &str = ".engineering";
 /// The file naming the protocol, the profile and where the documents are.
 pub const PROJECT_FILE: &str = "project.yaml";
-/// The format version this build reads.
-pub const PROJECT_VERSION: &str = "aep.project/1";
+/// The Markdown journal layout (one store-wide `journal.jsonl`), which this build refuses to open.
+///
+/// Only `aep plan store migrate git` reads such a store, to rewrite it as [`PROJECT_VERSION_V5`].
+pub const PROJECT_VERSION_V1: &str = "aep.project/1";
+/// The command that moves an `aep.project/1` store to `aep.project/5`, with this build.
+pub const MIGRATE_GIT_COMMAND: &str = "aep plan store migrate git --verify";
 /// The event-log store versions this build recognises only to refuse.
 pub const EVENT_LOG_PROJECT_VERSIONS: [&str; 3] =
     ["aep.project/2", "aep.project/3", "aep.project/4"];
@@ -63,14 +68,23 @@ pub fn event_log_store_refusal(version: &str) -> String {
     )
 }
 
+/// The refusal for a Markdown journal store (`aep.project/1`), naming how to migrate it.
+///
+/// Unlike an event-log store, this build still migrates one: the command runs here.
+#[must_use]
+pub fn journal_store_refusal() -> String {
+    format!(
+        "this store is `{PROJECT_VERSION_V1}`, the Markdown journal layout, which AEP no longer \
+         opens — migrate it to `{PROJECT_VERSION_V5}` with `{MIGRATE_GIT_COMMAND}`"
+    )
+}
+
 /// Which closed project document reader accepted the selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ProjectVersion {
-    /// The legacy Markdown, `SQLite`, `PostgreSQL` and hybrid selector.
-    #[serde(rename = "aep.project/1")]
-    V1,
-    /// Markdown files under `.engineering/planning` are the authority, merged by version control.
+    /// The plan is kept in the store `store:` selects: the Git-native Markdown files by default,
+    /// or a `SQLite` or `PostgreSQL` database.
     #[serde(rename = "aep.project/5")]
     V5,
 }
@@ -80,7 +94,6 @@ impl ProjectVersion {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
-            Self::V1 => PROJECT_VERSION,
             Self::V5 => PROJECT_VERSION_V5,
         }
     }
@@ -333,7 +346,6 @@ pub struct ProjectConfig {
     /// Where project-owned inputs live.
     pub paths: ProjectLocalPaths,
     /// Where the plan is kept.
-    #[serde(default)]
     pub store: StoreConfig,
     /// How to build a link for each external system an artifact may reference.
     ///
@@ -369,55 +381,38 @@ impl fmt::Display for ProjectConfig {
     }
 }
 
-/// Where a project keeps its plan, as written in `project.yaml` (wave H, story 1).
+/// Where a project keeps its plan, as written in an `aep.project/5` `project.yaml`.
 ///
 /// ```yaml
-/// store: markdown                    # the default: `.engineering/planning/`
-/// store: { sqlite: plan.sqlite3 }    # one file, relative to `.engineering/`
-/// store: { postgres: "postgres://…" }
-/// store:
-///   hybrid:
-///     authority: local               # local | replica
-///     read: local-first              # local-first | replica-first | replica-only
-///     on_unreachable: refuse         # refuse | serve-stale
-///     on_divergence: record          # refuse | record
-///     local: markdown
-///     replica: { sqlite: plan.sqlite3 }
+/// store: { git: {} }                          # the default: `.engineering/planning/`
+/// store: { sqlite: { path: plan.sqlite3 } }   # one file, relative to `.engineering/`
+/// store: { postgres: { url: "postgres://…" } }
 /// ```
-///
-/// A hybrid's four policy words are **required** — the runtime's R-106 says a default here is a
-/// policy nobody chose being applied to somebody's data — and a document missing one is refused
-/// naming the word, by the parser.
 #[derive(Debug, Clone, PartialEq, Eq, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum RawStore {
-    /// `markdown`, the only bare word.
+    /// A bare word. None is a store in `aep.project/5`; read so the refusal can name the forms.
     Named(String),
-    /// `sqlite: <path>`.
+    /// `git: {}`: the Markdown files under `planning` are the authority.
+    Git {
+        /// Carries no fields in `aep.project/5`.
+        git: RawGit,
+    },
+    /// `sqlite: { path: <path> }`.
     Sqlite {
-        /// The database file, relative to `.engineering/`.
-        sqlite: PathBuf,
+        /// Where the database file is.
+        sqlite: RawSqlite,
     },
-    /// `postgres: <url>`.
+    /// `postgres: { url: <url> }`.
     Postgres {
-        /// A libpq connection string or URL.
-        postgres: String,
-    },
-    /// `hybrid: {…}`.
-    Hybrid {
-        /// The composite's policy and its two halves.
-        hybrid: Box<RawHybrid>,
+        /// Which database to connect to.
+        postgres: RawPostgres,
     },
     /// `eventlog: {…}`, an event-log store selector. Read only so the document reaches its
     /// refusal, which names how to migrate it; its contents are not interpreted.
     Eventlog {
         /// The selector as written.
         eventlog: serde_json::Value,
-    },
-    /// `git: {}`, admitted only by `aep.project/5`.
-    Git {
-        /// Carries no fields in `aep.project/5`.
-        git: RawGit,
     },
 }
 
@@ -426,9 +421,28 @@ pub enum RawStore {
 #[serde(deny_unknown_fields)]
 pub struct RawGit {}
 
+/// The `sqlite` store selector.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawSqlite {
+    /// The database file, relative to `.engineering/`.
+    pub path: PathBuf,
+}
+
+/// The `postgres` store selector.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct RawPostgres {
+    /// A libpq connection string or URL.
+    pub url: String,
+}
+
+/// The forms a store selector takes, for a refusal.
+const STORE_FORMS: &str = "`git: {}`, `sqlite: { path: <path> }` or `postgres: { url: <url> }`";
+
 /// Hand-written rather than `#[serde(untagged)]`, for the refusal's sake: an untagged enum that
 /// fails to match reports *"did not match any variant"* and loses the reason, and the reason is the
-/// whole point — a hybrid missing `on_divergence` must be refused **naming `on_divergence`**.
+/// whole point — a `sqlite` selector with a misspelt key must be refused **naming the key**.
 impl<'de> serde::Deserialize<'de> for RawStore {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         use serde::de::Error as _;
@@ -438,61 +452,41 @@ impl<'de> serde::Deserialize<'de> for RawStore {
             serde_json::Value::Object(map) if map.len() == 1 => {
                 let (key, inner) = map.into_iter().next().expect("one entry");
                 match key.as_str() {
-                    "sqlite" => serde_json::from_value(inner)
-                        .map(|sqlite| Self::Sqlite { sqlite })
-                        .map_err(|error| D::Error::custom(format!("store.sqlite: {error}"))),
-                    "postgres" => serde_json::from_value(inner)
-                        .map(|postgres| Self::Postgres { postgres })
-                        .map_err(|error| D::Error::custom(format!("store.postgres: {error}"))),
-                    "hybrid" => serde_json::from_value::<RawHybrid>(inner)
-                        .map(|hybrid| Self::Hybrid {
-                            hybrid: Box::new(hybrid),
-                        })
-                        .map_err(|error| D::Error::custom(format!("store.hybrid: {error}"))),
-                    "eventlog" => Ok(Self::Eventlog { eventlog: inner }),
                     "git" => serde_json::from_value::<RawGit>(inner)
                         .map(|git| Self::Git { git })
                         .map_err(|error| D::Error::custom(format!("store.git: {error}"))),
+                    "sqlite" => serde_json::from_value::<RawSqlite>(inner)
+                        .map(|sqlite| Self::Sqlite { sqlite })
+                        .map_err(|error| D::Error::custom(format!("store.sqlite: {error}"))),
+                    "postgres" => serde_json::from_value::<RawPostgres>(inner)
+                        .map(|postgres| Self::Postgres { postgres })
+                        .map_err(|error| D::Error::custom(format!("store.postgres: {error}"))),
+                    "eventlog" => Ok(Self::Eventlog { eventlog: inner }),
                     other => Err(D::Error::custom(format!(
-                        "`{other}` is not a store form; write `markdown`, `sqlite: <path>`, \
-                         `postgres: <url>`, `hybrid: {{…}}` or `git: {{}}`"
+                        "`{other}` is not a store form; write {STORE_FORMS}"
                     ))),
                 }
             }
             other => Err(D::Error::custom(format!(
-                "a store is `markdown`, `sqlite: <path>`, `postgres: <url>`, `hybrid: {{…}}` \
-                 or `git: {{}}`, not {other}"
+                "a store is {STORE_FORMS}, not {other}"
             ))),
         }
     }
 }
 
-/// A hybrid store as written: four policy words and two stores, none defaulted.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct RawHybrid {
-    /// Whose copy is the record of truth: `local` or `replica`.
-    pub authority: String,
-    /// Where a read goes first: `local-first`, `replica-first` or `replica-only`.
-    pub read: String,
-    /// What a read does when the replica does not answer: `refuse` or `serve-stale`.
-    pub on_unreachable: String,
-    /// What happens to a write that lost: `refuse` or `record`.
-    pub on_divergence: String,
-    /// The local half.
-    pub local: RawStore,
-    /// The replica.
-    pub replica: RawStore,
-}
-
 /// Where a project keeps its plan, validated.
-#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StoreConfig {
-    /// Markdown documents under `.engineering/planning/`. The default.
-    #[default]
-    Markdown,
-    /// One `SQLite` file, at a path relative to `.engineering/`.
+    /// The Markdown files under `planning` are the authority and evidence records live under
+    /// `evidence`; version control merges both. The default.
+    Git {
+        /// Artifact directory, relative to `.engineering` until resolved.
+        planning: PathBuf,
+        /// Evidence directory, relative to `.engineering` until resolved.
+        evidence: PathBuf,
+    },
+    /// One `SQLite` file, at a path relative to `.engineering/` until resolved.
     Sqlite {
         /// The database file.
         path: PathBuf,
@@ -502,44 +496,26 @@ pub enum StoreConfig {
         /// A libpq connection string or URL.
         url: String,
     },
-    /// Two stores and a declared rule for when they disagree.
-    Hybrid {
-        /// The four words, every one typed.
-        policy: HybridPolicy,
-        /// The local half.
-        local: Box<StoreConfig>,
-        /// The replica.
-        replica: Box<StoreConfig>,
-    },
-    /// `aep.project/5`: the Markdown files under `planning` are the authority and evidence
-    /// records live under `evidence`; version control merges both.
-    Git {
-        /// Artifact directory, relative to `.engineering` until resolved.
-        planning: PathBuf,
-        /// Evidence directory, relative to `.engineering` until resolved.
-        evidence: PathBuf,
-    },
 }
 
 impl StoreConfig {
+    /// The Git-native store at its fixed paths, relative to `.engineering`.
+    #[must_use]
+    pub fn git() -> Self {
+        Self::Git {
+            planning: PathBuf::from(GIT_PLANNING_DIRECTORY),
+            evidence: PathBuf::from(GIT_EVIDENCE_DIRECTORY),
+        }
+    }
+
     /// The same configuration with every relative file path resolved against `engineering`.
     #[must_use]
     pub fn resolved(&self, engineering: &Path) -> Self {
         match self {
-            Self::Markdown => Self::Markdown,
             Self::Sqlite { path } => Self::Sqlite {
                 path: engineering.join(path),
             },
             Self::Postgres { url } => Self::Postgres { url: url.clone() },
-            Self::Hybrid {
-                policy,
-                local,
-                replica,
-            } => Self::Hybrid {
-                policy: policy.clone(),
-                local: Box::new(local.resolved(engineering)),
-                replica: Box::new(replica.resolved(engineering)),
-            },
             Self::Git { planning, evidence } => Self::Git {
                 planning: engineering.join(planning),
                 evidence: engineering.join(evidence),
@@ -548,187 +524,72 @@ impl StoreConfig {
     }
 }
 
-/// A hybrid's policy: the runtime's four required words, as this configuration spells them.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
-pub struct HybridPolicy {
-    /// `local` or `replica`.
-    pub authority: String,
-    /// `local-first`, `replica-first` or `replica-only`.
-    pub read: String,
-    /// `refuse` or `serve-stale`.
-    pub on_unreachable: String,
-    /// `refuse` or `record`.
-    pub on_divergence: String,
-}
-
-/// The words each policy field accepts.
-const HYBRID_WORDS: &[(&str, &[&str])] = &[
-    ("authority", &["local", "replica"]),
-    ("read", &["local-first", "replica-first", "replica-only"]),
-    ("on_unreachable", &["refuse", "serve-stale"]),
-    ("on_divergence", &["refuse", "record"]),
-];
-
 impl RawStore {
-    /// Validates a store configuration, accumulating every refusal under `at`.
-    #[allow(clippy::too_many_lines)] // One arm per closed store form keeps the refusals together.
+    /// Validates a store selector, accumulating every refusal under `at`.
     fn validate(self, at: &str, errors: &mut ValidationErrors) -> StoreConfig {
         match self {
-            Self::Named(name) if name == "markdown" => StoreConfig::Markdown,
+            Self::Git { git: RawGit {} } => StoreConfig::git(),
+            Self::Sqlite { sqlite } => {
+                if let Some(reason) = absolute_path_reason(&sqlite.path.to_string_lossy()) {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            format!("{at}.sqlite.path"),
+                            format!("`{}` is an absolute path ({reason})", sqlite.path.display()),
+                        )
+                        .with_hint("a store path is relative to `.engineering`, like every other"),
+                    );
+                }
+                StoreConfig::Sqlite { path: sqlite.path }
+            }
+            Self::Postgres { postgres } => {
+                if postgres.url.trim().is_empty() {
+                    errors.push(ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("{at}.postgres.url"),
+                        "a Postgres store needs a connection URL",
+                    ));
+                }
+                StoreConfig::Postgres { url: postgres.url }
+            }
             Self::Named(name) => {
                 errors.push(
                     ValidationError::new(
                         ValidationCode::TypeMismatch,
                         at,
-                        format!(
-                            "`{name}` is not a store; write `markdown`, `sqlite: <path>`, \
-                             `postgres: <url>` or `hybrid: {{…}}`"
-                        ),
+                        format!("`{name}` is not a store; write {STORE_FORMS}"),
                     )
-                    .with_hint("the bare word form has one value, `markdown`"),
+                    .with_hint(format!(
+                        "`{PROJECT_VERSION_V5}` has no bare-word store; the Markdown journal \
+                         layout of `{PROJECT_VERSION_V1}` is migrated with `{MIGRATE_GIT_COMMAND}`"
+                    )),
                 );
-                StoreConfig::Markdown
-            }
-            Self::Sqlite { sqlite } => {
-                if let Some(reason) = absolute_path_reason(&sqlite.to_string_lossy()) {
-                    errors.push(
-                        ValidationError::new(
-                            ValidationCode::TypeMismatch,
-                            format!("{at}.sqlite"),
-                            format!("`{}` is an absolute path ({reason})", sqlite.display()),
-                        )
-                        .with_hint("a store path is relative to `.engineering`, like every other"),
-                    );
-                }
-                StoreConfig::Sqlite { path: sqlite }
-            }
-            Self::Postgres { postgres } => {
-                if postgres.trim().is_empty() {
-                    errors.push(ValidationError::new(
-                        ValidationCode::TypeMismatch,
-                        format!("{at}.postgres"),
-                        "a Postgres store needs a connection URL",
-                    ));
-                }
-                StoreConfig::Postgres { url: postgres }
-            }
-            Self::Hybrid { hybrid } => {
-                let RawHybrid {
-                    authority,
-                    read,
-                    on_unreachable,
-                    on_divergence,
-                    local,
-                    replica,
-                } = *hybrid;
-                for (field, value) in [
-                    ("authority", &authority),
-                    ("read", &read),
-                    ("on_unreachable", &on_unreachable),
-                    ("on_divergence", &on_divergence),
-                ] {
-                    let accepted = HYBRID_WORDS
-                        .iter()
-                        .find(|(name, _)| *name == field)
-                        .map_or(&[][..], |(_, words)| *words);
-                    if !accepted.contains(&value.as_str()) {
-                        errors.push(
-                            ValidationError::new(
-                                ValidationCode::TypeMismatch,
-                                format!("{at}.hybrid.{field}"),
-                                format!("`{value}` is not a `{field}`; one of {}", accepted.join(", ")),
-                            )
-                            .with_hint(
-                                "a hybrid's four words are required and never defaulted: a default \
-                                 here is a policy nobody chose applied to somebody's data",
-                            ),
-                        );
-                    }
-                }
-                StoreConfig::Hybrid {
-                    policy: HybridPolicy {
-                        authority,
-                        read,
-                        on_unreachable,
-                        on_divergence,
-                    },
-                    local: Box::new(local.validate(&format!("{at}.hybrid.local"), errors)),
-                    replica: Box::new(replica.validate(&format!("{at}.hybrid.replica"), errors)),
-                }
+                StoreConfig::git()
             }
             Self::Eventlog { .. } => {
                 errors.push(
                     ValidationError::new(
                         ValidationCode::TypeMismatch,
                         format!("{at}.eventlog"),
-                        "`eventlog` selects an event-log store, which AEP no longer reads",
+                        format!(
+                            "`eventlog` selects an event-log store, which `{PROJECT_VERSION_V5}` \
+                             does not have"
+                        ),
                     )
                     .with_hint(
                         "migrate the store to `aep.project/5` with the release that still reads it",
                     ),
                 );
-                StoreConfig::Markdown
-            }
-            Self::Git { .. } => {
-                errors.push(ValidationError::new(
-                    ValidationCode::TypeMismatch,
-                    format!("{at}.git"),
-                    format!("a Git-native planning store requires `{PROJECT_VERSION_V5}`"),
-                ));
-                StoreConfig::Markdown
+                StoreConfig::git()
             }
         }
-    }
-}
-
-fn validate_versioned_store(
-    version: ProjectVersion,
-    raw_store: Option<RawStore>,
-    planning_scope: Option<&str>,
-    planning_tenant: Option<&str>,
-    planning_identity: Option<&str>,
-    errors: &mut ValidationErrors,
-) -> StoreConfig {
-    match version {
-        ProjectVersion::V1 => {
-            for (field, value) in [
-                ("planning_scope", planning_scope),
-                ("planning_tenant", planning_tenant),
-                ("planning_identity", planning_identity),
-            ] {
-                if value.is_some() {
-                    errors.push(ValidationError::new(
-                        ValidationCode::TypeMismatch,
-                        format!("project.{field}"),
-                        if field == "planning_scope" {
-                            format!("`{field}` belongs only to `{PROJECT_VERSION_V5}`")
-                        } else {
-                            format!(
-                                "`{field}` names an event-log authority, which AEP no longer reads"
-                            )
-                        },
-                    ));
-                }
-            }
-            match raw_store {
-                Some(store) => store.validate("project.store", errors),
-                None => StoreConfig::Markdown,
-            }
-        }
-        ProjectVersion::V5 => validate_git_store(
-            raw_store.as_ref(),
-            planning_scope,
-            planning_tenant,
-            planning_identity,
-            errors,
-        ),
     }
 }
 
 /// `aep.project/5`: `planning_scope` stays required; the two event-log identities are refused,
 /// because they name an event-log tenant and stream this store does not have.
-fn validate_git_store(
-    raw_store: Option<&RawStore>,
+fn validate_store(
+    raw_store: Option<RawStore>,
     planning_scope: Option<&str>,
     planning_tenant: Option<&str>,
     planning_identity: Option<&str>,
@@ -760,25 +621,13 @@ fn validate_git_store(
                         "`{field}` names an event-log authority, which `{PROJECT_VERSION_V5}` does not have"
                     ),
                 )
-                .with_hint("remove the field; a Git-native store is identified by `planning_scope` alone"),
+                .with_hint("remove the field; a planning store is identified by `planning_scope` alone"),
             );
         }
     }
-    match raw_store {
-        Some(RawStore::Git { git: RawGit {} }) | None => {}
-        Some(_) => errors.push(
-            ValidationError::new(
-                ValidationCode::TypeMismatch,
-                "project.store",
-                format!("`{PROJECT_VERSION_V5}` supports only `store: {{ git: {{}} }}`"),
-            )
-            .with_hint("a legacy store remains readable only through `aep.project/1`"),
-        ),
-    }
-    StoreConfig::Git {
-        planning: PathBuf::from(GIT_PLANNING_DIRECTORY),
-        evidence: PathBuf::from(GIT_EVIDENCE_DIRECTORY),
-    }
+    raw_store.map_or_else(StoreConfig::git, |store| {
+        store.validate("project.store", errors)
+    })
 }
 
 /// A project configuration document, as parsed.
@@ -816,9 +665,14 @@ pub struct RawProjectConfig {
     /// Where project-owned JSON Schema contracts are.
     #[serde(default)]
     pub schemas: Option<PathBuf>,
-    /// Where the plan is kept. Absent means `markdown`.
+    /// Where the plan is kept. Absent means `git: {}`.
+    ///
+    /// Held as written and read as a [`RawStore`] only after the version is accepted, so a `/1`
+    /// document whose selector this build no longer spells still reaches the refusal naming its
+    /// migration.
     #[serde(default)]
-    pub store: Option<RawStore>,
+    #[schemars(with = "Option<RawStore>")]
+    pub store: Option<serde_json::Value>,
     /// Provider-complete logical scope, required by `aep.project/5`.
     #[serde(default)]
     pub planning_scope: Option<String>,
@@ -838,7 +692,7 @@ pub const PROVIDER_KEY: &str = "{key}";
 
 /// Serde default for the format version.
 fn default_version() -> String {
-    PROJECT_VERSION.to_owned()
+    PROJECT_VERSION_V1.to_owned()
 }
 
 impl TryFrom<RawProjectConfig> for ProjectConfig {
@@ -861,23 +715,39 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             );
             return Err(errors);
         }
+        // The Markdown journal layout is refused alone too, and for the same reason.
+        if raw.version == PROJECT_VERSION_V1 {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::UnsupportedProtocolVersion,
+                    "project.version",
+                    journal_store_refusal(),
+                )
+                .with_hint(format!(
+                    "a `{PROJECT_VERSION_V1}` project whose `store:` is SQLite or Postgres is \
+                     rewritten by hand as `{PROJECT_VERSION_V5}` with a `planning_scope` and \
+                     `store: {{ sqlite: {{ path: <path> }} }}` or \
+                     `store: {{ postgres: {{ url: <url> }} }}`"
+                )),
+            );
+            return Err(errors);
+        }
 
-        let version = match raw.version.as_str() {
-            PROJECT_VERSION => ProjectVersion::V1,
-            PROJECT_VERSION_V5 => ProjectVersion::V5,
-            other => {
-                errors.push(
-                    ValidationError::new(
-                        ValidationCode::UnsupportedProtocolVersion,
-                        "project.version",
-                        format!(
-                            "this build reads `{PROJECT_VERSION}` and `{PROJECT_VERSION_V5}`, not `{other}`"
-                        ),
-                    )
-                    .with_hint("upgrade the tooling rather than reinterpreting the document"),
-                );
-                ProjectVersion::V1
-            }
+        let version = if raw.version == PROJECT_VERSION_V5 {
+            ProjectVersion::V5
+        } else {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::UnsupportedProtocolVersion,
+                    "project.version",
+                    format!(
+                        "this build reads `{PROJECT_VERSION_V5}`, not `{}`",
+                        raw.version
+                    ),
+                )
+                .with_hint("upgrade the tooling rather than reinterpreting the document"),
+            );
+            ProjectVersion::V5
         };
 
         let protocols = match raw.protocols {
@@ -965,9 +835,23 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             }
         }
 
-        let store = validate_versioned_store(
-            version,
-            raw.store,
+        let raw_store = match raw
+            .store
+            .map(serde_json::from_value::<RawStore>)
+            .transpose()
+        {
+            Ok(store) => store,
+            Err(error) => {
+                errors.push(ValidationError::new(
+                    ValidationCode::TypeMismatch,
+                    "project.store",
+                    error.to_string(),
+                ));
+                None
+            }
+        };
+        let store = validate_store(
+            raw_store,
             raw.planning_scope.as_deref(),
             raw.planning_tenant.as_deref(),
             raw.planning_identity.as_deref(),
@@ -994,12 +878,13 @@ mod tests {
     use super::*;
 
     const BASE: &str = "protocol: adp/1\nprofile: development.standard\n";
+    const V5: &str = "version: aep.project/5\nplanning_scope: aep\n";
 
     #[test]
-    fn a_project_that_names_no_store_keeps_its_plan_in_markdown() {
-        let parsed = config(BASE).expect("valid");
-        assert_eq!(parsed.version, ProjectVersion::V1);
-        assert_eq!(parsed.store, StoreConfig::Markdown);
+    fn a_v5_project_that_names_no_store_keeps_its_plan_in_git_native_markdown() {
+        let parsed = config(&format!("{V5}{BASE}")).expect("valid");
+        assert_eq!(parsed.version, ProjectVersion::V5);
+        assert_eq!(parsed.store, StoreConfig::git());
     }
 
     #[test]
@@ -1022,7 +907,7 @@ mod tests {
                  projection: planning\n    blobs: blobs\n",
             ),
         ] {
-            let errors = config(&format!("version: {version}\n{BASE}{rest}"))
+            let errors = raw_config(&format!("version: {version}\n{BASE}{rest}"))
                 .expect_err("an event-log store is refused");
             let [error] = errors.as_slice() else {
                 panic!("one refusal, not {errors:?}");
@@ -1047,34 +932,39 @@ mod tests {
     }
 
     #[test]
-    fn an_eventlog_selector_under_v1_is_refused_rather_than_read() {
-        let v1 = config(&format!(
-            "{BASE}store:\n  eventlog:\n    path: state\n    projection: planning\n"
-        ))
-        .expect_err("v1 cannot select an event-log store");
-        assert!(v1
-            .as_slice()
-            .iter()
-            .any(|error| error.location == "project.store.eventlog"));
-
-        let nested = config(&format!(
-            "{BASE}store:\n  hybrid:\n    authority: local\n    read: local-first\n    \
-             on_unreachable: refuse\n    on_divergence: record\n    local: markdown\n    \
-             replica:\n      eventlog:\n        path: state\n"
-        ))
-        .expect_err("a hybrid cannot hold an event-log store");
-        assert!(nested
-            .as_slice()
-            .iter()
-            .any(|error| error.location == "project.store.hybrid.replica.eventlog"));
+    fn a_v1_journal_store_is_refused_alone_naming_the_migration_this_build_runs() {
+        for text in [
+            format!("version: aep.project/1\n{BASE}"),
+            // No `version` is the `/1` document it always was.
+            BASE.to_owned(),
+            format!("version: aep.project/1\n{BASE}store:\n  sqlite: plan.sqlite3\n"),
+            format!("version: aep.project/1\n{BASE}store:\n  hybrid:\n    authority: local\n"),
+        ] {
+            let errors = raw_config(&text).expect_err("a /1 store is refused");
+            let [error] = errors.as_slice() else {
+                panic!("one refusal, not {errors:?}");
+            };
+            assert_eq!(error.code, ValidationCode::UnsupportedProtocolVersion);
+            assert_eq!(error.location, "project.version");
+            assert!(
+                error.message.contains(PROJECT_VERSION_V1)
+                    && error.message.contains(MIGRATE_GIT_COMMAND),
+                "{}",
+                error.message
+            );
+            assert!(
+                error
+                    .hint
+                    .as_deref()
+                    .is_some_and(|hint| hint.contains("sqlite: { path: <path> }")),
+                "{error:?}"
+            );
+        }
     }
 
     #[test]
     fn a_v5_project_selects_the_git_native_store_at_its_fixed_paths() {
-        let parsed = config(&format!(
-            "version: aep.project/5\n{BASE}planning_scope: aep\nstore:\n  git: {{}}\n"
-        ))
-        .expect("valid v5");
+        let parsed = config(&format!("{V5}{BASE}store:\n  git: {{}}\n")).expect("valid v5");
         assert_eq!(parsed.version, ProjectVersion::V5);
         assert_eq!(parsed.version.as_str(), PROJECT_VERSION_V5);
         assert_eq!(
@@ -1096,13 +986,12 @@ mod tests {
     #[test]
     fn v5_refuses_an_eventlog_store_and_eventlog_identities_naming_v5() {
         let errors = config(&format!(
-            "version: aep.project/5\n{BASE}planning_scope: aep\n\
-             planning_tenant: planning-main\nplanning_identity: stream-01\n\
+            "{V5}{BASE}planning_tenant: planning-main\nplanning_identity: stream-01\n\
              store:\n  eventlog:\n    path: state\n    projection: planning\n"
         ))
         .expect_err("v5 has no Eventlog");
         for location in [
-            "project.store",
+            "project.store.eventlog",
             "project.planning_tenant",
             "project.planning_identity",
         ] {
@@ -1133,94 +1022,92 @@ mod tests {
     }
 
     #[test]
-    fn a_git_store_is_refused_before_v5() {
-        let v1 = config(&format!("{BASE}store:\n  git: {{}}\n"))
-            .expect_err("v1 cannot select the Git-native store");
-        assert!(v1
-            .as_slice()
-            .iter()
-            .any(|error| error.location == "project.store.git"
-                && error.message.contains(PROJECT_VERSION_V5)));
-    }
-
-    #[test]
     fn an_unknown_key_under_store_git_is_refused() {
-        let text = format!(
-            "version: aep.project/5\n{BASE}planning_scope: aep\nstore:\n  git:\n    path: state\n"
-        );
-        let error = serde_yaml::from_str::<RawProjectConfig>(&text)
+        let errors = config(&format!("{V5}{BASE}store:\n  git:\n    path: state\n"))
             .expect_err("store.git carries no fields in v5");
-        assert!(error.to_string().contains("store.git"), "{error}");
+        let error = &errors.as_slice()[0];
+        assert_eq!(error.location, "project.store");
+        assert!(error.message.contains("store.git"), "{error}");
     }
 
     #[test]
     fn a_sqlite_store_is_a_relative_path_resolved_against_engineering() {
-        let parsed = config(&format!("{BASE}store:\n  sqlite: plan.sqlite3\n")).expect("valid");
+        let parsed = config(&format!(
+            "{V5}{BASE}store:\n  sqlite:\n    path: plan.sqlite3\n"
+        ))
+        .expect("valid");
         assert_eq!(
             parsed.store.resolved(Path::new("/repo/.engineering")),
             StoreConfig::Sqlite {
                 path: PathBuf::from("/repo/.engineering/plan.sqlite3")
             }
         );
-        let absolute = config(&format!("{BASE}store:\n  sqlite: /var/plan.sqlite3\n"))
-            .expect_err("an absolute path is refused");
-        assert_eq!(absolute.as_slice()[0].location, "project.store.sqlite");
+        let absolute = config(&format!(
+            "{V5}{BASE}store:\n  sqlite:\n    path: /var/plan.sqlite3\n"
+        ))
+        .expect_err("an absolute path is refused");
+        assert_eq!(absolute.as_slice()[0].location, "project.store.sqlite.path");
     }
 
     #[test]
-    fn a_hybrid_missing_a_word_is_refused_naming_the_word() {
-        // The parser refuses it: the four words are required fields, not defaulted ones.
-        let text = format!(
-            "{BASE}store:\n  hybrid:\n    authority: local\n    read: local-first\n    \
-             on_unreachable: refuse\n    local: markdown\n    replica:\n      sqlite: plan.sqlite3\n"
-        );
-        let error = serde_yaml::from_str::<RawProjectConfig>(&text)
-            .expect_err("a hybrid without `on_divergence` does not parse");
-        assert!(error.to_string().contains("on_divergence"), "{error}");
-    }
-
-    #[test]
-    fn a_hybrid_word_the_runtime_does_not_know_is_refused_naming_the_field_and_the_words() {
-        let text = format!(
-            "{BASE}store:\n  hybrid:\n    authority: local\n    read: sometimes\n    \
-             on_unreachable: refuse\n    on_divergence: record\n    local: markdown\n    \
-             replica:\n      sqlite: plan.sqlite3\n"
-        );
-        let errors = config(&text).expect_err("`sometimes` is not a read path");
-        let error = &errors.as_slice()[0];
-        assert_eq!(error.location, "project.store.hybrid.read");
-        assert!(error.message.contains("local-first"), "{}", error.message);
-    }
-
-    #[test]
-    fn a_complete_hybrid_carries_its_words_and_both_halves() {
-        let text = format!(
-            "{BASE}store:\n  hybrid:\n    authority: local\n    read: local-first\n    \
-             on_unreachable: serve-stale\n    on_divergence: record\n    local: markdown\n    \
-             replica:\n      sqlite: plan.sqlite3\n"
-        );
-        let parsed = config(&text).expect("valid");
-        let StoreConfig::Hybrid {
-            policy,
-            local,
-            replica,
-        } = parsed.store
-        else {
-            panic!("a hybrid");
-        };
-        assert_eq!(policy.on_unreachable, "serve-stale");
-        assert_eq!(*local, StoreConfig::Markdown);
+    fn a_postgres_store_carries_its_url_and_refuses_an_empty_one() {
+        let parsed = config(&format!(
+            "{V5}{BASE}store:\n  postgres:\n    url: postgres://db/plan\n"
+        ))
+        .expect("valid");
         assert_eq!(
-            *replica,
-            StoreConfig::Sqlite {
-                path: PathBuf::from("plan.sqlite3")
+            parsed.store,
+            StoreConfig::Postgres {
+                url: "postgres://db/plan".to_owned()
             }
         );
+        let empty = config(&format!("{V5}{BASE}store:\n  postgres:\n    url: ' '\n"))
+            .expect_err("an empty URL is refused");
+        assert_eq!(empty.as_slice()[0].location, "project.store.postgres.url");
     }
 
-    fn config(yaml: &str) -> Result<ProjectConfig, ValidationErrors> {
+    #[test]
+    fn a_misspelt_database_selector_is_refused_naming_the_key() {
+        for (text, named) in [
+            (
+                "store:\n  sqlite:\n    file: plan.sqlite3\n",
+                "store.sqlite",
+            ),
+            ("store:\n  sqlite: plan.sqlite3\n", "store.sqlite"),
+            (
+                "store:\n  postgres:\n    dsn: postgres://db\n",
+                "store.postgres",
+            ),
+            ("store:\n  hybrid: {}\n", "`hybrid` is not a store form"),
+        ] {
+            let errors = config(&format!("{V5}{BASE}{text}"))
+                .expect_err("a selector of the wrong shape is refused");
+            let error = &errors.as_slice()[0];
+            assert_eq!(error.location, "project.store");
+            assert!(error.message.contains(named), "{named}: {error}");
+        }
+    }
+
+    #[test]
+    fn a_bare_word_store_is_refused_in_v5() {
+        let errors = config(&format!("{V5}{BASE}store: markdown\n"))
+            .expect_err("`markdown` names the /1 layout");
+        assert_eq!(errors.as_slice()[0].location, "project.store");
+    }
+
+    /// Parses `yaml` as it is.
+    fn raw_config(yaml: &str) -> Result<ProjectConfig, ValidationErrors> {
         let raw: RawProjectConfig = serde_yaml::from_str(yaml).expect("document parses");
         ProjectConfig::try_from(raw)
+    }
+
+    /// Parses `yaml`, as an `aep.project/5` document when it names no version.
+    fn config(yaml: &str) -> Result<ProjectConfig, ValidationErrors> {
+        if yaml.contains("version:") {
+            raw_config(yaml)
+        } else {
+            raw_config(&format!("{V5}{yaml}"))
+        }
     }
 
     #[test]

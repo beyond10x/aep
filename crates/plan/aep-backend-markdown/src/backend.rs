@@ -10,8 +10,9 @@
 //! `aep_backend_entity::EntityBackend<MarkdownProvider, MarkdownProjection>` behind the same
 //! constructor and the same surface. The adapter applies every command in `aep-backend-memory`,
 //! asks the projection where the result lands, seals the event and commits it with the document in
-//! one step; [`crate::provider::MarkdownProvider`] writes the file and appends the event to the
-//! journal; [`crate::projection::MarkdownProjection`] keeps what is plan-shaped — the prose, the
+//! one step; [`crate::provider::MarkdownProvider`] writes the file, and any evidence record, as the
+//! Git-native layout keeps them; [`crate::projection::MarkdownProjection`] keeps what is
+//! plan-shaped — the prose, the
 //! edges in frontmatter, the ladder, the journal's own vocabulary. What used to be this module's
 //! `persist`, its latch and its `journal::append` — a second hand-written durability layer beside
 //! the SQLite backend's — is gone, not kept beside.
@@ -90,7 +91,10 @@ pub const BODY_KEY: &str = "body";
 pub struct MarkdownBackend(EntityBackend<MarkdownProvider, MarkdownProjection>);
 
 impl MarkdownBackend {
-    /// Opens the store at `root` and hydrates a backend from it.
+    /// Opens a Git-native store (`aep.project/5`) at `root`, with evidence under `evidence`.
+    ///
+    /// [`MarkdownProvider::open_git`] under the projection: a move appends a transition to the
+    /// document it moved and a recorded observation writes one evidence file.
     ///
     /// Hydration goes through `CreateEntity` commands, not through a side door: the entities exist
     /// because commands created them, which is what the audit trail then says.
@@ -98,27 +102,6 @@ impl MarkdownBackend {
     /// # Errors
     ///
     /// If the store cannot be read cleanly, if its edges do not resolve, or if seeding refuses.
-    pub fn open(
-        root: impl AsRef<Path>,
-        membership: Membership,
-        at: Timestamp,
-        actor: ActorRef,
-        lifecycles: aep_domain::artifact::LifecycleRegistry,
-    ) -> Result<Self, CommandError> {
-        let provider = MarkdownProvider::open(root.as_ref());
-        let projection = MarkdownProjection::new(membership, at, actor, lifecycles);
-        Ok(Self(EntityBackend::shaped(provider, projection)?))
-    }
-
-    /// Opens a Git-native store (`aep.project/5`) at `root`, with evidence under `evidence`.
-    ///
-    /// The same adapter and projection as [`open`](Self::open) over
-    /// [`MarkdownProvider::open_git`]: a move appends a transition to the document it moved, a
-    /// recorded observation writes one evidence file, and no journal is created or read.
-    ///
-    /// # Errors
-    ///
-    /// As [`open`](Self::open).
     pub fn open_git(
         root: impl AsRef<Path>,
         evidence: impl AsRef<Path>,

@@ -302,8 +302,15 @@ repositories are not changed; AEP stops depending on their event-log crates.
 | `aep plan store` verbs (`inspect`, `migrate`, `verify`, `rebuild`, `init-tree`, `export`, `install-hooks`, `writer-control`), including `migrate git` | they operate on the event-log store; adopters migrate with the commit that merged A (§ 13, R2) |
 | `artifact resolve`, `artifact render` | fork resolution and projection rendering of the tree store |
 
-Kept: `entity-core` (it decides lifecycles, invariant 9), `aep-backend-markdown` (the `/1` layout
-and the `/5` layout), `aep-backend-hybrid`, `aep-backend-sqlite`, `aep-backend-postgres`.
+Kept: `entity-core` (it decides lifecycles, invariant 9), `aep-backend-markdown` (the `/5` layout),
+`aep-backend-sqlite`, `aep-backend-postgres`.
+
+Removed later (`story:retire-legacy-planning-backends`, operator scope decision 2026-09-28):
+`aep-backend-hybrid` with its `divergences` and `catch-up` verbs, and the `aep.project/1` Markdown
+journal layout as a store (`journal.jsonl`, its hash chain, drift detection and reconciliation). A
+`/1` store is refused naming `aep plan store migrate git --verify`, which keeps a read-only journal
+reader. SQLite and PostgreSQL are selected from `aep.project/5` as `store: { sqlite: { path } }` and
+`store: { postgres: { url } }`.
 
 ## 11. Cross-repository effects
 

@@ -1362,7 +1362,7 @@ impl TwoTasks {
         write(
             &directory.join(".engineering/project.yaml"),
             &format!(
-                "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+                "version: aep.project/5\nplanning_scope: fixture\nprotocol: adp/1\nprofile: development.standard\n\
                  protocols: {}\n",
                 tree_relative_to(&directory.join(".engineering"))
             ),

@@ -105,7 +105,8 @@
       ]
     },
     "store": {
-      "description": "Where the plan is kept. Absent means `markdown`.",
+      "description": "Where the plan is kept. Absent means `git: {}`.\n\nHeld as written and read as a [`RawStore`] only after the version is accepted, so a `/1` document whose selector this build no longer spells still reaches the refusal naming its migration.",
+      "default": null,
       "anyOf": [
         {
           "$ref": "#/definitions/RawStore"
@@ -156,98 +157,87 @@
       "type": "object",
       "additionalProperties": false
     },
-    "RawHybrid": {
-      "description": "A hybrid store as written: four policy words and two stores, none defaulted.",
+    "RawPostgres": {
+      "description": "The `postgres` store selector.",
       "type": "object",
       "required": [
-        "authority",
-        "local",
-        "on_divergence",
-        "on_unreachable",
-        "read",
-        "replica"
+        "url"
       ],
       "properties": {
-        "authority": {
-          "description": "Whose copy is the record of truth: `local` or `replica`.",
+        "url": {
+          "description": "A libpq connection string or URL.",
           "type": "string"
-        },
-        "local": {
-          "description": "The local half.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/RawStore"
-            }
-          ]
-        },
-        "on_divergence": {
-          "description": "What happens to a write that lost: `refuse` or `record`.",
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawSqlite": {
+      "description": "The `sqlite` store selector.",
+      "type": "object",
+      "required": [
+        "path"
+      ],
+      "properties": {
+        "path": {
+          "description": "The database file, relative to `.engineering/`.",
           "type": "string"
-        },
-        "on_unreachable": {
-          "description": "What a read does when the replica does not answer: `refuse` or `serve-stale`.",
-          "type": "string"
-        },
-        "read": {
-          "description": "Where a read goes first: `local-first`, `replica-first` or `replica-only`.",
-          "type": "string"
-        },
-        "replica": {
-          "description": "The replica.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/RawStore"
-            }
-          ]
         }
       },
       "additionalProperties": false
     },
     "RawStore": {
-      "description": "Where a project keeps its plan, as written in `project.yaml` (wave H, story 1).\n\n```yaml store: markdown                    # the default: `.engineering/planning/` store: { sqlite: plan.sqlite3 }    # one file, relative to `.engineering/` store: { postgres: \"postgres://…\" } store: hybrid: authority: local               # local | replica read: local-first              # local-first | replica-first | replica-only on_unreachable: refuse         # refuse | serve-stale on_divergence: record          # refuse | record local: markdown replica: { sqlite: plan.sqlite3 } ```\n\nA hybrid's four policy words are **required** — the runtime's R-106 says a default here is a policy nobody chose being applied to somebody's data — and a document missing one is refused naming the word, by the parser.",
+      "description": "Where a project keeps its plan, as written in an `aep.project/5` `project.yaml`.\n\n```yaml store: { git: {} }                          # the default: `.engineering/planning/` store: { sqlite: { path: plan.sqlite3 } }   # one file, relative to `.engineering/` store: { postgres: { url: \"postgres://…\" } } ```",
       "anyOf": [
         {
-          "description": "`markdown`, the only bare word.",
+          "description": "A bare word. None is a store in `aep.project/5`; read so the refusal can name the forms.",
           "type": "string"
         },
         {
-          "description": "`sqlite: <path>`.",
+          "description": "`git: {}`: the Markdown files under `planning` are the authority.",
+          "type": "object",
+          "required": [
+            "git"
+          ],
+          "properties": {
+            "git": {
+              "description": "Carries no fields in `aep.project/5`.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/RawGit"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "description": "`sqlite: { path: <path> }`.",
           "type": "object",
           "required": [
             "sqlite"
           ],
           "properties": {
             "sqlite": {
-              "description": "The database file, relative to `.engineering/`.",
-              "type": "string"
+              "description": "Where the database file is.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/RawSqlite"
+                }
+              ]
             }
           }
         },
         {
-          "description": "`postgres: <url>`.",
+          "description": "`postgres: { url: <url> }`.",
           "type": "object",
           "required": [
             "postgres"
           ],
           "properties": {
             "postgres": {
-              "description": "A libpq connection string or URL.",
-              "type": "string"
-            }
-          }
-        },
-        {
-          "description": "`hybrid: {…}`.",
-          "type": "object",
-          "required": [
-            "hybrid"
-          ],
-          "properties": {
-            "hybrid": {
-              "description": "The composite's policy and its two halves.",
+              "description": "Which database to connect to.",
               "allOf": [
                 {
-                  "$ref": "#/definitions/RawHybrid"
+                  "$ref": "#/definitions/RawPostgres"
                 }
               ]
             }
@@ -262,23 +252,6 @@
           "properties": {
             "eventlog": {
               "description": "The selector as written."
-            }
-          }
-        },
-        {
-          "description": "`git: {}`, admitted only by `aep.project/5`.",
-          "type": "object",
-          "required": [
-            "git"
-          ],
-          "properties": {
-            "git": {
-              "description": "Carries no fields in `aep.project/5`.",
-              "allOf": [
-                {
-                  "$ref": "#/definitions/RawGit"
-                }
-              ]
             }
           }
         }

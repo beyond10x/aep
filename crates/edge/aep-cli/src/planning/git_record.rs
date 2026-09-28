@@ -185,3 +185,50 @@ pub(super) fn changed_evidence(evidence: &Path) -> Vec<String> {
         .map(ToOwned::to_owned)
         .collect()
 }
+
+/// When each of `paths` (relative to `root`) was added in its current incarnation, as milliseconds
+/// since the Unix epoch from the adding commit's author date, keyed by the same relative path.
+///
+/// One `git log` for the whole set. A path with no committed version is absent from the map, and
+/// so is every path outside a work tree.
+pub(super) fn first_committed(root: &Path, paths: &[&str]) -> BTreeMap<String, u64> {
+    let mut found = BTreeMap::new();
+    if paths.is_empty() {
+        return found;
+    }
+    let Some(prefix) = git(root, &["rev-parse", "--show-prefix"])
+        .and_then(|prefix| String::from_utf8(prefix).ok())
+    else {
+        return found;
+    };
+    let prefix = prefix.trim_end_matches('\n');
+    let mut args = vec![
+        "log",
+        "--no-renames",
+        "--diff-filter=A",
+        "--format=%x01%at",
+        "--name-only",
+        "--",
+    ];
+    args.extend_from_slice(paths);
+    let Some(log) = git(root, &args).and_then(|log| String::from_utf8(log).ok()) else {
+        return found;
+    };
+    // Newest first, and only the current incarnation counts: a file deleted and re-created is
+    // dated from its re-creation, which is the first addition this walk meets.
+    let mut seconds = None;
+    for line in log.lines() {
+        if let Some(at) = line.strip_prefix('\u{1}') {
+            seconds = at.trim().parse::<u64>().ok();
+            continue;
+        }
+        if line.is_empty() {
+            continue;
+        }
+        if let Some(seconds) = seconds {
+            let relative = line.strip_prefix(prefix).unwrap_or(line).to_owned();
+            found.entry(relative).or_insert(seconds.saturating_mul(1000));
+        }
+    }
+    found
+}
