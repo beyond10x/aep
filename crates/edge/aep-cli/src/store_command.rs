@@ -36,6 +36,7 @@ use serde::de::{DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde::Serialize;
 use sha2::{Digest as _, Sha256};
 
+mod migrate_git;
 #[cfg(target_os = "linux")]
 mod writer_control;
 #[cfg(not(target_os = "linux"))]
@@ -194,6 +195,10 @@ pub(crate) enum MigrateCommand {
     /// Rewrite an `aep.project/3` tree store as an `aep.project/4` one, whose large values are
     /// content blobs stored once, after proving the two hold the same history.
     Content(ContentArgs),
+    /// Rewrite an `aep.project/2`, `/3` or `/4` event-log store as an `aep.project/5` Git-native
+    /// one: each document carries its own transitions, each evidence record becomes a file, and
+    /// the event log is removed (Git history holds it).
+    Git(migrate_git::GitArgs),
 }
 
 #[derive(Debug, Clone, Args)]
@@ -236,6 +241,9 @@ where
         StoreCommand::Migrate {
             command: MigrateCommand::Content(args),
         } => migrate_content(&args),
+        StoreCommand::Migrate {
+            command: MigrateCommand::Git(args),
+        } => migrate_git::run(&args),
         StoreCommand::Migrate {
             command: MigrateCommand::DryRun { common, authority },
         } => {
@@ -2019,7 +2027,8 @@ impl Resolved {
                     }
                 }
             }
-            crate::planning::Plan::Eventlog { .. } => {
+            // `resolve` refuses an `aep.project/5` selector, so a Git plan never reaches here.
+            crate::planning::Plan::Eventlog { .. } | crate::planning::Plan::Git { .. } => {
                 Err(aep_planning_migration::AcquisitionError::InvalidCapture)
             }
         }
@@ -2052,6 +2061,16 @@ impl Resolved {
     }
 }
 
+/// Why a verb over an event-log store has nothing to read in an `aep.project/5` project.
+fn git_native_refusal(selector: &Path) -> String {
+    format!(
+        "{} selects `{}`, a Git-native store with no event-log store; `plan store` inspection, \
+         verification, rebuild and event-log migration do not apply to it",
+        selector.display(),
+        aep_domain::project::PROJECT_VERSION_V5
+    )
+}
+
 fn resolve(common: &CommonArgs) -> Result<Resolved> {
     let here = std::env::current_dir().context("reading current directory")?;
     resolve_from(common, &here)
@@ -2077,6 +2096,9 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
         Some(&selector.display().to_string()),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))?;
+    if config.version == aep_domain::project::ProjectVersion::V5 {
+        anyhow::bail!("{}", git_native_refusal(&selector));
+    }
     let store_field = serde_yaml::from_slice::<serde_yaml::Value>(&selector_bytes)
         .ok()
         .and_then(|value| value.as_mapping().map(|map| map.contains_key("store")))
@@ -2174,6 +2196,7 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
             }),
             PresenceV1::Present(host_path(projection_root)),
         ),
+        crate::planning::Plan::Git { .. } => anyhow::bail!("{}", git_native_refusal(&selector)),
     };
     let project_version = match config.version {
         aep_domain::project::ProjectVersion::V1 => ProjectVersionV1::V1,
@@ -2185,6 +2208,9 @@ fn resolve_from(common: &CommonArgs, here: &Path) -> Result<Resolved> {
                 "`{}` selects a tree authority, which these migration verbs do not read",
                 config.version.as_str()
             )
+        }
+        aep_domain::project::ProjectVersion::V5 => {
+            anyhow::bail!("{}", git_native_refusal(&selector))
         }
     };
     Ok(Resolved {
