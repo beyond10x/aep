@@ -175,6 +175,16 @@ pub struct Provenance {
     /// Evidence the caller asserted at the command line and nothing checks.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub asserted: BTreeMap<EvidenceKind, usize>,
+    /// Legacy conformance-rung eligibility derived from re-admitted, complete current coverage.
+    /// The actual records remain `ess_conformance_coverage_v1` in `recorded`; this is not a second
+    /// evidence event and never comes from a caller's asserted count.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub ess_conformance_from_coverage: usize,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde's skip predicate requires a reference.
+fn is_zero(value: &usize) -> bool {
+    *value == 0
 }
 
 impl Provenance {
@@ -189,6 +199,10 @@ impl Provenance {
         for (kind, count) in &self.asserted {
             *total.entry(*kind).or_default() += *count;
         }
+        if self.ess_conformance_from_coverage > 0 {
+            *total.entry(EvidenceKind::EssConformance).or_default() +=
+                self.ess_conformance_from_coverage;
+        }
         total
     }
 
@@ -201,7 +215,9 @@ impl Provenance {
     /// `true` when nothing at all was recorded about how the decision was taken.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.recorded.is_empty() && self.asserted.is_empty()
+        self.recorded.is_empty()
+            && self.asserted.is_empty()
+            && self.ess_conformance_from_coverage == 0
     }
 }
 

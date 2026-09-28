@@ -15,9 +15,13 @@ mod coverage_definition;
 mod coverage_suite;
 mod coverage_wire;
 mod direct_response;
+mod planning_coverage;
 
 pub use counts::{adapt_json_v2, CountStageReader};
 pub use coverage::{adapt_json_coverage, wrap_coverage_suite, CoverageReader};
+pub use planning_coverage::{
+    planning_coverage_source, qualify_planning_coverage, read_planning_coverage_source,
+};
 
 use aep_domain::evidence::{EssConformanceResult, Evidence, Producer, Provenance, SpecDigest};
 use aep_domain::time::{ObservedAt, Timestamp};

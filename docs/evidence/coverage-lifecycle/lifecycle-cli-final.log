@@ -1,0 +1,38 @@
+   Compiling aep-backend-markdown v0.63.1 (<AEP_WORKTREE>/crates/plan/aep-backend-markdown)
+   Compiling aep-ess-evidence v0.63.1 (<AEP_WORKTREE>/crates/observe/aep-ess-evidence)
+   Compiling aep-schema v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-schema)
+   Compiling aep-driver v0.63.1 (<AEP_WORKTREE>/crates/drive/aep-driver)
+   Compiling aep-project v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-project)
+   Compiling aep-backend-hybrid v0.63.1 (<AEP_WORKTREE>/crates/plan/aep-backend-hybrid)
+   Compiling aep-cli v0.63.1 (<AEP_WORKTREE>/crates/edge/aep-cli)
+    Finished `test` profile [unoptimized] target(s) in 12.11s
+     Running tests/ess_conformance_coverage.rs (target/debug/deps/ess_conformance_coverage-921ce063e4b7b27c)
+
+running 24 tests
+test coverage_horizon_equality_and_no_implicit_ttl_share_requirement_evaluation ... ok
+test coverage_complete_record_matches_every_independent_qualification_input ... ok
+test coverage_outside_refusal_qualifies_only_the_independently_selected_component ... ok
+test coverage_requirement_diagnostics_name_the_separate_kind ... ok
+test coverage_cli_inspection_admits_complete_original_input_and_exact_time ... ok
+test coverage_unknown_refused_and_empty_are_descriptive_even_when_all_executed_cases_pass ... ok
+test adversary_pass2_current_named_model_controls_both_decisions_after_graph_refresh_and_replay ... ok
+test coverage_typed_envelopes_preserve_legacy_observation_lexemes_but_require_exact_report_instants ... ok
+test adversary_coverage_actual_inspection_refuses_original_nested_duplicates_for_both_aliases ... ok
+test coverage_json_yaml_original_lineage_and_full_time_survive_both_reader_configuration ... ok
+test coverage_terminal_failures_inconclusive_runs_and_separate_records_never_join_into_qualification ... ok
+test coverage_both_decision_routes_and_replay_share_the_exact_record_with_atomic_refusals ... ok
+test coverage_qualification_requires_every_independent_identity_and_envelope_control ... ok
+test adversary_coverage_engine_re_admits_clones_and_preserves_both_reader_orders ... ok
+test coverage_actual_driver_reads_typed_record_and_re_admits_on_status_and_resume ... ok
+test coverage_planning_pair_dispatch_refuses_before_store_and_aliases_are_identical ... ok
+test coverage_direct_record_without_reader_refuses_before_publishing_state ... ok
+test coverage_opt_in_profile_composes_without_inheriting_count_requirements ... ok
+test coverage_planning_admits_original_input_as_descriptive_history ... ok
+test coverage_planning_wraps_exact_unfiltered_bytes_and_escapes_full_descriptive_diagnostics ... ok
+test direct_return_planning_dispatches_raw_suite_and_carrier_to_the_coverage_reader ... ok
+test descriptive_coverage_records_cannot_earn_specification_conformance ... ok
+test current_complete_coverage_earns_specification_conformance_without_inventing_a_record ... ok
+test a_newer_or_equally_timed_failed_coverage_run_prevents_old_success_earning_conformance ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.66s
+

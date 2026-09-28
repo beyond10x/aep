@@ -866,6 +866,240 @@ fn coverage_planning_admits_original_input_as_descriptive_history() {
 }
 
 #[test]
+fn current_complete_coverage_earns_specification_conformance_without_inventing_a_record() {
+    let base = scratch("coverage-lifecycle");
+    for git in [false, true] {
+        let directory = base.join(if git { "git" } else { "legacy" });
+        std::fs::create_dir_all(&directory).unwrap();
+        let store = directory.join("store");
+        let document_root = root();
+        if git {
+            std::fs::create_dir_all(directory.join(".engineering")).unwrap();
+            std::fs::write(directory.join(".engineering/project.yaml"), serde_json::json!({"version":"aep.project/5","protocols":"../../../../../..","protocol":"adp/1","profile":"development.standard","planning_scope":"coverage-fixture","summary":"Git lifecycle fixture","store":{"git":{}}}).to_string()).unwrap();
+        }
+        let invoke = |arguments: &[&str]| {
+            let mut args = vec!["plan", "artifact"];
+            args.extend_from_slice(arguments);
+            args.extend(["--root", document_root.to_str().unwrap()]);
+            if !git {
+                args.extend(["--store", store.to_str().unwrap()]);
+            }
+            std::process::Command::new(env!("CARGO_BIN_EXE_aep"))
+                .current_dir(&directory)
+                .args(args)
+                .output()
+                .unwrap()
+        };
+        let original = include_str!(
+            "../../../observe/aep-ess-evidence/tests/fixtures/direct_returns/direct-suite29.json"
+        );
+        let suite: serde_json::Value = serde_json::from_str(original).unwrap();
+        let ids = [
+            "library.api.Read/outcome/returned",
+            "library.api/authored/pure-return",
+        ];
+        let (report, _) = fixtures::pair_for(&suite, &ids, "passed", &[]);
+        let mut report: serde_json::Value = serde_json::from_str(&report).unwrap();
+        report["suite"] = fixtures::reference(original);
+        report["suite"]["version"] = "ess-conformance/29".into();
+        report["spec_digest"] = suite["provenance"]["spec_digest"].clone();
+        report["specification"] = "library/v1".into();
+        let report_path = directory.join("report.json");
+        let suite_path = directory.join("suite.json");
+        std::fs::write(&report_path, report.to_string()).unwrap();
+        std::fs::write(&suite_path, original).unwrap();
+        let id = "executable-system-specification:complete";
+        success(&invoke(&[
+            "new",
+            "executable-system-specification",
+            "complete",
+            "--title",
+            "Complete specification",
+        ]));
+        success(&invoke(&[
+            "set",
+            id,
+            "--model-digest",
+            suite["provenance"]["spec_digest"].as_str().unwrap(),
+        ]));
+        success(&invoke(&["move", id, "--to", "validated"]));
+        success(&invoke(&[
+            "evidence",
+            id,
+            "--from",
+            report_path.to_str().unwrap(),
+            "--suite",
+            suite_path.to_str().unwrap(),
+        ]));
+        // Admission must use the retained originals; a provenance label is not a future file read.
+        std::fs::remove_file(&report_path).unwrap();
+        std::fs::remove_file(&suite_path).unwrap();
+        success(&invoke(&["set", id, "--model-digest", &"a".repeat(64)]));
+        let stale = invoke(&["move", id, "--to", "conforming"]);
+        assert!(!stale.status.success());
+        assert!(String::from_utf8_lossy(&stale.stdout).contains("no ess_conformance record"));
+        success(&invoke(&[
+            "set",
+            id,
+            "--model-digest",
+            suite["provenance"]["spec_digest"].as_str().unwrap(),
+        ]));
+        let moved = invoke(&[
+            "move",
+            id,
+            "--to",
+            "conforming",
+            "--at",
+            "2026-09-28T00:00:00Z",
+        ]);
+        success(&moved);
+        assert!(String::from_utf8_lossy(&moved.stdout).contains("derived"));
+        let history = invoke(&["history", id, "--format", "json"]);
+        assert_coverage_basis(&history, 1);
+    }
+}
+
+fn assert_coverage_basis(history: &std::process::Output, recorded: usize) {
+    success(history);
+    let history: serde_json::Value = serde_json::from_slice(&history.stdout).unwrap();
+    let entries = history.as_array().unwrap();
+    let evidence: Vec<_> = entries
+        .iter()
+        .filter(|entry| entry["change"]["change"] == "evidence")
+        .collect();
+    assert_eq!(evidence.len(), recorded);
+    for entry in evidence {
+        assert_eq!(entry["change"]["kind"], "ess_conformance_coverage_v1");
+    }
+    let account = &entries.last().unwrap()["change"]["decided_on"];
+    assert_eq!(account["recorded"]["ess_conformance_coverage_v1"], recorded);
+    assert!(account["recorded"].get("ess_conformance").is_none());
+    assert_eq!(account["ess_conformance_from_coverage"], 1);
+}
+
+#[test]
+fn a_newer_or_equally_timed_failed_coverage_run_prevents_old_success_earning_conformance() {
+    for failed_at in [1, 2] {
+        let directory = scratch(&format!("coverage-latest-{failed_at}"));
+        let store = directory.join("store");
+        let document_root = root();
+        let invoke = |arguments: &[&str]| {
+            let mut args = vec!["plan", "artifact"];
+            args.extend_from_slice(arguments);
+            args.extend([
+                "--store",
+                store.to_str().unwrap(),
+                "--root",
+                document_root.to_str().unwrap(),
+            ]);
+            cli(&args)
+        };
+        let id = "executable-system-specification:latest";
+        success(&invoke(&[
+            "new",
+            "executable-system-specification",
+            "latest",
+            "--title",
+            "Latest complete specification",
+        ]));
+        success(&invoke(&["set", id, "--model-digest", fixtures::MODEL]));
+        success(&invoke(&["move", id, "--to", "validated"]));
+        let record = |time, failed| {
+            let (report, input) = fixtures::pair(time);
+            let mut report: serde_json::Value = serde_json::from_str(&report).unwrap();
+            if failed {
+                report["counts"]["passed"] = 0.into();
+                report["counts"]["failed"] = 1.into();
+                report["outcomes"]["passed"] = serde_json::json!([]);
+                report["outcomes"]["failed"] = serde_json::json!([fixtures::SELECTED]);
+                report["execution_status"] = "failed".into();
+                report["conformance_status"] = "failed".into();
+            }
+            let report_path = directory.join("report.json");
+            let input_path = directory.join("input.json");
+            std::fs::write(&report_path, report.to_string()).unwrap();
+            std::fs::write(&input_path, input).unwrap();
+            success(&invoke(&[
+                "evidence",
+                id,
+                "--from",
+                report_path.to_str().unwrap(),
+                "--suite-input",
+                input_path.to_str().unwrap(),
+            ]));
+        };
+        record(1, false);
+        record(failed_at, true);
+        let output = invoke(&["move", id, "--to", "conforming"]);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stdout).contains("no ess_conformance record"));
+        record(3, false);
+        record(3, false);
+        success(&invoke(&["move", id, "--to", "conforming"]));
+        let history = invoke(&["history", id, "--format", "json"]);
+        assert_coverage_basis(&history, 4);
+    }
+}
+
+#[test]
+fn descriptive_coverage_records_cannot_earn_specification_conformance() {
+    let directory = scratch("coverage-summary-no-authority");
+    let store = directory.join("store");
+    let document_root = root();
+    let invoke = |arguments: &[&str]| {
+        let mut args = vec!["plan", "artifact"];
+        args.extend_from_slice(arguments);
+        args.extend([
+            "--store",
+            store.to_str().unwrap(),
+            "--root",
+            document_root.to_str().unwrap(),
+        ]);
+        cli(&args)
+    };
+    let id = "executable-system-specification:summary";
+    success(&invoke(&[
+        "new",
+        "executable-system-specification",
+        "summary",
+        "--title",
+        "Summary lacks originals",
+    ]));
+    success(&invoke(&["set", id, "--model-digest", fixtures::MODEL]));
+    success(&invoke(&["move", id, "--to", "validated"]));
+    let (report, input) = fixtures::pair(1);
+    let adapted = aep_ess_evidence::adapt_json_coverage(&report, &input).unwrap();
+    let aep_domain::Evidence::EssConformanceCoverageV1(sources) = adapted.evidence() else {
+        panic!("coverage");
+    };
+    let source = aep_ess_evidence::planning_coverage_source(
+        sources,
+        "report.json",
+        "input.json",
+        "original_input",
+    )
+    .unwrap();
+    let mut summary: serde_json::Value = serde_json::from_str(&source).unwrap();
+    summary.as_object_mut().unwrap().remove("originals");
+    for source in ["all tests passed".to_owned(), summary.to_string(), source] {
+        // Even exact originals require the source report's admitted observation instant.
+        success(&invoke(&[
+            "evidence",
+            id,
+            "--kind",
+            "ess_conformance_coverage_v1",
+            "--source",
+            &source,
+            "--at",
+            "1970-01-01T00:00:01Z",
+        ]));
+        let moved = invoke(&["move", id, "--to", "conforming"]);
+        assert!(!moved.status.success());
+        assert!(String::from_utf8_lossy(&moved.stdout).contains("no ess_conformance record"));
+    }
+}
+
+#[test]
 fn direct_return_planning_dispatches_raw_suite_and_carrier_to_the_coverage_reader() {
     let directory = scratch("direct-return-planning");
     let original = include_str!(
