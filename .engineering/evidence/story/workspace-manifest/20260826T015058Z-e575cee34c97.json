@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-26T01:50:58Z",
+  "actor": "operator",
+  "artifact": "story:workspace-manifest",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check 2026-08-26",
+    "reference": "twelve steps, 161 suites, 2576 tests, exit 0"
+  }
+}

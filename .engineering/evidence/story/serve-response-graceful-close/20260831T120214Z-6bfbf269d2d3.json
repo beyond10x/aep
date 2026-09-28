@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T12:02:14Z",
+  "actor": "human:operator",
+  "artifact": "story:serve-response-graceful-close",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "GitHub Release workflow 33388911934",
+    "reference": "tag 0.36.4 commit 2f15e67; gate / Gate passed and release published"
+  }
+}

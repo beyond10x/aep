@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T15:16:41Z",
+  "actor": "human:timo",
+  "artifact": "story:a-session-is-one-spend",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "23f3d19"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-04T00:55:38Z",
+  "actor": "human:timo",
+  "artifact": "story:eval-run-preflight-accumulates",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check in worktree wt-ffa0ccf1d6af on aa51599: exit 0, 16 steps, 2139 tests (eval_run 41, trace_cli 7, evidence_producers 7)"
+  }
+}

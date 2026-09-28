@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:cold-start-outlives-the-deadline
 kind: story
 status: draft

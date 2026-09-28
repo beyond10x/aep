@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-20T20:26:06Z",
+  "actor": "human:timo",
+  "artifact": "task:validate-v2-projection-awareness",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 store_writer_control.rs:323 pre-existing, filed as story:migration-receipt-identity-under-symlinked-selector; short scratch roots assigned",
+    "review": "review-result:validate-v2-review-1",
+    "outcome": "no-op"
+  }
+}

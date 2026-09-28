@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:shell-echo-harness
 kind: story
 status: implemented
@@ -13,6 +13,9 @@ relations:
 - decomposes: epic:cross-harness-portability
 - depends_on: story:driver-router
 revision: 5
+transitions:
+- {from: "proposed", to: "active", at: "2026-08-28T20:02:37Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:02:37Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A second harness with no model, no network and no credential
 

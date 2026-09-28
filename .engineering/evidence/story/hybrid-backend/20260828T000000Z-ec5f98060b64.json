@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T00:00:00Z",
+  "actor": "human:operator",
+  "artifact": "story:hybrid-backend",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "18 steps, exit 0, postgres-check ran; aep-backend-hybrid 5/5, store_selection 5/5"
+  }
+}

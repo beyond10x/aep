@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:ova-table-shape
 kind: task
 status: implemented
@@ -16,6 +16,10 @@ relations:
 - depends_on: task:ova-audit-corpus
 - depends_on: task:ova-scan-declarations
 revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:24:40Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:24:40Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:24:40Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Task: one table, one header, two verdicts, a floor
 

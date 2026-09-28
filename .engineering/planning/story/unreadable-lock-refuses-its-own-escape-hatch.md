@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:unreadable-lock-refuses-its-own-escape-hatch
 kind: story
 status: active
@@ -18,6 +18,9 @@ scope:
 - confidence: inferred
   path: website/docs/reference/cli.md
 revision: 15
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 4, imported: true}
 ---
 # Story: A lock file nobody can read refuses the command that exists to remove it
 

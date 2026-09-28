@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:driven-eval-acceptance
 kind: story
 status: archived
@@ -13,6 +13,9 @@ relations:
 - decomposes: epic:self-evaluation
 - depends_on: story:plugin-enforcement-hooks
 revision: 5
+transitions:
+- {from: "proposed", to: "draft", at: "2026-08-28T19:58:51Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "draft", to: "archived", at: "2026-08-28T19:58:51Z", actor: "human:operator", revision: 5, imported: true}
 ---
 # Story: One real task, driven end to end, with a denial on purpose
 

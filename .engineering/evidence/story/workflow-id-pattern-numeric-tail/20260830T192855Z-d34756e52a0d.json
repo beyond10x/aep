@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T19:28:55Z",
+  "actor": "human:operator",
+  "artifact": "story:workflow-id-pattern-numeric-tail",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "17473be 21/21 steps exit 0, 199 suites, 2952 tests, 0 failed, 0 ignored; postgres-check skipped (ENTITY_POSTGRES_URL unset)"
+  }
+}

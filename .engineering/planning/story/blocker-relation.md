@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:blocker-relation
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T21:18:53Z", actor: "human:operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T21:18:53Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T22:07:39Z", actor: "human:operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: Parked on a credential does not look like actively worked
 

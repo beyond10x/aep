@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:sqlite-backend-adapter
 kind: story
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - supersedes: story:sqlite-backend
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T09:39:37Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T09:39:37Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T09:40:28Z", actor: "operator", revision: 4, decided_on: {"asserted":{"test_result":1}}, imported: true}
 ---
 # Story: P4 — `aep-backend-sqlite`
 

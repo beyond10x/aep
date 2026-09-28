@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:15:33Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "review",
+    "source": "source read of the worktree at 52d529c, 2026-08-29",
+    "reference": "crates/protocol-cli/src/drive.rs:1490-1496 (argv_for hands b10x_argv the parsed step's own scope and context) and :3706-3717 (the compile: ordered --write-scope <glob>=<word>, then --context <file>) — the decision: the compile belongs to the driver, the one place that assembles a run from a step map"
+  }
+}

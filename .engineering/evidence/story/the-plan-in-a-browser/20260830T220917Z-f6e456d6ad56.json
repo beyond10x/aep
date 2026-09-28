@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T22:09:17Z",
+  "actor": "human:operator",
+  "artifact": "story:the-plan-in-a-browser",
+  "kind": "story",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "4d2501e; task check 22/22 steps exit 0, 197 suites, 3020 tests, 0 failed, 0 ignored; postgres-check skipped (ENTITY_POSTGRES_URL unset)"
+  }
+}

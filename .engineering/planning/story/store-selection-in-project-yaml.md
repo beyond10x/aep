@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:store-selection-in-project-yaml
 kind: story
 status: implemented
@@ -15,6 +15,10 @@ relations:
 - depends_on: story:markdown-backend-is-the-adapter
 - supersedes: story:sqlite-backend
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T17:14:04Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T17:14:04Z", actor: "human:operator", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T17:14:04Z", actor: "human:operator", revision: 9, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `project.yaml` names the store, and every verb opens it
 

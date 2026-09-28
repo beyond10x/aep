@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-20T23:11:55Z",
+  "actor": "human:timo",
+  "artifact": "task:evidence-on-hand-v2-journal",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 3 planning.rs:5631 reviews_of INFEASIBLE introduced note: two rounds recorded in one second ordered by id. Fixed in bot commit 051a19346f5dda4096c292b5b7b738320eb63ad3 by breaking the same-second tie on the store position; case two_rounds_recorded_in_one_second_are_compared_in_the_order_they_happened green, asserting the true recording order rather than the narrowed behaviour",
+    "review": "review-result:evidence-on-hand-review-2",
+    "outcome": "fixed"
+  }
+}

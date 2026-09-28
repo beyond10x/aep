@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:15:41Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "review",
+    "source": "source read of beyond10x/harness origin/main 5f887f8 and this worktree at 52d529c, 2026-08-29",
+    "reference": "harness/crates/harness-cli/src/lib.rs:1636-1641 refuses an unreadable context file, reached at :1159 before an endpoint is contacted; nothing here checks it — crates/protocol-cli/src/drive.rs:2944-3014 (b10x_preflight) tests endpoint, model, binary and adapter only, and the rule is prose at crates/aep-driver-spec/src/map.rs:396-398 — acceptance bullet 3 NOT met: no test on either side reaches the refusal"
+  }
+}

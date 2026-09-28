@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:executable-system-specification-is-governed
 kind: story
 status: implemented
@@ -7,6 +7,10 @@ title: A specification is a governed artifact with a lifecycle and a model diges
 relations:
 - serves: vision:O2
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-03T19:35:26Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-03T19:35:27Z", actor: "human:timo", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-03T19:35:35Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## What was missing
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:workflow-id-pattern-numeric-tail
 kind: story
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - informed_by: story:driver-spec-crate
 - serves: vision:O3
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T19:29:00Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A published pattern that still calls three step maps valid
 

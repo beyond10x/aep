@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:29:47Z",
+  "actor": "human:operator",
+  "artifact": "story:generator-version-stamp",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p xtask a_version_bump_rewrites_no_generated_file, 2026-08-28 — 1 passed; task check 18/18 exit 0",
+    "reference": "xtask/src/main.rs"
+  }
+}

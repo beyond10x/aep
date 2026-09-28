@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:ova-scan-loop
 kind: task
 status: implemented
@@ -16,6 +16,10 @@ relations:
 - depends_on: task:ova-scan-declarations
 - depends_on: task:ova-citations
 revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:24:38Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:24:38Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:24:39Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Task: completeness and provenance, and the limit stated out loud
 

@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T14:19:53Z",
+  "actor": "human:operator",
+  "artifact": "story:contract-result-gates",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "GitHub Release workflow 33400921430",
+    "reference": "tag 0.37.1 commit a977a8054bc8bf97c9e6fb23ad017f117e8492a3; gate / Gate passed and release published"
+  }
+}

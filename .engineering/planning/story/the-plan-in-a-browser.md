@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:the-plan-in-a-browser
 kind: story
 status: implemented
@@ -7,6 +7,10 @@ title: The plan is a shape, so there is a verb that draws it
 relations:
 - serves: vision:O2
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T22:09:17Z", actor: "human:operator", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T22:09:17Z", actor: "human:operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T22:09:17Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: The plan is a shape, so there is a verb that draws it
 

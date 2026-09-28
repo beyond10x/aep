@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:adopter-schema-contract-tooling
 kind: story
 status: implemented
@@ -13,6 +13,8 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
 revision: 7
+transitions:
+- {from: "active", to: "implemented", at: "2026-08-29T23:34:48Z", actor: "agent:claude-session", revision: 7, decided_on: {"recorded":{"test_result":2}}, imported: true}
 ---
 # Story: one project schema registry, validated and projected for adopters
 

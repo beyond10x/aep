@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:drive-transition-verb
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:cross-harness-portability
 - serves: vision:O3
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T20:47:29Z", actor: "agent:claude-session", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T20:47:29Z", actor: "agent:claude-session", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T20:49:07Z", actor: "agent:claude-session", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A native flow is governed by the engine at every section boundary
 

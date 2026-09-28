@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T03:04:48Z",
+  "actor": "human:operator",
+  "artifact": "story:aep-service-wire-and-client",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "aep-service task check, commit 8793c50, against EP 0.35.0 commit 1406c06",
+    "reference": "https://github.com/beyond10x/aep-service/commit/8793c50d460b89f133152f89d7378e74099dea2d"
+  }
+}

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: review-result:aep-pin-vector-review-1
 kind: review-result
 status: active
@@ -7,6 +7,8 @@ title: 'Independent verification pass 1: one URL one rev across both repositorie
 relations:
 - reviews: task:aep-pin-verify-once-vector
 revision: 2
+transitions:
+- {from: "draft", to: "active", at: "2026-09-21T01:09:47Z", actor: "human:timo", revision: 2, imported: true}
 ---
 # Independent verification pass 1 — task:aep-pin-verify-once-vector
 

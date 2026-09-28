@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T12:22:50Z",
+  "actor": "human:operator",
+  "artifact": "story:driven-run-cost-ceiling",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-driver && cargo test -p protocol-cli",
+    "reference": "crates/aep-driver/tests/driving.rs; crates/protocol-cli/tests/drive_cli.rs"
+  }
+}

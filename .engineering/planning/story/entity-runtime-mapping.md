@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:entity-runtime-mapping
 kind: story
 status: implemented
@@ -11,6 +11,10 @@ tags:
 - lifecycle
 - protocol
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:33:21Z", actor: "human:operator", revision: 7, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:33:21Z", actor: "human:operator", revision: 8, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:33:22Z", actor: "human:operator", revision: 9, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: Another repository has already expressed our eight ladders as data, and asks for a verdict
 

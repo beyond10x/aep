@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:eval-run-preflight-accumulates
 kind: story
 status: implemented
@@ -12,6 +12,10 @@ scope:
 - confidence: inferred
   path: crates/edge/aep-cli/src/eval.rs
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T00:18:43Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T00:18:44Z", actor: "human:timo", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-04T00:55:43Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `aep eval run` preflight reports every refusal, not the first
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:guard-tests
 kind: story
 status: implemented
@@ -8,6 +8,10 @@ summary: 'Cross-crate duplicate test bodies are a gate failure: either the asser
 relations:
 - decomposes: epic:evidence-gated-completion
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T09:27:08Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T09:27:08Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T09:32:40Z", actor: "operator", revision: 4, decided_on: {"asserted":{"test_result":1}}, imported: true}
 ---
 # Story: A test that asserts what another crate's test asserts is not evidence of a difference
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:cross-repo-relations
 kind: story
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - decomposes: epic:one-cli-many-repositories
 - depends_on: story:assemble-across-sources
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T02:32:39Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T02:32:39Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T02:32:39Z", actor: "operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A relation whose target lives in another member
 

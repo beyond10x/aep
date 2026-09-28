@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:driver-router
 kind: story
 status: implemented
@@ -13,6 +13,8 @@ relations:
 - depends_on: story:driver-spec-crate
 - serves: vision:O3
 revision: 7
+transitions:
+- {from: "active", to: "implemented", at: "2026-08-30T11:22:18Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1,"review":1}}, imported: true}
 ---
 # Story: `aep-driver` — the three-valued router
 

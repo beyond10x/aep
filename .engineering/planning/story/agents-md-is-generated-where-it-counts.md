@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:agents-md-is-generated-where-it-counts
 kind: story
 status: implemented
@@ -12,6 +12,10 @@ relations:
 - serves: vision:O6
 - informed_by: story:prose-that-the-tree-contradicts
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:12Z", actor: "agent:claude-audit", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:12Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T15:48:13Z", actor: "agent:claude-audit", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `AGENTS.md` carries generated counts and an index, not a 67 KB re-read
 

@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-06T08:19:35Z",
+  "actor": "human:timo",
+  "artifact": "story:admit-ess-conformance-v2-counts",
+  "kind": "story",
+  "revision": 49,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "sixteen declared gate commands on 012a183c: 2209 cases passed; PostgreSQL explicitly skipped",
+    "reference": "verification-report:ess-conformance-v2-counts-integrated"
+  }
+}

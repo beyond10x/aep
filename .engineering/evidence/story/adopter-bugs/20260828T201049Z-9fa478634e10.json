@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:10:49Z",
+  "actor": "human:operator",
+  "artifact": "story:adopter-bugs",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-engine --test lifecycle_fallback --test adopting_guide --test project_directory_env; -p aep-domain --lib principle::, 2026-08-28",
+    "reference": "crates/aep-engine/tests/lifecycle_fallback.rs,crates/aep-engine/tests/adopting_guide.rs"
+  }
+}

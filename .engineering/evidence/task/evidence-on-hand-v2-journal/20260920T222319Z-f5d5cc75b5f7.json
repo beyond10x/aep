@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-20T22:23:19Z",
+  "actor": "human:timo",
+  "artifact": "task:evidence-on-hand-v2-journal",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 planning.rs:892 O(N) reads: history_of(ids) bounded to reviews and their subjects, 14→3 reads measured, commit f3a06a0cac43917408da629f2d6544dc8cb7db25",
+    "review": "review-result:evidence-on-hand-review-1",
+    "outcome": "fixed"
+  }
+}

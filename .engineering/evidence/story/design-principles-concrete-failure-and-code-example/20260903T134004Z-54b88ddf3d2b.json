@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T13:40:04Z",
+  "actor": "human:timo",
+  "artifact": "story:design-principles-concrete-failure-and-code-example",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "focused CLI, engine, backend, schema, ESS adapter, docs-reference, and Docusaurus checks",
+    "reference": "website/docs/concepts/design-principles.md"
+  }
+}

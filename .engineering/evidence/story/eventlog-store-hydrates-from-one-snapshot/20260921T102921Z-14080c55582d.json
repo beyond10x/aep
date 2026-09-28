@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T10:29:21Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-store-hydrates-from-one-snapshot",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 F1 lib.rs:494 concurrency CONFIRMED introduced, and pass 2 P5 lib.rs:529 INFEASIBLE: a handle answers from the capture taken at open, so a row appended through another handle is invisible for the handle's life. Coordinator decision, no-op on the evidence of two independent holder enumerations: nothing in the workspace holds an EventlogPlanningStore across two commands — aep serve holds a StoreLocation and opens per request, the writer-control hold process holds no store, DrivenPlan and FileProjectionPublisher open per call, and EventlogMutationLedger holds a PathBuf (pass 2 corrects pass 1 here: it does have a caller, at mutation.rs:367). Pass 2 adds that the one in-process second writer alive beside a handle writes only aep.planning-invocation subjects, which no read path of this store asks about. The rule is written where the field is, in the retained field's doc comment, so a future long-lived holder meets it there rather than in a wave record",
+    "review": "review-result:one-snapshot-hydrate-review-1",
+    "outcome": "no-op"
+  }
+}

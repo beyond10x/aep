@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T23:50:39Z",
+  "actor": "human:operator",
+  "artifact": "story:command-failure-atomicity",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "83c852496ba24b5d34592c0842d3baa759f0086c"
+  }
+}

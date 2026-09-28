@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T12:38:37Z",
+  "actor": "human:operator",
+  "artifact": "story:driven-run-cost-ceiling",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "GitHub Release workflow 33391877961",
+    "reference": "tag 0.37.0 commit b27d6baddf41ec5244f25f785c7546cbb75d85bd; gate / Gate passed and release published"
+  }
+}

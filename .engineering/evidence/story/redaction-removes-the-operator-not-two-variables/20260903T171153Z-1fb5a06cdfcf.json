@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T17:11:53Z",
+  "actor": "human:timo",
+  "artifact": "story:redaction-removes-the-operator-not-two-variables",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "873cc12"
+  }
+}

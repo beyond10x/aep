@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T11:47:00Z",
+  "actor": "human:timo",
+  "artifact": "story:eval-run-caps-the-run",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "9de3c99"
+  }
+}

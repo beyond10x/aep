@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:review-result-cannot-be-authored
 kind: story
 status: implemented
@@ -14,6 +14,10 @@ relations:
 - informed_by: story:adopter-bugs
 - serves: vision:O2
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T21:08:48Z", actor: "human:operator", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T21:08:48Z", actor: "human:operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T21:08:48Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A review-result cannot be authored, retired or removed through the CLI
 

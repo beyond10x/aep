@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:eval-run-passes-plugin-through
 kind: story
 status: implemented
@@ -18,6 +18,10 @@ scope:
 - confidence: inferred
   path: crates/protocol-cli/tests/eval_run.rs
 revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-03T01:29:32Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-03T01:29:33Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-03T01:29:34Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `aep eval run --arm plugin` passes a marketplace plugin through to metaharness
 

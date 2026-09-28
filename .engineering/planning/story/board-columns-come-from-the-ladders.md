@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:board-columns-come-from-the-ladders
 kind: story
 status: implemented
@@ -12,6 +12,10 @@ relations:
 - informed_by: story:blocker-relation
 - serves: vision:O2
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T01:07:52Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T01:07:52Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T02:21:35Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: The board's columns come from the ladders, not from a list compiled into the binary
 

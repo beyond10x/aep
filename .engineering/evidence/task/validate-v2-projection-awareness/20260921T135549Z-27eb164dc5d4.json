@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-21T13:55:49Z",
+  "actor": "human:timo",
+  "artifact": "task:validate-v2-projection-awareness",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Bot commit af2af7e74c0230dbb5f8a202e68b719dbfbed7a4 on the integration branch; two independent passes, 8 findings, Timo's option B applied for the three --strict advisory classes with the faithful port filed as story:strict-advisory-classes-on-an-eventlog-plan. Carried into the merged head 763d195be, gate 16 of 16 exit 0, 2,103 passed"
+  }
+}

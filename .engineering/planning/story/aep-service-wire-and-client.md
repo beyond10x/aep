@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:aep-service-wire-and-client
 kind: story
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - serves: vision:O2
 - serves: vision:O6
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-31T01:03:49Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-31T01:08:51Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-31T03:04:49Z", actor: "human:operator", revision: 9, decided_on: {"recorded":{"test_result":6}}, imported: true}
 ---
 ## Context
 

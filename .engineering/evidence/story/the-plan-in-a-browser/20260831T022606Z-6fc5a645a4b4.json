@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T02:26:06Z",
+  "actor": "human:operator",
+  "artifact": "story:the-plan-in-a-browser",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p protocol-cli --test serve_cli --locked",
+    "reference": "complete response/reset guard and every loopback exchange passed"
+  }
+}

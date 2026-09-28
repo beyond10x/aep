@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:operator-resume-ux
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:reference-driver
 - depends_on: story:protocol-drive-verb
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T19:19:08Z", actor: "agent:claude-session", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T19:19:08Z", actor: "agent:claude-session", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T19:26:17Z", actor: "agent:claude-session", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A refused run tells the operator which of two things to type
 

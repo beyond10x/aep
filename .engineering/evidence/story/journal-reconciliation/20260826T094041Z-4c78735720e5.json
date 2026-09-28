@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-26T09:40:41Z",
+  "actor": "operator",
+  "artifact": "story:journal-reconciliation",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check 2026-08-26",
+    "reference": "15 steps, 166 suites, 2610 tests, exit 0"
+  }
+}

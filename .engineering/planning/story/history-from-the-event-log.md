@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:history-from-the-event-log
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:markdown-backend-is-the-adapter
 revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T15:31:53Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T16:00:43Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T16:04:03Z", actor: "human:operator", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: History and audit are answered from the event log, not from a per-process memory
 

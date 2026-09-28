@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:cli-ergonomics-round-2
 kind: story
 status: active
@@ -22,6 +22,9 @@ scope:
 - confidence: cited
   path: website/docs/reference/cli.md
 revision: 13
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:03Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:03Z", actor: "agent:claude-audit", revision: 4, imported: true}
 ---
 # Story: Six small refusals that each cost a session one retry
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:open-vocabulary-audit
 kind: story
 status: implemented
@@ -15,6 +15,10 @@ relations:
 - informed_by: story:adopter-bugs
 - informed_by: story:entity-runtime-mapping
 revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:25:10Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:25:10Z", actor: "human:operator", revision: 7, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:25:11Z", actor: "human:operator", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: Every adopter-facing declaration, checked for whether it is actually open
 

@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T23:34:48Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:adopter-schema-contract-tooling",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "adopter run: protocol schema validate docs/principles.json docs/research/evidence in agentic-principles",
+    "reference": "6 schema(s), 6 instance(s): valid, exit 0"
+  }
+}

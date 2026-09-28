@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-24T14:17:47Z",
+  "actor": "human:timo",
+  "artifact": "epic:planning-on-entity-runtime",
+  "kind": "epic",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "AEP 0.58.0 release: tag gate (task check, 16 steps) success on 9883fe3761cb283adbb65be12b57bd7295f68dcd; 4 platform archives and SHA256SUMS published",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/35993609278"
+  }
+}

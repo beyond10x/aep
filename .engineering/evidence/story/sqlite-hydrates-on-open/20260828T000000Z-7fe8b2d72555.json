@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T00:00:00Z",
+  "actor": "human:operator",
+  "artifact": "story:sqlite-hydrates-on-open",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, full gate, exit 0, 2026-08-28",
+    "reference": "crates/aep-backend-entity/tests/hydration.rs"
+  }
+}

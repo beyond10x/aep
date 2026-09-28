@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-25T05:00:00Z",
+  "actor": "human:timo",
+  "artifact": "epic:planning-on-entity-runtime",
+  "kind": "epic",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "aep 0.59.2 release gate; six stores cut over and re-rendered (design section 14)",
+    "reference": "https://github.com/beyond10x/aep/releases/tag/0.59.2"
+  }
+}

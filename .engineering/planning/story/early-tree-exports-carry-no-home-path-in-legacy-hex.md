@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:early-tree-exports-carry-no-home-path-in-legacy-hex
 kind: story
 status: rejected
@@ -8,6 +8,9 @@ relations:
 - serves: vision:O2
 - decomposes: epic:planning-on-entity-runtime
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-26T00:21:51Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "proposed", to: "rejected", at: "2026-09-26T00:22:05Z", actor: "human:timo", revision: 4, imported: true}
 ---
 ## Outcome
 

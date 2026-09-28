@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:reusable-workflow-nodes
 kind: story
 status: draft

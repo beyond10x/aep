@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T00:00:00Z",
+  "actor": "human:operator",
+  "artifact": "story:markdown-backend-is-the-adapter",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, full gate, exit 0, 2026-08-28",
+    "reference": "crates/protocol-cli/tests/golden_plan.rs"
+  }
+}

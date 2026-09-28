@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:ova-followups
 kind: task
 status: implemented
@@ -15,6 +15,10 @@ relations:
 - depends_on: task:ova-checks-runner
 - depends_on: task:ova-closed-cells
 revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:24:33Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:24:33Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:24:34Z", actor: "human:operator", revision: 6, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Task: every unsettled closure names an artifact that resolves
 

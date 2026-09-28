@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T21:38:41Z",
+  "actor": "human:operator",
+  "artifact": "story:open-vocabulary-audit",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "re-run at HEAD 2026-08-28 after a cited line drifted: bash .engineering/checks/run.sh -> 119 pass, 0 fail, 13 of 13 units, on this machine and on a PATH with no ambient protocol",
+    "reference": ".engineering/checks/run.sh,docs/guide/open-vocabulary.md"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-21T13:55:51Z",
+  "actor": "human:timo",
+  "artifact": "task:evidence-on-hand-v2-journal",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Bot commit 051a19346f5dda4096c292b5b7b738320eb63ad3, merged; two independent passes and two correction rounds; 603 passed, 0 failed at the unit, carried into the merged head 763d195be with gate 16 of 16 exit 0 and 2,103 passed"
+  }
+}

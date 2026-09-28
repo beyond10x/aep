@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-24T16:19:22Z",
+  "actor": "human:timo",
+  "artifact": "story:tree-projections-render-planning-md-2",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "aep-cli 647, aep-backend-markdown 174, aep-planning-migration 56 passed; tree_validate_against 3, tree_projection_format 2; clippy and fmt clean",
+    "reference": "git:beyond10x/aep@6c6285f9a"
+  }
+}

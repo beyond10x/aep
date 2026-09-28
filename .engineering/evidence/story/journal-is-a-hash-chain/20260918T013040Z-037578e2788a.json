@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-18T01:30:40Z",
+  "actor": "human:timo",
+  "artifact": "story:journal-is-a-hash-chain",
+  "kind": "story",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check-source",
+    "reference": "local:migration/2026-09-18-provable-lead@6fdddaa+working-tree"
+  }
+}

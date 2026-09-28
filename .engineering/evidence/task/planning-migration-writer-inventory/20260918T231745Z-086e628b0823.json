@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-18T23:17:45Z",
+  "actor": "human:timo",
+  "artifact": "task:planning-migration-writer-inventory",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Original bounded read-only writer configuration inventory delivered; scope does not establish live exclusion",
+    "reference": "home-path:sha256:5941703e16dfddd07acf7e18206b84b879065289ff4a8ff2315348b64a77f07e"
+  }
+}

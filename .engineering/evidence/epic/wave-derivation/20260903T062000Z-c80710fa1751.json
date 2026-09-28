@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T06:20:00Z",
+  "actor": "human:timo",
+  "artifact": "epic:wave-derivation",
+  "kind": "epic",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "aep artifact waves",
+    "reference": "waves: 18, collisions: 377, unassessed: 124 (113 finished) on this store after 195 scope writes"
+  }
+}

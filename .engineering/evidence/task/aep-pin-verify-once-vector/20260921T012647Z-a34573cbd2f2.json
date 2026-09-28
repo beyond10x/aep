@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T01:26:47Z",
+  "actor": "human:timo",
+  "artifact": "task:aep-pin-verify-once-vector",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "N2 CHANGELOG.md:137 CONFIRMED introduced: the entry quotes the v1 provider's 218 transactions / 227,452 object reads / 2,863 MB as the cost the pin removes, and no post-pin number existed. Now measured on one migrated copy with both binaries interleaved: plan artifact list median 97.7 s old vs 93.5 s new; one list opens events.jsonl 222 times under BOTH binaries, manifest.json 223 under both, 244,864 vs 244,862 blob opens. The pin removes none of it, because capture.rs was never touched by the verify-once work (0 commits f802eb8..db608cd, 0 references to Verified, capture.rs:116 open_strict per call). Escalated rather than reworded: the coordinator's decision is story:file-capture-reuses-the-verified-view lands before any cutover, and the CHANGELOG is rewritten with that unit's measured numbers. Evidence: evidence/pin-cost-ab-20260921.md",
+    "review": "review-result:aep-pin-vector-review-1",
+    "outcome": "escalated"
+  }
+}

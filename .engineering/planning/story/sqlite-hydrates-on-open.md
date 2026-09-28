@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:sqlite-hydrates-on-open
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:events-reach-the-store
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T15:21:59Z", actor: "human:operator", revision: 7, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T15:23:46Z", actor: "human:operator", revision: 9, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A populated database is read back on open, and the foreign-row refusal retires
 

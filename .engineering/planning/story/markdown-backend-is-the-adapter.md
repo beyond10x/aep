@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:markdown-backend-is-the-adapter
 kind: story
 status: implemented
@@ -14,6 +14,10 @@ relations:
 - depends_on: story:markdown-documents-as-a-store
 - depends_on: story:events-reach-the-store
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T15:31:53Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T15:52:04Z", actor: "human:operator", revision: 7, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T16:04:03Z", actor: "human:operator", revision: 9, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `MarkdownBackend` is the adapter over that provider, and the hand-written write path leaves
 

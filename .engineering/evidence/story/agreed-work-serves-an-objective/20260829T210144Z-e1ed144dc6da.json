@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T21:01:44Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:agreed-work-serves-an-objective",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check (isolated worktree)",
+    "reference": "home-path:sha256:f2668d61ab960e62ca7c5a9f25e7c1a7da6ba2fe88997daf4c4452b5a0d6e9a3"
+  }
+}

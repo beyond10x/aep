@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T11:01:24Z",
+  "actor": "human:operator",
+  "artifact": "story:postgres-test-schema-cleanup-race",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "live PostgreSQL gate plus 10 repeated backend runs; 2026-08-31"
+  }
+}

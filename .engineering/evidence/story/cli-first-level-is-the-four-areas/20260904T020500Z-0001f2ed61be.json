@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-04T02:05:00Z",
+  "actor": "human:timo",
+  "artifact": "story:cli-first-level-is-the-four-areas",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "https://github.com/beyond10x/aep/releases/tag/0.52.0"
+  }
+}

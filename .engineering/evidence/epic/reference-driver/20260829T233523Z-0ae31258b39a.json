@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T23:35:23Z",
+  "actor": "agent:claude-session",
+  "artifact": "epic:reference-driver",
+  "kind": "epic",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review",
+    "source": "audit of active artifacts, claude session, 2026-08-30",
+    "reference": "Done When unmet: .engineering/runs/W4-1/1/cursor.json state=establish_verifiers, never complete; no trace_conformance record; second harness is synthetic (crates/aep-driver/tests/shell_echo.rs:673)"
+  }
+}

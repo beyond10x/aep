@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T23:34:48Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:adopter-schema-contract-tooling",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p schema-contract (9 passed) + -p protocol-cli --test schema_contract_cli (3 passed), exit 0",
+    "reference": "crates/protocol-cli/tests/schema_contract_cli.rs"
+  }
+}

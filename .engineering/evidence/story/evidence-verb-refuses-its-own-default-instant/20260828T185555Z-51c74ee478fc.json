@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T18:55:55Z",
+  "actor": "human:operator",
+  "artifact": "story:evidence-verb-refuses-its-own-default-instant",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "18 steps, exit 0; store_selection 6/6"
+  }
+}

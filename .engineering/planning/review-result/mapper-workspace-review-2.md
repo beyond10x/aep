@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: review-result:mapper-workspace-review-2
 kind: review-result
 status: active
@@ -7,6 +7,8 @@ title: 'Independent verification pass 2: the lifted predicate does not know whic
 relations:
 - reviews: story:migration-mapper-reads-the-declared-workspace
 revision: 2
+transitions:
+- {from: "draft", to: "active", at: "2026-09-21T17:13:46Z", actor: "human:timo", revision: 2, imported: true}
 ---
 # Unit 8 — story:migration-mapper-reads-the-declared-workspace — independent verification, pass 2
 

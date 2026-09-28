@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:consumers-use-grouped-spellings
 kind: epic
 status: active
@@ -8,6 +8,9 @@ summary: Migrate 469 authored aep/protocol/ess call sites across agentplugins, m
 relations:
 - derived_from: story:cli-first-level-is-the-four-areas
 revision: 3
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T02:17:58Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T02:17:59Z", actor: "human:timo", revision: 3, imported: true}
 ---
 # Epic: The consumer repositories use the grouped CLI spellings
 

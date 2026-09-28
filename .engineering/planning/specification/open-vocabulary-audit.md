@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: specification:open-vocabulary-audit
 kind: specification
 status: approved

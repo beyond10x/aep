@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:eventlog-store-hydrates-from-one-snapshot
 kind: story
 status: implemented
@@ -16,6 +16,10 @@ scope:
 - confidence: cited
   path: crates/plan/aep-backend-eventlog/src/lib.rs
 revision: 10
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-21T08:34:24Z", actor: "human:timo", revision: 4, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-21T08:36:33Z", actor: "human:timo", revision: 5, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-21T13:55:32Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"test_result":1,"metric_observation":1,"review_outcome":7}}, imported: true}
 ---
 ## Outcome
 

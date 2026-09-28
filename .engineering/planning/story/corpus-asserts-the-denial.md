@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:corpus-asserts-the-denial
 kind: story
 status: implemented
@@ -12,6 +12,10 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T09:43:05Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T09:43:05Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T10:04:06Z", actor: "operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: a control that can still fail
 

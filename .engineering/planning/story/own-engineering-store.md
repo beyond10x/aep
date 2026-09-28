@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:own-engineering-store
 kind: story
 status: implemented
@@ -12,6 +12,8 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 revision: 6
+transitions:
+- {from: "active", to: "implemented", at: "2026-08-28T20:28:37Z", actor: "human:operator", revision: 6, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: The repository's own `.engineering/`, holding this backlog
 

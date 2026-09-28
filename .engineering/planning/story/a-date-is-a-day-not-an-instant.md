@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:a-date-is-a-day-not-an-instant
 kind: story
 status: implemented
@@ -16,6 +16,10 @@ relations:
 - informed_by: story:per-record-horizons
 - serves: vision:O2
 revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T21:18:51Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T21:18:51Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T22:07:37Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A date written at UTC+2 is not a claim about the future
 

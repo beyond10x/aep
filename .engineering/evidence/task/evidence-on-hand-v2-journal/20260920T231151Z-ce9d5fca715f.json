@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-20T23:11:51Z",
+  "actor": "human:timo",
+  "artifact": "task:evidence-on-hand-v2-journal",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 planning.rs:907 history_of CONFIRMED introduced warning: outcomes listed by subject id, not oldest first. Fixed in bot commit 051a19346f5dda4096c292b5b7b738320eb63ad3 by ordering on the store's own position (StorePosition); case the_outcomes_of_a_review_of_two_subjects_keep_their_order_across_a_migration green",
+    "review": "review-result:evidence-on-hand-review-2",
+    "outcome": "fixed"
+  }
+}

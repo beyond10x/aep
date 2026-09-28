@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:one-session-per-checkout
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - serves: vision:O6
 - informed_by: story:wave-as-a-surface
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:10Z", actor: "agent:claude-audit", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:11Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T15:48:11Z", actor: "agent:claude-audit", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: One session per checkout, and a wave in its own worktree
 

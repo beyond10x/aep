@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-18T23:13:03Z",
+  "actor": "human:timo",
+  "artifact": "dependency-blocker:recorded-eventlog-runtime",
+  "kind": "dependency-blocker",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Qualified integrated Eventlog f802eb8 and runtime 8b175736; actual PostgreSQL and supported minima passed",
+    "reference": "home-path:sha256:19d5681cdac168547df40853b4a176cae64fea3a5843403bb7ecffd58201788d"
+  }
+}

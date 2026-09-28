@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:migration-receipt-identity-under-symlinked-selector
 kind: story
 status: draft

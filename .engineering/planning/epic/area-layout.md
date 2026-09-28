@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:area-layout
 kind: epic
 status: implemented
@@ -8,6 +8,10 @@ summary: Group the 22 crates into govern, plan, drive, observe, profile and edge
 relations:
 - serves: vision:O2
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-03T21:32:09Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-03T21:32:09Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-03T22:24:01Z", actor: "human:timo", revision: 4, imported: true}
 ---
 # Epic: Crates grouped by bounded context, profiles and CLI named after AEP
 

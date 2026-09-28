@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-25T23:22:19Z",
+  "actor": "human:timo",
+  "artifact": "story:review-findings-accept-prose-and-json",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:u38-adversary-pass-1",
+    "review": "review-result:u38-adversary-pass-1",
+    "outcome": "fixed"
+  }
+}

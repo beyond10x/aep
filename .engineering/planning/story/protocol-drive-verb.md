@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:protocol-drive-verb
 kind: story
 status: active
@@ -21,6 +21,8 @@ scope:
 - confidence: cited
   path: crates/edge/aep-cli
 revision: 14
+transitions:
+- {from: "proposed", to: "active", at: "2026-08-30T09:42:02Z", actor: "human:operator", revision: 5, imported: true}
 ---
 # Story: `protocol drive` — the run that touches the world
 

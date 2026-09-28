@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-03T22:23:59Z",
+  "actor": "human:timo",
+  "artifact": "story:plugin-names-follow-agentplugins",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check in worktree wt-ffa0ccf1d6af on 228706f: exit 0, 16 steps, 2128 tests; aep trace check identical over 10 recording pairs"
+  }
+}

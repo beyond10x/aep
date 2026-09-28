@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T01:46:48Z",
+  "actor": "human:operator",
+  "artifact": "story:aep-service-wire-and-client",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, full release gate, 2026-08-31",
+    "reference": "b2c3af4; GATE_EXIT=0; aep-client wire, corpus, MSRV and website build"
+  }
+}

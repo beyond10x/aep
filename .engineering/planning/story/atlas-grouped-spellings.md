@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:atlas-grouped-spellings
 kind: story
 status: active
@@ -18,6 +18,9 @@ scope:
 - confidence: cited
   path: atlas:skills
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T02:18:33Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T02:18:33Z", actor: "human:timo", revision: 3, imported: true}
 ---
 # Story: atlas teaches the grouped spellings, and the catalog records the new releases
 

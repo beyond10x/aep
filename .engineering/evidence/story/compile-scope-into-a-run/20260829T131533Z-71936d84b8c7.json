@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:15:33Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-driver-spec --lib --exact: 3 passed, 0 failed, exit 0 (2026-08-29)",
+    "reference": "crates/aep-driver-spec/src/map.rs:1613 and :1654, with crates/protocol-cli/src/drive.rs:5539-5542 and :5750 — acceptance bullet 2 (rule order survives; the scope is an ordered list from document to argv), met"
+  }
+}

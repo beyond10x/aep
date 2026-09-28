@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:waves-derived-from-scope
 kind: story
 status: archived
@@ -14,6 +14,8 @@ scope:
 - confidence: cited
   path: crates/protocol-cli
 revision: 5
+transitions:
+- {from: "draft", to: "archived", at: "2026-09-03T01:12:15Z", actor: "human:timo", revision: 5, imported: true}
 ---
 # Story: Waves are derived from scope, not paired by hand
 

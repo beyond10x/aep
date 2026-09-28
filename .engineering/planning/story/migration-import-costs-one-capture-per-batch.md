@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:migration-import-costs-one-capture-per-batch
 kind: story
 status: implemented
@@ -17,6 +17,10 @@ scope:
 - confidence: cited
   path: crates/plan/aep-planning-migration/src/durable.rs
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-21T19:11:40Z", actor: "human:timo", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-23T23:09:23Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-23T23:11:36Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## Outcome
 

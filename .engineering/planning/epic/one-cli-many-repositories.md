@@ -1,11 +1,15 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:one-cli-many-repositories
 kind: epic
 status: implemented
 title: One CLI across repositories, with dependencies
 summary: 'Every repository is an island: protocol artifact reads one store. A story here blocked by a story in another repository cannot say so, and the limitations page names the gap - no federated artifact graphs across repositories. Needs no provider, no database and no network: every store involved is already markdown in a git checkout.'
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T07:16:21Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T07:16:21Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T07:16:21Z", actor: "operator", revision: 4, imported: true}
 ---
 # Epic: One CLI across repositories, with dependencies
 

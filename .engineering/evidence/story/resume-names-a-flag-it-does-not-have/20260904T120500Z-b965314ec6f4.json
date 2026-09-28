@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-04T12:05:00Z",
+  "actor": "human:timo",
+  "artifact": "story:resume-names-a-flag-it-does-not-have",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check at d2306ff7a605e85998964a923ef926a927839074 — 142 suites, 0 failures, exit 0"
+  }
+}

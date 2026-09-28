@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T01:25:09Z",
+  "actor": "human:timo",
+  "artifact": "task:aep-pin-verify-once-vector",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "N1 xtask/src/main.rs:727 CONFIRMED pre-existing: dep-check enumerates only the entity-* packages, so deps() returns Ok over a lock carrying eventlog-core at two commits — the exact state this wave reached. Not fixed in this wave; folded into story:cross-repository-rev-uniformity-and-pin-order, whose Acceptance now requires the step to fail on a second commit of any git URL in the lock (draft, AEP store, informed_by this review)",
+    "review": "review-result:aep-pin-vector-review-1",
+    "outcome": "no-op"
+  }
+}

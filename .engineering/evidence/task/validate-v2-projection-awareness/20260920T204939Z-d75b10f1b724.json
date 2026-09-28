@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-20T20:49:39Z",
+  "actor": "human:timo",
+  "artifact": "task:validate-v2-projection-awareness",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 1 planning.rs:5694 introduced; corrected in unit-2 commit 11cc13e10 (reviews_without_an_outcome via Opened::history_entries), reviewer's red case adopted and green",
+    "review": "review-result:validate-v2-review-1",
+    "outcome": "fixed"
+  }
+}

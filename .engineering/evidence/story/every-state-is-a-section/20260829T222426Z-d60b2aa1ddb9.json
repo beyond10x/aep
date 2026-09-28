@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T22:24:26Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:every-state-is-a-section",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, 2026-08-30, 191 suites, exit 0 (engineering-protocols 870894d)",
+    "reference": "crates/protocol-cli/tests/cli.rs::workflow_flow_makes_every_state_a_section; crates/protocol-cli/src/flow.rs::every_state_is_a_section_so_a_governor_asked_at_every_section_is_asked_at_every_state; metaharness native-eval.hUbOP5 census: governor consulted at 18 boundaries — root 2/2, receive 3/3, specify 4/4 enter/leave"
+  }
+}

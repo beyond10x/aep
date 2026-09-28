@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:a-tag-can-be-filtered-on
 kind: story
 status: draft

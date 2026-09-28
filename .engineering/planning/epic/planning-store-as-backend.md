@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:planning-store-as-backend
 kind: epic
 status: implemented
@@ -12,6 +12,10 @@ tags:
 relations:
 - decomposes: initiative:the-repo-governs-itself
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T18:46:35Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T18:46:35Z", actor: "human:operator", revision: 4, imported: true}
 ---
 # Epic: The planning store answers as a backend
 

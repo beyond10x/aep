@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:ova-mutation-proof
 kind: task
 status: implemented
@@ -18,6 +18,10 @@ relations:
 - depends_on: task:ova-followups
 - depends_on: task:ova-citations
 revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:24:35Z", actor: "human:operator", revision: 7, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:24:35Z", actor: "human:operator", revision: 8, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:24:36Z", actor: "human:operator", revision: 9, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Task: nine deliberate mutations, each turning the suite red
 

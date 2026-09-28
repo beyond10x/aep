@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:writer-control-socket-path-budget
 kind: story
 status: draft

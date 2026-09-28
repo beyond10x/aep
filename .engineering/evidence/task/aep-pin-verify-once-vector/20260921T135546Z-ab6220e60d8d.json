@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-21T13:55:46Z",
+  "actor": "human:timo",
+  "artifact": "task:aep-pin-verify-once-vector",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Pinned twice as the chain moved: 8970d5bae then 1a5ceda4de5d045cde7935e89756ca69d4aaa9c0, the final vector being Eventlog 76aad5e and ER 8569da2. Gate 16 of 16 exit 0 with 2,083 passed at the pin, and 2,103 at the merged head. One independent pass, three findings, all routed. Evidence: evidence/gate-aep-pin-final/"
+  }
+}

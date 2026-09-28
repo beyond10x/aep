@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T19:26:17Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:operator-resume-ux",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "home-path:sha256:faf3970fec90b1854f2944327273076d0fc31f392713393f84969318ef58be70"
+  }
+}

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:wave-skill-defects-found-by-running-it
 kind: story
 status: draft

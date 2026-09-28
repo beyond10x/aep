@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:review-value-table
 kind: story
 status: implemented
@@ -15,6 +15,10 @@ relations:
 - depends_on: story:structured-findings-on-review-result
 - serves: vision:O6
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-02T23:28:08Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-02T23:28:09Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-02T23:28:10Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: One table says, per critic, what its findings changed and what its verdicts cost
 

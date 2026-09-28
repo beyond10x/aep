@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:wave-derivation
 kind: epic
 status: implemented
@@ -14,6 +14,10 @@ relations:
 - informed_by: story:a-story-records-where-it-lands
 - informed_by: story:wave-as-a-surface
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-02T23:28:16Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-02T23:28:17Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-03T01:12:16Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"verification":1}}, imported: true}
 ---
 # Epic: A wave is derived from the store, not read from prose
 

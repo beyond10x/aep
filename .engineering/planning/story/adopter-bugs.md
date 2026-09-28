@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:adopter-bugs
 kind: story
 status: implemented
@@ -12,6 +12,10 @@ tags:
 relations:
 - decomposes: epic:adopter-feedback-round-1
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:10:42Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:10:42Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:10:49Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: The unambiguous ones — the fallback lifecycle, the kind ladder, the project merge
 

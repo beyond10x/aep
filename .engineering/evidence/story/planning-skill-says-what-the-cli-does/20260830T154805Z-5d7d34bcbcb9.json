@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T15:48:05Z",
+  "actor": "agent:claude-audit",
+  "artifact": "story:planning-skill-says-what-the-cli-does",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check 2026-08-30",
+    "reference": "wave/session-audit-2026-08-30 at 85c3e91 plus this branch's uncommitted tree; task check 22 steps, 197 suites, 2986 tests, exit 0"
+  }
+}

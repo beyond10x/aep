@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:gate-runs-in-a-worktree
 kind: story
 status: implemented
@@ -11,6 +11,10 @@ relations:
 - decomposes: epic:declared-configuration-invariants
 - serves: vision:O6
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:13Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:13Z", actor: "agent:claude-audit", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T15:48:14Z", actor: "agent:claude-audit", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: Every gate step runs in a fresh worktree, and a wrapper's exit is never read as the gate's
 

@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-03T23:10:20Z",
+  "actor": "human:timo",
+  "artifact": "story:plugin-names-follow-agentplugins",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 9: preflight_child_path returns the first refusal (EVAL-RUN-017 masks 018); finding 7 (scratch names) no change needed; new: trace evidence provenance.command is the literal 'protocol' whatever binary ran (trace.rs:403)",
+    "review": "review-result:adversary-renames-round-2",
+    "outcome": "escalated"
+  }
+}
