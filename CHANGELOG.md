@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.64.0] — 2026-09-28
+
 ### Removed
 
 - The `protocol` alias binary. The CLI has one name: use `aep`. Release archives, `task install`
@@ -20,7 +22,7 @@ belongs in the commit message or in `docs/design/`.
 ### Fixed
 
 - A stamped Git-pinned protocol snapshot is trusted without opening a directory. The stamp
-  (now `aep.snapshot-verified/2`) records every directory's length, times, inode, device and mode
+  also records every directory's length, times, inode, device and mode
   beside every file's, and the trusted path stats each recorded entry instead of listing the
   tree: adding, removing or renaming an entry moves its directory's `mtime` and `ctime`. A
   format-1 stamp is ignored and replaced after one full verification; any mismatch still

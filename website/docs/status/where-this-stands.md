@@ -7,7 +7,7 @@ description: The generated release and gate stamp, with links to authoritative p
 # Where this stands
 
 {/* generated:currency:begin — do not edit; run `cargo xtask status` */}
-Current as of the tag `0.63.1` (2026-09-28).
+Current as of the tag `0.64.0` (2026-09-28).
 
 The repository's gate, `task check`, runs **16 steps** — `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `postgres-check`, `doc-check`, `schema-check`, `msrv` and `website`.
 {/* generated:currency:end */}
