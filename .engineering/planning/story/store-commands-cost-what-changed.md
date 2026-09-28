@@ -4,7 +4,7 @@ id: story:store-commands-cost-what-changed
 kind: story
 status: draft
 title: A planning-store command costs what changed since the last verified head, not the whole store
-revision: 1
+revision: 2
 ---
 ## Problem
 
@@ -55,3 +55,13 @@ artifacts it touches.
   the verified bytes, not trusted by position).
 - A write that changes one artifact rewrites one projected markdown file plus any that render its
   relations.
+
+## Outcome, 2026-09-28
+
+Delivered by another route: 0.62.0 replaced the event-log store with the Git-native
+`aep.project/5` store (docs/design/git-native-planning-store-v0.1.md) instead of making the
+event-log store incremental. Measured with a release build on this repository after migration:
+`list` 0.02 s, `validate` 0.05 s, `new task` 0.05 s CPU, peak RSS 35 MB. On a migrated copy of a
+downstream 210-artifact store: `list` 0.43 s, `validate` 0.44 s, write 0.56 s wall, 57 MB. The
+stamp work in 0.63.1 and 0.64.0 removed most of the remaining protocol-snapshot cost. This story is
+left in draft for the operator to archive.
