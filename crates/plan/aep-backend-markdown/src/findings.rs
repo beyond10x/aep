@@ -604,6 +604,19 @@ pub fn opens_a_block(body: &str) -> bool {
 /// carrying a key this format does not have, or a value outside the vocabulary — positioned at one
 /// body line, which the error quotes.
 pub fn parse(body: &str) -> Result<Vec<Finding>, FindingsError> {
+    recorded(body).map(Option::unwrap_or_default)
+}
+
+/// [`parse`], keeping apart the two answers it folds into one empty list: `None` for a body with
+/// no block, `Some` of an empty list for a block of `[]`.
+///
+/// They are different facts. `[]` is a review saying it found nothing, which is what an `approve`
+/// writes; no block is a review that never said, which `validate` reports.
+///
+/// # Errors
+///
+/// Whatever [`parse`] refuses.
+pub fn recorded(body: &str) -> Result<Option<Vec<Finding>>, FindingsError> {
     let Some(block) = block(body) else {
         if let Some((opened, _)) = findings_fence(body) {
             return Err(Defect::at(
@@ -612,9 +625,11 @@ pub fn parse(body: &str) -> Result<Vec<Finding>, FindingsError> {
             )
             .within(FindingsInput::Body, body));
         }
-        return Ok(Vec::new());
+        return Ok(None);
     };
-    parse_block(&block).map_err(|defect| defect.within(FindingsInput::Body, body))
+    parse_block(&block)
+        .map(Some)
+        .map_err(|defect| defect.within(FindingsInput::Body, body))
 }
 
 /// Findings given as a JSON array on their own, read against the entry schema a block is read
@@ -1388,6 +1403,22 @@ mod tests {
         assert_eq!(
             parse("# R\n\n````\n```findings\n- nonsense: [\n```\n````\n").expect("prose only"),
             Vec::new()
+        );
+    }
+
+    #[test]
+    fn an_empty_block_is_recorded_as_no_findings_and_a_missing_block_as_none() {
+        assert_eq!(
+            super::recorded("approve\n\n```findings\n[]\n```\n").expect("an empty block"),
+            Some(Vec::new())
+        );
+        assert_eq!(
+            super::recorded("approve\n\nNothing to report.\n").expect("no block"),
+            None
+        );
+        assert_eq!(
+            super::recorded(&super::render_block(&[])).expect("a rendered empty block"),
+            Some(Vec::new())
         );
     }
 

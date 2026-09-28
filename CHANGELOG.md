@@ -61,6 +61,9 @@ belongs in the commit message or in `docs/design/`.
   one born in the layout is still held to start there.
 - `validate --outcome-within` dates a review in an `aep.project/5` store from the commit that added
   it, or now when it is not committed; it had no creation record to date from and reported nothing.
+- `aep plan artifact validate` no longer reports a `review-result` whose `findings` block is `[]`,
+  the block an `approve` writes, as stating its findings as prose only; that warning is kept for a
+  review with no block at all, and its text no longer carries a run of spaces (#60).
 
 
 ## [0.64.0] — 2026-09-28
