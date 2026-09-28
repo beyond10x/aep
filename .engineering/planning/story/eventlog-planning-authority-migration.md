@@ -41,8 +41,6 @@ scope:
 - confidence: cited
   path: crates/plan/aep-backend-entity/
 - confidence: cited
-  path: crates/plan/aep-backend-eventlog/
-- confidence: cited
   path: crates/plan/aep-backend-hybrid/
 - confidence: cited
   path: crates/plan/aep-backend-markdown/
@@ -56,8 +54,6 @@ scope:
   path: crates/plan/aep-contract/src/lib.rs
 - confidence: inferred
   path: crates/plan/aep-contract/src/migration/
-- confidence: cited
-  path: crates/plan/aep-planning-migration/
 - confidence: cited
   path: docs/design/eventlog-planning-authority-v0.1.md
 - confidence: inferred
@@ -74,7 +70,7 @@ scope:
   path: website/docs/
 - confidence: cited
   path: xtask/
-revision: 61
+revision: 62
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-18T23:14:36Z", actor: "human:timo", revision: 51, decided_on: {"recorded":{"review_outcome":6}}, imported: true}
 - {from: "proposed", to: "active", at: "2026-09-18T23:14:37Z", actor: "human:timo", revision: 52, decided_on: {"recorded":{"review_outcome":6}}, imported: true}
