@@ -15,9 +15,10 @@
 //! | 3 | this scan | a guard on future edits |
 //!
 //! Mechanism 1 is checked here too, because it is one line to check and it is the mechanism the
-//! other two lean on. Mechanism 3 is the house pattern — invariants 2, 7, 8 and 9 are all held by
-//! source scans — and it exists because `set_horizon(&mut self, ..)` is a reasonable-looking helper
-//! that a later edit will add without an argument unless something refuses it.
+//! other two lean on. Mechanism 3 is the house pattern — *Parse, then validate*, *Decisions are
+//! deterministic* and the rule against manufacturing evidence are all held by source scans — and it
+//! exists because `set_horizon(&mut self, ..)` is a reasonable-looking helper that a later edit
+//! will add without an argument unless something refuses it.
 //!
 //! # The scan checks itself first
 //!

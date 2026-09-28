@@ -861,10 +861,10 @@ fn the_numeric_tail_rule_is_expressible_as_a_pattern() {
 ///
 /// An editor applies the pattern from `schemas/generated/`; the loader applies the constructor.
 /// Every string the two disagree about is a document one of them calls valid and the other
-/// refuses, which is invariant 1 inverted — and which is what `story:driver-spec-crate` found for
-/// `PinnedWorkflowRef`, what `story:workflow-id-pattern-numeric-tail` found upstream of it for
-/// `WorkflowId`, and what neither would have found for `ServiceId` or `ObligationId` because
-/// nobody was looking there.
+/// refuses, which is invariant *Rust types are the source of truth* inverted — and which is what
+/// `story:driver-spec-crate` found for `PinnedWorkflowRef`, what
+/// `story:workflow-id-pattern-numeric-tail` found upstream of it for `WorkflowId`, and what neither
+/// would have found for `ServiceId` or `ObligationId` because nobody was looking there.
 ///
 /// **What this case cannot say.** It reads the `pattern` and nothing else, and a pattern is not
 /// the whole published rule. `validate` refuses an identifier longer than 200 characters, no

@@ -1,9 +1,10 @@
 //! Review finding **F3**, as a test: the tool set is the *decision*, not one of its three inputs.
 //!
 //! The mutation this file exists to kill is one line long. The first draft of D3(a) derived an
-//! `llm` step's tools from `CapabilityPolicy::allow` and called that invariant 6's ordering. It is
-//! not: the ordering lives in `CapabilityPolicy::decide`, the three sets are independent — `grant`
-//! extends all three — and membership is by `covers` rather than equality.
+//! `llm` step's tools from `CapabilityPolicy::allow` and called that the ordering of invariant
+//! *Capability decisions default to deny*. It is not: the ordering lives in
+//! `CapabilityPolicy::decide`, the three sets are independent — `grant` extends all three — and
+//! membership is by `covers` rather than equality.
 
 use aep_domain::capability::{
     Audience, Capability, CapabilityDecision, CapabilityPolicy, Environment,
@@ -53,7 +54,7 @@ fn a_wide_allow_entry_does_not_hand_out_a_narrowly_gated_deploy() {
     assert_eq!(
         policy.decide(&Capability::Deploy(Environment::Production)),
         CapabilityDecision::RequiresApproval,
-        "`decide` is the one function that owns invariant 6's ordering"
+        "`decide` is the one function that owns the deny-first ordering"
     );
     assert!(
         policy.allow.contains(&Capability::Deploy(Environment::Any)),

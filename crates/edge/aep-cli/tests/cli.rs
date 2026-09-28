@@ -768,8 +768,9 @@ fn mixed_evidence_document(name: &str) -> PathBuf {
 #[test]
 fn one_future_record_refuses_itself_by_position_and_the_document_is_still_evaluated() {
     // The adopter's report: one record two hours ahead discarded the other 214, and the run
-    // produced no evaluation at all. The refusal stands — it is invariant 7 and nothing here
-    // downgrades it — but it is now about that record, and the rest of the file is submitted.
+    // produced no evaluation at all. The refusal stands — it is the rule against manufacturing
+    // evidence and nothing here downgrades it — but it is now about that record, and the rest of
+    // the file is submitted.
     let file = mixed_evidence_document("aep-cli-evaluate-future-record");
     let output = aep(&[
         "govern",
@@ -1063,7 +1064,7 @@ fn a_repository_with_no_workspace_file_is_not_an_error() {
 /// A workspace file that exists and does not parse is refused, naming the file and the reason.
 ///
 /// `story:migration-mapper-reads-the-declared-workspace`, amended acceptance, item 3, on the read
-/// side. **Unknown differs from false** (`AGENTS.md` invariant 5): read as *this store declares no
+/// side. **Unknown differs from false** (an `AGENTS.md` invariant): read as *this store declares no
 /// members*, a mistyped declaration turned every crossing into a dangling edge and `validate`
 /// named each innocent artifact document instead of the one file that is wrong. The migration and
 /// the read commands share one reader, so they refuse the same way.

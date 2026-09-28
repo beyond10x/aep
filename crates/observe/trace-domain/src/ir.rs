@@ -10,11 +10,11 @@
 //!
 //! # Unknown is not dropped, and it is not false
 //!
-//! Invariant 5, in the shape a transcript forces. An event the adapter does not recognise is
-//! retained as [`EventKind::Opaque`] — its index, its `type`/`subtype` if it had one, and the
-//! digest of its raw bytes — and is never discarded. Dropping it would produce the failure mode
-//! this whole family exists to prevent: a checker reporting *"the tool was never called"* when
-//! what happened is that it stopped being able to see tool calls.
+//! Invariant *Unknown differs from false*, in the shape a transcript forces. An event the adapter
+//! does not recognise is retained as [`EventKind::Opaque`] — its index, its `type`/`subtype` if it
+//! had one, and the digest of its raw bytes — and is never discarded. Dropping it would produce the
+//! failure mode this whole family exists to prevent: a checker reporting *"the tool was never
+//! called"* when what happened is that it stopped being able to see tool calls.
 //!
 //! Every field a harness might not record is an [`Option`], down to the leaves, for the same
 //! reason: absence has to stay distinguishable from zero all the way to the verdict, because
@@ -31,10 +31,10 @@
 //!
 //! # No clock, anywhere
 //!
-//! Invariant 9. Every duration here is *derived from timestamps the harness recorded*, never
-//! measured: [`TraceIr::steps`] subtracts two recorded times and yields [`None`] where either is
-//! absent. The same transcript therefore yields the same numbers on any machine at any load,
-//! which is what lets a report be committed, diffed and used as evidence.
+//! Invariant *Decisions are deterministic*. Every duration here is *derived from timestamps the
+//! harness recorded*, never measured: [`TraceIr::steps`] subtracts two recorded times and yields
+//! [`None`] where either is absent. The same transcript therefore yields the same numbers on any
+//! machine at any load, which is what lets a report be committed, diffed and used as evidence.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1199,8 +1199,8 @@ impl TraceIr {
 ///
 /// Deliberately not "the sum of the ones that are there". A total that silently omitted an
 /// unmeasurable step would be a smaller number presented as the same quantity, which is the
-/// failure mode invariant 5 exists to prevent — the honest answer is that this transcript cannot
-/// state the total.
+/// failure mode invariant *Unknown differs from false* exists to prevent — the honest answer is
+/// that this transcript cannot state the total.
 fn total_of(values: impl Iterator<Item = Option<i64>>) -> Option<i64> {
     let mut total = 0i64;
     let mut any = false;

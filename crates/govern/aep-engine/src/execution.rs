@@ -412,7 +412,8 @@ impl Execution {
     ///
     /// The engine calls this at every entry point that holds `&mut` — initialising, restoring,
     /// submitting evidence and transitioning — so that a horizon is decided against a clock the
-    /// engine read, never against a wall clock the domain reached for (invariant 8).
+    /// engine read, never against a wall clock the domain reached for (invariant *Decisions are
+    /// deterministic*).
     ///
     /// # One instant, two readers
     ///

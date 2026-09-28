@@ -20,12 +20,12 @@
 //!
 //! # A record, not a document
 //!
-//! Invariant 2 is about authored documents: a `Raw*` deserialises and a validated type does not.
-//! Nobody authors a cursor — the driver writes it and the driver reads it back — so it round-trips
-//! through serde in both directions and has no schema. The workflow pin is kept here as the
-//! **string** `<id>/<major>` for the same reason: what a resume needs is an equality check against
-//! what it recorded, and a validated reference that could deserialise would weaken a rule this
-//! crate holds elsewhere for no gain.
+//! AGENTS.md invariant *Parse, then validate* is about authored documents: a `Raw*` deserialises
+//! and a validated type does not. Nobody authors a cursor — the driver writes it and the driver
+//! reads it back — so it round-trips through serde in both directions and has no schema. The
+//! workflow pin is kept here as the **string** `<id>/<major>` for the same reason: what a resume
+//! needs is an equality check against what it recorded, and a validated reference that could
+//! deserialise would weaken a rule this crate holds elsewhere for no gain.
 
 use std::collections::BTreeMap;
 use std::fmt;

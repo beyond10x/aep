@@ -188,7 +188,7 @@ fn a_second_process_sees_everything_the_first_wrote_with_the_same_identities() {
 fn a_second_process_mints_identities_past_the_first_ones() {
     // The defect the foreign-row refusal guarded against, closed rather than refused: run 2 used to
     // mint `01MEM…0001` again and overwrite run 1's entity. Now it holds run 1's identities and
-    // mints past them — without parsing them, which invariant 13 forbids.
+    // mints past them — without parsing them, which the rule that identity is opaque forbids.
     let path = fresh_file("hydrate-mint");
     let first = open(&path);
     let (one, two) = a_small_plan(&first);

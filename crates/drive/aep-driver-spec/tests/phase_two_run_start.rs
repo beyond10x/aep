@@ -97,9 +97,9 @@ fn the_kind_compared_is_the_one_the_step_declares_and_the_step_refused_is_the_on
 
 /// Every undeclared kind is reported, not the first one.
 ///
-/// Invariant 3, the same rule `four_broken_steps_report_four_errors` asserts for load: a validator
-/// that returns at the first problem passes a `contains` test and fails a counted one. Two states,
-/// two steps each, four kinds the protocol does not declare.
+/// Invariant *Validation accumulates*, the same rule `four_broken_steps_report_four_errors` asserts
+/// for load: a validator that returns at the first problem passes a `contains` test and fails a
+/// counted one. Two states, two steps each, four kinds the protocol does not declare.
 #[test]
 fn four_steps_naming_kinds_the_protocol_does_not_declare_report_four_refusals() {
     let states = r#"{"implement":{"steps":[

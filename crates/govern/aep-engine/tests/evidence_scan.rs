@@ -1,4 +1,4 @@
-//! Invariant 7, enforced rather than stated: the engine never manufactures evidence.
+//! The rule, enforced rather than stated: the engine never manufactures evidence.
 //!
 //! The engine's whole authority rests on a division of labour: verifiers and humans *produce*
 //! evidence, the engine *evaluates* it. An engine that can conjure a passing `TestResult` on its
@@ -66,7 +66,7 @@ fn payload_types() -> Vec<(String, String)> {
             panic!(
                 "`Evidence` has grown a variant this extractor cannot read: {trimmed:?}. Every \
                  variant so far is `Name(PayloadType),`; teach the extractor the new shape so \
-                 invariant 7 keeps covering it"
+                 the rule keeps covering it"
             );
         };
         let payload = rest
@@ -273,7 +273,7 @@ fn the_engine_constructs_no_evidence_payload_outside_its_test_modules() {
     );
     assert!(
         violations.is_empty(),
-        "invariant 7: the engine evaluates evidence, it does not manufacture it. Shipped engine \
+        "the engine evaluates evidence, it does not manufacture it. Shipped engine \
          code constructs an evidence payload here:\n{}\nIf the engine genuinely needs to *carry* \
          a new payload, it still arrives through `EvidenceSubmission`; only the envelope is the \
          engine's to build",
@@ -340,7 +340,7 @@ fn the_scan_reads_constructions_and_not_patterns_or_prose() {
         "a fully qualified pattern is still a pattern"
     );
 
-    let prose = "    // Never construct a TestResult { .. } here: see invariant 7.";
+    let prose = "    // Never construct a TestResult { .. } here: see the evidence rule.";
     assert!(
         constructions(prose, &payloads).is_empty(),
         "prose about the rule is not a breach of it"

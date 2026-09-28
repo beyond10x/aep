@@ -1,4 +1,5 @@
-//! Invariant 2, enforced rather than stated: a validated type does not implement `Deserialize`.
+//! AGENTS.md invariant *Parse, then validate*, enforced rather than stated: a validated type does
+//! not implement `Deserialize`.
 //!
 //! Every other guarantee in this repository sits on top of this one. A document deserialises into
 //! a `Raw*` type and becomes a domain type through `TryFrom`, so possession of a `Protocol` is
@@ -175,7 +176,7 @@ fn every_raw_document_type_is_checked_against_its_validated_counterpart() {
             assert!(
                 DOCUMENT_TYPES.iter().any(|(raw, _)| *raw == name),
                 "{file}: `{name}` is a document type nothing pairs with a validated counterpart, \
-                 so invariant 2 is unchecked for whatever it validates into. Add the pair to \
+                 so invariant *Parse, then validate* is unchecked for whatever it validates into. Add the pair to \
                  `DOCUMENT_TYPES`"
             );
             found.push(name);

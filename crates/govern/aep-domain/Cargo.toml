@@ -17,9 +17,9 @@ serde_json.workspace = true
 # counterexample. `default-features = false, features = ["std"]` drops `fork` (process isolation for
 # tests that may abort — nothing here aborts) and `timeout`, so `rusty-fork` and its transitive tree
 # stay out of the build; safe because these tests are pure functions over three-valued logic. The
-# gate runs with a fixed seed (invariant 9's spirit: a gate must not be flaky); see
-# `tests/truth_laws.rs` for the seed and how to widen locally. Same version and spelling as
-# `ess-compiler`, deliberately — one generator behaviour across the workspace.
+# gate runs with a fixed seed (the spirit of invariant *Decisions are deterministic*: a gate must
+# not be flaky); see `tests/truth_laws.rs` for the seed and how to widen locally. Same version and
+# spelling as `ess-compiler`, deliberately — one generator behaviour across the workspace.
 proptest = { version = "1.11.0", default-features = false, features = ["std"] }
 schemars.workspace = true
 thiserror.workspace = true

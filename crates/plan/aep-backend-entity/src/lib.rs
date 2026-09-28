@@ -52,7 +52,7 @@
 //! to open — naming the row — rather than answering about part of it, because a backend that
 //! hydrated nine of ten entities and said nothing is the failure nobody finds.
 //!
-//! Identities are the store's: this adapter derives nothing from them (invariant 13), and
+//! Identities are the store's: this adapter derives nothing from them (identity is opaque), and
 //! `MemoryBackend` mints new ones past whatever is already held rather than parsing the old ones.
 //!
 //! # Events cross the seam
@@ -709,7 +709,7 @@ impl<S, P> EntityBackend<S, P> {
     ///
     /// For a test that wants to see what landed without opening a second handle — which a
     /// `MemoryStore` cannot offer. Read-only by signature; every write goes through
-    /// [`CommandService::execute`], and that is invariant 14.
+    /// [`CommandService::execute`], and that is invariant *Planning status is decided as data*.
     ///
     /// # Panics
     ///
@@ -1330,7 +1330,7 @@ impl<S: PlanningStore, P: Projection<S> + Clone> CommandService for EntityBacken
             placements = projection.placements(&durable, &candidate, result)?;
         }
         // Whatever the contract decided, the records it wrote about deciding reach the store: a
-        // refusal is recorded (invariant 15), so its record is too.
+        // refusal is recorded, so its record is too.
         let records = {
             let durable = self.durable.lock().expect("the provider is not poisoned");
             projection.records(&durable, &candidate, &before, &provenance.key)?

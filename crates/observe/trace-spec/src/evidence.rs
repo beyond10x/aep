@@ -8,7 +8,7 @@
 //!
 //! # Why the conversion lives here and not in the engine
 //!
-//! Invariant 7: **the engine never manufactures evidence.** It evaluates what verifiers and humans
+//! The rule: **the engine never manufactures evidence.** It evaluates what verifiers and humans
 //! produced. So the conversion sits in the crate that *ran the check*, on the producing side of
 //! the boundary, and it takes no argument naming who produced it. [`TraceEvidence::PRODUCER`] is a
 //! constant: there is no call site at which a caller can name itself the verifier, which is what

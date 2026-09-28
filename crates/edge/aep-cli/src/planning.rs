@@ -2142,8 +2142,9 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
 
     // **Through a command, not through the store.** This is what D-P1 was: a second write path is a
     // second place for idempotency, revision checks and the audit record to be forgotten, and
-    // invariant 14 gives state change exactly one door. The document above is what the command has
-    // to produce, not what gets written — `MarkdownBackend` writes it, from the entity.
+    // invariant *Planning status is decided as data* gives state change exactly one door. The
+    // document above is what the command has to produce, not what gets written — `MarkdownBackend`
+    // writes it, from the entity.
     let opened = open(&args.store.location, true)?;
     let path = write_through_a_command(&opened, &document)?;
     let relative = relative_path_for(&id);
@@ -2950,7 +2951,7 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
         .with_context(|| not_here)?;
 
     // Refused before anything is issued, and refused with the answer to the question it raises.
-    // Invariant 7: a refusal changes nothing, so this comes before the command and before any
+    // Invariant *Refusals change nothing*, so this comes before the command and before any
     // write, and the document is left exactly as it was found.
     if !stored.document.remove_relation(relation, target.id()) {
         let declared = &stored.document.frontmatter.relations;
@@ -3280,8 +3281,8 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
     let relative = stored.relative_path.clone();
     let document = stored.document.clone();
     // Through a command, carrying the prose as data — which is the whole reason `BODY_KEY` exists.
-    // A verb that wrote the body directly is the second write path invariant 14 forbids, and a body
-    // is the one thing a planning document is *for*.
+    // A verb that wrote the body directly is the second write path invariant *Planning status is
+    // decided as data* forbids, and a body is the one thing a planning document is *for*.
     let _ = relative;
     let body_change = vec![(
         aep_backend_markdown::backend::BODY_KEY.to_owned(),
@@ -6222,7 +6223,7 @@ fn review_outcome_of<'a>(
 /// review*. [`Opened::history_of`] is where that history is: the transitions and evidence files of
 /// a Git-native plan; outcomes are written on the
 /// artifacts the review `reviews`. A SQLite or Postgres plan answers no outcomes here rather than a wrong number, which
-/// is invariant 5 rather than a gap nobody wrote down.
+/// is invariant *Unknown differs from false* rather than a gap nobody wrote down.
 fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
     use aep_backend_markdown::journal::Change;
 

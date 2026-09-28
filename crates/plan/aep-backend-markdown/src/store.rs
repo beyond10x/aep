@@ -508,8 +508,8 @@ mod tests {
 
     #[test]
     fn every_broken_file_is_reported_with_its_path() {
-        // Invariant 3's shape for a directory: an exact count, because "some failures" would pass
-        // with a loader that stopped at the first one.
+        // Invariant *Validation accumulates*, in its shape for a directory: an exact count, because
+        // "some failures" would pass with a loader that stopped at the first one.
         let store = scratch("broken");
         write(&store, "story/good.md", &story("story:good", ""));
         write(&store, "story/no-fence.md", "# Just markdown\n");

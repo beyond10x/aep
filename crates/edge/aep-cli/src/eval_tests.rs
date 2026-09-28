@@ -81,8 +81,9 @@ observed_at: 2026-08-23
     }
 #[test]
     fn a_missing_field_is_refused_by_its_own_name_and_every_other_refusal_is_reported_beside_it() {
-        // Invariant 3: a document with four broken fields reports four refusals. A reader who has
-        // to run the verb four times to find four typos stops running it.
+        // Invariant *Validation accumulates*: a document with four broken fields reports four
+        // refusals. A reader who has to run the verb four times to find four typos stops running
+        // it.
         //
         // `model` stays in this set deliberately after it became a `Written`: an *absent* model is
         // still refused, and keeping it here proves `written_or_null` accumulates beside `required`

@@ -59,8 +59,8 @@ requires:
   # with a suite it happened to name `contract`, and `drivers/development/checks.yaml` fills it from
   # `aep govern validate`. `contracts.breaking_changes` has exactly one producer, so this is the first
   # point in the workflow where a contract *runner* must have spoken. Nothing observing it leaves the
-  # fact Unknown, and Unknown does not permit a transition (invariant 5): a run with no contract
-  # record does not enter review by saying nothing.
+  # fact Unknown, and Unknown does not permit a transition (invariant *Unknown differs from false*):
+  # a run with no contract record does not enter review by saying nothing.
   before_review:
     predicates:
       - contracts.breaking_changes == 0

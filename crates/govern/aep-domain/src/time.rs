@@ -86,7 +86,8 @@ impl fmt::Display for Timestamp {
 /// Converting one to a [`Timestamp`] needs civil-calendar arithmetic and nothing else: no clock, no
 /// zone database, no dependency. The conversion is Howard Hinnant's `days_from_civil`, which is
 /// exact for every proleptic Gregorian date and is pure integer arithmetic, so this type keeps the
-/// crate's clock-free property (invariant 8) while still letting a document say a date.
+/// crate's clock-free property (invariant *Decisions are deterministic*) while still letting a
+/// document say a date.
 ///
 /// Midnight UTC is the instant a date maps to. That choice is stated rather than assumed because it
 /// decides a boundary: an observation on `2026-08-25` with a seven-day horizon, read on
@@ -510,9 +511,9 @@ pub enum Granularity {
 ///
 /// UTC+14 — the Line Islands, and Samoa on summer time — is the most-ahead zone in use, so a
 /// calendar day starts there fourteen hours before it starts at UTC. It is a constant rather than
-/// a lookup on purpose: this crate carries no zone database and is clock-free (invariant 8), and
-/// the question being answered is not *which zone was the writer in* but *has this day begun for
-/// anybody at all*.
+/// a lookup on purpose: this crate carries no zone database and is clock-free (invariant *Decisions
+/// are deterministic*), and the question being answered is not *which zone was the writer in* but
+/// *has this day begun for anybody at all*.
 const MAX_UTC_OFFSET_MILLIS: u64 = 14 * 3_600_000;
 
 /// When somebody looked.
@@ -621,10 +622,10 @@ impl ObservedAt {
     ///   writer there is; above it, somebody on earth is having that day right now and has written
     ///   the correct date.
     ///
-    /// What this does **not** do is decide when the observation happened (invariant 7). It widens
-    /// one comparison by the width of the timezone map and refuses everything past it; nothing is
-    /// clamped, defaulted or rewritten, and a record dated tomorrow everywhere is refused exactly
-    /// as it was.
+    /// What this does **not** do is decide when the observation happened (the engine's rule against
+    /// manufacturing evidence). It widens one comparison by the width of the timezone map and
+    /// refuses everything past it; nothing is clamped, defaulted or rewritten, and a record dated
+    /// tomorrow everywhere is refused exactly as it was.
     pub const fn is_after(self, now: Timestamp) -> bool {
         let begins = match self.written_as {
             Granularity::Instant => self.at.epoch_millis(),

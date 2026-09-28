@@ -1,6 +1,6 @@
 //! What a check produces: three verdicts, each carrying what that verdict owes.
 //!
-//! # The shape that makes invariant 5 structural
+//! # The shape that makes invariant *Unknown differs from false* structural
 //!
 //! [`Outcome`] has three variants, and the type refuses a verdict that says nothing:
 //!
@@ -11,9 +11,9 @@
 //! | [`Undecidable`](Outcome::Undecidable) | the reason the transcript cannot decide | write `unk` and mean "false" |
 //!
 //! There is no `Outcome::from_bool`, no `Option<Citation>` beside a separate verdict field, and
-//! no way to build a `Gap` without citing something. That is the enforcement invariant 5 asks
-//! for, expressed the way `infra-spec`'s `Outcome` expresses it — by having no other shape
-//! available.
+//! no way to build a `Gap` without citing something. That is the enforcement invariant *Unknown
+//! differs from false* asks for, expressed the way `infra-spec`'s `Outcome` expresses it — by
+//! having no other shape available.
 //!
 //! # The report is what a later evidence record is minted from
 //!

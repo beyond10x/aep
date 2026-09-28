@@ -74,8 +74,9 @@ pub fn fixture_principles() -> Vec<Principle> {
 
 /// One principle from its document text, validated.
 ///
-/// Written as a document and validated rather than assembled as a struct literal, for invariant 2's
-/// reason: a fixture that dodged validation could describe a principle the loader would refuse.
+/// Written as a document and validated rather than assembled as a struct literal, for invariant
+/// *Parse, then validate*'s reason: a fixture that dodged validation could describe a principle the
+/// loader would refuse.
 pub fn principle_from(document: &str) -> Principle {
     let raw: RawPrinciple =
         serde_yaml::from_str(document).unwrap_or_else(|error| panic!("parsing: {error}"));
@@ -97,9 +98,9 @@ fn read_sorted(directory: &Path) -> Vec<PathBuf> {
 
 /// A synthetic workflow over `states`, wired by `edges`, ending at `terminal`.
 ///
-/// Written as a document and validated, rather than assembled as a struct literal: invariant 2 says
-/// a validated type is obtained by validating, and a fixture that dodged that could describe a
-/// workflow the loader would refuse.
+/// Written as a document and validated, rather than assembled as a struct literal: invariant
+/// *Parse, then validate* says a validated type is obtained by validating, and a fixture that
+/// dodged that could describe a workflow the loader would refuse.
 pub fn workflow_with(states: &[&str], edges: &[(&str, &str)], terminal: &str) -> Workflow {
     let mut document = String::from("id: test/synthetic\nversion: 1\ntitle: Synthetic\ninitial: ");
     document.push_str(states.first().expect("at least one state"));

@@ -392,8 +392,9 @@ impl<C: Clock> ProtocolEngine for Engine<C> {
         //
         // The comparison is the caller's spelling's, not the engine's: `ObservedAt::is_after`
         // refuses an instant exactly and a calendar day only once that day has not begun in any
-        // timezone. The engine still does not decide when the observation happened (invariant 7) —
-        // it decides nothing here except whether what the caller wrote can already have been true.
+        // timezone. The engine still does not decide when the observation happened (the rule
+        // against manufacturing evidence) — it decides nothing here except whether what the caller
+        // wrote can already have been true.
         if submission.observed_at.is_after(now) {
             return Err(ProtocolError::ObservationInFuture {
                 observed_at: submission.observed_at,

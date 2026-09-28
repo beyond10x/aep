@@ -1324,8 +1324,9 @@ mod tests {
 
     #[test]
     fn four_broken_steps_report_four_errors() {
-        // Invariant 3, asserted as an exact count rather than as "is an error": a validator that
-        // returned on the first failure passes an `is_err` test and fails this one.
+        // Invariant *Validation accumulates*, asserted as an exact count rather than as "is an
+        // error": a validator that returned on the first failure passes an `is_err` test and fails
+        // this one.
         let states = r#"{"implement":{"steps":[
             {"kind":"command","run":[]},
             {"kind":"command","run":["x"],"evidence":{"kind":"metric_observation","verifier":"compiler"}},

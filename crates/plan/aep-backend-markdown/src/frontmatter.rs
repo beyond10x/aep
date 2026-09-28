@@ -176,8 +176,8 @@ pub struct RawPlanningFrontmatter {
 
 /// The frontmatter of a planning document, validated.
 ///
-/// No `Deserialize`, by invariant 2: the only way to obtain one is to validate a
-/// [`RawPlanningFrontmatter`], so a value of this type is one whose format version is understood
+/// No `Deserialize`, by invariant *Parse, then validate*: the only way to obtain one is to validate
+/// a [`RawPlanningFrontmatter`], so a value of this type is one whose format version is understood
 /// and whose revision counts from a real write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanningFrontmatter {
@@ -855,8 +855,9 @@ mod tests {
 
     #[test]
     fn every_malformed_reference_is_reported_and_not_just_the_first() {
-        // Invariant 3 again, and the case it matters for: a migration writes twenty of these at
-        // once, and a validator that stopped at the first would be run twenty times.
+        // Invariant *Validation accumulates* again, and the case it matters for: a migration writes
+        // twenty of these at once, and a validator that stopped at the first would be run twenty
+        // times.
         let errors = PlanningFrontmatter::try_from(raw(&format!(
             "{MINIMAL}refs:\n  - DEV-630\n  - jira:has a space\n  - provider: jira\n"
         )))
@@ -923,7 +924,7 @@ mod tests {
 
     #[test]
     fn a_document_wrong_about_two_things_reports_both() {
-        // Invariant 3: validation accumulates. An exact count, because "is an error" would pass
+        // Invariant *Validation accumulates*. An exact count, because "is an error" would pass
         // with a validator that returned on the first problem.
         let errors = PlanningFrontmatter::try_from(raw(&format!(
             "format: aep.planning-md/99\nrevision: 0\n{MINIMAL}"

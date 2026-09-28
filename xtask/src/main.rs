@@ -59,7 +59,8 @@ enum Command {
     Version,
     /// Check the Entity Runtime pin and refuse any compiled ESS modeling crate.
     Deps,
-    /// Check that every uniqueness claim in a test name has a guard beside it.
+    /// Check that no test body is duplicated across crates and that no comment or document cites
+    /// an `AGENTS.md` invariant by number.
     Guards,
     /// Check that each released `### Fixed` entry names something that existed to be broken.
     Claims,
@@ -287,7 +288,13 @@ fn main() -> Result<()> {
         Command::Version => version_check(&workspace_root()),
         Command::Release => release_check(&workspace_root()),
         Command::Deps => deps(&workspace_root()),
-        Command::Guards => guards(&workspace_root()),
+        // Both run, so a red gate names every defect at once rather than one per attempt.
+        Command::Guards => {
+            let root = workspace_root();
+            let duplicates = guards(&root);
+            let citations = invariant_citations(&root);
+            duplicates.and(citations)
+        }
         Command::Claims => claims(&workspace_root()),
     }
 }
@@ -1083,6 +1090,169 @@ fn test_bodies(text: &str) -> Vec<(String, String)> {
     found
 }
 
+/// Tracked paths whose text is a dated record of what was true when it was written. A citation
+/// there names the list as it stood that day, and rewriting it would falsify the record.
+const DATED_RECORDS: &[&str] = &[
+    "CHANGELOG.md",
+    "docs/design/",
+    "docs/reviews/",
+    "docs/plan/archive/",
+    ".engineering/",
+];
+
+/// Which lines of a file are prose a citation can sit in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Prose {
+    /// A Rust source: its `//`, `///` and `//!` comment lines. String literals are code, and a
+    /// message a test prints is reviewed with the code that prints it.
+    RustComments,
+    /// Documentation and configuration: every line.
+    EveryLine,
+}
+
+/// The prose kind of a tracked path, or `None` when the path is out of the scan.
+fn citation_scope(relative: &str) -> Option<Prose> {
+    if DATED_RECORDS
+        .iter()
+        .any(|record| relative == *record || relative.starts_with(record))
+    {
+        return None;
+    }
+    match Path::new(relative).extension()?.to_str()? {
+        "rs" => Some(Prose::RustComments),
+        "md" | "mdx" | "toml" | "yaml" | "yml" | "sh" => Some(Prose::EveryLine),
+        _ => None,
+    }
+}
+
+/// Each prose line of `text` as `(line number, text)`, the comment markers removed for Rust.
+fn prose_lines(kind: Prose, text: &str) -> Vec<(usize, &str)> {
+    text.lines()
+        .enumerate()
+        .filter_map(|(index, line)| match kind {
+            Prose::EveryLine => Some((index + 1, line)),
+            Prose::RustComments => {
+                let comment = line.trim_start().strip_prefix("//")?;
+                let comment = comment
+                    .strip_prefix('/')
+                    .or_else(|| comment.strip_prefix('!'))
+                    .unwrap_or(comment);
+                Some((index + 1, comment))
+            }
+        })
+        .collect()
+}
+
+/// Whether `prose` cites an invariant by number: the word `invariant` or `invariants`, in any case,
+/// then whitespace, an optional `#`, and a digit. The fixtures in `invariant_citation_tests` spell
+/// out each form.
+fn cites_by_number(prose: &str) -> bool {
+    let lower = prose.to_ascii_lowercase();
+    lower.match_indices("invariant").any(|(at, word)| {
+        if lower[..at]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
+        {
+            return false;
+        }
+        let rest = &lower[at + word.len()..];
+        let rest = rest.strip_prefix('s').unwrap_or(rest);
+        let spaced = rest.trim_start_matches([' ', '\t']);
+        if spaced.len() == rest.len() {
+            return false;
+        }
+        let spaced = spaced.strip_prefix('#').unwrap_or(spaced);
+        spaced.starts_with(|c: char| c.is_ascii_digit())
+    })
+}
+
+/// Whether `prose` ends on the word `invariant` or `invariants`, so that a number opening the next
+/// line completes a citation the line wrap split.
+fn ends_on_invariant(prose: &str) -> bool {
+    let lower = prose.trim_end().to_ascii_lowercase();
+    let stem = lower.strip_suffix('s').unwrap_or(&lower);
+    stem.strip_suffix("invariant").is_some_and(|before| {
+        !before
+            .chars()
+            .next_back()
+            .is_some_and(char::is_alphanumeric)
+    })
+}
+
+/// Every line of `text` that cites an invariant by number, as `(line number, trimmed line)`.
+fn numbered_invariant_citations(kind: Prose, text: &str) -> Vec<(usize, String)> {
+    let lines = prose_lines(kind, text);
+    let mut found = Vec::new();
+    for (position, (number, prose)) in lines.iter().enumerate() {
+        let wrapped = ends_on_invariant(prose)
+            && lines.get(position + 1).is_some_and(|(next, following)| {
+                *next == number + 1 && {
+                    let following = following.trim_start();
+                    let following = following.strip_prefix('#').unwrap_or(following);
+                    following.starts_with(|c: char| c.is_ascii_digit())
+                }
+            });
+        if cites_by_number(prose) || wrapped {
+            found.push((*number, prose.trim().to_owned()));
+        }
+    }
+    found
+}
+
+/// No comment or document cites an `AGENTS.md` invariant by its number.
+///
+/// # The defect this catches
+///
+/// The invariant list is renumbered whenever a rule is added or retired, and 0.64.0 did both. A
+/// citation by number keeps pointing at whichever rule holds that number now: a test that pinned
+/// the single write path described itself with the number the guard rule holds today, and nothing
+/// noticed, because no compiler reads a comment. A citation by name either still names a rule on
+/// the list or visibly names one that is gone.
+///
+/// Rust sources are scanned in their comments; documentation and configuration in every line.
+/// [`DATED_RECORDS`] are out: they record the list as it stood when they were written.
+///
+/// # Errors
+///
+/// If `git ls-files` fails, or if any line cites an invariant by number.
+fn invariant_citations(root: &Path) -> Result<()> {
+    let listed = git_at(root, &["ls-files", "-z"], "listing tracked files")?;
+    let listed = String::from_utf8(listed.stdout).context("git ls-files printed non-UTF-8")?;
+    let mut scanned = 0usize;
+    let mut findings = Vec::new();
+    for relative in listed.split('\0').filter(|path| !path.is_empty()) {
+        let Some(kind) = citation_scope(relative) else {
+            continue;
+        };
+        // A tracked file deleted in the working tree has nothing left to cite.
+        let Ok(text) = fs::read_to_string(root.join(relative)) else {
+            continue;
+        };
+        scanned += 1;
+        for (line, prose) in numbered_invariant_citations(kind, &text) {
+            findings.push(format!("{relative}:{line}: {prose}"));
+        }
+    }
+    for finding in &findings {
+        println!("  - {finding}");
+    }
+    println!(
+        "{scanned} file(s) scanned for an invariant cited by number, {} found",
+        findings.len()
+    );
+    if findings.is_empty() {
+        Ok(())
+    } else {
+        bail!(
+            "an invariant cited by number names whichever rule holds that number today, and the \
+             list is renumbered when a rule is added or retired. Cite the rule by the name \
+             AGENTS.md gives it — for example invariant *Refusals change nothing* — or, for a \
+             rule that is no longer on the list, state the rule in words."
+        )
+    }
+}
+
 /// The planning store's records as text: each line of the `aep.project/2` journal, each
 /// history file of an `aep.project/3` tree store, whose evidence is held in its blobs, and each
 /// `*.json` evidence record of an `aep.project/5` store under `.engineering/evidence/`. Older
@@ -1717,8 +1887,8 @@ fn website_currency(root: &Path, tag: &str, check: bool) -> Result<usize> {
 /// The table is derived from the repository's annotated tags, oldest first, because `git tag -n99`
 /// is the per-wave record of what actually shipped — and because the delivered-waves list was the
 /// one status surface still maintained by hand. Four hand-written gate counts drifted apart within
-/// the repository's first 48 hours; the fix is the rule invariant 1 already applies to the
-/// schemas: derive, then drift-check.
+/// the repository's first 48 hours; the fix is the rule invariant *Rust types are the source of
+/// truth* already applies to the schemas: derive, then drift-check.
 fn status(root: &Path, check: bool) -> Result<()> {
     let output = std::process::Command::new("git")
         .args([
@@ -2656,9 +2826,10 @@ mod layout_tests {
 
     /// The guard of the guard: a crate one level deeper than an area is found, and reported.
     ///
-    /// `AGENTS.md` invariant 14 — break the guarded condition, observe the named failure. The
-    /// mutation is a manifest at `crates/<area>/<group>/<crate>`, which is exactly what the
-    /// immediate-children scan this replaced could not see.
+    /// `AGENTS.md` invariant *A guard is mutation-tested before it is trusted* — break the guarded
+    /// condition, observe the named failure. The mutation is a manifest at
+    /// `crates/<area>/<group>/<crate>`, which is exactly what the immediate-children scan this
+    /// replaced could not see.
     #[test]
     fn a_crate_nested_below_an_area_is_found_and_is_not_at_area_depth() {
         let root = workspace_root().join("target/xtask-tests/layout-nested-crate");
@@ -2842,6 +3013,90 @@ mod layout_tests {
             findings.is_empty(),
             "a workspace dependency path has to be the member path of the crate it names: \
              {findings:?}"
+        );
+    }
+}
+
+#[cfg(test)]
+mod invariant_citation_tests {
+    use super::{citation_scope, numbered_invariant_citations, Prose};
+
+    /// A Rust fixture that cites by number in each comment form, once wrapped across two lines,
+    /// and once more inside a string literal, which is code and not scanned.
+    /// Written one quoted line per source line, so this file's own comment scan does not see the
+    /// fixture.
+    const RUST: &[&str] = &[
+        "//! Invariant 2, enforced rather than stated.",
+        "/// Keyed by declared id (invariants 8 and 9).",
+        "fn f() {",
+        "    // what invariant #14 forbids",
+        "    // the rule named by the list's",
+        "    // invariant",
+        "    // 7, split by the wrap",
+        "    let _ = \"invariant 5: not a comment\";",
+        "}",
+    ];
+
+    /// The mutation: each broken citation is found, at its line.
+    #[test]
+    fn a_numbered_citation_in_a_comment_is_found_and_one_in_a_string_literal_is_not() {
+        let found: Vec<usize> = numbered_invariant_citations(Prose::RustComments, &RUST.join("\n"))
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect();
+        assert_eq!(found, vec![1, 2, 4, 6], "{found:?}");
+    }
+
+    /// The restoration: the same fixture citing by name is clean, so the check is not stuck red.
+    #[test]
+    fn the_same_citations_by_name_pass() {
+        let named = "//! Invariant *Parse, then validate*, enforced rather than stated.\n\
+                     /// Keyed by declared id (invariant *Decisions are deterministic*).\n\
+                     // what invariant *Planning status is decided as data* forbids\n\
+                     // the invariants of AGENTS.md, and noninvariant 3 is not a citation\n\
+                     // 7 lines of invariant\n\
+                     // prose, and nothing numbered follows the word\n";
+        assert_eq!(
+            numbered_invariant_citations(Prose::RustComments, named),
+            Vec::new()
+        );
+    }
+
+    #[test]
+    fn documentation_is_scanned_in_every_line() {
+        let page = "# Notes\n\n| invariant 7 — engine never manufactures evidence | scan |\n";
+        let found = numbered_invariant_citations(Prose::EveryLine, page);
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].0, 3);
+    }
+
+    #[test]
+    fn dated_records_are_out_of_scope_and_live_prose_is_in() {
+        for dated in [
+            "CHANGELOG.md",
+            "docs/design/evidence-horizons-design-v0.1.md",
+            "docs/reviews/2026-09-01.md",
+            "docs/plan/archive/old.md",
+            ".engineering/planning/story/x.md",
+        ] {
+            assert_eq!(citation_scope(dated), None, "{dated}");
+        }
+        assert_eq!(
+            citation_scope("crates/plan/aep-contract/tests/write_surface.rs"),
+            Some(Prose::RustComments)
+        );
+        for live in [
+            "AGENTS.md",
+            "docs/plan/gap-register.md",
+            "website/docs/concepts/governance.md",
+            "crates/govern/aep-domain/Cargo.toml",
+            "principles/development/contract-testing.yaml",
+        ] {
+            assert_eq!(citation_scope(live), Some(Prose::EveryLine), "{live}");
+        }
+        assert_eq!(
+            citation_scope("conformance/eval/run/transcript.jsonl"),
+            None
         );
     }
 }

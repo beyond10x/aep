@@ -303,7 +303,8 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             "and which task had none: {refusal}"
         );
     }
-/// Invariant 7 at the layer a `record:` path opens: a run cannot submit a person's approval.
+/// The rule against manufacturing evidence, at the layer a `record:` path opens: a run cannot
+/// submit a person's approval.
     ///
     /// The path a step writes to is a path a step can also write *to*, and an approval read out of
     /// a file would unlock a capability gate with a document the run itself could have authored.
@@ -367,7 +368,8 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
     /// that a `cargo test` step does not is *the verb ran and wrote nothing usable*: a store the
     /// checker refused to choose from, a path a rename broke, a half-written file. None of those is
     /// a failing verdict — the run has observed nothing — and submitting a `failed` record for one
-    /// would be the driver inventing an observation, which is invariant 7 a layer above the engine.
+    /// would be the driver inventing an observation, which is the rule against manufacturing
+    /// evidence broken a layer above the engine.
     ///
     /// Both roads are checked because they fail at different depths: a missing file never reaches
     /// the parser, and a malformed one fails inside it.

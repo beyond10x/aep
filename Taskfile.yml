@@ -132,6 +132,9 @@ tasks:
       Fail when a test body is duplicated across crates. A test asserting exactly what a test in
       another crate asserts is not evidence that the two behave differently — which is how a
       "rolls back both halves" test that asserted a pre-check refusal was cited for two releases.
+      Also fail when a comment or document outside the dated records cites an AGENTS.md invariant
+      by number: the list is renumbered when a rule is added or retired, and a numbered citation
+      goes on naming whichever rule holds that number now.
     cmds:
       - cargo xtask guards
 

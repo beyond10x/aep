@@ -42,9 +42,9 @@
 //! # What is not here
 //!
 //! * **No I/O.** Nothing in this crate opens a file, and nothing reaches a network.
-//! * **No clock and no randomness** (invariants 8 and 9). Every duration is derived from a
-//!   timestamp the harness recorded; `tests/determinism.rs` scans for the tokens that would break
-//!   this and builds the same values twice to compare bytes.
+//! * **No clock and no randomness** (invariant *Decisions are deterministic*). Every duration is
+//!   derived from a timestamp the harness recorded; `tests/determinism.rs` scans for the tokens
+//!   that would break this and builds the same values twice to compare bytes.
 //! * **No model, anywhere.** A transcript checker is the single most tempting place in this
 //!   repository to ask a model whether an agent behaved reasonably, and that would make every
 //!   verdict unreproducible and unfalsifiable at once.

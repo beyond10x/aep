@@ -163,7 +163,7 @@ states:
       # only because nothing had looked, or did not walk in at all. It is an `operator` step and
       # not an `llm` one because approving a specification is a person's act: a run that approved
       # its own specification would satisfy the principle by writing to the document the principle
-      # is about, which is invariant 7 one layer up.
+      # is about, which is the rule against manufacturing evidence one layer up.
       #
       # Last in the state, after the suite has run red, so the person is asked once with the
       # state's mechanical work already done — the same order `checks.yaml` takes.

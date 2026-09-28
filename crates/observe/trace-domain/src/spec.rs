@@ -1121,8 +1121,8 @@ pub struct Expectation {
 
 /// A specification: what a run must have looked like.
 ///
-/// Validated. There is no `Deserialize` here (invariant 2) — [`crate::raw::RawTraceSpec`] is the
-/// type that deserializes, and `TryFrom` is the only door.
+/// Validated. There is no `Deserialize` here (invariant *Parse, then validate*) —
+/// [`crate::raw::RawTraceSpec`] is the type that deserializes, and `TryFrom` is the only door.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct TraceSpec {
     /// What the specification is about, such as `planning-plugin/eval`.
@@ -1155,8 +1155,9 @@ struct DigestView<'a> {
 impl TraceSpec {
     /// Builds a validated specification and computes its digest.
     ///
-    /// Crate-private: `TryFrom<RawTraceSpec>` is the only door, which is invariant 2. A consumer
-    /// that could construct one directly could construct one that never passed a rule.
+    /// Crate-private: `TryFrom<RawTraceSpec>` is the only door, which is invariant *Parse, then
+    /// validate*. A consumer that could construct one directly could construct one that never
+    /// passed a rule.
     pub(crate) fn new(id: String, title: Option<String>, expectations: Vec<Expectation>) -> Self {
         let digest = digest_of_canonical(&DigestView {
             format: SPEC_FORMAT,

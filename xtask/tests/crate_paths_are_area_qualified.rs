@@ -443,10 +443,11 @@ fn copy_tree(from: &Path, to: &Path) {
 
 /// The guard of the store-side guard: a scope the tree cannot resolve is reported, live only.
 ///
-/// `AGENTS.md` invariant 14 — break the guarded condition, observe the named failure. Run against a
-/// **copy of the real store** rather than a two-file fixture, so the mutation is measured on the
-/// document shapes the gating test actually reads: a scanner that stopped parsing frontmatter would
-/// pass a synthetic corpus written to suit it. The real store is never written.
+/// `AGENTS.md` invariant *A guard is mutation-tested before it is trusted* — break the guarded
+/// condition, observe the named failure. Run against a **copy of the real store** rather than a
+/// two-file fixture, so the mutation is measured on the document shapes the gating test actually
+/// reads: a scanner that stopped parsing frontmatter would pass a synthetic corpus written to suit
+/// it. The real store is never written.
 ///
 /// The planted path is `crates/edge/protocol-cli/src/planning.rs` — area-qualified, so the pre-move
 /// predicate is blind to it by construction, which is the half this test exists to prove is covered.
@@ -671,8 +672,9 @@ fn no_tracked_file_names_a_crate_this_tree_does_not_have() {
 
 /// The guard of the guard: a retired crate's path is a finding, and a live one is not.
 ///
-/// `AGENTS.md` invariant 14 — break the guarded condition, observe the named failure. Written
-/// against the predicate rather than the corpus so it says what the rule decides, on both sides.
+/// `AGENTS.md` invariant *A guard is mutation-tested before it is trusted* — break the guarded
+/// condition, observe the named failure. Written against the predicate rather than the corpus so it
+/// says what the rule decides, on both sides.
 #[test]
 fn a_path_naming_a_crate_the_tree_lacks_is_refused_and_a_live_one_is_not() {
     let pairs = area_crate_directories(&repo_root());

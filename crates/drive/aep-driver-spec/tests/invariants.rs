@@ -1,4 +1,5 @@
-//! Invariant 2 for this crate's document: a validated type does not implement `Deserialize`.
+//! AGENTS.md invariant *Parse, then validate* for this crate's document: a validated type does not
+//! implement `Deserialize`.
 //!
 //! The same scan, for the same reason, as `crates/govern/aep-domain/tests/invariants.rs`. Adding
 //! `serde::Deserialize` to [`StepMap`] — the shortcut that saves one conversion — would let anyone

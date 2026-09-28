@@ -443,9 +443,9 @@ fn a_recorded_transcript_and_a_driven_stream_take_the_same_arguments() {
 
 #[test]
 fn the_same_stream_and_specification_produce_a_byte_identical_report() {
-    // Invariant 9, on the new reader. Reading a file twice must produce the same IR, and checking
-    // it twice must produce the same bytes — a report that moved between runs could not be
-    // committed, diffed or used as evidence.
+    // Invariant *Decisions are deterministic*, on the new reader. Reading a file twice must produce
+    // the same IR, and checking it twice must produce the same bytes — a report that moved between
+    // runs could not be committed, diffed or used as evidence.
     let specification = document("expectations.driven-step.trace.yaml");
     let first = serde_json::to_string(&check(&specification, &ir(HONEST), &[]))
         .expect("a report renders as JSON");

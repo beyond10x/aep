@@ -1,4 +1,5 @@
-//! Invariant 14, enforced rather than stated: every mutation is a command.
+//! AGENTS.md invariant *Planning status is decided as data*, enforced rather than stated: every
+//! mutation is a command.
 //!
 //! The contract's design gives state change exactly one door — `CommandService::execute` — because
 //! validation, authorisation, protocol enforcement, idempotency, optimistic concurrency,
@@ -17,10 +18,10 @@
 //!
 //! **To whoever fails this test by adding a method:** if the new method mutates, it must not
 //! exist — model the mutation as a command payload dispatched through `execute`, which is the
-//! whole point of invariant 14. If it is a genuinely new *read*, add it to `QueryService`'s list
+//! whole point of that invariant. If it is a genuinely new *read*, add it to `QueryService`'s list
 //! here in the same commit, with `AGENTS.md`'s invariant table untouched. If you are deliberately
-//! opening a second write surface, that is a design change: change invariant 14 in `AGENTS.md`
-//! first, and say why the ten concerns above are handled twice.
+//! opening a second write surface, that is a design change: change invariant *Planning status is
+//! decided as data* in `AGENTS.md` first, and say why the ten concerns above are handled twice.
 
 use std::path::Path;
 

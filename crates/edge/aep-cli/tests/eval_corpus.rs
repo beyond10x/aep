@@ -173,7 +173,7 @@ fn corpus() -> Vec<Loaded> {
 
 /// Every workflow document in the tree, by the id it declares.
 ///
-/// Keyed by declared id and never by filename — invariant 10, and the same reason
+/// Keyed by declared id and never by filename — the document-identity rule, and the same reason
 /// `workflow_coverage.rs` gives.
 fn workflows() -> BTreeMap<String, Workflow> {
     let mut found = BTreeMap::new();

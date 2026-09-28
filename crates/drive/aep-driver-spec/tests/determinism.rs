@@ -1,4 +1,5 @@
-//! Invariant 9's scan for this crate: no unordered map, no clock, no randomness.
+//! AGENTS.md invariant *Decisions are deterministic*, scanned for this crate: no unordered map, no
+//! clock, no randomness.
 //!
 //! § 4.1 makes a purity claim for the driver that is stronger than `aep-engine`'s, and this is the
 //! half of it that can be checked mechanically. The map's **digest** is what a resumed run is

@@ -244,7 +244,11 @@ fn past_its_horizon_the_requirement_reads_unknown_and_names_the_horizon_and_the_
     );
     assert!(detail.contains("3d"), "the horizon: {detail}");
     assert!(detail.contains("2026-09-02"), "when it lapsed: {detail}");
-    assert_ne!(truth, Truth::False, "invariant 5, spelled out");
+    assert_ne!(
+        truth,
+        Truth::False,
+        "Unknown differs from false, spelled out"
+    );
 }
 
 #[test]
@@ -398,9 +402,10 @@ fn an_observation_in_the_future_is_refused_and_never_stored() {
 
 #[test]
 fn a_day_that_has_begun_somewhere_is_admitted_and_one_that_has_begun_nowhere_is_still_refused() {
-    // Invariant 7 asserted, not relaxed. The engine still manufactures nothing and still does not
-    // decide when the observation happened: it decides only whether what the caller wrote can
-    // already have been true anywhere on earth. Nothing is clamped and nothing is defaulted.
+    // The rule against manufacturing evidence asserted, not relaxed. The engine still manufactures
+    // nothing and still does not decide when the observation happened: it decides only whether what
+    // the caller wrote can already have been true anywhere on earth. Nothing is clamped and nothing
+    // is defaulted.
     //
     // The clock is 22:27 UTC on 2026-08-28 — the instant an adopter measured 20 of their 215
     // records refused, because their store sits at UTC+2 and writes local calendar dates.

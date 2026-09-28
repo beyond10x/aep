@@ -14,9 +14,10 @@
 //! # Append-only
 //!
 //! Evidence files are written once and never again; a transition list only grows. A mistake is
-//! corrected by a later record rather than by editing an earlier one, which is invariant 16 —
-//! *nothing is physically deleted* — applied to the record of what was done. `aep plan artifact
-//! validate` compares each committed evidence file with its Git blob to hold that.
+//! corrected by a later record rather than by editing an earlier one, which is AGENTS.md invariant
+//! *Audit is append-only* — *nothing is physically deleted* — applied to the record of what was
+//! done. `aep plan artifact validate` compares each committed evidence file with its Git blob to
+//! hold that.
 
 use std::fmt;
 use std::path::{Path, PathBuf};

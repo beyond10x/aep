@@ -17,8 +17,9 @@
 //! `metaharness_contract_result.rs` exists.
 //!
 //! One rule is asserted for all three together, at the end: none of them may write a record a
-//! person is recorded as having produced. That is invariant 7 at the layer a `record:` path opens —
-//! nothing below the driver would stop a step handing the engine an approval it read out of a file.
+//! person is recorded as having produced. That is the rule against manufacturing evidence at the
+//! layer a `record:` path opens — nothing below the driver would stop a step handing the engine an
+//! approval it read out of a file.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -394,11 +395,11 @@ fn a_store_holding_two_specifications_of_this_tasks_work_is_refused_rather_than_
 
 #[test]
 fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
-    // Invariant 7 at the layer a `record:` path opens, asserted once over all three producers
-    // rather than three times: `crates/edge/aep-cli/src/drive.rs`'s `read_record` refuses a record
-    // whose producer is a human, so a producer that wrote one would turn a step into a step that
-    // silently submits nothing. The rule that keeps that from happening is that no producer can
-    // name its own producer at all.
+    // The rule against manufacturing evidence, at the layer a `record:` path opens, asserted once
+    // over all three producers rather than three times: `crates/edge/aep-cli/src/drive.rs`'s
+    // `read_record` refuses a record whose producer is a human, so a producer that wrote one would
+    // turn a step into a step that silently submits nothing. The rule that keeps that from
+    // happening is that no producer can name its own producer at all.
     let directory = scratch("producers");
     specification_store(&directory);
 

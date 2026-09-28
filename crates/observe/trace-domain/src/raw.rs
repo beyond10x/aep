@@ -1,10 +1,10 @@
 //! Reading a `trace-spec/1` document: the permissive half, and the rules deserialization cannot
 //! see.
 //!
-//! Invariant 2, in the third observation domain. A specification is a file somebody writes,
-//! reviews and commits, so it becomes a domain type by *validating* rather than by deserializing:
-//! [`TraceSpec`] does not implement `Deserialize`, this module holds the type that does, and
-//! [`TryFrom`] is the only door.
+//! Invariant *Parse, then validate*, in the third observation domain. A specification is a file
+//! somebody writes, reviews and commits, so it becomes a domain type by *validating* rather than by
+//! deserializing: [`TraceSpec`] does not implement `Deserialize`, this module holds the type that
+//! does, and [`TryFrom`] is the only door.
 //!
 //! # What the shape already refuses, and what it cannot
 //!
@@ -77,9 +77,9 @@
 //!
 //! # Errors accumulate
 //!
-//! Invariant 3. A document with four broken expectations reports four refusals in one run, and
-//! the tests at the bottom of this file assert an exact count per code rather than "is an error",
-//! which is the only thing that enforces it.
+//! Invariant *Validation accumulates*. A document with four broken expectations reports four
+//! refusals in one run, and the tests at the bottom of this file assert an exact count per code
+//! rather than "is an error", which is the only thing that enforces it.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -986,7 +986,7 @@ impl TryFrom<RawTraceSpec> for TraceSpec {
             }
 
             // The kind is validated whatever the id did, so a document with a bad id and a bad
-            // bound reports both in one run (invariant 3).
+            // bound reports both in one run (invariant *Validation accumulates*).
             let Some(kind) = kind_of(written.expect, &location, &mut errors) else {
                 continue;
             };
@@ -1755,7 +1755,7 @@ fn cost_total(
 /// Validates `order`, refusing the pair that asks a call to precede itself.
 ///
 /// Both sides are validated before either refusal is propagated, so a document with two broken
-/// selectors reports two refusals (invariant 3).
+/// selectors reports two refusals (invariant *Validation accumulates*).
 fn order(
     written: RawOrder,
     location: &str,
@@ -2343,7 +2343,7 @@ fn is_identifier(value: &str) -> bool {
 ///
 /// The `/` is the namespace the design writes — `planning-plugin/eval` — and exactly one is
 /// allowed, because a path with two is a filename and a specification id is not a filename
-/// (invariant 10).
+/// (document identity comes from content, not a filename).
 fn is_document_id(value: &str) -> bool {
     let mut segments = value.split('/');
     let first = segments.next().unwrap_or_default();
@@ -2741,8 +2741,8 @@ expectations:
 
     #[test]
     fn four_defects_in_one_document_are_four_refusals_in_one_pass() {
-        // Invariant 3, and the only thing that enforces it is an exact count per code: a
-        // validator that returned on the first defect would report one.
+        // Invariant *Validation accumulates*, and the only thing that enforces it is an exact count
+        // per code: a validator that returned on the first defect would report one.
         let refused = refusals(
             "format: trace-spec/2\n\
              id: planning-plugin/eval\n\

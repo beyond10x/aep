@@ -8,14 +8,14 @@
 //!
 //! # Unknown is not dropped, and it is not false
 //!
-//! Invariant 5, in the shape a transcript forces (design § 2.9). An event `type` this build does
-//! not recognise — or a content block type inside a recognised event — becomes
-//! [`EventKind::Opaque`] carrying its declared `type`, its declared `subtype` and the digest of
-//! the raw line. It is never discarded and never guessed at, because a checker that dropped it
-//! would report *"the tool was never called"* when what happened is that it stopped being able to
-//! see tool calls. An event that this adapter recognised the envelope of but could read nothing
-//! out of becomes opaque too, for the same reason: an event that produced no IR event at all has
-//! vanished, whatever the intention was.
+//! Invariant *Unknown differs from false*, in the shape a transcript forces (design § 2.9). An
+//! event `type` this build does not recognise — or a content block type inside a recognised event —
+//! becomes [`EventKind::Opaque`] carrying its declared `type`, its declared `subtype` and the
+//! digest of the raw line. It is never discarded and never guessed at, because a checker that
+//! dropped it would report *"the tool was never called"* when what happened is that it stopped
+//! being able to see tool calls. An event that this adapter recognised the envelope of but could
+//! read nothing out of becomes opaque too, for the same reason: an event that produced no IR event
+//! at all has vanished, whatever the intention was.
 //!
 //! # Unknown *fields*, by contrast, are tolerated in silence
 //!
@@ -41,7 +41,8 @@
 //! | `TRACE-ADAPT-002` | a transcript with no events at all |
 //!
 //! An unrecognised event is neither of those; it is an opaque record and a successful read.
-//! Refusals accumulate (invariant 3): a transcript with four unparseable lines reports four.
+//! Refusals accumulate (invariant *Validation accumulates*): a transcript with four unparseable
+//! lines reports four.
 //!
 //! # The measures, stated rather than implied
 //!
@@ -68,9 +69,10 @@
 //!
 //! # No clock, and no correlation here
 //!
-//! Timestamps are read off the event and passed through verbatim; nothing is measured (invariant
-//! 9). Correlating a result to its call is [`TraceIr::new`]'s job and deliberately not this
-//! module's, so there is one owner of the pairing rather than one per adapter.
+//! Timestamps are read off the event and passed through verbatim; nothing is measured
+//! (invariant *Decisions are deterministic*). Correlating a result to its call is
+//! [`TraceIr::new`]'s job and deliberately not this module's, so there is one owner of the pairing
+//! rather than one per adapter.
 
 use std::collections::BTreeMap;
 
@@ -253,7 +255,8 @@ fn read_event(
     if events.len() == before {
         // A recognised envelope carrying nothing this build could read — an `assistant` event
         // whose content is a shape we do not know, say. Recording it opaque keeps the census
-        // honest; letting it produce nothing would be the silent drop invariant 5 forbids.
+        // honest; letting it produce nothing would be the silent drop invariant *Unknown differs
+        // from false* forbids.
         events.push(TraceEvent::new(
             source_line,
             timestamp,

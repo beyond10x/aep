@@ -19,10 +19,10 @@
 //! stop `artifact`, `evaluate` or `drive` from working, so none of them may decide the exit code. A
 //! preflight that exits `1` on a normal state is a preflight people learn to ignore.
 //!
-//! `warn` also carries the one thing invariant 5 requires and a boolean cannot: **not checked**. A
-//! project file that did not parse leaves the source and store questions *unanswered*, and an
-//! unanswered question is reported as one rather than rewritten into a second failure — the defect
-//! is one defect, and the line above already named it.
+//! `warn` also carries the one thing invariant *Unknown differs from false* requires and a boolean
+//! cannot: **not checked**. A project file that did not parse leaves the source and store questions
+//! *unanswered*, and an unanswered question is reported as one rather than rewritten into a second
+//! failure — the defect is one defect, and the line above already named it.
 //!
 //! # What this reads, and what it refuses to
 //!
@@ -86,8 +86,8 @@ pub(crate) struct DoctorArgs {
     /// A plugin directory to check for a manifest. Repeatable.
     ///
     /// Given directories are the whole list; `AEP_DRIVE_PLUGIN_DIR` supplies one only when none is
-    /// given, which is the rule `aep drive` follows and invariant 11 requires. Nothing here guesses
-    /// a path under the checkout.
+    /// given, which is the rule `aep drive` follows and invariant *Plugin authority is explicit*
+    /// requires. Nothing here guesses a path under the checkout.
     #[arg(long)]
     plugin_dir: Vec<PathBuf>,
     /// How to render the report.
@@ -583,10 +583,10 @@ fn reaches_a_network(plan: &Plan) -> bool {
 
 /// Does each plugin directory the operator named carry a manifest?
 ///
-/// The list is built by exactly the rule `aep drive` uses, and invariant 11 is why: named
-/// directories are the whole list, `AEP_DRIVE_PLUGIN_DIR` supplies one only when none is named, and
-/// nothing falls back to a path inside the checkout. A preflight that reported on a plugin
-/// directory the driver would not load would be describing a different run.
+/// The list is built by exactly the rule `aep drive` uses, and invariant *Plugin authority is
+/// explicit* is why: named directories are the whole list, `AEP_DRIVE_PLUGIN_DIR` supplies one only
+/// when none is named, and nothing falls back to a path inside the checkout. A preflight that
+/// reported on a plugin directory the driver would not load would be describing a different run.
 ///
 /// No directory at all is a `warn`: every verb but `eval run --arm plugin` works without one.
 fn plugin_directories(named: &[PathBuf]) -> Vec<Check> {
@@ -731,9 +731,9 @@ mod tests {
 
     /// The tag list is filtered by shape, and the shape is what decides which tag is *newest*.
     ///
-    /// The mutation invariant 14 asks for is in the second half: a filter that accepted everything
-    /// would answer `v0.42.0`, which sorts above `0.41.0` under `-v:refname` and is not a release
-    /// tag of this convention at all.
+    /// The mutation invariant *A guard is mutation-tested before it is trusted* asks for is in the
+    /// second half: a filter that accepted everything would answer `v0.42.0`, which sorts above
+    /// `0.41.0` under `-v:refname` and is not a release tag of this convention at all.
     #[test]
     fn a_slugged_or_prefixed_tag_is_not_a_bare_version_and_cannot_win() {
         assert!(is_bare_version("0.41.0"), "the convention's own form");

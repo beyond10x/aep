@@ -23,9 +23,10 @@
 //! **`Unknown` is spelled "submit nothing".** The engine has no `Unknown` value to submit — absence
 //! is modelled as the fact simply not being in the store — so a crashed `cargo test` is *not*
 //! `tests.unit.failed > 0`. Submitting a failing `TestResult` for a suite that never ran would
-//! fabricate an observation, which is invariant 7's failure one layer above the engine, and it would
-//! send an agent to fix code nobody ran. A failing suite is [`StepOutcome::Observed`] carrying a
-//! `TestResult` with failures, and the back-edge is then the **workflow's** to take.
+//! fabricate an observation, which is the engine's rule against manufacturing evidence failing one
+//! layer above the engine, and it would send an agent to fix code nobody ran. A failing suite is
+//! [`StepOutcome::Observed`] carrying a `TestResult` with failures, and the back-edge is then the
+//! **workflow's** to take.
 //!
 //! The one exception D5 names is not a fourth variant: `aep observe trace check` exit 3 is a *recorded*
 //! absence — `trace evidence` writes `status: inconclusive` — so it arrives as
@@ -90,9 +91,9 @@ pub struct StepContext<'a> {
     /// exactly as a `{transcript}` in a run where no `llm` step has run is: a fact about the run,
     /// which no document loader could have decided.
     ///
-    /// **Not a field of [`Task`]**, and invariant 10 is why: document identity comes from document
-    /// content and never from a filename, so a path hung on the validated type would travel
-    /// everywhere the identity does and be available to index by.
+    /// **Not a field of [`Task`]**, and the document-identity rule is why: document identity comes
+    /// from document content and never from a filename, so a path hung on the validated type would
+    /// travel everywhere the identity does and be available to index by.
     pub task_document: Option<&'a Path>,
     /// **The execution this step belongs to**, which is also the identity a session acts under.
     ///

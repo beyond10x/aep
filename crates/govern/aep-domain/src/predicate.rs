@@ -1223,7 +1223,7 @@ mod tests {
         assert_eq!(
             predicate.evaluate(&partial),
             Truth::Unknown,
-            "the unobserved half must stay Unknown, not collapse to False — invariant 5"
+            "the unobserved half must stay Unknown, not collapse to False — invariant *Unknown differs from false*"
         );
     }
 
@@ -1319,9 +1319,10 @@ mod tests {
 
     #[test]
     fn negating_unknown_leaves_it_unknown() {
-        // Invariant 5, asserted as the whole table rather than as a sample: `not Unknown == True`
-        // would mean `not deployment.failed` permits a transition *because* nothing has run, which
-        // is the collapse of unobserved into false that the third value exists to prevent.
+        // Invariant *Unknown differs from false*, asserted as the whole table rather than as a
+        // sample: `not Unknown == True` would mean `not deployment.failed` permits a transition
+        // *because* nothing has run, which is the collapse of unobserved into false that the third
+        // value exists to prevent.
         for (input, expected) in [
             (Truth::True, Truth::False),
             (Truth::False, Truth::True),

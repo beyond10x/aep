@@ -442,7 +442,7 @@ fn a_store_inside_a_submodule_is_fenced_in_the_submodules_git_directory() {
 
 /// A repository whose Git directory is not writable (a sandbox that protects `.git`, a checkout
 /// owned by someone else): the write is refused, the refusal names the fence, and nothing in the
-/// store changed (invariant 7).
+/// store changed (invariant *Refusals change nothing*).
 #[test]
 fn a_read_only_git_directory_refuses_the_write_and_changes_nothing() {
     let root = scratch("readonly-git");

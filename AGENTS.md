@@ -73,7 +73,9 @@ credentials, signing keys, private policy values or a public denylist. Enforced 
 
 ## Invariants
 
-Each invariant names what enforces it. A rule without a check is not an invariant.
+Each invariant names what enforces it. A rule without a check is not an invariant. Cite an
+invariant by its name, never by its number: the numbers move when a rule is added or retired, and
+`guard-check` refuses a numbered citation outside dated records.
 
 1. **Rust types are the source of truth.** `schemas/generated/` is written only by
    `cargo xtask schema`; `schema-check` refuses changed and orphaned files.
@@ -127,10 +129,10 @@ drift). A change under `website/` is exercised by the `website` step.
 
 What the other steps refuse: `status-check` a stale generated region (this list, `docs/status.md`,
 the website's currency line); `version-check` a workspace version that differs from the newest
-tag; `guard-check` a test body duplicated across crates; `claim-check` a released `### Fixed`
-entry naming something absent at the previous release; `docs-check` a CLI verb missing from
-`website/docs/reference/cli.md`. Prose states no count of tests; the gate output is the only place
-that count belongs.
+tag; `guard-check` a test body duplicated across crates, or a comment or document citing an
+invariant by number; `claim-check` a released `### Fixed` entry naming something absent at the
+previous release; `docs-check` a CLI verb missing from `website/docs/reference/cli.md`. Prose
+states no count of tests; the gate output is the only place that count belongs.
 
 `audit-check` and `plan-check` run the `.engineering/checks` suite and the planning validator
 through `aep`; the checks use `AEP_BIN` when it is set and executable. Set it to a build of this

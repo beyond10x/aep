@@ -525,9 +525,9 @@ enum DriveGroup {
     /// facts held, how many were contradicted and how many nobody could find out.
     ///
     /// **It computes no score**, and refuses to: the only ways to fold three columns into one
-    /// number are to count an unobservable expectation as a pass, which is the collapse invariant 5
-    /// exists to refuse, or as a failure, which blames an agent for a field a harness stopped
-    /// recording.
+    /// number are to count an unobservable expectation as a pass, which is the collapse invariant
+    /// *Unknown differs from false* exists to refuse, or as a failure, which blames an agent for a
+    /// field a harness stopped recording.
     ///
     /// Not to be confused with `aep govern evaluate`, which asks the engine what one task owes and
     /// what it is permitted. This verb decides nothing and reads no protocol document; the only
@@ -627,9 +627,9 @@ enum Command {
     /// facts held, how many were contradicted and how many nobody could find out.
     ///
     /// **It computes no score**, and refuses to: the only ways to fold three columns into one
-    /// number are to count an unobservable expectation as a pass, which is the collapse invariant 5
-    /// exists to refuse, or as a failure, which blames an agent for a field a harness stopped
-    /// recording.
+    /// number are to count an unobservable expectation as a pass, which is the collapse invariant
+    /// *Unknown differs from false* exists to refuse, or as a failure, which blames an agent for a
+    /// field a harness stopped recording.
     ///
     /// Not to be confused with `aep govern evaluate`, which asks the engine what one task owes and
     /// what it is permitted. This verb decides nothing and reads no protocol document; the only
@@ -1778,10 +1778,10 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
 
     // One record two hours ahead used to discard the other 214: the first failure propagated with
     // `?` and the run produced no evaluation at all. A future observation is still a refusal — it
-    // is invariant 7 and nothing here downgrades it to a warning — but it refuses *that record*,
-    // by file position and by the date as written, and the rest of the document is still
-    // submitted. Every other refusal the engine can make is a fact about the document as a whole
-    // and still stops the run.
+    // is the rule against manufacturing evidence and nothing here downgrades it to a warning — but
+    // it refuses *that record*, by file position and by the date as written, and the rest of the
+    // document is still submitted. Every other refusal the engine can make is a fact about the
+    // document as a whole and still stops the run.
     let mut refused: Vec<String> = Vec::new();
     for path in &args.evidence {
         let origin = path.display().to_string();

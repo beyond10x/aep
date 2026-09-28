@@ -4,7 +4,7 @@
 //! and the infrastructure half (`infra-domain`): every refusal carries a stable machine-readable
 //! code, tests and harnesses match on the code and never on message text, and validation
 //! accumulates — a specification with four broken expectations reports four refusals in one run
-//! (invariant 3).
+//! (invariant *Validation accumulates*).
 //!
 //! The codes live in their own `TRACE-` namespace because an agent-run transcript is neither a
 //! protocol document, nor a system specification, nor a cluster: a harness that sees
@@ -217,8 +217,9 @@ impl ValidationErrors {
 
     /// How many refusals carry this code.
     ///
-    /// Tests assert an exact count per code rather than "is an error", which is invariant 3's
-    /// enforcement: a validator that returned on the first defect would report one here.
+    /// Tests assert an exact count per code rather than "is an error", which is invariant
+    /// *Validation accumulates*'s enforcement: a validator that returned on the first defect would
+    /// report one here.
     pub fn count(&self, code: TraceCode) -> usize {
         self.0.iter().filter(|error| error.code == code).count()
     }
