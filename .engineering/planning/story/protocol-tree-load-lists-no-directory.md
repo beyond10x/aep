@@ -2,14 +2,15 @@
 format: aep.planning-md/3
 id: story:protocol-tree-load-lists-no-directory
 kind: story
-status: active
+status: implemented
 title: Loading a pinned protocol tree opens no directory once its snapshot is stamped
 relations:
 - serves: vision:O2
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-28T13:07:15Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-09-28T13:07:15Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-09-28T18:39:07Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Problem
 

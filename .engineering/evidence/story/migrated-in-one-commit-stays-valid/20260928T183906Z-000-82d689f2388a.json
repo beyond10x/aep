@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-28T18:39:06Z",
+  "actor": "human:timo",
+  "artifact": "story:migrated-in-one-commit-stays-valid",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "released in aep 0.65.0 (tag commit 665cd6eddd512dff037530e4503a58b679b55854); task check exit 0",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/36465035747"
+  }
+}
