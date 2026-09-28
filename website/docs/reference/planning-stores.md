@@ -24,8 +24,8 @@ page disagrees with it. A release marked *next release* is not tagged yet.
 
 | Store | `version` | `store` selector | Removed in | Migration | Notes |
 |---|---|---|---|---|---|
-| Markdown journal layout | `aep.project/1` | `store: markdown` | 0.65.0 (next release) | `aep plan store migrate git --verify`, which the release that removes the layout still carries. | Markdown artifacts under `.engineering/planning/` plus a `journal.jsonl`; also what an `aep.project/1` file without `store` selected. |
-| Hybrid | `aep.project/1` | `store: { hybrid: {…} }` | 0.65.0 (next release) | None. Re-create the plan in a Git-native, SQLite or PostgreSQL store. | A local store and a replica under a declared divergence policy. |
+| Markdown journal layout | `aep.project/1` | `store: markdown` | 0.65.0 | `aep plan store migrate git --verify`, which the release that removes the layout still carries. | Markdown artifacts under `.engineering/planning/` plus a `journal.jsonl`; also what an `aep.project/1` file without `store` selected. |
+| Hybrid | `aep.project/1` | `store: { hybrid: {…} }` | 0.65.0 | None. Re-create the plan in a Git-native, SQLite or PostgreSQL store. | A local store and a replica under a declared divergence policy. |
 | Event-log stores | `aep.project/2 – aep.project/4` | `store: { eventlog: {…} }` | 0.62.0 | Install the build at commit `9c0f1da44429ff935fa0b2d743457945d51e1c51` (`cargo install --git https://github.com/beyond10x/aep --rev 9c0f1da44429ff935fa0b2d743457945d51e1c51 aep-cli`), then run `aep plan store migrate git --verify`. | Planning state kept in an Eventlog stream. |
 {/* generated:planning-stores:end */}
 
