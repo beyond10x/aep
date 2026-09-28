@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 
+mod planning_stores;
 mod release_pins;
 
 /// The index of a generated directory, written from the same list the directory is.
@@ -282,7 +283,8 @@ fn main() -> Result<()> {
             status(&root, check)?;
             agents_gate_steps(&root, check)?;
             website_currency_from_tags(&root, check)?;
-            release_pins_from_tags(&root, check)
+            release_pins_from_tags(&root, check)?;
+            planning_stores_page(&root, check)
         }
         Command::Version => version_check(&workspace_root()),
         Command::Release => release_check(&workspace_root()),
@@ -1419,7 +1421,22 @@ const STATUS_REGION_FILES: &[&str] = &[
     STATUS_PAGE,
     SITE_STATUS_PAGE,
     SITE_LANDING_PAGE,
+    planning_stores::PAGE,
 ];
+
+/// Writes or checks the planning-store reference page against the store catalog.
+fn planning_stores_page(root: &Path, check: bool) -> Result<()> {
+    let newest = newest_release_tag(root)?;
+    let written = planning_stores::hold(root, &newest, check)?;
+    if check {
+        println!("the planning-store page matches the store catalog ({newest})");
+    } else if written {
+        println!("rewrote the planning-store page from the store catalog ({newest})");
+    } else {
+        println!("the planning-store page already matches the store catalog ({newest})");
+    }
+    Ok(())
+}
 
 /// Refuses a generated status marker the command does not know how to refresh.
 fn generated_status_region_inventory(root: &Path) -> Result<()> {

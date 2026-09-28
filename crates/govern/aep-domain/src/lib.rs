@@ -39,6 +39,7 @@
 //! | [`protocol`] | protocol declarations: the vocabulary a profile may use |
 //! | [`profile`] | profiles: protocol, workflow, principles and completion |
 //! | [`project`] | what an adopting project says about itself |
+//! | [`store_catalog`] | the planning store backends, supported and removed |
 //! | [`plan`] | resolved execution plans |
 //! | [`event`] | the audit event vocabulary |
 //! | [`audit`] | the audit trail: who authorised it, what ran, why it was allowed |
@@ -69,6 +70,7 @@ pub mod protocol;
 pub mod raw;
 pub mod requirement;
 pub mod review;
+pub mod store_catalog;
 pub mod task;
 pub mod time;
 pub mod verification;
