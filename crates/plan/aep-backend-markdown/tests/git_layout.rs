@@ -393,3 +393,43 @@ fn an_interrupted_batch_is_completed_once_and_its_transition_is_not_doubled() {
     }
     assert!(!store.planning.join(journal::LEGACY_JOURNAL).exists());
 }
+
+/// Two records made in the same second come back in the order they were made, whatever their
+/// digests: every other backend answers in recording order, and a history that ordered by hash
+/// disagreed with them.
+#[test]
+fn evidence_recorded_in_one_second_is_read_back_in_recording_order() {
+    let store = scratch("same-second");
+    let record = |source: &str| Entry {
+        at: "2026-09-28T10:04:11Z".to_owned(),
+        actor: "human:operator".to_owned(),
+        artifact: artifact(),
+        kind: "story".parse().expect("a kind"),
+        revision: 1,
+        change: Change::Evidence {
+            kind: EvidenceKind::TestResult,
+            source: source.to_owned(),
+            reference: None,
+            review: None,
+            outcome: None,
+        },
+    };
+    // Enough records that some later one must hash below an earlier one.
+    let sources: Vec<String> = (0..12).map(|n| format!("run {n}")).collect();
+    for source in &sources {
+        journal::write_evidence(&store.evidence, &record(source)).expect("written");
+    }
+    let (history, unreadable) = journal::history_git(&store.planning, &store.evidence, &artifact());
+    assert_eq!(unreadable, 0);
+    let read: Vec<String> = history
+        .iter()
+        .filter_map(|entry| match &entry.change {
+            Change::Evidence { source, .. } => Some(source.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        read, sources,
+        "same-second records keep their recording order"
+    );
+}

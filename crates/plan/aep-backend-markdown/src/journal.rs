@@ -407,7 +407,7 @@ pub fn evidence_on_hand_git(
 
 /// Writes one evidence record into a Git-native store and answers where it went.
 ///
-/// `<evidence>/<kind>/<name>/<compact at>-<first 12 hex of the SHA-256 of the file>.json`, where
+/// `<evidence>/<kind>/<name>/<compact at>-<three-digit sequence within that second>-<first 12 hex of the SHA-256 of the file>.json`, where
 /// the file is the entry as pretty JSON with a trailing newline. Written through a temporary file
 /// in the same directory and then linked into place, so a reader never sees half a record.
 ///
@@ -452,13 +452,7 @@ pub fn write_evidence_occurrence(
         compact.push_str("undated");
     }
     let directory = evidence_directory(evidence, &entry.artifact);
-    let stem = if occurrence == 0 {
-        format!("{compact}-{}", &digest[..12])
-    } else {
-        format!("{compact}-{}-{occurrence}", &digest[..12])
-    };
-    let path = directory.join(format!("{stem}.json"));
-
+    let short = &digest[..12];
     let identical = |path: &Path| -> std::io::Result<PathBuf> {
         if std::fs::read(path)? == text.as_bytes() {
             Ok(path.to_path_buf())
@@ -472,6 +466,39 @@ pub fn write_evidence_occurrence(
             ))
         }
     };
+    // A record already written under any sequence number is the same record: writing it again
+    // (a recovered batch) answers that file instead of adding a second one.
+    // A file of that name holding other bytes is a record somebody rewrote, and is refused.
+    if occurrence == 0 {
+        if let Some(existing) = files_with(&directory, "json").into_iter().find(|path| {
+            path.file_stem()
+                .and_then(|stem| stem.to_str())
+                .is_some_and(|stem| {
+                    stem.starts_with(&format!("{compact}-")) && stem.ends_with(short)
+                })
+        }) {
+            return identical(&existing);
+        }
+    }
+    // Records made in the same second sort in the order they were made: the name carries how many
+    // records of that second the directory already holds. The digest alone would order them by
+    // hash, and a Git-native history would then disagree with every other backend about which of
+    // two same-second records came first.
+    let sequence = files_with(&directory, "json")
+        .iter()
+        .filter(|path| {
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with(&format!("{compact}-")))
+        })
+        .count();
+    let stem = if occurrence == 0 {
+        format!("{compact}-{sequence:03}-{short}")
+    } else {
+        format!("{compact}-{sequence:03}-{short}-{occurrence}")
+    };
+    let path = directory.join(format!("{stem}.json"));
+
     if path.exists() {
         return identical(&path);
     }

@@ -15,7 +15,7 @@ all plain files you commit:
 .engineering/
   project.yaml                                        aep.project/5
   planning/<kind>/<name>.md                           one artifact (aep.planning-md/3)
-  evidence/<kind>/<name>/<instant>-<digest>.json      one evidence record, never rewritten
+  evidence/<kind>/<name>/<instant>-<sequence>-<digest>.json      one evidence record, never rewritten
 ```
 
 The store has no journal, event log, database or generated projection. The artifact files are the

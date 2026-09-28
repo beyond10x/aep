@@ -9,7 +9,7 @@
 //!
 //! ```text
 //! <root>/<entity>/<id>.md                         the instance: frontmatter + body
-//! <evidence>/<entity>/<id>/<instant>-<digest>.json one recorded observation, never rewritten
+//! <evidence>/<entity>/<id>/<instant>-<sequence>-<digest>.json one recorded observation, never rewritten
 //! ```
 //!
 //! | document | instance |
