@@ -619,7 +619,8 @@ fn verify_snapshot_once(directory: &Path, revision: &str) -> Result<(), String> 
     {
         return Ok(());
     }
-    verify_snapshot_stamped(directory, revision, RACY_WINDOW)?;
+    let listing = verify_snapshot_stamped(directory, revision, RACY_WINDOW)?;
+    crate::load::remember_sealed_listing(directory, listing);
     if let Ok(mut verified) = verified.lock() {
         verified.insert(key);
     }
@@ -691,44 +692,52 @@ fn snapshot_stamp_path(directory: &Path) -> Option<PathBuf> {
 /// unchanged as the full check. A
 /// failed verification writes no stamp; a failure to write one is not an error, it only means the
 /// next process verifies in full again.
+///
+/// Returns the verified snapshot's files, relative and sorted, the manifest excluded — the
+/// listing a tree load uses instead of opening the snapshot's directories.
 fn verify_snapshot_stamped(
     directory: &Path,
     revision: &str,
     racy_window: std::time::Duration,
-) -> Result<(), String> {
-    if snapshot_stamp_holds(directory, revision) {
-        return Ok(());
+) -> Result<Vec<String>, String> {
+    if let Some(listing) = snapshot_stamp_listing(directory, revision) {
+        return Ok(listing);
     }
     let started = std::time::SystemTime::now();
-    verify_snapshot(directory, revision)?;
+    let listing = verify_snapshot(directory, revision)?;
     write_snapshot_stamp(directory, revision, started, racy_window).ok();
-    Ok(())
+    Ok(listing)
 }
 
-/// Whether the stamp beside `directory` still describes it, reading only the manifest.
-fn snapshot_stamp_holds(directory: &Path, revision: &str) -> bool {
-    let Some(path) = snapshot_stamp_path(directory) else {
-        return false;
-    };
-    let Ok(bytes) = std::fs::read(&path) else {
-        return false;
-    };
-    let Ok(stamp) = serde_json::from_slice::<SnapshotStamp>(&bytes) else {
-        return false;
-    };
+/// The snapshot's files, when the stamp beside `directory` still describes it, reading only the
+/// manifest.
+///
+/// The stamp's file map is the listing: a stamp is written only after the tree matched the sealed
+/// manifest, and it is trusted only while every recorded file and directory is unchanged.
+fn snapshot_stamp_listing(directory: &Path, revision: &str) -> Option<Vec<String>> {
+    let path = snapshot_stamp_path(directory)?;
+    let bytes = std::fs::read(&path).ok()?;
+    let stamp = serde_json::from_slice::<SnapshotStamp>(&bytes).ok()?;
     if stamp.format != SNAPSHOT_STAMP_FORMAT
         || stamp.revision != revision
         || stamp.verifier_version != env!("CARGO_PKG_VERSION")
     {
-        return false;
+        return None;
     }
-    let Ok(manifest) = std::fs::read(directory.join(SNAPSHOT_MANIFEST)) else {
-        return false;
-    };
+    let manifest = std::fs::read(directory.join(SNAPSHOT_MANIFEST)).ok()?;
     if hex_sha256(&manifest) != stamp.manifest_sha256 {
-        return false;
+        return None;
     }
-    recorded_entries_unchanged(directory, &stamp)
+    if !recorded_entries_unchanged(directory, &stamp) {
+        return None;
+    }
+    Some(
+        stamp
+            .files
+            .into_keys()
+            .filter(|relative| relative != SNAPSHOT_MANIFEST)
+            .collect(),
+    )
 }
 
 /// Whether every entry the stamp records still has the metadata it recorded, by stat alone.
@@ -912,8 +921,9 @@ thread_local! {
     static DIRECTORIES_READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
 }
 
-/// Rebuilds a snapshot's manifest from its current bytes and compares it with the sealed one.
-fn verify_snapshot(directory: &Path, revision: &str) -> Result<(), String> {
+/// Rebuilds a snapshot's manifest from its current bytes and compares it with the sealed one,
+/// returning the sealed manifest's file paths.
+fn verify_snapshot(directory: &Path, revision: &str) -> Result<Vec<String>, String> {
     let path = directory.join(SNAPSHOT_MANIFEST);
     let bytes = std::fs::read(&path)
         .map_err(|error| format!("reading snapshot manifest {}: {error}", path.display()))?;
@@ -927,7 +937,7 @@ fn verify_snapshot(directory: &Path, revision: &str) -> Result<(), String> {
     }
     let actual = snapshot_manifest(directory, revision, false)?;
     if actual == expected {
-        Ok(())
+        Ok(expected.files.into_iter().map(|entry| entry.path).collect())
     } else {
         Err(format!(
             "protocol source snapshot {} does not match its path, mode and byte manifest",
@@ -1432,7 +1442,7 @@ mod tests {
     ) -> (Result<(), String>, usize, usize) {
         FILES_HASHED.with(|hashed| hashed.set(0));
         DIRECTORIES_READ.with(|read| read.set(0));
-        let result = verify_snapshot_stamped(root, revision, std::time::Duration::ZERO);
+        let result = verify_snapshot_stamped(root, revision, std::time::Duration::ZERO).map(drop);
         (
             result,
             FILES_HASHED.with(std::cell::Cell::get),
@@ -1644,6 +1654,164 @@ mod tests {
             "files written just now could change again within the clock's resolution"
         );
         cleanup(&root, &stamp);
+    }
+
+    /// Copies `from` into `to`, recursively.
+    fn copy_tree(from: &Path, to: &Path) {
+        std::fs::create_dir_all(to).expect("the copy is writable");
+        for entry in std::fs::read_dir(from).expect("the source is readable") {
+            let entry = entry.expect("an entry");
+            let target = to.join(entry.file_name());
+            if entry.file_type().expect("a file type").is_dir() {
+                copy_tree(&entry.path(), &target);
+            } else {
+                std::fs::copy(entry.path(), &target).expect("the file copies");
+            }
+        }
+    }
+
+    /// A sealed snapshot of the repository's own protocol tree, plus `extra` files.
+    fn sealed_protocol_snapshot(name: &str, revision: &str, extra: &[(&str, &str)]) -> PathBuf {
+        let root = scratch(name);
+        std::fs::remove_dir_all(root.join(project_directory())).ok();
+        if let Some(stamp) = snapshot_stamp_path(&root) {
+            std::fs::remove_file(stamp).ok();
+        }
+        for directory in [
+            "protocols",
+            "principles",
+            "workflows",
+            "profiles",
+            "artifacts/lifecycles",
+            "drivers",
+        ] {
+            copy_tree(&protocol_tree().join(directory), &root.join(directory));
+        }
+        for (path, contents) in extra {
+            write(&root.join(path), contents);
+        }
+        seal(&root, revision);
+        root
+    }
+
+    /// Everything a tree load observably produced, for comparing two loads of one tree.
+    fn load_fingerprint(outcome: &crate::load::LoadOutcome) -> String {
+        let failures: Vec<String> = outcome.failures.iter().map(ToString::to_string).collect();
+        format!(
+            "files_read={}\nfailures={failures:#?}\nregistry={:#?}\ndrivers={:#?}",
+            outcome.files_read, outcome.registry, outcome.drivers
+        )
+    }
+
+    fn tree_directories_listed() -> usize {
+        crate::load::TREE_DIRECTORIES_LISTED.with(std::cell::Cell::get)
+    }
+
+    /// Loads `root` once from its sealed listing and once by walking it, and returns both.
+    fn listed_and_walked(root: &Path) -> (crate::load::LoadOutcome, crate::load::LoadOutcome) {
+        let listed = load_tree_report(root);
+        crate::load::forget_sealed_listing(root);
+        let walked = load_tree_report(root);
+        (listed, walked)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_stamped_snapshot_tree_loads_without_opening_a_directory() {
+        let revision = "8".repeat(40);
+        let root = sealed_protocol_snapshot("tree-load-stamped", &revision, &[]);
+        let stamp = snapshot_stamp_path(&root).expect("a stamp path");
+        verify_snapshot_stamped(&root, &revision, std::time::Duration::ZERO)
+            .expect("the sealed tree verifies and is stamped");
+        crate::load::forget_sealed_listing(&root);
+
+        DIRECTORIES_READ.with(|read| read.set(0));
+        crate::load::TREE_DIRECTORIES_LISTED.with(|listed| listed.set(0));
+        verify_snapshot_once(&root, &revision).expect("the stamp holds");
+        let outcome = load_tree_report(&root);
+        let bundle = crate::load::load_bundle(&root).expect("the tree is a valid bundle");
+        assert_eq!(
+            DIRECTORIES_READ.with(std::cell::Cell::get),
+            0,
+            "a matching stamp spares every directory listing"
+        );
+        assert_eq!(
+            tree_directories_listed(),
+            0,
+            "a stamped snapshot's tree is listed from its stamp, not from its directories"
+        );
+        assert!(outcome.is_clean(), "{}", load_fingerprint(&outcome));
+        assert!(outcome.files_read > 50, "the whole tree loaded");
+
+        crate::load::forget_sealed_listing(&root);
+        let walked = load_tree_report(&root);
+        let walked_bundle = crate::load::load_bundle(&root).expect("the walked bundle loads");
+        assert!(
+            tree_directories_listed() > 0,
+            "without a listing the tree is walked"
+        );
+        assert_eq!(load_fingerprint(&outcome), load_fingerprint(&walked));
+        assert_eq!(bundle.digest, walked_bundle.digest);
+        assert_eq!(bundle.files_read, walked_bundle.files_read);
+        cleanup(&root, &stamp);
+    }
+
+    /// The listing applies the walk's rules: dot entries skipped at any depth, documents chosen by
+    /// extension, subdirectories descended. Every extra here is garbage, so any divergence shows up
+    /// as a different failure or file count.
+    #[test]
+    fn a_sealed_listing_selects_exactly_the_files_the_walk_selects() {
+        let revision = "9".repeat(40);
+        let root = sealed_protocol_snapshot(
+            "tree-load-rules",
+            &revision,
+            &[
+                ("protocols/.hidden/skipped.yaml", "not: [a protocol"),
+                ("principles/.skipped.yaml", "not: [a principle"),
+                ("principles/nested/.deeper/skipped.json", "{"),
+                ("profiles/notes.md", "not a document"),
+                ("profiles/README", "not a document"),
+                ("workflows/nested/deeper/broken.yaml", "not: [a workflow"),
+                ("workflows/broken.yml", "not: [a workflow"),
+                ("drivers/broken.json", "{"),
+                ("artifacts/lifecycles/broken.yaml", "not: [a lifecycle"),
+                ("artifacts/lifecyclesx/outside.yaml", "not: [a lifecycle"),
+                ("artifacts/elsewhere.yaml", "not: [a lifecycle"),
+                (".hidden.yaml", "not: [anything"),
+                ("top-level.yaml", "not: [anything"),
+            ],
+        );
+        let listing = verify_snapshot(&root, &revision).expect("the sealed tree verifies");
+        crate::load::remember_sealed_listing(&root, listing);
+
+        crate::load::TREE_DIRECTORIES_LISTED.with(|listed| listed.set(0));
+        let (listed, walked) = listed_and_walked(&root);
+        assert!(
+            tree_directories_listed() > 0,
+            "the second load walked the tree"
+        );
+        let said: Vec<String> = listed.failures.iter().map(ToString::to_string).collect();
+        assert_eq!(
+            said.len(),
+            4,
+            "the four garbage documents the walk reads: {said:#?}"
+        );
+        assert_eq!(load_fingerprint(&listed), load_fingerprint(&walked));
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// A local protocol root has no sealed listing and keeps being walked.
+    #[test]
+    fn a_local_protocol_root_is_still_read_from_its_directories() {
+        let root = minimal_project("local-root-walked");
+        crate::load::TREE_DIRECTORIES_LISTED.with(|listed| listed.set(0));
+        let project = load(&root).expect("the project loads");
+        assert!(project.registry.principles().count() >= 20);
+        assert!(
+            tree_directories_listed() > 0,
+            "a local tree is not a sealed snapshot, so its directories are listed"
+        );
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[cfg(unix)]

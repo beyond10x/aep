@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- Loading the protocol tree of a verified Git-pinned snapshot opens no directory: its files are
+  listed from the stamp or the sealed manifest the verification just checked, with the same
+  ordering, dotfile and extension rules as the directory walk. A local `protocols:` path is still
+  walked. With a stamped pin, `aep plan artifact new task` makes 0 directory opens under
+  `protocol-sources` (was 40) and `aep plan artifact list` 0 (was 20); file opens are unchanged.
+
 ## [0.64.0] — 2026-09-28
 
 ### Removed

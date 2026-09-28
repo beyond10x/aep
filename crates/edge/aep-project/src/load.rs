@@ -13,6 +13,7 @@ use std::fmt;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use aep_domain::error::ValidationErrors;
 use aep_domain::error::{ValidationCode, ValidationError};
@@ -229,7 +230,7 @@ pub fn load_tree_report(root: &Path) -> LoadOutcome {
             continue;
         }
         let mut files = Vec::new();
-        if let Err(error) = collect_documents(&path, &mut files) {
+        if let Err(error) = documents_under(root, directory, &mut files) {
             failures.push(LoadFailure {
                 path: Some(path.clone()),
                 detail: format!("cannot be read: {error}"),
@@ -276,7 +277,7 @@ pub fn load_bundle(root: &Path) -> Result<PinnedBundle, LoadErrors> {
     for (directory, _) in TREE {
         let path = root.join(directory);
         if path.is_dir() {
-            collect_documents(&path, &mut files).map_err(|error| {
+            documents_under(root, directory, &mut files).map_err(|error| {
                 LoadErrors(vec![LoadFailure {
                     path: Some(path.clone()),
                     detail: format!("cannot be read for bundle digest: {error}"),
@@ -429,8 +430,94 @@ fn validation_failures(errors: &ValidationErrors) -> Vec<LoadFailure> {
         .collect()
 }
 
+/// File lists of verified sealed snapshots, by snapshot root, as their sealed manifests give them.
+type SealedListings = Mutex<BTreeMap<PathBuf, Arc<[String]>>>;
+
+fn sealed_listings() -> &'static SealedListings {
+    static LISTINGS: OnceLock<SealedListings> = OnceLock::new();
+    LISTINGS.get_or_init(Default::default)
+}
+
+/// Records the verified file list of the sealed snapshot at `root`.
+///
+/// `files` are the manifest's paths, relative to `root` with `/` separators. Only a caller that
+/// has just verified the snapshot against that manifest — a matching stamp or a full re-hash —
+/// may record it: loading the tree from `root` then lists these files instead of opening a
+/// directory, which is the same in-process trust the verification memo already extends.
+pub(crate) fn remember_sealed_listing(root: &Path, files: Vec<String>) {
+    if let Ok(mut listings) = sealed_listings().lock() {
+        listings.insert(root.to_path_buf(), files.into());
+    }
+}
+
+fn sealed_listing(root: &Path) -> Option<Arc<[String]>> {
+    sealed_listings()
+        .lock()
+        .ok()
+        .and_then(|listings| listings.get(root).cloned())
+}
+
+/// Collects the documents of `root`'s `directory`: from the sealed listing when `root` is a
+/// verified snapshot, otherwise by walking the directory.
+fn documents_under(root: &Path, directory: &str, into: &mut Vec<PathBuf>) -> io::Result<()> {
+    match sealed_listing(root) {
+        Some(listing) => {
+            listed_documents(root, directory, &listing, into);
+            Ok(())
+        }
+        None => collect_documents(&root.join(directory), into),
+    }
+}
+
+/// The documents [`collect_documents`] would find under `root/directory`, from a file list.
+///
+/// The same rules: an entry below `directory` whose name starts with `.` is skipped with
+/// everything under it, and a file is a document by its extension alone.
+fn listed_documents(root: &Path, directory: &str, listing: &[String], into: &mut Vec<PathBuf>) {
+    for relative in listing {
+        let Some(rest) = relative
+            .strip_prefix(directory)
+            .and_then(|rest| rest.strip_prefix('/'))
+        else {
+            continue;
+        };
+        if rest
+            .split('/')
+            .any(|name| name.is_empty() || name.starts_with('.'))
+        {
+            continue;
+        }
+        let mut path = root.join(directory);
+        path.extend(rest.split('/'));
+        let is_document = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| EXTENSIONS.contains(&extension));
+        if is_document {
+            into.push(path);
+        }
+    }
+}
+
+/// Drops `root`'s sealed listing, so a test can load the same tree by walking it.
+#[cfg(test)]
+pub(crate) fn forget_sealed_listing(root: &Path) {
+    if let Ok(mut listings) = sealed_listings().lock() {
+        listings.remove(root);
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Tree directories this thread has listed, so tests can prove a sealed listing spared them.
+    pub(crate) static TREE_DIRECTORIES_LISTED: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
+
 /// Collects document files under `directory`, recursively.
 fn collect_documents(directory: &Path, into: &mut Vec<PathBuf>) -> io::Result<()> {
+    #[cfg(test)]
+    TREE_DIRECTORIES_LISTED.with(|listed| listed.set(listed.get() + 1));
     for entry in fs::read_dir(directory)? {
         let entry = entry?;
         let path = entry.path();
