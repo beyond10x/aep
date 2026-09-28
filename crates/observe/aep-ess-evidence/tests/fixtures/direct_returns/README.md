@@ -3,6 +3,8 @@
 `direct-suite28.json` and `direct-suite29.json` are exact ESS CLI output from the adjacent
 `direct-source.yaml` and `direct-scenario.yaml`. They were freshly produced by the ESS direct
 library return extension over released 0.38.0; no version marker was relabeled.
+The frozen producer is ESS `ac6fc6fe2f39b43f016e4d3a9edecb3573f7d6a1` (beyond10x/ess#185).
+Regeneration with that source's CLI reproduced these bytes exactly.
 
 From this directory, generate with the extension's ESS CLI:
 

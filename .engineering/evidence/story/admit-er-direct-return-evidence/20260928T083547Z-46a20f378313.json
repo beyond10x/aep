@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-28T08:35:47Z",
+  "actor": "human:timo",
+  "artifact": "story:admit-er-direct-return-evidence",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Actual ER runner report and exact suite admitted; permanent integration regression passed; ER CLI evidence import succeeded",
+    "reference": "crates/observe/aep-ess-evidence/tests/fixtures/er_library"
+  }
+}

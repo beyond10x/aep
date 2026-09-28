@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:admit-er-direct-return-evidence
 kind: story
-status: active
+status: implemented
 title: Admit exact direct-return ESS conformance evidence for ER
 relations:
 - serves: vision:O2
@@ -21,23 +21,26 @@ scope:
   path: docs
 - confidence: cited
   path: schemas/generated
-revision: 8
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-28T07:38:44Z", actor: "human:timo", revision: 6}
 - {from: "proposed", to: "active", at: "2026-09-28T07:38:45Z", actor: "human:timo", revision: 7}
+- {from: "active", to: "implemented", at: "2026-09-28T08:35:47Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"test_result":2,"review_outcome":1}}}
 ---
-## Acceptance
+## Acceptance and result
 
-The ER library specification's exact passing ESS report and inventory-bearing suite are admitted as typed conformance evidence while malformed, contradictory, unknown-field, wrong-digest, and incomplete reports remain refused, allowing ER to adopt its executable contract and release on the current Git-native planning store.
+ER's exact actual library conformance report and inventory suite are admitted as typed coverage evidence. `tests/er_library_report.rs` retains the original runner report and suite and checks their complete successful selection and unchanged source bytes. ER's evidence command also recorded this pair against executable-system-specification:er-library-contracts. The runtime's later release-manifest pin alignment receives its own run; this retained first admission is not rewritten.
 
-## Authorized scope
+## Closed implementation contract
 
-The operator requested completing ER's mainline integration, moving its own plan to the current planning store, cleanup and release. This is the narrow AEP boundary fix previously recorded as ER's `blocker:er-ess-suite27-evidence`. ESS 0.38.0 has since allocated suite/26–27 to other constructs, so the direct-return extension must use a fresh version before final admission is wired. Coordinate the exact new versions with that extension; never relabel existing suite evidence.
+Ordinary suite28 and inventory suite29 use ESS source17/scenario4 from ac6fc6fe2f39b43f016e4d3a9edecb3573f7d6a1 (beyond10x/ess#185). Released suite26/27 retain different meanings and are not reinterpreted. Supported response types are String, Boolean, Integer, Optional<String>, Optional<List<String>> and transparent nominal newtypes ending in those types. Integer decimal/exponent spellings are evaluated exactly, without binary64 conversion. Unsupported types and unknown fields remain explicit refusals.
 
-## Implementation contract
+Original suite SHA256 association, model identity, selected scenario counts, complete inventory and parent lineage remain required. Modern scalar lexemes are retained exactly; legacy suite5 normalization stays unchanged. No compiled ESS dependency or new planning-store schema is added. Released AEP0.63.1 reads the resulting descriptive planning history, while admission and replay require this extended reader.
 
-Keep AEP core independent of compiled ESS modeling crates. Extend the closed optional aep-ess-evidence reader and narrow AEP count/coverage value types as needed. Preserve exact original suite association, model digest, scenario identity/counts, inventory and parent-lineage guards. Use the real ER report as an integration fixture and mutation tests for refusals. Update schemas only through xtask and retain source/design traceability. Preserve legacy admissions and their tests.
+## Evidence
 
-## Scope
+The initial task check passed, including source checks, MSRV and website validation. Named negative tests cover malformed declarations and mismatched report/suite authority. Removing the suite-digest guard made its integrity test fail, and restoration passed. Five independent boundary probes passed; review-result:er-direct-return-reader-review retains that report. The complete actual ER pair is a permanent fixture separate from authored reader reports. The reader integration test passes with the exact suite digest sha256:a6f8ceb64b95f76d33f75c741fb3b67770ad6130243504b77761921be6832548. Logs, mutation patch and review are in docs/evidence/direct-return-reader; source/profile limits are in docs/design/ess-direct-return-evidence.md.
 
-Cited: crates/observe/aep-ess-evidence, crates/govern/aep-domain/src/ess_conformance*, related schema projections and CLI evidence tests. Inferred: documentation and changelog entries for the newly admitted formats. No general ESS dependency or broad store behavior change.
+## Integration
+
+The operator authorized this compatibility work to complete ER's mainline integration, current planning-store adoption and release. beyond10x/aep#61 carries the change; beyond10x/entity-runtime#47 retains the actual implementation execution and AEP admission. Repository gates and required CI must pass on the final candidate before mainline merge. Upstream publication does not assert that ER's later release has already completed.
