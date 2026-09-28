@@ -699,9 +699,9 @@ fn agents_gate_steps(root: &Path, check: bool) -> Result<()> {
 ///
 /// 1. no `entity-*` package appears at two versions;
 /// 2. every `entity-*` package comes from the same source — one tag, one commit;
-/// 3. every `eventlog-*` package comes from the same source. AEP pins Eventlog beside Entity
-///    Runtime, which pins its own; two sources here means AEP's pin is not the one the pinned
-///    Entity Runtime commit was built and tested against.
+/// 3. no event-log package — `eventlog-*` or `entity-eventlog` — is locked at all. AEP's planning
+///    store is Markdown under version control; an event-log crate in the lockfile is a dependency
+///    that came back.
 ///
 /// The prefix is `entity-` because that is what `entity-runtime` publishes; the check would fire
 /// for any crate somebody added under that name, which is the right answer — a crate that is not
@@ -709,7 +709,7 @@ fn agents_gate_steps(root: &Path, check: bool) -> Result<()> {
 ///
 /// # Errors
 ///
-/// If `Cargo.lock` cannot be read, or if either rule is broken.
+/// If `Cargo.lock` cannot be read, or if any rule is broken.
 fn deps(root: &Path) -> Result<()> {
     let lock = fs::read_to_string(root.join("Cargo.lock")).context("reading Cargo.lock")?;
     let ess_packages = locked_packages(&lock, ESS_MODEL_PREFIX);
@@ -724,6 +724,8 @@ fn deps(root: &Path) -> Result<()> {
              the closed standalone report wire and must not depend on an `ess-*` package."
         );
     }
+
+    no_event_log_crate(&lock)?;
 
     let packages = locked_packages(&lock, ENTITY_RUNTIME_PREFIX);
     if packages.is_empty() {
@@ -787,8 +789,6 @@ fn deps(root: &Path) -> Result<()> {
         );
     }
 
-    one_eventlog_pin(&lock)?;
-
     let names: Vec<&str> = by_name.keys().copied().collect();
     let (source, _) = sources.iter().next().expect("at least one source");
     println!(
@@ -799,35 +799,38 @@ fn deps(root: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Rule 3 of [`deps`]: every `eventlog-*` package comes from one source.
+/// Rule 3 of [`deps`]: no event-log package is locked.
 ///
 /// # Errors
 ///
-/// When two sources are locked, naming each and the packages it supplies.
-fn one_eventlog_pin(lock: &str) -> Result<()> {
-    let eventlog = locked_packages(lock, EVENTLOG_PREFIX);
-    let mut eventlog_sources: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
-    for package in &eventlog {
-        eventlog_sources
-            .entry(package.source.as_str())
-            .or_default()
-            .insert(package.name.as_str());
-    }
-    if eventlog_sources.len() > 1 {
-        let listed: Vec<String> = eventlog_sources
+/// When `Cargo.lock` holds an `eventlog-*` package or `entity-eventlog`, naming each.
+fn no_event_log_crate(lock: &str) -> Result<()> {
+    let mut found = locked_packages(lock, EVENTLOG_PREFIX);
+    found.extend(
+        locked_packages(lock, ENTITY_EVENTLOG)
+            .into_iter()
+            .filter(|package| package.name == ENTITY_EVENTLOG),
+    );
+    if !found.is_empty() {
+        let listed: Vec<String> = found
             .iter()
-            .map(|(source, names)| {
+            .map(|package| {
                 format!(
-                    "  {} from {source}",
-                    names.iter().copied().collect::<Vec<_>>().join(", ")
+                    "  {} {} from {}",
+                    package.name, package.version, package.source
                 )
             })
             .collect();
         bail!(
-            "the `eventlog-*` crates come from more than one `eventlog` pin:\n{}\n\
-             AEP's Eventlog pin must be the one its Entity Runtime pin names, so the store the \
-             kernel was tested against is the store this workspace compiles.",
-            listed.join("\n")
+            "Cargo.lock holds event-log crates:
+{}
+
+             AEP no longer reads event-log stores, and nothing in this workspace may depend on 
+             `eventlog` or `entity-eventlog`; `cargo tree -i <crate>` names what pulls each in.",
+            listed.join(
+                "
+"
+            )
         );
     }
     Ok(())
@@ -890,8 +893,10 @@ struct LockedPackage {
 /// What `entity-runtime` publishes its crates as.
 const ENTITY_RUNTIME_PREFIX: &str = "entity-";
 const ESS_MODEL_PREFIX: &str = "ess-";
-/// What `eventlog` publishes its crates as.
+/// What `eventlog` publishes its crates as. None may be locked.
 const EVENTLOG_PREFIX: &str = "eventlog-";
+/// Entity Runtime's event-log provider. It may not be locked either.
+const ENTITY_EVENTLOG: &str = "entity-eventlog";
 
 /// A test asserting the same thing as one in another crate is not evidence of a difference.
 ///
@@ -2355,24 +2360,39 @@ source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
     }
 
     #[test]
-    fn an_eventlog_pin_other_than_the_runtimes_is_refused_naming_both() {
+    fn any_eventlog_crate_in_the_lockfile_is_refused_naming_it() {
         let lock = format!(
             "{ONE_PIN}\n[[package]]\nname = \"eventlog-core\"\nversion = \"0.4.0\"\n\
-             source = \"git+https://github.com/beyond10x/eventlog?rev=aaa#aaa\"\n\n\
-             [[package]]\nname = \"eventlog-core\"\nversion = \"0.3.0\"\n\
-             source = \"git+https://github.com/beyond10x/eventlog?rev=bbb#bbb\"\n"
+             source = \"git+https://github.com/beyond10x/eventlog?rev=aaa#aaa\"\n"
         );
         let root = lockfile_in_a_root(&lock);
         let error = deps(root.path())
-            .expect_err("two eventlog pins must not pass")
+            .expect_err("an eventlog crate must not pass")
             .to_string();
         assert!(
-            error.contains("more than one `eventlog` pin"),
+            error.contains("Cargo.lock holds event-log crates"),
             "the message names the finding: {error}"
         );
         assert!(
-            error.contains("rev=aaa") && error.contains("rev=bbb"),
-            "and both pins: {error}"
+            error.contains("eventlog-core 0.4.0 from git+https://github.com/beyond10x/eventlog"),
+            "and the package: {error}"
+        );
+    }
+
+    #[test]
+    fn entity_eventlog_in_the_lockfile_is_refused_even_at_the_runtime_pin() {
+        let lock = format!(
+            "{ONE_PIN}\n[[package]]\nname = \"entity-eventlog\"\nversion = \"0.9.1\"\n\
+             source = \"git+https://github.com/beyond10x/entity-runtime?tag=0.9.1#dc5b25a\"\n"
+        );
+        let root = lockfile_in_a_root(&lock);
+        let error = deps(root.path())
+            .expect_err("entity-eventlog must not pass")
+            .to_string();
+        assert!(
+            error.contains("Cargo.lock holds event-log crates")
+                && error.contains("entity-eventlog"),
+            "the message names the finding and the package: {error}"
         );
     }
 

@@ -561,9 +561,6 @@ fn absent(plan: &Plan) -> Option<String> {
             Some(root.display().to_string())
         }
         Plan::Sqlite { path } if !path.is_file() => Some(path.display().to_string()),
-        Plan::Eventlog { authority_root, .. } if !authority_root.is_dir() => {
-            Some(authority_root.display().to_string())
-        }
         _ => None,
     }
 }
@@ -576,9 +573,7 @@ fn reaches_a_network(plan: &Plan) -> bool {
     match plan {
         Plan::Postgres { .. } => true,
         Plan::Hybrid { replica, .. } => matches!(replica, Replica::Postgres(_)),
-        Plan::Markdown { .. } | Plan::Git { .. } | Plan::Sqlite { .. } | Plan::Eventlog { .. } => {
-            false
-        }
+        Plan::Markdown { .. } | Plan::Git { .. } | Plan::Sqlite { .. } => false,
     }
 }
 

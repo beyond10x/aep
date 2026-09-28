@@ -25,7 +25,6 @@ use std::fmt::Write as _;
 use std::io::Read as _;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use aep_backend_markdown::{MarkdownStore, PlanningDocument, PlanningFrontmatter, StoreReport};
 use aep_domain::artifact::{
@@ -82,9 +81,6 @@ pub(crate) struct StoreArgs {
     /// How to render the result.
     #[arg(long, value_enum, default_value_t = Format::Text)]
     format: Format,
-    /// Stable identity for an ordinary mutation retry. Returned in every Eventlog mutation result.
-    #[arg(long)]
-    command_identity: Option<String>,
 }
 
 impl StoreArgs {
@@ -160,10 +156,11 @@ impl StoreLocation {
     /// decides — `markdown` by default, so no existing project changes meaning.
     fn plan(&self) -> Result<Plan> {
         if let Some(path) = &self.store {
-            refuse_explicit_eventlog_projection(path)?;
             // `--store` naming a Git-native project's own planning directory opens it as what
             // it is: read as a journal store, a move would start a journal beside the documents.
-            if let Some(git) = git_plan_at(path) {
+            // A project whose selector this build refuses is refused here too, rather than its
+            // planning directory being opened as a Markdown store.
+            if let Some(git) = git_plan_at(path)? {
                 return Ok(git);
             }
             return Ok(Plan::Markdown { root: path.clone() });
@@ -200,66 +197,21 @@ impl StoreLocation {
     }
 }
 
-/// The lifecycle document tree the project at `repository` names in its `protocols` source,
-/// materialized where it is a pinned Git source. The repository itself is the right tree only when
-/// the project says `protocols: .`; a tree store must record every kind the project governs, so
-/// reading the wrong tree would record none of them typed.
-///
-/// # Errors
-///
-/// When the project's configuration cannot be read or its source cannot be materialized.
-pub(crate) fn protocols_of(repository: &Path) -> Result<PathBuf> {
-    aep_project::project::load_paths(repository)
-        .map(|paths| paths.protocols)
-        .map_err(|error| anyhow::anyhow!("{error}"))
-        .with_context(|| {
-            format!(
-                "reading the protocol document source of {}",
-                repository.join(project_directory()).display()
-            )
-        })
-}
-
 /// The Git-native plan whose planning directory `path` is, when `path`'s parent is a project
-/// directory whose `project.yaml` selects `store: git`.
-fn git_plan_at(path: &Path) -> Option<Plan> {
-    let absolute = std::path::absolute(path).ok()?;
-    let engineering = absolute.parent()?;
-    if engineering.file_name()? != project_directory() {
-        return None;
+/// directory whose `project.yaml` selects `store: git`. A project directory whose `project.yaml`
+/// does not read is refused, so a store this build refuses is not reopened through `--store`.
+fn git_plan_at(path: &Path) -> Result<Option<Plan>> {
+    let absolute = std::path::absolute(path).context("resolving the explicit planning path")?;
+    let Some(engineering) = absolute.parent() else {
+        return Ok(None);
+    };
+    if engineering.file_name() != Some(project_directory().as_ref()) {
+        return Ok(None);
     }
-    match Plan::for_project(engineering).ok()? {
+    Ok(match Plan::for_project(engineering)? {
         Plan::Git { root, evidence } if root == absolute => Some(Plan::Git { root, evidence }),
         _ => None,
-    }
-}
-
-/// An explicit legacy path cannot promote an Eventlog projection back to authority, even when
-/// empty or deleted. Inspect the selected path's project, rather than the caller's working
-/// directory, and also inspect the canonical target of an existing symbolic link.
-fn refuse_explicit_eventlog_projection(path: &Path) -> Result<()> {
-    let absolute = std::path::absolute(path).context("resolving the explicit planning path")?;
-    let canonical = crate::planning_writer_fence::canonical_store_path(path)?;
-    for selected in [&absolute, &canonical] {
-        for engineering in selected.ancestors().filter(|ancestor| {
-            ancestor
-                .file_name()
-                .is_some_and(|name| name == project_directory())
-        }) {
-            if let Plan::Eventlog {
-                projection_root, ..
-            } = Plan::for_project(engineering)?
-            {
-                if selected.starts_with(&projection_root) {
-                    bail!(
-                        "explicit --store cannot open an Eventlog projection as Markdown authority: {}",
-                        selected.display()
-                    );
-                }
-            }
-        }
-    }
-    Ok(())
+    })
 }
 
 /// Where a plan is kept, resolved: what a verb opens.
@@ -280,17 +232,6 @@ pub(crate) enum Plan {
         root: PathBuf,
         replica: Replica,
         policy: aep_domain::project::HybridPolicy,
-    },
-    /// Eventlog file authority and its derived tracked Markdown projection.
-    Eventlog {
-        authority_root: PathBuf,
-        projection_root: PathBuf,
-        authority: aep_domain::project::PlanningAuthority,
-        /// Set for an `aep.project/3` tree authority: the repository whose lifecycles give the
-        /// kinds it records as typed entities. `None` for an `aep.project/2` file authority.
-        tree: Option<PathBuf>,
-        /// Set for an `aep.project/4` tree authority: the directory its content blobs are in.
-        blobs: Option<PathBuf>,
     },
 }
 
@@ -385,33 +326,6 @@ impl Plan {
                     policy: policy.clone(),
                 }
             }
-            StoreConfig::Eventlog {
-                path,
-                projection,
-                authority,
-            } => Self::Eventlog {
-                authority_root: path.clone(),
-                projection_root: projection.clone(),
-                authority: authority.clone(),
-                tree: None,
-                blobs: None,
-            },
-            StoreConfig::EventlogTree {
-                path,
-                projection,
-                authority,
-                blobs,
-            } => Self::Eventlog {
-                authority_root: path.clone(),
-                projection_root: projection.clone(),
-                authority: authority.clone(),
-                tree: Some(
-                    engineering
-                        .parent()
-                        .map_or_else(|| engineering.to_owned(), Path::to_owned),
-                ),
-                blobs: blobs.clone(),
-            },
         })
     }
 
@@ -428,17 +342,6 @@ impl Plan {
                     replica.describe()
                 )
             }
-            Self::Eventlog {
-                authority_root,
-                authority,
-                ..
-            } => format!(
-                "the Eventlog store {} ({}/{}/{})",
-                authority_root.display(),
-                authority.logical_scope,
-                authority.tenant,
-                authority.stream_identity
-            ),
         }
     }
 
@@ -459,46 +362,6 @@ impl Plan {
                 aep_backend_postgres::PostgresBackend::connect(url)
                     .map_err(|error| anyhow::anyhow!("{error}"))
                     .with_context(|| format!("connecting to {}", redact(url)))?,
-            )),
-            Self::Eventlog {
-                authority_root,
-                authority,
-                tree: Some(repository),
-                blobs,
-                ..
-            } => {
-                let lifecycles = StoreLocation::at(None, Some(protocols_of(repository)?))
-                    .lifecycles()
-                    .with_context(|| {
-                        format!("loading the lifecycles {} records typed", repository.display())
-                    })?
-                    .lifecycles()
-                    .clone();
-                Some(PlanBackend::Eventlog(
-                    aep_backend_eventlog::open_tree(
-                        authority_root.clone(),
-                        authority.logical_scope.clone(),
-                        authority.tenant.clone(),
-                        authority.stream_identity.clone(),
-                        lifecycles,
-                        blobs.clone(),
-                    )
-                    .map_err(|error| anyhow::anyhow!("{error}"))?,
-                ))
-            }
-            Self::Eventlog {
-                authority_root,
-                authority,
-                tree: None,
-                ..
-            } => Some(PlanBackend::Eventlog(
-                aep_backend_eventlog::open(
-                    authority_root.clone(),
-                    authority.logical_scope.clone(),
-                    authority.tenant.clone(),
-                    authority.stream_identity.clone(),
-                )
-                .map_err(|error| anyhow::anyhow!("{error}"))?,
             )),
         })
     }
@@ -606,8 +469,6 @@ fn describe_config(store: &aep_domain::project::StoreConfig) -> String {
         StoreConfig::Sqlite { path } => format!("sqlite: {}", path.display()),
         StoreConfig::Postgres { url } => format!("postgres: {}", redact(url)),
         StoreConfig::Hybrid { .. } => "hybrid".to_owned(),
-        StoreConfig::Eventlog { path, .. } => format!("eventlog: {}", path.display()),
-        StoreConfig::EventlogTree { path, .. } => format!("eventlog tree: {}", path.display()),
         StoreConfig::Git { planning, .. } => format!("git: {}", planning.display()),
     }
 }
@@ -699,100 +560,25 @@ pub(crate) enum PlanBackend {
     Postgres(aep_backend_postgres::PostgresBackend),
     HybridSqlite(aep_backend_hybrid::HybridBackend<entity_sqlite::SqliteStore>),
     HybridPostgres(aep_backend_hybrid::HybridBackend<entity_postgres::PostgresStore>),
-    Eventlog(aep_backend_eventlog::EventlogBackend),
-}
-
-/// Where the store itself puts one history entry, across every artifact in it.
-///
-/// The authority keeps history **per entity** and writes its instants to the second, so two
-/// records made in one second about two artifacts carry nothing that tells them apart — a reader
-/// that concatenated per-artifact histories answered in artifact-id order and called it oldest
-/// first (`review-2`, finding 1), and one that sorted on the instant alone fell to the same id.
-/// What the store does keep is a position: the ordinal the migration preserved for each retained
-/// journal line (`order: store`, the line's index in the one file the plan was migrated from) and
-/// the provider's own `position.store` for each record made since. The three variants are ordered
-/// as the store was written: everything the migration retained, then everything its imported
-/// anchor holds, then everything recorded after the cut-over.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum StorePosition {
-    /// The ordinal of a retained legacy journal line in the journal it came from.
-    Retained(u64),
-    /// The place of one preserved envelope in the imported anchor, which carries no position of
-    /// its own — its own order is all there is, and it is kept.
-    Anchor(u64),
-    /// The provider's store-wide position of a record made after the cut-over.
-    Recorded(u64),
 }
 
 impl PlanBackend {
-    /// Retained journal entries followed by the provider's actual recorded event suffix, each with
-    /// the position the store keeps it at ([`StorePosition`]).
+    /// The provider's recorded events about one entity, read back as journal entries, oldest first,
+    /// and how many events did not read as one.
     fn entries_of(
         &self,
         entity: &aep_domain::entity::EntityId,
         id: &ArtifactId,
-    ) -> Result<(
-        Vec<(StorePosition, aep_backend_markdown::journal::Entry)>,
-        usize,
-    )> {
+    ) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
         let mut entries = Vec::new();
         let mut unreadable = 0;
-        if let Self::Eventlog(backend) = self {
-            let lines = backend.with_store(|store| {
-                store.legacy_journal_in_store_order("aep.entity", &entity.to_string())
-            })?;
-            for (ordinal, line) in lines {
-                let entry = serde_json::from_slice::<aep_backend_markdown::journal::Entry>(&line)
-                    .ok()
-                    .or_else(|| {
-                        let event = serde_json::from_slice::<entity_core::DomainEvent>(&line).ok()?;
-                        if event.entity != id.namespace() || event.id != id.name() {
-                            return None;
-                        }
-                        entry_from_event(self, id, &event)
-                    });
-                match entry {
-                    Some(entry) if entry.artifact == *id => {
-                        entries.push((StorePosition::Retained(ordinal), entry));
-                    }
-                    _ => unreadable += 1,
-                }
-            }
-            let recorded = backend.with_store(|store| {
-                store.events_in_store_order("aep.entity", &entity.to_string())
-            })?;
-            for (index, (position, event)) in recorded.into_iter().enumerate() {
-                // Evidence preserved in the imported anchor carries no position of its own; the
-                // anchor's order is all there is and it is kept as it stands.
-                let position = position.map_or(StorePosition::Anchor(index as u64), |position| {
-                    StorePosition::Recorded(position)
-                });
-                match entry_from_event(self, id, &event) {
-                    Some(entry) => entries.push((position, entry)),
-                    None => unreadable += 1,
-                }
-            }
-            return Ok((entries, unreadable));
-        }
-        for (index, event) in self.events_of(entity)?.into_iter().enumerate() {
+        for event in self.events_of(entity)? {
             match entry_from_event(self, id, &event) {
-                Some(entry) => entries.push((StorePosition::Recorded(index as u64), entry)),
+                Some(entry) => entries.push(entry),
                 None => unreadable += 1,
             }
         }
         Ok((entries, unreadable))
-    }
-
-    /// Immutable receipt of the most recent recorded command. Legacy providers return none.
-    fn last_commit_receipt(&self) -> Option<entity_store::asynchronous::CommitReceipt> {
-        match self {
-            Self::Markdown(backend) | Self::Git(backend) => backend.as_entity_backend().last_commit_receipt(),
-            Self::Sqlite(backend) => backend.as_entity_backend().last_commit_receipt(),
-            Self::Postgres(backend) => backend.as_entity_backend().last_commit_receipt(),
-            Self::HybridSqlite(backend) => backend.as_entity_backend().last_commit_receipt(),
-            Self::HybridPostgres(backend) => backend.as_entity_backend().last_commit_receipt(),
-            Self::Eventlog(backend) => backend.last_commit_receipt(),
-        }
     }
 
     /// The event log of one entity, as the provider keeps it — what a plan without a journal
@@ -807,7 +593,6 @@ impl PlanBackend {
             Self::Postgres(backend) => backend.as_entity_backend().events_of(id),
             Self::HybridSqlite(backend) => backend.as_entity_backend().events_of(id),
             Self::HybridPostgres(backend) => backend.as_entity_backend().events_of(id),
-            Self::Eventlog(backend) => backend.events_of(id),
         };
         events.map_err(|error| anyhow::anyhow!("reading the event log: {error}"))
     }
@@ -826,7 +611,6 @@ impl aep_contract::command::CommandService for PlanBackend {
             Self::Postgres(backend) => backend.execute(envelope).await,
             Self::HybridSqlite(backend) => backend.execute(envelope).await,
             Self::HybridPostgres(backend) => backend.execute(envelope).await,
-            Self::Eventlog(backend) => backend.execute(envelope).await,
         }
     }
 }
@@ -845,7 +629,6 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.get(reference, consistency).await,
             Self::HybridSqlite(backend) => backend.get(reference, consistency).await,
             Self::HybridPostgres(backend) => backend.get(reference, consistency).await,
-            Self::Eventlog(backend) => backend.get(reference, consistency).await,
         }
     }
 
@@ -859,7 +642,6 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.resolve(locator).await,
             Self::HybridSqlite(backend) => backend.resolve(locator).await,
             Self::HybridPostgres(backend) => backend.resolve(locator).await,
-            Self::Eventlog(backend) => backend.resolve(locator).await,
         }
     }
 
@@ -876,7 +658,6 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.query(query).await,
             Self::HybridSqlite(backend) => backend.query(query).await,
             Self::HybridPostgres(backend) => backend.query(query).await,
-            Self::Eventlog(backend) => backend.query(query).await,
         }
     }
 
@@ -893,7 +674,6 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.relations(query).await,
             Self::HybridSqlite(backend) => backend.relations(query).await,
             Self::HybridPostgres(backend) => backend.relations(query).await,
-            Self::Eventlog(backend) => backend.relations(query).await,
         }
     }
 
@@ -907,7 +687,6 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.history(reference).await,
             Self::HybridSqlite(backend) => backend.history(reference).await,
             Self::HybridPostgres(backend) => backend.history(reference).await,
-            Self::Eventlog(backend) => backend.history(reference).await,
         }
     }
 
@@ -921,7 +700,6 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.audit(query).await,
             Self::HybridSqlite(backend) => backend.audit(query).await,
             Self::HybridPostgres(backend) => backend.audit(query).await,
-            Self::Eventlog(backend) => backend.audit(query).await,
         }
     }
 
@@ -935,7 +713,6 @@ impl aep_contract::query::QueryService for PlanBackend {
             Self::Postgres(backend) => backend.describe_type(entity_type).await,
             Self::HybridSqlite(backend) => backend.describe_type(entity_type).await,
             Self::HybridPostgres(backend) => backend.describe_type(entity_type).await,
-            Self::Eventlog(backend) => backend.describe_type(entity_type).await,
         }
     }
 }
@@ -987,11 +764,9 @@ impl Opened {
 
     /// The evidence recorded about `id`, by kind, wherever this plan keeps its records.
     ///
-    /// Through [`Opened::journal`], so a migrated Eventlog plan is counted from its authority. The
-    /// journal under its projection stops where the migration did, and this count is the input to
-    /// the evidence-gated move decision: read from that file, a record made after the cut-over did
-    /// not exist, and the first guarded rung on a migrated store was refused by the store's own
-    /// reader for evidence the store was holding.
+    /// The journal of a markdown or hybrid plan, the evidence files of a Git-native plan, and the
+    /// contract for a plan whose record is its backend's. This count is the input to the
+    /// evidence-gated move decision.
     fn evidence_on_hand(
         &self,
         id: &ArtifactId,
@@ -1025,17 +800,11 @@ impl Opened {
     ///
     /// A markdown or hybrid plan writes `journal.jsonl` beside its documents, and every question
     /// about its history — drift, a forged revision, what a move rested on — is answered from it.
-    /// An Eventlog plan keeps its record in the authority, and the journal under its projection is
-    /// the **migrated store's**, frozen where the migration left it: no governed command advances
-    /// it. Read as the plan's own it makes every write since look like a hand edit — on
-    /// 2026-09-19 one `move` on a migrated store had `validate` report the document as drifted
-    /// from a log that ended before the move and as claiming a revision no write produced, while
-    /// `plan store verify` on the same tree answered `current`. So an Eventlog plan answers here
-    /// as a SQLite or Postgres plan does: no journal, and the contract answers its history.
+    /// A SQLite or Postgres plan has no journal, and the contract answers its history.
     fn journal(&self) -> Option<&MarkdownStore> {
         match &self.plan {
             // A Git-native plan has no journal: its record is read through [`Opened::log`].
-            Plan::Eventlog { .. } | Plan::Git { .. } => None,
+            Plan::Git { .. } => None,
             Plan::Markdown { .. }
             | Plan::Sqlite { .. }
             | Plan::Postgres { .. }
@@ -1043,212 +812,14 @@ impl Opened {
         }
     }
 
-    /// The history of the artifacts `ids` names, and of no other artifact in the store.
-    ///
-    /// *When was this review recorded*, *what became of it* — the journal answers both, for the
-    /// plan whose record it is ([`Opened::journal`]), and it is one file read once: the caller
-    /// filters it. An Eventlog plan's record is its authority, and the journal under its
-    /// projection is the migrated store's: every record written after the cut-over is simply
-    /// absent from it, so `review-value` counted no outcome and `show` listed none for a review
-    /// answered after a migration. The authority keeps its history per entity, so it is read one
-    /// artifact at a time through [`entries_from_the_contract`] — the reading `history` and
-    /// `explain` already make, and deliberately the only one there is — and **only for the ids
-    /// named**, each once. Those reads are where these verbs spend their time: the first cut of
-    /// this read every artifact in the store for a question about its reviews, and `validate` on
-    /// a fourteen-document migrated plan spent 50 s in them on top of the 102 s opening the plan
-    /// took. So the caller names exactly the artifacts its question is about, and a question about
-    /// no artifact reads nothing.
+    /// Everything the plan's own record holds, oldest first: the journal of a markdown or hybrid
+    /// plan, the transitions and evidence files of a Git-native plan. The caller filters it.
     ///
     /// A SQLite or Postgres plan answers nothing here, as it always has: it never had a journal to
     /// go stale, and *no outcomes rather than a wrong number* is the invariant [`outcomes_of`]
-    /// states. An artifact the contract will not answer for is left out rather than guessed at.
-    fn positioned_history_of<'a>(
-        &self,
-        ids: impl IntoIterator<Item = &'a ArtifactId>,
-    ) -> Vec<(StorePosition, aep_backend_markdown::journal::Entry)> {
-        if let Some((entries, _)) = self.log() {
-            // A plan whose record the journal is keeps the order the store was written in as the
-            // file's own line order, and that is its store-wide position; a Git-native plan's
-            // record is answered in the order its entries happened.
-            return entries
-                .into_iter()
-                .enumerate()
-                .map(|(line, entry)| (StorePosition::Retained(line as u64), entry))
-                .collect();
-        }
-        if !matches!(self.plan, Plan::Eventlog { .. }) {
-            return Vec::new();
-        }
-        let mut ordered: Vec<(StorePosition, ArtifactId, aep_backend_markdown::journal::Entry)> =
-            ids.into_iter()
-                .collect::<BTreeSet<&ArtifactId>>()
-                .into_iter()
-                .filter_map(|id| {
-                    Some((id.clone(), positioned_entries_from_the_contract(self, id).ok()?))
-                })
-                .flat_map(|(id, (entries, _))| {
-                    entries
-                        .into_iter()
-                        .map(move |(position, entry)| (position, id.clone(), entry))
-                })
-                .collect();
-        // The store's own position first, so two records about two artifacts are in the order the
-        // store was written in and not in the order their artifacts' ids sort in. The id is kept
-        // as the last resort, so an authority that answered two entries the same position — which
-        // it does not — still answers the same list twice.
-        ordered.sort_by(|left, right| (left.0, &left.1).cmp(&(right.0, &right.1)));
-        ordered
-            .into_iter()
-            .map(|(position, _, entry)| (position, entry))
-            .collect()
-    }
-
-    /// The same history, with the entries alone.
-    fn history_of<'a>(
-        &self,
-        ids: impl IntoIterator<Item = &'a ArtifactId>,
-    ) -> Vec<aep_backend_markdown::journal::Entry> {
-        self.positioned_history_of(ids)
-            .into_iter()
-            .map(|(_, entry)| entry)
-            .collect()
-    }
-}
-
-// The projection callback deliberately retains the complete typed failure rather than erasing the
-// authority snapshot and publication diagnostics at the CLI boundary.
-#[allow(clippy::result_large_err)]
-fn eventlog_invocation<E>(
-    args: &StoreArgs,
-    opened: &Opened,
-    request: &serde_json::Value,
-    child_requests: &[serde_json::Value],
-    mut execute: E,
-) -> Result<Option<aep_contract::migration::PlanningMutationEnvelopeV1>>
-where
-    E: FnMut(
-        &PlanBackend,
-        &aep_contract::migration::PlannedCommandStepV1,
-    ) -> Result<aep_contract::migration::PlanningMutationResultV1>,
-{
-    use aep_contract::migration::{
-        AuthorityCoordinateV1, AuthorityValueV1, CommandRefusalCodeV1, MigrationIdV1,
-    };
-
-    let Plan::Eventlog {
-        authority_root,
-        projection_root,
-        authority: selected,
-        ..
-    } = &opened.plan
-    else {
-        return Ok(None);
-    };
-    let authority = AuthorityCoordinateV1 {
-        logical_scope: AuthorityValueV1::new(&selected.logical_scope)
-            .map_err(|error| anyhow::anyhow!(error))?,
-        tenant: AuthorityValueV1::new(&selected.tenant).map_err(|error| anyhow::anyhow!(error))?,
-        stream_identity: AuthorityValueV1::new(&selected.stream_identity)
-            .map_err(|error| anyhow::anyhow!(error))?,
-    };
-    let request_bytes = serde_json::to_vec(request)?;
-    let identity = args
-        .command_identity
-        .clone()
-        .or_else(|| std::env::var(COMMAND_IDENTITY_ENV).ok())
-        .unwrap_or_else(|| mint_command_identity(&request_bytes));
-    let command_identity = MigrationIdV1::new(identity)
-        .map_err(|error| anyhow::anyhow!("invalid --command-identity: {error}"))?;
-    let child_bytes = child_requests
-        .iter()
-        .map(serde_json::to_vec)
-        .collect::<std::result::Result<Vec<_>, _>>()?;
-    let reservation = aep_planning_migration::reservation(
-        command_identity,
-        authority.clone(),
-        &request_bytes,
-        &child_bytes,
-    )?;
-    let backend = opened.backend()?;
-    // One opened authority for the whole invocation: the plan's own, which the ledger, the
-    // post-commit capture and both publications read and write through instead of each opening
-    // the authority again.
-    let PlanBackend::Eventlog(plan) = backend else {
-        anyhow::bail!("an Eventlog plan opened a backend of another kind");
-    };
-    let session = plan.with_store(aep_backend_eventlog::EventlogPlanningStore::session);
-    if session.path() != authority_root.as_path() {
-        anyhow::bail!(
-            "the Eventlog plan was opened at {}, not at its selected authority {}",
-            session.path().display(),
-            authority_root.display()
-        );
-    }
-    let publisher = aep_planning_migration::FileProjectionPublisher::over_session(
-        session.clone(),
-        authority.clone(),
-        projection_root.clone(),
-    );
-    let result = aep_planning_migration::execute_invocation(
-        &session,
-        reservation,
-        |planned| match execute(backend, planned) {
-            Ok(result) => {
-                let commit_receipt = backend.last_commit_receipt().ok_or_else(|| {
-                    aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
-                        mutation_refusal(&authority, CommandRefusalCodeV1::ReceiptConflict),
-                    ])
-                })?;
-                let snapshot = session.complete_snapshot().map_err(|_| {
-                            aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
-                                mutation_refusal(
-                                    &authority,
-                                    CommandRefusalCodeV1::AuthoritySnapshotChanged,
-                                ),
-                            ])
-                        })?;
-                let (authority_snapshot, _) =
-                    aep_planning_migration::authority_snapshot_identity(&authority, &snapshot)
-                        .map_err(|_| {
-                            aep_planning_migration::ChildExecutionFailure::Uncertain(vec![
-                                mutation_refusal(
-                                    &authority,
-                                    CommandRefusalCodeV1::VerificationMismatch,
-                                ),
-                            ])
-                        })?;
-                Ok(aep_planning_migration::ExecutedChild {
-                    commit_receipt,
-                    result,
-                    authority_snapshot,
-                })
-            }
-            Err(_) => Err(aep_planning_migration::ChildExecutionFailure::Refused(
-                vec![mutation_refusal(
-                    &authority,
-                    CommandRefusalCodeV1::SemanticMismatch,
-                )],
-            )),
-        },
-        || publisher.publish_current(),
-    )?;
-    Ok(Some(result))
-}
-
-fn mutation_refusal(
-    authority: &aep_contract::migration::AuthorityCoordinateV1,
-    code: aep_contract::migration::CommandRefusalCodeV1,
-) -> aep_contract::migration::CommandRefusalV1 {
-    use aep_contract::migration::{
-        AuthorityDiagnosticV1, CommandRefusalV1, DiagnosticCoordinateV1, PresenceV1,
-    };
-    CommandRefusalV1 {
-        code,
-        at: DiagnosticCoordinateV1::Authority(AuthorityDiagnosticV1 {
-            authority: authority.clone(),
-            subject: PresenceV1::Missing,
-            record_id: PresenceV1::Missing,
-        }),
+    /// states.
+    fn history_of(&self) -> Vec<aep_backend_markdown::journal::Entry> {
+        self.log().map(|(entries, _)| entries).unwrap_or_default()
     }
 }
 
@@ -1348,21 +919,6 @@ pub(crate) fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) ->
                 files: None,
             })
         }
-        Plan::Eventlog {
-            projection_root, ..
-        } => {
-            let backend = plan
-                .open_backend()?
-                .context("an Eventlog plan opens its selected authority")?;
-            let report = report_from_backend(&backend)?;
-            let store = MarkdownStore::open(projection_root.clone());
-            Ok(Opened {
-                plan,
-                backend: Some(backend),
-                report,
-                files: Some(store),
-            })
-        }
     }
 }
 
@@ -1451,7 +1007,7 @@ fn evidence_from_events(
     let target = block_on(backend.resolve(&locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
     let mut counted = aep_backend_markdown::kernel::EvidenceOnHand::new();
-    for (_, entry) in backend.entries_of(&target, id)?.0 {
+    for entry in backend.entries_of(&target, id)?.0 {
         if let Change::Evidence { kind, .. } = entry.change {
             *counted.entry(kind).or_default() += 1;
         }
@@ -1464,35 +1020,6 @@ fn evidence_from_events(
 pub(crate) enum ArtifactCommand {
     /// Create a plan item, and write it.
     New(NewArgs),
-    /// Render the projection of an `aep.project/3` tree store from its authority.
-    ///
-    /// Every write renders it already; this is for a projection a merge or an interrupted command
-    /// left behind its authority, which `validate --strict` reports as S5.
-    Render {
-        /// Where the plan is and how to render.
-        #[command(flatten)]
-        store: StoreArgs,
-    },
-    /// Join a plan item that two merged branches both changed, in an `aep.project/3` tree store.
-    ///
-    /// After `git merge`, an item both branches wrote has two heads and refuses every ordinary
-    /// write. This records one merge decision over every head that keeps the content of `--first`,
-    /// or of the one head whose files the `--onto` revision holds. Nothing is deleted: the other
-    /// branch's decisions stay in the history and are printed, so what is still wanted can be
-    /// issued again. The projection is re-rendered, which clears the item's `.md` conflict.
-    Resolve {
-        /// Where the plan is and how to render.
-        #[command(flatten)]
-        store: StoreArgs,
-        /// The artifact, such as `story:passkey-login`.
-        id: String,
-        /// The digest of the head to keep.
-        #[arg(long)]
-        first: Option<String>,
-        /// The revision whose head is kept when `--first` is not given.
-        #[arg(long, default_value = "origin/main")]
-        onto: String,
-    },
     /// Move a plan item to another status, if its kind's lifecycle permits.
     ///
     /// Refused moves are printed with **every** status the artifact could have moved to instead,
@@ -2049,11 +1576,6 @@ pub(crate) enum ArtifactCommand {
         /// read against the clock **here**, at the edge, and the store decides nothing about it.
         #[arg(long, value_name = "DAYS", default_value_t = OUTCOME_DAYS)]
         outcome_within: u64,
-        /// For an `aep.project/3` tree store: the revision the authority is held to, so a file it
-        /// committed that was since deleted or rewritten, other than by redaction, is a problem.
-        /// A pull request's check passes its target branch, such as `origin/main`.
-        #[arg(long, value_name = "REVISION")]
-        against: Option<String>,
     },
     /// List the artifact kinds, marking the ones that are planning rather than output.
     ///
@@ -2215,18 +1737,6 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
         .transpose()?;
     match command {
         ArtifactCommand::New(args) => create(&args),
-        ArtifactCommand::Resolve {
-            store,
-            id,
-            first,
-            onto,
-        } => resolve_fork(&store, &id, first.as_deref(), &onto),
-        ArtifactCommand::Render { store } => {
-            let opened = open(&store.location, true)?;
-            publish_tree_projection(&opened)?;
-            println!("rendered the projection");
-            Ok(ExitCode::SUCCESS)
-        }
         ArtifactCommand::Move {
             store,
             id,
@@ -2333,8 +1843,7 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             store,
             strict,
             outcome_within,
-            against,
-        } => validate(&store, strict, outcome_within, against.as_deref()),
+        } => validate(&store, strict, outcome_within),
         ArtifactCommand::History { store, id } => history(&store, &id),
         ArtifactCommand::Explain { store, id } => explain(&store, &id),
         ArtifactCommand::Divergences { store } => divergences(&store),
@@ -2385,8 +1894,6 @@ fn artifact_mutation_location(command: &ArtifactCommand) -> Option<&StoreLocatio
     match command {
         ArtifactCommand::New(args) => Some(&args.store.location),
         ArtifactCommand::Move { store, .. }
-        | ArtifactCommand::Resolve { store, .. }
-        | ArtifactCommand::Render { store }
         | ArtifactCommand::Relate { store, .. }
         | ArtifactCommand::Unrelate { store, .. }
         | ArtifactCommand::Body { store, .. }
@@ -2525,35 +2032,6 @@ pub(crate) fn clock_at_the_edge() -> aep_domain::time::Timestamp {
 /// (`crate::drive::session_env`) and read here on every store write, so the two ends of the
 /// declaration are one constant rather than two string literals.
 pub(crate) const ACTOR_ENV: &str = "AEP_ACTOR";
-
-/// Stable invocation identity supplied by a driver-created action.
-///
-/// A direct CLI invocation may instead use `--command-identity`; when neither is present the edge
-/// mints and returns a fresh identity. Keeping the driver's value in one shared constant prevents
-/// the process-launch and command-admission halves from drifting into different environment keys.
-pub(crate) const COMMAND_IDENTITY_ENV: &str = "AEP_COMMAND_IDENTITY";
-
-static MINTED_COMMAND_ORDINAL: AtomicU64 = AtomicU64::new(0);
-
-fn mint_command_identity(request: &[u8]) -> String {
-    let elapsed = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos()
-        .to_be_bytes()
-        .to_vec();
-    let process = std::process::id().to_be_bytes().to_vec();
-    let ordinal = MINTED_COMMAND_ORDINAL
-        .fetch_add(1, Ordering::Relaxed)
-        .to_be_bytes()
-        .to_vec();
-    let digest = aep_contract::migration::digest_parts_v1(
-        "aep.planning-edge-command/1",
-        &[request.to_vec(), elapsed, process, ordinal],
-    )
-    .expect("bounded command identity inputs fit canonical framing");
-    format!("command-{}", digest.as_wire().trim_start_matches("sha256:"))
-}
 
 /// Who the command is from.
 ///
@@ -2760,7 +2238,6 @@ fn entity_body(
 fn create_through_a_command(
     opened: &Opened,
     document: &PlanningDocument,
-    command_identity: Option<&str>,
 ) -> Result<(String, u64)> {
     use aep_contract::command::CommandService;
     use aep_contract::testing::block_on;
@@ -2780,7 +2257,7 @@ fn create_through_a_command(
     )
     .map_err(|error| anyhow::anyhow!("`{}` cannot be given an address: {error}", front.id))?;
 
-    let name = command_identity.map_or_else(|| format!("new-{}", front.id), ToOwned::to_owned);
+    let name = format!("new-{}", front.id);
     let envelope = envelope_for(
         &name,
         "protocol-artifact-new",
@@ -2844,7 +2321,7 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
         })?;
     }
 
-    let (path, _) = create_through_a_command(opened, document, None)?;
+    let (path, _) = create_through_a_command(opened, document)?;
     // The edges, each its own command — the same one `protocol artifact relate` issues, because
     // an edge created at birth and an edge added later are the same act.
     for relation in &front.relations {
@@ -2852,17 +2329,13 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
             backend,
             &front.id,
             relation.kind,
-            relation.target.id(),
-            None,
-        )?;
+            relation.target.id())?;
     }
     Ok(path)
 }
 
 /// `protocol artifact new`
-// One closed command assembles and validates the document, reserves every Eventlog child, then
-// emits the existing format-specific response; keeping that transaction visible is intentional.
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines)] // One closed command assembles, validates and writes the document.
 fn create(args: &NewArgs) -> Result<ExitCode> {
     let kind = ArtifactKind::parse(&args.kind).map_err(|error| anyhow::anyhow!("{error}"))?;
     // The id's namespace is the kind's *canonical* name, whichever spelling was typed, so `adr` and
@@ -2927,109 +2400,6 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     // invariant 14 gives state change exactly one door. The document above is what the command has
     // to produce, not what gets written — `MarkdownBackend` writes it, from the entity.
     let opened = open(&args.store.location, true)?;
-    if matches!(&opened.plan, Plan::Eventlog { .. }) {
-        // Resolve every target before the reservation can admit its first child. The immutable
-        // roster still contains create followed by each relation in caller order; a retry resumes
-        // the first missing child and never changes that order.
-        use aep_contract::query::QueryService;
-        use aep_contract::testing::block_on;
-        use aep_domain::entity::EntityLocator;
-        for relation in &document.frontmatter.relations {
-            let target = relation.target.id();
-            block_on(QueryService::resolve(
-                opened.backend()?,
-                &EntityLocator::new(
-                    aep_backend_markdown::backend::ORGANISATION,
-                    aep_backend_markdown::backend::SPACE,
-                    target.namespace(),
-                    target.name(),
-                )
-                .map_err(|error| {
-                    anyhow::anyhow!("`{target}` cannot be given an address: {error}")
-                })?,
-            ))
-            .map_err(|error| {
-                anyhow::anyhow!(
-                    "`{}` would point at `{target}`, which this store does not hold: {error}",
-                    document.frontmatter.id
-                )
-            })?;
-        }
-        let mut children = vec![serde_json::json!({
-            "operation": "create",
-            "id": id.to_string(),
-            "kind": kind.as_str(),
-            "status": status.as_str(),
-            "data": entity_body(&document),
-        })];
-        children.extend(document.frontmatter.relations.iter().map(|relation| {
-            serde_json::json!({
-                "operation":"relate",
-                "id":id.to_string(),
-                "relation":relation.kind.as_str(),
-                "target":relation.target.to_string(),
-            })
-        }));
-        let request = serde_json::json!({
-            "verb":"new",
-            "id":id.to_string(),
-            "kind":kind.as_str(),
-            "status":status.as_str(),
-            "children":children.clone(),
-        });
-        let mut created_revision = None;
-        if let Some(result) = eventlog_invocation(
-            &args.store,
-            &opened,
-            &request,
-            &children,
-            |backend, planned| {
-                if planned.step_index == 0 {
-                    let (_, revision) = create_through_a_command(
-                        &opened,
-                        &document,
-                        Some(&planned.child_identity),
-                    )?;
-                    created_revision = Some(revision);
-                    return Ok(aep_contract::migration::PlanningMutationResultV1::Created(
-                        aep_contract::migration::CreatedResultV1 {
-                            id: id.to_string(),
-                            kind: kind.as_str().to_owned(),
-                            status: status.as_str().to_owned(),
-                            revision,
-                            path: relative_path_for(&id),
-                        },
-                    ));
-                }
-                let relation = document
-                    .frontmatter
-                    .relations
-                    .get(
-                        usize::try_from(planned.step_index - 1)
-                            .context("the immutable new-command relation index exceeds usize")?,
-                    )
-                    .context("the immutable new-command roster named an absent relation")?;
-                relate_through_a_command(
-                    backend,
-                    &id,
-                    relation.kind,
-                    relation.target.id(),
-                    Some(&planned.child_identity),
-                )?;
-                Ok(aep_contract::migration::PlanningMutationResultV1::Related(
-                    aep_contract::migration::RelationResultV1 {
-                        id: id.to_string(),
-                        relation: relation.kind.as_str().to_owned(),
-                        target: relation.target.to_string(),
-                        revision: created_revision.unwrap_or(1),
-                    },
-                ))
-            },
-        )? {
-            crate::store_command::emit_mutation(&result, args.store.format)?;
-            return Ok(crate::exit_code(result.success()));
-        }
-    }
     let path = write_through_a_command(&opened, &document)?;
     let relative = relative_path_for(&id);
 
@@ -3057,7 +2427,6 @@ fn move_through_a_command(
     id: &ArtifactId,
     to: &ArtifactStatus,
     decided_on: &aep_backend_markdown::journal::Provenance,
-    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
@@ -3092,15 +2461,7 @@ fn move_through_a_command(
         expected_revision: None,
         decided_on: account,
     });
-    let envelope = if let Some(identity) = command_identity {
-        envelope_for(
-            identity,
-            "protocol-artifact-move",
-            "aep.status.move/v1",
-            payload,
-            at,
-        )?
-    } else {
+    let envelope = {
         let name = format!("move-{id}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-{name}")
@@ -3183,8 +2544,6 @@ struct MoveRequest<'a> {
 /// store that does not exist. The caller needs the hops before it needs the reason.
 #[derive(Debug)]
 struct MoveOutcome {
-    /// Every hop named by the original request, including one at which the walk stopped.
-    requested: Vec<ArtifactStatus>,
     /// The hops that were written, in the order they were written.
     made: Vec<Moved>,
     /// What the decision rested on, kept so a caller can say whether it leaned on an assertion.
@@ -3242,7 +2601,6 @@ fn decide_and_move(
     registry: &aep_engine::Registry,
     repository: &Path,
     asked: MoveRequest<'_>,
-    execute_commands: bool,
 ) -> Result<MoveOutcome> {
     let MoveRequest {
         id,
@@ -3273,7 +2631,6 @@ fn decide_and_move(
         .get_mut(id)
         .with_context(|| not_here)?;
     let (standing, ladder, hops) = plan_the_walk(&stored.document, registry, to, via)?;
-    let requested = hops.clone();
 
     // **A walk crosses rungs nothing guards, and stops at the first one that is.** `--via` is for
     // the ceremony a ladder makes somebody type — `draft → proposed → active` is two commands per
@@ -3289,7 +2646,6 @@ fn decide_and_move(
         &standing,
     ) {
         return Ok(MoveOutcome {
-            requested,
             made: Vec::new(),
             decided_on,
             refusal: Some(stopped),
@@ -3321,7 +2677,6 @@ fn decide_and_move(
                 .move_status(rung.clone(), registry.lifecycles(), &evidence, Some(now))
         {
             return Ok(MoveOutcome {
-                requested,
                 made,
                 decided_on,
                 refusal: Some(MoveStopped::Refused { from, refusal }),
@@ -3342,7 +2697,6 @@ fn decide_and_move(
             .find(|finding| !before.contains(*finding) && finding.contains(&id.to_string()))
         {
             return Ok(MoveOutcome {
-                requested,
                 made,
                 decided_on,
                 refusal: Some(MoveStopped::WouldNotValidate {
@@ -3358,9 +2712,7 @@ fn decide_and_move(
         // the decision and the account it rested on. `MarkdownBackend` writes the file and
         // journals it — **once per hop**, so a walk leaves the same record two commands would.
         let _ = relative;
-        if execute_commands {
-            move_through_a_command(opened.backend()?, id, rung, &decided_on, None)?;
-        }
+        move_through_a_command(opened.backend()?, id, rung, &decided_on)?;
         made.push(Moved {
             id: id.to_string(),
             from: from.as_str().to_owned(),
@@ -3371,7 +2723,6 @@ fn decide_and_move(
     }
 
     Ok(MoveOutcome {
-        requested,
         made,
         decided_on,
         refusal: None,
@@ -3474,7 +2825,6 @@ fn move_status(
     let mut opened = open(&args.location, true)?;
     let repository = args.repository_root();
 
-    let execute_commands = !matches!(&opened.plan, Plan::Eventlog { .. });
     let outcome = decide_and_move(
         &mut opened,
         &registry,
@@ -3486,64 +2836,7 @@ fn move_status(
             now: &now,
             via,
         },
-        execute_commands,
     )?;
-
-    if !execute_commands {
-        let children = outcome
-            .requested
-            .iter()
-            .map(|rung| {
-                serde_json::json!({
-                    "operation":"move",
-                    "id":id.to_string(),
-                    "to":rung.as_str(),
-                    "decided_on":outcome.decided_on,
-                })
-            })
-            .collect::<Vec<_>>();
-        let request = serde_json::json!({
-            "verb":"move",
-            "id":id.to_string(),
-            "to":to,
-            "via":via,
-            "now":now,
-            "decided_on":outcome.decided_on,
-            "children":children.clone(),
-        });
-        if let Some(result) =
-            eventlog_invocation(args, &opened, &request, &children, |backend, planned| {
-                let index = usize::try_from(planned.step_index)
-                    .context("the immutable move roster index exceeds usize")?;
-                let made = outcome
-                    .made
-                    .get(index)
-                    .context("the requested status hop was refused before execution")?;
-                let rung = outcome
-                    .requested
-                    .get(index)
-                    .context("the immutable move roster named an absent hop")?;
-                move_through_a_command(
-                    backend,
-                    &id,
-                    rung,
-                    &outcome.decided_on,
-                    Some(&planned.child_identity),
-                )?;
-                Ok(aep_contract::migration::PlanningMutationResultV1::Moved(
-                    aep_contract::migration::MovedResultV1 {
-                        id: id.to_string(),
-                        from: made.from.clone(),
-                        to: made.to.clone(),
-                        revision: made.revision,
-                    },
-                ))
-            })?
-        {
-            crate::store_command::emit_mutation(&result, args.format)?;
-            return Ok(crate::exit_code(result.success()));
-        }
-    }
 
     // Reported before the refusal, because a walk that made two hops and stopped at the third made
     // two real moves and the reader has to see them first.
@@ -3666,7 +2959,6 @@ fn relate_through_a_command(
     source: &ArtifactId,
     relation: RelationKind,
     target: &ArtifactId,
-    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
@@ -3694,22 +2986,13 @@ fn relate_through_a_command(
         source: EntityRef::new(resolve(source)?),
         target: EntityRef::new(resolve(target)?),
     });
-    let envelope = if let Some(identity) = command_identity {
-        envelope_for(
-            identity,
-            "protocol-artifact-relate",
-            "aep.relation.create/v1",
-            payload,
-            at,
-        )?
-    } else {
+    let envelope = {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-{name}")
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            // A fresh ordinary CLI attempt gets a fresh idempotency key. A coordinated
-            // Eventlog retry instead takes the exact reserved child identity above.
+            // A fresh CLI attempt gets a fresh idempotency key.
             format!("rel-{name}-{}", at.epoch_millis())
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
@@ -3787,35 +3070,7 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
     // frontmatter, so the document above is what this verb had to check a graph against — not what
     // gets written.
     let _ = relative;
-    if let Some(result) = eventlog_invocation(
-        args,
-        &opened,
-        &serde_json::json!({"verb":"relate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
-        &[
-            serde_json::json!({"operation":"relate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
-        ],
-        |backend, planned| {
-            relate_through_a_command(
-                backend,
-                &id,
-                relation,
-                target.id(),
-                Some(&planned.child_identity),
-            )?;
-            Ok(aep_contract::migration::PlanningMutationResultV1::Related(
-                aep_contract::migration::RelationResultV1 {
-                    id: id.to_string(),
-                    relation: relation.as_str().to_owned(),
-                    target: target.to_string(),
-                    revision: document.frontmatter.revision,
-                },
-            ))
-        },
-    )? {
-        crate::store_command::emit_mutation(&result, args.format)?;
-        return Ok(crate::exit_code(result.success()));
-    }
-    relate_through_a_command(opened.backend()?, &id, relation, target.id(), None)?;
+    relate_through_a_command(opened.backend()?, &id, relation, target.id())?;
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} (revision {})",
@@ -3847,7 +3102,6 @@ fn unrelate_through_a_command(
     source: &ArtifactId,
     relation: RelationKind,
     target: &ArtifactId,
-    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::{QueryService, RelationQuery};
@@ -3892,15 +3146,7 @@ fn unrelate_through_a_command(
     let payload = Command::RemoveRelation(RemoveRelation {
         relation: edge.id.clone(),
     });
-    let envelope = if let Some(identity) = command_identity {
-        envelope_for(
-            identity,
-            "protocol-artifact-unrelate",
-            "aep.relation.remove/v1",
-            payload,
-            at,
-        )?
-    } else {
+    let envelope = {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-unrel-{name}")
@@ -3993,37 +3239,7 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
     // Through a command. The edge the contract removes is what `MarkdownBackend` takes out of the
     // frontmatter, so the document above is what this verb had to check a graph against — not what
     // gets written.
-    if let Some(result) = eventlog_invocation(
-        args,
-        &opened,
-        &serde_json::json!({"verb":"unrelate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
-        &[
-            serde_json::json!({"operation":"unrelate","id":id.to_string(),"relation":relation.as_str(),"target":target.to_string()}),
-        ],
-        |backend, planned| {
-            unrelate_through_a_command(
-                backend,
-                &id,
-                relation,
-                target.id(),
-                Some(&planned.child_identity),
-            )?;
-            Ok(
-                aep_contract::migration::PlanningMutationResultV1::Unrelated(
-                    aep_contract::migration::RelationResultV1 {
-                        id: id.to_string(),
-                        relation: relation.as_str().to_owned(),
-                        target: target.to_string(),
-                        revision: document.frontmatter.revision,
-                    },
-                ),
-            )
-        },
-    )? {
-        crate::store_command::emit_mutation(&result, args.format)?;
-        return Ok(crate::exit_code(result.success()));
-    }
-    unrelate_through_a_command(opened.backend()?, &id, relation, target.id(), None)?;
+    unrelate_through_a_command(opened.backend()?, &id, relation, target.id())?;
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} removed (revision {})",
@@ -4051,7 +3267,6 @@ fn update_through_a_command(
     id: &ArtifactId,
     changes: impl IntoIterator<Item = (String, aep_domain::node::Node)>,
     correlation: &str,
-    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
@@ -4074,9 +3289,7 @@ fn update_through_a_command(
         target: EntityRef::new(target),
         changes: changes.into_iter().collect(),
     });
-    let envelope = if let Some(identity) = command_identity {
-        envelope_for(identity, correlation, "aep.entity.update/v1", payload, at)?
-    } else {
+    let envelope = {
         let name = format!("{correlation}-{id}").replace([':', '/'], "-");
         let context = CommandContext::new(
             format!("req-{name}")
@@ -4329,48 +3542,11 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
         aep_backend_markdown::backend::BODY_KEY.to_owned(),
         aep_domain::node::Node::from(document.body.as_str()),
     )];
-    let body_digest = aep_contract::migration::digest_parts_v1(
-        "aep.planning-body/1",
-        &[document.body.as_bytes().to_vec()],
-    )?;
-    if let Some(result) = eventlog_invocation(
-        args,
-        &opened,
-        &serde_json::json!({"verb":"body","id":id.to_string(),"edit":edit.correlation()}),
-        &[serde_json::json!({
-            "operation":"update",
-            "id":id.to_string(),
-            "changes":serde_json::to_value(&body_change)?,
-        })],
-        |backend, planned| {
-            update_through_a_command(
-                backend,
-                &id,
-                body_change.clone(),
-                edit.correlation(),
-                Some(&planned.child_identity),
-            )?;
-            Ok(
-                aep_contract::migration::PlanningMutationResultV1::BodyUpdated(
-                    aep_contract::migration::BodyUpdatedResultV1 {
-                        id: id.to_string(),
-                        revision: document.frontmatter.revision,
-                        body_digest,
-                    },
-                ),
-            )
-        },
-    )? {
-        crate::store_command::emit_mutation(&result, args.format)?;
-        return Ok(crate::exit_code(result.success()));
-    }
     update_through_a_command(
         opened.backend()?,
         &id,
         body_change,
-        edit.correlation(),
-        None,
-    )?;
+        edit.correlation())?;
     let path = opened.path_of(&id);
     match args.format {
         Format::Text => outln!(
@@ -4605,46 +3781,11 @@ fn set(
     // than guessed only if that stops being true.
     let revision = front.revision.saturating_add(1);
     let relative = stored.relative_path.clone();
-    let request = serde_json::json!({
-        "verb": "set",
-        "id": id.to_string(),
-        "fields": named,
-    });
-    let child = serde_json::json!({
-        "operation": "update",
-        "id": id.to_string(),
-        "changes": serde_json::to_value(&changes)?,
-    });
-    if let Some(result) =
-        eventlog_invocation(args, &opened, &request, &[child], |backend, planned| {
-            update_through_a_command(
-                backend,
-                &id,
-                changes.clone(),
-                "protocol-artifact-set",
-                Some(&planned.child_identity),
-            )?;
-            Ok(
-                aep_contract::migration::PlanningMutationResultV1::FieldsSet(
-                    aep_contract::migration::FieldsSetResultV1 {
-                        id: id.to_string(),
-                        revision,
-                        fields: named.clone(),
-                    },
-                ),
-            )
-        })?
-    {
-        crate::store_command::emit_mutation(&result, args.format)?;
-        return Ok(crate::exit_code(result.success()));
-    }
     update_through_a_command(
         opened.backend()?,
         &id,
         changes,
-        "protocol-artifact-set",
-        None,
-    )?;
+        "protocol-artifact-set")?;
 
     let path = opened.path_of(&id);
     match args.format {
@@ -4763,48 +3904,11 @@ fn scope(
     let relative = stored.relative_path.clone();
     let written = entries.clone();
     let scope_change = vec![("scope".to_owned(), scope_node(&entries))];
-    let scope_digest = aep_contract::migration::digest_parts_v1(
-        "aep.planning-scope/1",
-        &[serde_json::to_vec(&entries)?],
-    )?;
-    if let Some(result) = eventlog_invocation(
-        args,
-        &opened,
-        &serde_json::json!({"verb":"scope","id":id.to_string(),"entries":entries}),
-        &[serde_json::json!({
-            "operation":"update",
-            "id":id.to_string(),
-            "changes":serde_json::to_value(&scope_change)?,
-        })],
-        |backend, planned| {
-            update_through_a_command(
-                backend,
-                &id,
-                scope_change.clone(),
-                "protocol-artifact-scope",
-                Some(&planned.child_identity),
-            )?;
-            Ok(
-                aep_contract::migration::PlanningMutationResultV1::ScopeUpdated(
-                    aep_contract::migration::ScopeUpdatedResultV1 {
-                        id: id.to_string(),
-                        revision,
-                        scope_digest,
-                    },
-                ),
-            )
-        },
-    )? {
-        crate::store_command::emit_mutation(&result, args.format)?;
-        return Ok(crate::exit_code(result.success()));
-    }
     update_through_a_command(
         opened.backend()?,
         &id,
         scope_change,
-        "protocol-artifact-scope",
-        None,
-    )?;
+        "protocol-artifact-scope")?;
 
     let path = opened.path_of(&id);
     match args.format {
@@ -5983,61 +5087,10 @@ fn reviews(stored: &aep_backend_markdown::StoredDocument, subject: &ArtifactId) 
         })
 }
 
-/// Every `review-result` the plan holds.
-fn review_results(
-    opened: &Opened,
-) -> impl Iterator<Item = &aep_backend_markdown::StoredDocument> {
-    opened
-        .report
-        .documents
-        .values()
-        .filter(|stored| stored.document.frontmatter.kind == ArtifactKind::ReviewResult)
-}
-
-/// The artifacts `review` declares it `reviews` — the ones its outcome is written on.
-///
-/// A `review_outcome` is a record **about the reviewed artifact** that names the review
-/// ([`evidence_through_a_command`] takes the reviewed id, and the review as what it `answers`),
-/// and the evidence verb refuses to record one on an artifact the review does not `reviews`. So
-/// what became of a review is in its subjects' history, and its own history holds only when it
-/// was recorded.
-fn subjects_of(
-    review: &aep_backend_markdown::StoredDocument,
-) -> impl Iterator<Item = &ArtifactId> {
-    review
-        .document
-        .frontmatter
-        .relations
-        .iter()
-        .filter(|relation| relation.kind == RelationKind::Reviews)
-        .map(|relation| relation.target.id())
-}
-
 /// The store's history behind every review it holds: each review's own record, whose `Created`
 /// entry is when it was recorded, and each of its subjects', where its outcomes are.
-///
-/// Through [`Opened::history_of`], so on an Eventlog plan the authority is read for these
-/// artifacts and no others — a plan with no `review-result` reads it for nothing, and `validate`,
-/// which asks this on every run, costs a plan without reviews no authority read at all.
 fn review_history(opened: &Opened) -> Vec<aep_backend_markdown::journal::Entry> {
-    opened.history_of(review_results(opened).flat_map(|review| {
-        std::iter::once(&review.document.frontmatter.id).chain(subjects_of(review))
-    }))
-}
-
-/// Where a plan's own record puts a review, for the order [`reviews_of`] answers in.
-///
-/// One variant per kind of record, and a plan has one kind, so the two are never compared with
-/// each other; `Ord` across them exists only so the sort key has a type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Ordinal {
-    /// The line the journal recorded it on, for a plan whose record the journal is.
-    Line(usize),
-    /// The instant the authority recorded its creation, as epoch milliseconds, for an Eventlog
-    /// plan, and the position the store keeps that record at — which is what tells two rounds
-    /// recorded in one second apart. The authority writes its instants to the second, so the
-    /// instant alone fell to the id and put two rounds back to front (`review-2`, finding 3).
-    At(u64, StorePosition),
+    opened.history_of()
 }
 
 /// The reviews of `subject`, oldest first.
@@ -6046,57 +5099,28 @@ enum Ordinal {
 /// the reason [`joined`] gives: `at` is when the caller says they looked, it is written to the
 /// second, and two reviews recorded in one second have the same one. A plan whose journal is its
 /// record ([`Opened::journal`]) holds the order the store was actually written in, which is the
-/// order a second round happened in, and that is the order here. An Eventlog plan's record is its
-/// authority, which keeps history per entity and no order across entities; what it does hold is
-/// the instant it recorded each review's `Created` entry, and that — read through
-/// [`Opened::history_of`] for the reviews of `subject` and for nothing else — is the order here,
-/// with the id breaking a same-second tie. A review the record says nothing about falls to the
-/// id, so the answer is at least stable.
-///
-/// The frozen journal under a migrated Eventlog plan's projection is **not** consulted: it holds
-/// every review recorded before the cut-over and nothing about one recorded since, which is a
-/// partial order, and `Option`'s ordering put the reviews it said nothing about first — the
-/// second round sorted ahead of the first, and the pair `findings` compares by default was the
-/// two the wrong way round. Falling to the id alone was no answer either: rounds named for their
-/// reviewers, `zulu` then `alpha`, sort against the order they happened in, and the ledger called
-/// every finding the second round resolved new.
+/// order a second round happened in, and that is the order here. A review the record says nothing
+/// about falls to the id, so the answer is at least stable.
 fn reviews_of<'a>(
     opened: &'a Opened,
     subject: &ArtifactId,
 ) -> Vec<&'a aep_backend_markdown::StoredDocument> {
-    use aep_backend_markdown::journal::Change;
-
     let mut found: Vec<&aep_backend_markdown::StoredDocument> = opened
         .report
         .documents
         .values()
         .filter(|stored| reviews(stored, subject))
         .collect();
-    let order: BTreeMap<ArtifactId, Ordinal> = if let Some((entries, _)) = opened.log() {
-        entries
-            .into_iter()
-            .enumerate()
-            .map(|(index, entry)| (entry.artifact, Ordinal::Line(index)))
-            .collect()
-    } else {
-        let mut recorded = BTreeMap::new();
-        let ids: Vec<&ArtifactId> = found
-            .iter()
-            .map(|stored| &stored.document.frontmatter.id)
-            .collect();
-        for (position, entry) in opened.positioned_history_of(ids) {
-            let Change::Created { .. } = entry.change else {
-                continue;
-            };
-            let Ok(at) = instant(&entry.at) else {
-                continue;
-            };
-            recorded
-                .entry(entry.artifact)
-                .or_insert(Ordinal::At(at.epoch_millis(), position));
-        }
-        recorded
-    };
+    let order: BTreeMap<ArtifactId, usize> = opened
+        .log()
+        .map(|(entries, _)| {
+            entries
+                .into_iter()
+                .enumerate()
+                .map(|(index, entry)| (entry.artifact, index))
+                .collect()
+        })
+        .unwrap_or_default();
     found.sort_by(|left, right| {
         let key = |stored: &aep_backend_markdown::StoredDocument| {
             (
@@ -6278,11 +5302,7 @@ fn print_ledger(ledger: &FindingsLedger) {
 /// out rather than guessed at: a document predating the event log is already its own reported
 /// class, and reporting it twice under a second heading would say two things about one gap.
 ///
-/// The history, and not the journal file ([`review_history`]). Reading only the journal
-/// emptied this class outright on every migrated Eventlog plan — including a review recorded
-/// *before* the cut-over, whose creation the frozen journal still holds and whose document the
-/// authority holds — while `website/docs/reference/cli.md` promises the class unconditionally. A
-/// class that is empty because of where a plan keeps its records is a silence, not an answer.
+/// Read through [`review_history`], which is the plan's own record whatever form it takes.
 fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
     use aep_backend_markdown::journal::Change;
 
@@ -6386,9 +5406,6 @@ struct ReviewRecords {
 }
 
 /// The store's own history, read once for both things the table needs from it.
-///
-/// Through [`review_history`], so a migrated Eventlog plan is counted from its authority and not
-/// from the journal the migration froze under its projection.
 fn review_records(opened: &Opened) -> ReviewRecords {
     use aep_backend_markdown::journal::Change;
 
@@ -6578,15 +5595,11 @@ fn validate(
     args: &StoreArgs,
     strict: bool,
     outcome_within: u64,
-    against: Option<&str>,
 ) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let registry = args.lifecycles()?;
     let mut summary = findings(&opened, &registry, &args.repository_root());
     summary.without_an_outcome = reviews_without_an_outcome(&opened, outcome_within);
-    let tree = tree_findings(&opened, against)?;
-    summary.problems.extend(tree.problems);
-    summary.skipped = tree.skipped;
 
     match args.format {
         Format::Text => print_validation(&summary, strict),
@@ -6663,9 +5676,8 @@ pub(crate) fn findings(
         .collect();
     // The journal and the event log are a markdown plan's; a SQLite or Postgres plan keeps its
     // history in the store and the contract answers it, so there is no second record to reconcile
-    // — and the journal under an Eventlog plan's projection is not one either: it is the migrated
-    // store's, and it ends where the migration did (`Opened::journal`).
-    let mut log = match opened.journal() {
+    // — and a Git-native plan reads its record through `Opened::log` instead.
+    let log = match opened.journal() {
         Some(store) => {
             let log = log_findings(store.root(), report, &held);
             problems.extend(log.problems.iter().cloned());
@@ -6682,36 +5694,6 @@ pub(crate) fn findings(
             chain_uncovered: 0,
         },
     };
-    // An Eventlog plan's drift is the projection's, and the authority decides it: every command
-    // publishes a watermark over the documents it wrote, so a projection whose owned files digest
-    // to no watermark the authority holds was changed by something that was not a command. It is
-    // the fact `plan store verify` reports as `projection_drift`, asked here so that `validate`
-    // neither invents drift from the frozen journal nor stops seeing the real kind.
-    // A tree authority keeps no watermark inventory to hold the projection to: its documents are
-    // held to a fresh render instead (`tree_findings`, S5). This check opens a file authority, and
-    // pointing it at a tree would write a file store into the tree's directory.
-    if let Plan::Eventlog {
-        authority_root,
-        projection_root,
-        authority,
-        tree: None,
-        ..
-    } = &opened.plan
-    {
-        if let Err(disagreement) =
-            crate::store_command::projection_current(authority_root, projection_root, authority)
-        {
-            let finding = format!(
-                "the projection {} drifted from its authority: {disagreement:#} — an edit made \
-                 outside a command is a change nothing decided; `aep plan store verify` names the \
-                 mismatch, and `aep plan store rebuild --authority-snapshot <id>` writes the \
-                 projection the authority holds",
-                projection_root.display()
-            );
-            problems.push(finding.clone());
-            log.drift.push(finding);
-        }
-    }
 
     // A Git-native plan has no journal to drift from; what it holds instead is each document's own
     // transitions and one file per evidence record, and both are checked here.
@@ -6772,7 +5754,6 @@ pub(crate) fn findings(
         without_findings,
         without_an_outcome: Vec::new(),
         unscoped: unscoped_stories(report, registry.lifecycles()),
-        skipped: Vec::new(),
     }
 }
 
@@ -7062,9 +6043,6 @@ fn print_validation(summary: &Summary, strict: bool) {
                 outln!("  - {note}");
             }
         }
-    }
-    for skipped in &summary.skipped {
-        outln!("{skipped}");
     }
     if summary.problems.is_empty() {
         outln!("valid");
@@ -7454,23 +6432,15 @@ fn review_outcome_of<'a>(
 ///
 /// Read from the store's history rather than from the reviewed artifact's own evidence count,
 /// because the count says *how many `review_outcome` records* and this question is *which
-/// review*. [`Opened::history_of`] is where that history is: the journal for the plan whose
-/// record it is, the authority for an Eventlog plan — whose projected journal ends at the
-/// migration, so a review answered after the cut-over read as one nobody ever acted on — read for
-/// the artifacts the review `reviews`, where its outcomes are written ([`subjects_of`]), and for
-/// no others. A SQLite or Postgres plan answers no outcomes here rather than a wrong number, which
+/// review*. [`Opened::history_of`] is where that history is: the journal of a markdown or hybrid
+/// plan, the transitions and evidence files of a Git-native plan; outcomes are written on the
+/// artifacts the review `reviews`. A SQLite or Postgres plan answers no outcomes here rather than a wrong number, which
 /// is invariant 5 rather than a gap nobody wrote down.
 fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
     use aep_backend_markdown::journal::Change;
 
-    let subjects = opened
-        .report
-        .documents
-        .get(review)
-        .into_iter()
-        .flat_map(subjects_of);
     opened
-        .history_of(subjects)
+        .history_of()
         .into_iter()
         .filter_map(|entry| match entry.change {
             Change::Evidence {
@@ -7501,7 +6471,7 @@ fn outcomes_of(opened: &Opened, review: &ArtifactId) -> Vec<ShownOutcome> {
 /// `validate --strict` reported the answered review as one nobody acted on. This is the symmetric
 /// half of the same rule.
 ///
-/// It is a rule about the store and not about one backend: markdown, hybrid and Eventlog plans all
+/// It is a rule about the store and not about one backend: markdown, hybrid and Git-native plans all
 /// make it. A SQLite or Postgres plan answers no history here and so refuses nothing, which is the
 /// same *no outcomes rather than a wrong number* position [`outcomes_of`] takes rather than a
 /// second rule. `reviews` is the only relation a record names — a `review_outcome` is the only
@@ -7539,7 +6509,7 @@ fn outcomes_resting_on(opened: &Opened, review: &ArtifactId, subject: &ArtifactI
     use aep_backend_markdown::journal::Change;
 
     opened
-        .history_of(std::iter::once(subject))
+        .history_of()
         .into_iter()
         .filter_map(|entry| match entry.change {
             Change::Evidence {
@@ -7570,7 +6540,6 @@ fn evidence_through_a_command(
     answers: Option<(&ArtifactId, aep_domain::review::ReviewOutcome)>,
     reference: Option<&str>,
     at: aep_domain::time::Timestamp,
-    command_identity: Option<&str>,
 ) -> Result<()> {
     use aep_contract::command::CommandService;
     use aep_contract::query::QueryService;
@@ -7588,15 +6557,7 @@ fn evidence_through_a_command(
     let target = block_on(QueryService::resolve(backend, &locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
 
-    let name = command_identity.map_or_else(
-        || {
-            format!(
-                "evidence-{id}-{kind}-{}",
-                clock_at_the_edge().epoch_millis()
-            )
-        },
-        ToOwned::to_owned,
-    );
+    let name = format!("evidence-{id}-{kind}-{}", clock_at_the_edge().epoch_millis());
     let envelope = envelope_for(
         &name,
         "protocol-artifact-evidence",
@@ -7900,47 +6861,6 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     // decision reads without passing the door every other write passes — the same deviation D-P1
     // was, and invisible to a scan looking only for store writes.
     let observed_at = instant(&at)?;
-    let revision = stored.document.frontmatter.revision;
-    let child = serde_json::json!({
-        "operation": "record_evidence",
-        "id": id.to_string(),
-        "kind": kind.as_str(),
-        "source": source,
-        "reference": reference,
-        "review": answers.map(|(review, _)| review.to_string()),
-        "outcome": answers.map(|(_, outcome)| outcome.as_str()),
-        "at": at,
-    });
-    if let Some(result) = eventlog_invocation(
-        args,
-        &opened,
-        &serde_json::json!({"verb":"evidence","id":id.to_string(),"record":child.clone()}),
-        &[child],
-        |backend, planned| {
-            evidence_through_a_command(
-                backend,
-                &id,
-                kind,
-                &source,
-                answers,
-                reference.as_deref(),
-                observed_at,
-                Some(&planned.child_identity),
-            )?;
-            Ok(
-                aep_contract::migration::PlanningMutationResultV1::EvidenceRecorded(
-                    aep_contract::migration::EvidenceRecordedResultV1 {
-                        id: id.to_string(),
-                        evidence_id: planned.child_identity.clone(),
-                        revision,
-                    },
-                ),
-            )
-        },
-    )? {
-        crate::store_command::emit_mutation(&result, args.format)?;
-        return Ok(crate::exit_code(result.success()));
-    }
     evidence_through_a_command(
         opened.backend()?,
         &id,
@@ -7948,9 +6868,7 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
         &source,
         answers,
         reference.as_deref(),
-        observed_at,
-        None,
-    )?;
+        observed_at)?;
 
     let on_hand = opened.evidence_on_hand(&id)?;
     match args.format {
@@ -8164,13 +7082,10 @@ fn history_from_the_contract(args: &StoreArgs, id: &ArtifactId) -> Result<ExitCo
 /// The **only** reading path `explain` has, in every store, and the one `history` takes wherever
 /// there is no journal file to read instead. A question the store answers must have one answer: a
 /// second way of reading the same events is a second answer waiting to drift from the first.
-fn positioned_entries_from_the_contract(
+pub(crate) fn entries_from_the_contract(
     opened: &Opened,
     id: &ArtifactId,
-) -> Result<(
-    Vec<(StorePosition, aep_backend_markdown::journal::Entry)>,
-    usize,
-)> {
+) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::entity::EntityLocator;
@@ -8181,15 +7096,7 @@ fn positioned_entries_from_the_contract(
         if !opened.report.documents.contains_key(id) {
             bail!("{}", opened.missing(id));
         }
-        let (entries, unreadable) = aep_backend_markdown::journal::history_git(root, evidence, id);
-        return Ok((
-            entries
-                .into_iter()
-                .enumerate()
-                .map(|(index, entry)| (StorePosition::Recorded(index as u64), entry))
-                .collect(),
-            unreadable,
-        ));
+        return Ok(aep_backend_markdown::journal::history_git(root, evidence, id));
     }
 
     let backend = opened.backend()?;
@@ -8203,18 +7110,6 @@ fn positioned_entries_from_the_contract(
     let entity = block_on(backend.resolve(&locator)).with_context(|| opened.missing(id))?;
 
     backend.entries_of(&entity, id)
-}
-
-/// The same reading, with the position the store keeps each entry at ([`StorePosition`]).
-pub(crate) fn entries_from_the_contract(
-    opened: &Opened,
-    id: &ArtifactId,
-) -> Result<(Vec<aep_backend_markdown::journal::Entry>, usize)> {
-    let (entries, unreadable) = positioned_entries_from_the_contract(opened, id)?;
-    Ok((
-        entries.into_iter().map(|(_, entry)| entry).collect(),
-        unreadable,
-    ))
 }
 
 /// `protocol artifact explain`
@@ -9349,11 +8244,6 @@ pub(crate) struct Summary {
     /// so rather than pretending the store decided it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     without_an_outcome: Vec<String>,
-    /// Rules that were asked for and could not apply, each with the reason. Not a problem: a rule
-    /// with nothing to hold the tree to is not a rule the tree broke, but a reader who asked for
-    /// it must see that it did not run rather than read its silence as a pass.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    skipped: Vec<String>,
 }
 
 /// What `findings` compared, and what it found.
@@ -9489,21 +8379,6 @@ mod tests {
     }
 
     #[test]
-    fn a_direct_edge_mints_distinct_valid_retry_identities() {
-        let first = mint_command_identity(br#"{"verb":"move","id":"story:one"}"#);
-        let second = mint_command_identity(br#"{"verb":"move","id":"story:one"}"#);
-        assert_ne!(
-            first, second,
-            "two new invocations must not share a reservation"
-        );
-        assert!(
-            aep_contract::migration::MigrationIdV1::new(first).is_ok(),
-            "the returned identity must be accepted unchanged on retry"
-        );
-        assert!(aep_contract::migration::MigrationIdV1::new(second).is_ok());
-    }
-
-    #[test]
     fn an_edge_argument_splits_at_the_first_colon_only() {
         // `derived_from:epic:passwordless` has three segments and one meaning: the target id keeps
         // its own colon. Splitting at the last would produce the relation `derived_from:epic`.
@@ -9546,7 +8421,6 @@ pub(crate) fn board_of(location: &StoreLocation, kind: Option<&str>) -> Result<V
     let args = StoreArgs {
         location: location.clone(),
         format: Format::Json,
-        command_identity: None,
     };
     let opened = open(location, false)?;
     let ladders = ladders_or_none(&args);
@@ -9595,7 +8469,6 @@ pub(crate) fn explained_of(location: &StoreLocation, id: &str) -> Result<Explain
     let args = StoreArgs {
         location: location.clone(),
         format: Format::Json,
-        command_identity: None,
     };
     let id = artifact_id(id)?;
     let opened = open(location, true)?;
@@ -9650,26 +8523,17 @@ pub(crate) fn moved_by(
     id: &str,
     to: &str,
     decided_on: Option<&str>,
-    command_identity: Option<&str>,
 ) -> Result<ServedMove> {
     let _writer_fence = location.acquire_writer_fence()?;
     let args = StoreArgs {
         location: location.clone(),
         format: Format::Json,
-        command_identity: command_identity.map(ToOwned::to_owned),
     };
     let id = artifact_id(id)?;
     let registry = args.lifecycles()?;
     let mut opened = open(location, true)?;
-    if matches!(&opened.plan, Plan::Eventlog { .. }) && command_identity.is_none() {
-        bail!("an Eventlog served mutation requires command_identity for exact retry");
-    }
-    if matches!(&opened.plan, Plan::Eventlog { .. }) && decided_on.is_none() {
-        bail!("an Eventlog served mutation requires decided_on so a retry reproduces the request");
-    }
     let now = decided_on.map_or_else(now_at_the_edge, ToOwned::to_owned);
     let repository = args.repository_root();
-    let execute_commands = !matches!(&opened.plan, Plan::Eventlog { .. });
     let outcome = decide_and_move(
         &mut opened,
         &registry,
@@ -9681,60 +8545,7 @@ pub(crate) fn moved_by(
             now: &now,
             via: false,
         },
-        execute_commands,
     )?;
-    let mutation = if execute_commands {
-        None
-    } else {
-        let children = outcome
-            .requested
-            .iter()
-            .map(|rung| {
-                serde_json::json!({
-                    "operation":"move",
-                    "id":id.to_string(),
-                    "to":rung.as_str(),
-                    "decided_on":outcome.decided_on,
-                })
-            })
-            .collect::<Vec<_>>();
-        let request = serde_json::json!({
-            "verb":"served_move",
-            "id":id.to_string(),
-            "to":to,
-            "via":false,
-                "now":now,
-                "decided_on":outcome.decided_on,
-            "children":children.clone(),
-        });
-        eventlog_invocation(&args, &opened, &request, &children, |backend, planned| {
-            let index = usize::try_from(planned.step_index)
-                .context("the immutable served move roster index exceeds usize")?;
-            let made = outcome
-                .made
-                .get(index)
-                .context("the requested served status hop was refused before execution")?;
-            let rung = outcome
-                .requested
-                .get(index)
-                .context("the immutable served move roster named an absent hop")?;
-            move_through_a_command(
-                backend,
-                &id,
-                rung,
-                &outcome.decided_on,
-                Some(&planned.child_identity),
-            )?;
-            Ok(aep_contract::migration::PlanningMutationResultV1::Moved(
-                aep_contract::migration::MovedResultV1 {
-                    id: id.to_string(),
-                    from: made.from.clone(),
-                    to: made.to.clone(),
-                    revision: made.revision,
-                },
-            ))
-        })?
-    };
     let leans_on_an_assertion = outcome.decided_on.leans_on_an_assertion();
     let refusal = outcome.refusal.map(|stopped| match stopped {
         MoveStopped::Refused { from, refusal } => ServedRefusal {
@@ -9764,7 +8575,6 @@ pub(crate) fn moved_by(
         made: outcome.made,
         leans_on_an_assertion,
         refusal,
-        mutation,
     })
 }
 
@@ -9790,23 +8600,15 @@ pub(crate) struct ServedMove {
     /// Why it stopped, when it did.
     #[serde(skip_serializing_if = "Option::is_none")]
     refusal: Option<ServedRefusal>,
-    /// Exact durable invocation and projection receipts for an Eventlog-backed served mutation.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    mutation: Option<aep_contract::migration::PlanningMutationEnvelopeV1>,
 }
 
 impl ServedMove {
-    /// HTTP status required by the closed served-mutation result contract.
+    /// HTTP status: 200 when the move was made, 409 when it stopped.
     pub(crate) fn http_status(&self) -> u16 {
-        use aep_contract::migration::PlanningMutationOutcomeV1;
-
-        match self.mutation.as_ref().map(|mutation| &mutation.outcome) {
-            Some(PlanningMutationOutcomeV1::Complete(_)) => 200,
-            Some(PlanningMutationOutcomeV1::Uncertain(_)) => 503,
-            Some(PlanningMutationOutcomeV1::CommittedProjectionFailure(_)) => 500,
-            None if self.refusal.is_none() => 200,
-            Some(PlanningMutationOutcomeV1::Partial(_) | PlanningMutationOutcomeV1::Refused(_))
-            | None => 409,
+        if self.refusal.is_none() {
+            200
+        } else {
+            409
         }
     }
 }
@@ -9825,454 +8627,4 @@ pub(crate) struct ServedRefusal {
     /// What the would-be store would have reported.
     #[serde(skip_serializing_if = "Option::is_none")]
     finding: Option<String>,
-}
-
-/// `aep plan artifact resolve`.
-fn resolve_fork(args: &StoreArgs, id: &str, first: Option<&str>, onto: &str) -> Result<ExitCode> {
-    use aep_contract::query::QueryService;
-    use aep_contract::testing::block_on;
-    use aep_domain::entity::EntityLocator;
-
-    let id = artifact_id(id)?;
-    let opened = open(&args.location, true)?;
-    let Plan::Eventlog {
-        authority_root,
-        tree: Some(repository),
-        ..
-
-    } = &opened.plan
-    else {
-        bail!("`resolve` joins a fork in an `aep.project/3` tree store, and this plan is not one");
-    };
-    let PlanBackend::Eventlog(plan) = opened.backend()? else {
-        bail!("an Eventlog plan opened a backend of another kind");
-    };
-    let locator = EntityLocator::new(
-        aep_backend_markdown::backend::ORGANISATION,
-        aep_backend_markdown::backend::SPACE,
-        id.namespace(),
-        id.name(),
-    )
-    .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
-    let entity = block_on(QueryService::resolve(plan, &locator))
-        .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
-    let entity_id = entity.to_string();
-    let heads = plan
-        .with_store(|store| store.heads_of(&entity_id))
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
-    if heads.len() < 2 {
-        bail!("`{id}` has not forked; there is nothing to resolve");
-    }
-    let first = if let Some(first) = first {
-        first.to_owned()
-    } else {
-            let listing = std::process::Command::new("git")
-                .arg("-C")
-                .arg(repository)
-                .args(["ls-tree", "-r", "--name-only", onto, "--"])
-                .arg(authority_root.strip_prefix(repository).unwrap_or(authority_root))
-                .output()
-                .with_context(|| format!("listing {onto} with git"))?;
-            if !listing.status.success() {
-                bail!(
-                    "`git ls-tree {onto}` failed; fetch it, or name the head to keep with \
-                     `--first` (heads: {})",
-                    heads.join(", ")
-                );
-            }
-            let listed = String::from_utf8_lossy(&listing.stdout);
-            let held: Vec<&String> = heads
-                .iter()
-                .filter(|head| listed.lines().any(|line| line.ends_with(&format!("/{head}.json"))))
-                .collect();
-            match held.as_slice() {
-                [only] => (*only).clone(),
-                [] => bail!(
-                    "no head of `{id}` is in {onto}; name the one to keep with `--first` \
-                     (heads: {})",
-                    heads.join(", ")
-                ),
-                _ => bail!(
-                    "every head of `{id}` is in {onto}; name the one to keep with `--first` \
-                     (heads: {})",
-                    heads.join(", ")
-                ),
-            }
-    };
-    let outcome = plan
-        .with_store(|store| store.resolve(&entity_id, &first, &now_at_the_edge()))
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
-
-    publish_tree_projection(&opened)?;
-
-    println!(
-        "resolved {id}: kept head {} at revision {}, joined {} heads",
-        outcome.first,
-        outcome.revision,
-        outcome.heads.len()
-    );
-    for record in &outcome.not_carried {
-        println!("  not carried over: {record}");
-    }
-    Ok(ExitCode::SUCCESS)
-}
-
-/// The rules only a tree authority has, as problems: its files (`eventlog verify` V1–V5, and V2
-/// against `against`), an artifact two branches forked (S3), a document that is not its render
-/// (S5) and an absolute home path in any committed planning file (S9).
-///
-/// V2 is skipped, and says so, when `against` holds no tree store: an `aep.project/2` base — the
-/// commit a cutover is measured against — has no committed tree file V2 could hold the head to,
-/// and every file it does hold would otherwise read as deleted. On an `aep.project/4` store it is
-/// skipped against a base whose selector is an earlier version, every content blob must hash to its
-/// name (C1), and the blob directory is held to S9 too.
-#[allow(clippy::too_many_lines)] // One pass over every rule a tree has, in the order they report.
-fn tree_findings(opened: &Opened, against: Option<&str>) -> Result<TreeFindings> {
-    let Plan::Eventlog {
-        authority_root,
-        projection_root,
-        authority: selected,
-        tree: Some(repository),
-        blobs,
-    } = &opened.plan
-    else {
-        return Ok(TreeFindings::default());
-    };
-    let mut problems = Vec::new();
-    let mut skipped = Vec::new();
-
-    let scratch = std::env::temp_dir().join(format!(
-        "aep-validate-{}-{}",
-        std::process::id(),
-        authority_root.display().to_string().len()
-    ));
-    let base = match against {
-        Some(revision) if blobs.is_some() && !base_keeps_content_blobs(repository, revision)? => {
-            skipped.push(format!(
-                "V2 skipped: {revision} selects no `{}` store; the content migration wrote every \
-                 authority file anew",
-                aep_domain::project::PROJECT_VERSION_V4
-            ));
-            None
-        }
-        Some(revision) => {
-            let relative = authority_root.strip_prefix(repository).unwrap_or(authority_root);
-            let marker = relative.join(TREE_STORE_MARKER);
-            if holds_file(repository, revision, &marker)? {
-                Some(materialize(repository, revision, relative, &scratch)?.join(relative))
-            } else {
-                skipped.push(format!(
-                    "V2 skipped: {revision} holds no tree store ({})",
-                    marker.display()
-                ));
-                None
-            }
-        }
-        None => None,
-    };
-    for finding in aep_backend_eventlog::verify_tree(authority_root, base.as_deref()) {
-        problems.push(format!(
-            "{}: {} ({})",
-            finding.rule,
-            finding.detail,
-            finding.path.display()
-        ));
-    }
-    let _ = std::fs::remove_dir_all(&scratch);
-    if let Some(blobs) = blobs {
-        for problem in aep_backend_eventlog::content::ContentStore::at(blobs.clone()).verify() {
-            problems.push(format!("C1: {problem}"));
-        }
-    }
-
-    let Some(PlanBackend::Eventlog(plan)) = opened.plan.open_backend()? else {
-        return Ok(TreeFindings { problems, skipped });
-    };
-    let forked = plan
-        .with_store(aep_backend_eventlog::EventlogPlanningStore::forked)
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
-    for (id, heads) in forked {
-        problems.push(format!(
-            "S3: entity {id} has forked into {} heads; run `aep plan artifact resolve` on it",
-            heads.len()
-        ));
-    }
-
-    let authority = aep_contract::migration::AuthorityCoordinateV1 {
-        logical_scope: aep_contract::migration::AuthorityValueV1::new(&selected.logical_scope)
-            .map_err(|error| anyhow::anyhow!(error))?,
-        tenant: aep_contract::migration::AuthorityValueV1::new(&selected.tenant)
-            .map_err(|error| anyhow::anyhow!(error))?,
-        stream_identity: aep_contract::migration::AuthorityValueV1::new(
-            &selected.stream_identity,
-        )
-        .map_err(|error| anyhow::anyhow!(error))?,
-    };
-    let session = plan.with_store(aep_backend_eventlog::EventlogPlanningStore::session);
-    let snapshot = session
-        .complete_snapshot()
-        .map_err(|error| anyhow::anyhow!(error))?;
-    let (snapshot_id, _) = aep_planning_migration::authority_snapshot_identity(&authority, &snapshot)
-        .map_err(|error| anyhow::anyhow!("{error:?}"))?;
-    let staged = aep_planning_migration::FileProjectionPublisher::over_session(
-        session,
-        authority,
-        projection_root.clone(),
-    )
-    .stage(snapshot_id)
-    .map_err(|error| anyhow::anyhow!("rendering the projection: {error:?}"))?;
-    let rendered = markdown_files(staged.directory());
-    let written = markdown_files(projection_root);
-    let _ = std::fs::remove_dir_all(staged.directory());
-    for (path, bytes) in &rendered {
-        match written.get(path) {
-            Some(held) if held == bytes || is_render_in_its_own_format(held, bytes) => {}
-            Some(_) => problems.push(format!("S5: {path} is not the render of its artifact")),
-            None => problems.push(format!("S5: {path} is missing from the projection")),
-        }
-    }
-    for path in written.keys() {
-        if !rendered.contains_key(path) {
-            problems.push(format!("S5: {path} renders no artifact"));
-        }
-    }
-
-    for root in [Some(authority_root), Some(projection_root), blobs.as_ref()]
-        .into_iter()
-        .flatten()
-    {
-        for (path, bytes) in all_files(root) {
-            if let Some(found) = home_path_in(&String::from_utf8_lossy(&bytes)) {
-                problems.push(format!("S9: {path} carries the home path `{found}`"));
-            }
-        }
-    }
-    Ok(TreeFindings { problems, skipped })
-}
-
-/// Whether `held` is `rendered` written in the format `held`'s own `format:` tag names (S5, design
-/// § 8). A projection rendered before the renderer moved to `aep.planning-md/2` keeps its tag
-/// until it is re-rendered, and is held to the render of that tag rather than refused wholesale.
-fn is_render_in_its_own_format(held: &[u8], rendered: &[u8]) -> bool {
-    let (Ok(held), Ok(rendered)) = (std::str::from_utf8(held), std::str::from_utf8(rendered)) else {
-        return false;
-    };
-    let (Ok(held_document), Ok(mut document)) = (
-        aep_backend_markdown::PlanningDocument::parse(held, None),
-        aep_backend_markdown::PlanningDocument::parse(rendered, None),
-    ) else {
-        return false;
-    };
-    if held_document.frontmatter.format == document.frontmatter.format {
-        return false;
-    }
-    document.frontmatter.format = held_document.frontmatter.format;
-    document.render() == held
-}
-
-/// Whether `revision`'s project selector is an `aep.project/4` one, whose authority keeps content
-/// blobs. A base before the content migration holds the same tree paths with other bytes, and V2
-/// would read every one of them as rewritten.
-fn base_keeps_content_blobs(repository: &Path, revision: &str) -> Result<bool> {
-    use std::process::{Command, Stdio};
-    let selector = Path::new(aep_project::project::project_directory())
-        .join(aep_domain::project::PROJECT_FILE);
-    let shown = Command::new("git")
-        .arg("-C")
-        .arg(repository)
-        .arg("show")
-        .arg(format!("{revision}:./{}", selector.display()))
-        .stderr(Stdio::null())
-        .output()
-        .context("running git show")?;
-    if !shown.status.success() {
-        return Ok(false);
-    }
-    let value: serde_yaml::Value = serde_yaml::from_slice(&shown.stdout).unwrap_or_default();
-    Ok(value.get("version").and_then(serde_yaml::Value::as_str)
-        == Some(aep_domain::project::PROJECT_VERSION_V4))
-}
-
-/// The file every `eventlog-tree` store holds at its root, written once at creation (design
-/// § 3.2). A revision without it under the authority path holds no tree store.
-const TREE_STORE_MARKER: &str = "store.json";
-
-/// What the tree rules found, and which of them could not run.
-#[derive(Debug, Default)]
-struct TreeFindings {
-    problems: Vec<String>,
-    skipped: Vec<String>,
-}
-
-/// Whether `revision` holds the file `path`. A revision Git cannot resolve is refused, never read
-/// as one that holds nothing: a base that was not fetched must not quietly skip V2.
-fn holds_file(repository: &Path, revision: &str, path: &Path) -> Result<bool> {
-    use std::process::{Command, Stdio};
-    let resolved = Command::new("git")
-        .arg("-C")
-        .arg(repository)
-        .args(["rev-parse", "--verify", "--quiet"])
-        .arg(format!("{revision}^{{commit}}"))
-        .stdout(Stdio::null())
-        .status()
-        .context("running git rev-parse")?;
-    if !resolved.success() {
-        bail!("{revision} could not be read for `--against`; fetch it first");
-    }
-    // `ls-tree` reads `path` from `repository`, as `git archive` does in `materialize`, so a
-    // project in a subdirectory of its Git repository finds its own store; a `<rev>:<path>`
-    // spelling would read it from the repository's top level instead.
-    let listed = Command::new("git")
-        .arg("-C")
-        .arg(repository)
-        .args(["ls-tree", "--object-only", revision, "--"])
-        .arg(path)
-        .stderr(Stdio::null())
-        .output()
-        .context("running git ls-tree")?;
-    if !listed.status.success() {
-        bail!("{revision} could not be read for `--against`; fetch it first");
-    }
-    let object = String::from_utf8_lossy(&listed.stdout).trim().to_owned();
-    if object.is_empty() {
-        return Ok(false);
-    }
-    // Listed but unreadable, as in a partial clone whose objects were not fetched: refused, so
-    // an absent file and a missing object are not the same answer.
-    let readable = Command::new("git")
-        .arg("-C")
-        .arg(repository)
-        .args(["cat-file", "-e", &object])
-        .stderr(Stdio::null())
-        .status()
-        .context("running git cat-file")?;
-    if !readable.success() {
-        bail!(
-            "{revision} lists {} but its object cannot be read; fetch it first",
-            path.display()
-        );
-    }
-    Ok(true)
-}
-
-/// The files of `relative` at `revision`, extracted under `into`.
-fn materialize(
-    repository: &Path,
-    revision: &str,
-    relative: &Path,
-    into: &Path,
-) -> Result<PathBuf> {
-    use std::process::{Command, Stdio};
-    std::fs::create_dir_all(into).with_context(|| format!("creating {}", into.display()))?;
-    let mut archive = Command::new("git")
-        .arg("-C")
-        .arg(repository)
-        .args(["archive", revision, "--"])
-        .arg(relative)
-        .stdout(Stdio::piped())
-        .spawn()
-        .context("running git archive")?;
-    let stdout = archive.stdout.take().context("git archive's output")?;
-    let status = Command::new("tar")
-        .arg("-x")
-        .arg("-C")
-        .arg(into)
-        .stdin(stdout)
-        .status()
-        .context("running tar")?;
-    let archived = archive.wait().context("waiting for git archive")?;
-    if !archived.success() || !status.success() {
-        bail!("{revision} could not be read for `--against`; fetch it first");
-    }
-    Ok(into.to_owned())
-}
-
-/// Every `.md` file under `root`, by its path relative to it.
-fn markdown_files(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
-    all_files(root)
-        .into_iter()
-        .filter(|(path, _)| Path::new(path).extension().is_some_and(|ext| ext == "md"))
-        .collect()
-}
-
-/// Every file under `root`, by its path relative to it. A writer's lock file and the tree's
-/// `.cache/` are not history and are never committed.
-fn all_files(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
-    let mut found = std::collections::BTreeMap::new();
-    let mut stack = vec![root.to_owned()];
-    while let Some(directory) = stack.pop() {
-        let Ok(entries) = std::fs::read_dir(&directory) else {
-            continue;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if path != root.join(".cache") {
-                    stack.push(path);
-                }
-            } else if path.file_name().is_some_and(|name| name != ".lock") {
-                let relative = path
-                    .strip_prefix(root)
-                    .unwrap_or(&path)
-                    .display()
-                    .to_string();
-                found.insert(relative, std::fs::read(&path).unwrap_or_default());
-            }
-        }
-    }
-    found
-}
-
-/// The first absolute home path in `text`, in any of the spellings S9 names.
-fn home_path_in(text: &str) -> Option<String> {
-    for prefix in ["/home/", "/Users/", "c:\\users\\", "C:\\Users\\"] {
-        if let Some(start) = text.find(prefix) {
-            let rest = &text[start + prefix.len()..];
-            let user: String = rest.chars().take_while(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || *c == '.').collect();
-            if !user.is_empty() && rest[user.len()..].starts_with(['/', '\\']) {
-                return Some(format!("{prefix}{user}"));
-            }
-        }
-    }
-    for literal in ["/root/", "~/", "$HOME/"] {
-        if text.contains(literal) {
-            return Some(literal.to_owned());
-        }
-    }
-    None
-}
-
-/// Render a tree store's projection from its authority, through the plan's own session.
-fn publish_tree_projection(opened: &Opened) -> Result<()> {
-    let Plan::Eventlog {
-        projection_root,
-        authority: selected,
-        tree: Some(_),
-        ..
-    } = &opened.plan
-    else {
-        bail!("only an `aep.project/3` tree store renders its projection this way");
-    };
-    let PlanBackend::Eventlog(plan) = opened.backend()? else {
-        bail!("an Eventlog plan opened a backend of another kind");
-    };
-    let authority = aep_contract::migration::AuthorityCoordinateV1 {
-        logical_scope: aep_contract::migration::AuthorityValueV1::new(&selected.logical_scope)
-            .map_err(|error| anyhow::anyhow!(error))?,
-        tenant: aep_contract::migration::AuthorityValueV1::new(&selected.tenant)
-            .map_err(|error| anyhow::anyhow!(error))?,
-        stream_identity: aep_contract::migration::AuthorityValueV1::new(
-            &selected.stream_identity,
-        )
-        .map_err(|error| anyhow::anyhow!(error))?,
-    };
-    let session = plan.with_store(aep_backend_eventlog::EventlogPlanningStore::session);
-    aep_planning_migration::FileProjectionPublisher::over_session(
-        session,
-        authority,
-        projection_root.clone(),
-    )
-    .publish_current()
-    .map_err(|error| anyhow::anyhow!("rendering the projection: {error:?}"))?;
-    Ok(())
 }

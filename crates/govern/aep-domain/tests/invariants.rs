@@ -49,7 +49,6 @@ const DOCUMENT_TYPES: &[(&str, &str)] = &[
     ("RawArtifactManifest", "ArtifactGraph"),
     ("RawWorkspace", "Workspace"),
     ("RawMember", "Member"),
-    ("RawEventlog", "StoreConfig"),
     ("RawGit", "StoreConfig"),
     // Wave H: a hybrid store's four policy words, typed, never defaulted.
     ("RawHybrid", "HybridPolicy"),

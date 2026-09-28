@@ -147,13 +147,10 @@ fn move_it(serving: &Serving, request: &Request, id: &str) -> Response {
     let Some(to) = asked.get("to").and_then(serde_json::Value::as_str) else {
         return Response::refusal(400, "a move names the status to reach, as `to`");
     };
-    let command_identity = asked
-        .get("command_identity")
-        .and_then(serde_json::Value::as_str);
     let decided_on = asked
         .get("decided_on")
         .and_then(serde_json::Value::as_str);
-    match planning::moved_by(&serving.location, id, to, decided_on, command_identity) {
+    match planning::moved_by(&serving.location, id, to, decided_on) {
         Ok(outcome) => {
             let status = outcome.http_status();
             match serde_json::to_string(&outcome) {
@@ -264,7 +261,7 @@ mod tests {
         assert!(
             answer
                 .body
-                .contains("another admitted planning writer or migration holds"),
+                .contains("another admitted planning writer holds"),
             "{}",
             answer.body
         );

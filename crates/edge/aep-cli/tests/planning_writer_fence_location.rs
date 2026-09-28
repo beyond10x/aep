@@ -296,8 +296,7 @@ fn writers_to_one_store_from_two_linked_worktrees_contend_on_one_fence_under_the
         "a second writer entered the store"
     );
     assert!(
-        String::from_utf8_lossy(&racing.stderr)
-            .contains("another admitted planning writer or migration holds"),
+        String::from_utf8_lossy(&racing.stderr).contains("another admitted planning writer holds"),
         "{}",
         said(&racing)
     );

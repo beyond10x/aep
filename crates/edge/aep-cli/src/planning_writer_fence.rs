@@ -1,9 +1,8 @@
-//! Cooperative exclusion shared by new-build planning writers and migration commands.
+//! Cooperative exclusion shared by planning writers.
 //!
-//! This lock is deliberately only the first layer of migration writer control. It stops two AEP
-//! processes that implement this protocol from opening and writing the selected legacy store at
-//! once. It says nothing about an older binary or an external SQL client that ignores the lock;
-//! migration apply still requires its separate [`aep_planning_migration::WriterControl`].
+//! It stops two AEP processes that implement this protocol from opening and writing the selected
+//! store at once. It says nothing about an older binary or an external SQL client that ignores the
+//! lock.
 //!
 //! # Where the fence lives
 //!
@@ -180,8 +179,8 @@ fn store_fence_paths(store: &Path, parent: &Path) -> Result<FencePaths> {
 }
 
 /// Resolve aliases without creating a missing store. Canonicalizing the existing parent keeps a
-/// deleted projection reached through a directory symlink bound to its original project.
-pub(crate) fn canonical_store_path(store: &Path) -> Result<PathBuf> {
+/// deleted store reached through a directory symlink bound to its original project.
+fn canonical_store_path(store: &Path) -> Result<PathBuf> {
     let mut existing = std::path::absolute(store)
         .with_context(|| format!("resolving explicit planning store {}", store.display()))?;
     let mut missing = Vec::new();
@@ -290,7 +289,7 @@ impl PlanningWriterFence {
         };
         file.try_lock_exclusive().with_context(|| {
             format!(
-                "another admitted planning writer or migration holds {}",
+                "another admitted planning writer holds {}",
                 path.display()
             )
         })?;
@@ -307,7 +306,7 @@ impl PlanningWriterFence {
             .with_context(|| format!("opening planning writer fence {}", path.display()))?;
         file.try_lock_exclusive().with_context(|| {
             format!(
-                "another admitted planning writer or migration holds {}",
+                "another admitted planning writer holds {}",
                 path.display()
             )
         })?;
@@ -328,7 +327,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_paused_new_build_writer_excludes_an_apply_peer_until_release() {
+    fn a_paused_writer_excludes_a_peer_until_release() {
         let engineering =
             std::env::temp_dir().join(format!("aep-planning-writer-fence-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&engineering);
@@ -337,14 +336,14 @@ mod tests {
         let writer = PlanningWriterFence::acquire(&engineering).expect("first writer enters");
         let refused = PlanningWriterFence::acquire(&engineering)
             .err()
-            .expect("a racing migration is refused while the writer is paused");
+            .expect("a racing writer is refused while the writer is paused");
         assert!(refused
             .to_string()
             .contains("another admitted planning writer"));
 
         drop(writer);
         PlanningWriterFence::acquire(&engineering)
-            .expect("the migration can enter after the writer completes");
+            .expect("the peer can enter after the writer completes");
         let _ = std::fs::remove_dir_all(engineering);
     }
 
