@@ -177,6 +177,11 @@
       },
       "additionalProperties": false
     },
+    "RawGit": {
+      "description": "The `git` store selector: empty in `aep.project/5`, and any key is refused.",
+      "type": "object",
+      "additionalProperties": false
+    },
     "RawHybrid": {
       "description": "A hybrid store as written: four policy words and two stores, none defaulted.",
       "type": "object",
@@ -286,6 +291,23 @@
               "allOf": [
                 {
                   "$ref": "#/definitions/RawEventlog"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "description": "`git: {}`, admitted only by `aep.project/5`.",
+          "type": "object",
+          "required": [
+            "git"
+          ],
+          "properties": {
+            "git": {
+              "description": "Carries no fields in `aep.project/5`.",
+              "allOf": [
+                {
+                  "$ref": "#/definitions/RawGit"
                 }
               ]
             }
