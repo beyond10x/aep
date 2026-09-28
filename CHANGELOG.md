@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.65.0] — 2026-09-28
+
 ### Added
 
 
