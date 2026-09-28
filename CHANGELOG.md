@@ -17,6 +17,27 @@ belongs in the commit message or in `docs/design/`.
   CLI mints names its verifier tool `aep` and records the grouped command path
   (`aep observe trace evidence …`, `aep govern validate …`).
 
+### Fixed
+
+- A stamped Git-pinned protocol snapshot is trusted without opening a directory. The stamp
+  (now `aep.snapshot-verified/2`) records every directory's length, times, inode, device and mode
+  beside every file's, and the trusted path stats each recorded entry instead of listing the
+  tree: adding, removing or renaming an entry moves its directory's `mtime` and `ctime`. A
+  format-1 stamp is ignored and replaced after one full verification; any mismatch still
+  verifies in full, and the 2 s racy window now also covers directories. On a revision carrying
+  its own planning store, `aep plan artifact new task` made 424 directory opens under
+  `protocol-sources` and now makes 40, all from loading the protocol tree (123 file opens,
+  unchanged); `aep plan artifact list` makes 20 (was 404).
+- `aep plan artifact validate` on an `aep.project/5` store refuses a hand-edited `status` on an
+  artifact that was never moved. With no transitions, `status` must be the kind's initial state,
+  unless the artifact's Git history begins in an older document format (it was migrated); then
+  it must keep the status its first committed `aep.planning-md/3` version carried.
+- `validate` enforces immutability against Git (git-native design § 5, § 6): a committed evidence
+  file under `.engineering/evidence/` that differs from its committed blob is refused, and so is a
+  `review-result` whose title or body differs from its first committed `aep.planning-md/3`
+  version, even after the edit is committed. A `move` on a review result still validates. Outside
+  a Git work tree both checks are skipped.
+
 ## [0.63.1] — 2026-09-28
 
 ### Fixed
