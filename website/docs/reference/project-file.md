@@ -75,6 +75,9 @@ refused by every command. A Markdown `/1` store migrates with
 
 `planning_tenant` and `planning_identity` named event-log identities. Both are refused today.
 
+[Planning stores](./planning-stores.md) lists every supported and removed backend, generated from
+the code, with each removed store's migration path.
+
 ## Written by
 
 - `aep plan reverse init --protocols … --profile … [--protocol adp/1] [--summary …]` writes a new
