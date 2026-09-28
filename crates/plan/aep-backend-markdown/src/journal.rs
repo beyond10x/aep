@@ -80,6 +80,12 @@ pub enum Change {
         /// this was decided*. Rewriting them to claim otherwise is exactly what append-only forbids.
         #[serde(default)]
         decided_on: Provenance,
+        /// What actually performed the move, when that was not the actor.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        executor: Option<String>,
+        /// The wider activity the command that made the move named.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        correlation: Option<String>,
     },
     /// An edge was added.
     Related {
@@ -210,6 +216,38 @@ pub struct Transition {
     /// in — so `validate` holds an imported move to continuity only, never to today's ladder.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub imported: bool,
+    /// What actually performed the move, written only when it differs from `actor`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executor: Option<String>,
+    /// The wider activity the command named, written when it named one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub correlation: Option<String>,
+}
+
+/// The correlation a move carries when its caller named no wider activity.
+///
+/// The command context requires a correlation, so an ordinary `aep plan artifact move` supplies
+/// this placeholder. It is not written into a transition: every move would otherwise carry the
+/// same line, which names nothing.
+pub const UNCORRELATED_MOVE: &str = "protocol-artifact-move";
+
+/// The executor and correlation an event's sealed payload carries, as a transition records them.
+///
+/// The executor is kept only when it differs from `actor`; the correlation only when it is not
+/// [`UNCORRELATED_MOVE`].
+#[must_use]
+pub fn attribution(
+    payload: &serde_json::Map<String, serde_json::Value>,
+    actor: &str,
+) -> (Option<String>, Option<String>) {
+    let text = |key: &str| payload.get(key).and_then(serde_json::Value::as_str);
+    let executor = text("executor")
+        .filter(|executor| *executor != actor)
+        .map(str::to_owned);
+    let correlation = text("correlation")
+        .filter(|correlation| !correlation.is_empty() && *correlation != UNCORRELATED_MOVE)
+        .map(str::to_owned);
+    (executor, correlation)
 }
 
 impl Transition {
@@ -237,6 +275,14 @@ impl Transition {
         if self.imported {
             line.push_str(", imported: true");
         }
+        if let Some(executor) = &self.executor {
+            line.push_str(", executor: ");
+            line.push_str(&json(executor));
+        }
+        if let Some(correlation) = &self.correlation {
+            line.push_str(", correlation: ");
+            line.push_str(&json(correlation));
+        }
         line.push('}');
         line
     }
@@ -254,6 +300,8 @@ impl Transition {
                 from: self.from.clone(),
                 to: self.to.clone(),
                 decided_on: self.decided_on.clone(),
+                executor: self.executor.clone(),
+                correlation: self.correlation.clone(),
             },
         }
     }
@@ -267,10 +315,18 @@ impl fmt::Display for Change {
                 from,
                 to,
                 decided_on,
+                executor,
+                correlation,
             } => {
                 write!(f, "moved {from} -> {to}")?;
                 if decided_on.leans_on_an_assertion() {
                     f.write_str(" (on asserted evidence)")?;
+                }
+                if let Some(executor) = executor {
+                    write!(f, ", executed by {executor}")?;
+                }
+                if let Some(correlation) = correlation {
+                    write!(f, ", correlation {correlation}")?;
                 }
                 Ok(())
             }

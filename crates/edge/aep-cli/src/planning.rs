@@ -855,6 +855,16 @@ pub(crate) enum ArtifactCommand {
         /// exactly what an evidence gate is against.
         #[arg(long)]
         via: bool,
+        /// What actually performs the move when it is not the actor, such as `agent:release-17`.
+        ///
+        /// The actor is who the move is on behalf of (`AEP_ACTOR`, else `human:$USER`); the
+        /// executor is what ran it. Recorded in the transition only when it differs from the actor.
+        #[arg(long, value_name = "ACTOR")]
+        executor: Option<String>,
+        /// The wider activity this move belongs to, such as a run or a wave id. Recorded in the
+        /// transition.
+        #[arg(long, value_name = "ID")]
+        correlation: Option<String>,
     },
     /// Add an edge from one plan item to another.
     ///
@@ -1510,7 +1520,17 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             evidence,
             at,
             via,
-        } => move_status(&store, &id, &to, &evidence, at.as_deref(), via),
+            executor,
+            correlation,
+        } => move_status(
+            &store,
+            &id,
+            &to,
+            &evidence,
+            at.as_deref(),
+            via,
+            &MoveAttribution::parse(executor.as_deref(), correlation.as_deref())?,
+        ),
         ArtifactCommand::Relate {
             store,
             id,
@@ -2173,6 +2193,7 @@ fn move_through_a_command(
     id: &ArtifactId,
     to: &ArtifactStatus,
     decided_on: &aep_backend_markdown::journal::Provenance,
+    attribution: &MoveAttribution,
 ) -> Result<()> {
     use aep_contract::command::{CommandContext, CommandEnvelope, CommandService};
     use aep_contract::query::QueryService;
@@ -2209,7 +2230,13 @@ fn move_through_a_command(
     });
     let envelope = {
         let name = format!("move-{id}").replace([':', '/'], "-");
-        let context = CommandContext::new(
+        let correlation = match &attribution.correlation {
+            Some(correlation) => correlation.clone(),
+            None => aep_backend_markdown::journal::UNCORRELATED_MOVE
+                .parse()
+                .map_err(|error| anyhow::anyhow!("{error}"))?,
+        };
+        let mut context = CommandContext::new(
             format!("req-{name}")
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
@@ -2217,11 +2244,12 @@ fn move_through_a_command(
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
-            "protocol-artifact-move"
-                .parse()
-                .map_err(|error| anyhow::anyhow!("{error}"))?,
+            correlation,
             at,
         );
+        if let Some(executor) = &attribution.executor {
+            context = context.executed_by(executor.clone());
+        }
         CommandEnvelope::new(
             format!("cmd-{name}-{}", at.epoch_millis())
                 .parse()
@@ -2281,6 +2309,41 @@ struct MoveRequest<'a> {
     now: &'a str,
     /// Walk the ladder's own route rather than requiring one hop.
     via: bool,
+    /// What ran the move and the activity it belongs to, as the command carries them.
+    attribution: &'a MoveAttribution,
+}
+
+/// What a move's command carries besides its actor: what ran it, and the activity it belongs to.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct MoveAttribution {
+    /// What actually performs the move, when the caller named it.
+    executor: Option<aep_domain::entity::ActorRef>,
+    /// The wider activity, when the caller named one.
+    correlation: Option<aep_domain::ids::CorrelationId>,
+}
+
+impl MoveAttribution {
+    /// Parses `--executor` and `--correlation`, refusing either when it is not a usable value.
+    fn parse(executor: Option<&str>, correlation: Option<&str>) -> Result<Self> {
+        Ok(Self {
+            executor: executor
+                .map(|executor| {
+                    aep_domain::entity::ActorRef::parse(executor).map_err(|error| {
+                        anyhow::anyhow!("`--executor {executor}` is not a usable actor: {error}")
+                    })
+                })
+                .transpose()?,
+            correlation: correlation
+                .map(|correlation| {
+                    correlation.parse().map_err(|error| {
+                        anyhow::anyhow!(
+                            "`--correlation {correlation}` is not a usable correlation id: {error}"
+                        )
+                    })
+                })
+                .transpose()?,
+        })
+    }
 }
 
 /// What a move did, and — when it stopped — why.
@@ -2354,6 +2417,7 @@ fn decide_and_move(
         asserted,
         now,
         via,
+        attribution,
     } = asked;
     // What the whole store already reports, before this move. Taken here because the decision below
     // mutates the document in place, and *new* is the only interesting word in the comparison: a
@@ -2458,7 +2522,7 @@ fn decide_and_move(
         // the decision and the account it rested on. `MarkdownBackend` writes the file and
         // journals it — **once per hop**, so a walk leaves the same record two commands would.
         let _ = relative;
-        move_through_a_command(opened.backend()?, id, rung, &decided_on)?;
+        move_through_a_command(opened.backend()?, id, rung, &decided_on, attribution)?;
         made.push(Moved {
             id: id.to_string(),
             from: from.as_str().to_owned(),
@@ -2556,6 +2620,7 @@ fn move_status(
     evidence: &[String],
     at: Option<&str>,
     via: bool,
+    attribution: &MoveAttribution,
 ) -> Result<ExitCode> {
     let asserted = parse_evidence(evidence)?;
     // The clock, read once, here. `aep-domain` has no clock and neither does the backend; this is
@@ -2581,6 +2646,7 @@ fn move_status(
             asserted,
             now: &now,
             via,
+            attribution,
         },
     )?;
 
@@ -6851,6 +6917,8 @@ fn joined(entries: &[aep_backend_markdown::journal::Entry]) -> (Vec<Reached>, Ve
                 from,
                 to,
                 decided_on,
+                executor,
+                correlation,
             } => {
                 let rested_on = std::mem::take(&mut since);
                 let on_nothing_recorded = rested_on
@@ -6863,6 +6931,8 @@ fn joined(entries: &[aep_backend_markdown::journal::Entry]) -> (Vec<Reached>, Ve
                     revision: entry.revision,
                     rested_on,
                     on_nothing_recorded,
+                    executor: executor.clone(),
+                    correlation: correlation.clone(),
                 });
             }
             Change::Created { .. }
@@ -6925,8 +6995,18 @@ fn print_explanation(format: Format, explained: &Explained) -> Result<ExitCode> 
                 outln!("  no status move is recorded");
             }
             for step in &explained.reached {
+                let executed = step
+                    .executor
+                    .as_ref()
+                    .map_or_else(String::new, |executor| format!(", executed by {executor}"));
+                let correlated = step
+                    .correlation
+                    .as_ref()
+                    .map_or_else(String::new, |correlation| {
+                        format!(", correlation {correlation}")
+                    });
                 outln!(
-                    "  {} -> {}  {}  (revision {})",
+                    "  {} -> {}  {}  (revision {}{executed}{correlated})",
                     step.from,
                     step.to,
                     step.at,
@@ -6995,7 +7075,18 @@ fn entry_from_event(
     let seal = event.payload.as_object()?;
     let at = seal.get("recorded_at")?.as_str()?.to_owned();
     let actor = seal.get("actor")?.as_str()?.to_owned();
-    let entry = |change: Change| {
+    let entry = |mut change: Change| {
+        if let Change::Moved {
+            executor,
+            correlation,
+            ..
+        } = &mut change
+        {
+            let (sealed_executor, sealed_correlation) =
+                aep_backend_markdown::journal::attribution(seal, &actor);
+            executor.clone_from(&sealed_executor);
+            correlation.clone_from(&sealed_correlation);
+        }
         Some(Entry {
             at: at.clone(),
             actor: actor.clone(),
@@ -7028,6 +7119,8 @@ fn entry_from_event(
                 .get("decided_on")
                 .map(provenance_of)
                 .unwrap_or_default(),
+            executor: None,
+            correlation: None,
         },
         "create-relation" => {
             let target: EntityId = args.get("target")?.as_str()?.parse().ok()?;
@@ -7706,6 +7799,12 @@ pub(crate) struct Reached {
     /// instead. A status reached on nobody's record is legal and must not be invisible.
     #[serde(skip_serializing_if = "Option::is_none")]
     on_nothing_recorded: Option<String>,
+    /// What actually performed the move, when that was not its actor.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    executor: Option<String>,
+    /// The wider activity the move's command named.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    correlation: Option<String>,
 }
 
 /// What `explain` answers: what made this artifact what it is.
@@ -8143,6 +8242,7 @@ pub(crate) fn moved_by(
             asserted: aep_backend_markdown::kernel::EvidenceOnHand::new(),
             now: &now,
             via: false,
+            attribution: &MoveAttribution::default(),
         },
     )?;
     let leans_on_an_assertion = outcome.decided_on.leans_on_an_assertion();

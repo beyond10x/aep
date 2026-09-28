@@ -433,3 +433,134 @@ fn evidence_recorded_in_one_second_is_read_back_in_recording_order() {
         "same-second records keep their recording order"
     );
 }
+
+/// A status move issued under `context`, which names its actor, executor and correlation.
+fn move_under(backend: &MarkdownBackend, status: &str, context: CommandContext) {
+    let id = one(backend);
+    let command = Command::UpdateEntity(UpdateEntity {
+        target: EntityRef::new(id),
+        changes: [("status".to_owned(), aep_domain::node::Node::from(status))]
+            .into_iter()
+            .collect(),
+    });
+    let kind = command.kind().as_str();
+    block_on(backend.execute(CommandEnvelope::new(
+        "cmd-attributed".parse().expect("a command id"),
+        kind,
+        command,
+        context,
+    )))
+    .expect("permitted");
+}
+
+fn context(correlation: &str) -> CommandContext {
+    CommandContext::new(
+        "req-attributed".parse().expect("a request id"),
+        "key-attributed".parse().expect("an idempotency key"),
+        ActorRef::parse("human:operator").expect("an actor"),
+        correlation.parse().expect("a correlation id"),
+        Timestamp::from_epoch_millis(1_700_000_001_000),
+    )
+}
+
+#[test]
+fn a_move_with_an_executor_records_it_in_the_transition_and_the_history() {
+    let store = scratch("executor");
+    let backend = open(&store);
+    move_under(
+        &backend,
+        "active",
+        context("wave-7").executed_by(ActorRef::parse("agent:x").expect("an executor")),
+    );
+
+    let transition = &document(&store).frontmatter.transitions[0];
+    assert_eq!(transition.actor, "human:operator");
+    assert_eq!(transition.executor.as_deref(), Some("agent:x"));
+    assert_eq!(transition.correlation.as_deref(), Some("wave-7"));
+    let text = std::fs::read_to_string(store.planning.join("story/one.md")).expect("the document");
+    assert!(
+        text.contains(", executor: \"agent:x\", correlation: \"wave-7\"}\n"),
+        "{text}"
+    );
+
+    let (history, _) = journal::history_git(&store.planning, &store.evidence, &artifact());
+    assert!(
+        matches!(
+            &history[0].change,
+            Change::Moved { executor: Some(executor), correlation: Some(correlation), .. }
+                if executor == "agent:x" && correlation == "wave-7"
+        ),
+        "{history:?}"
+    );
+    assert!(
+        history[0]
+            .change
+            .to_string()
+            .ends_with(", executed by agent:x, correlation wave-7"),
+        "{}",
+        history[0].change
+    );
+}
+
+#[test]
+fn a_move_by_the_actor_alone_writes_no_executor_key() {
+    let store = scratch("actor-alone");
+    let backend = open(&store);
+    move_under(
+        &backend,
+        "active",
+        context(journal::UNCORRELATED_MOVE)
+            .executed_by(ActorRef::parse("human:operator").expect("the actor itself")),
+    );
+
+    let transition = &document(&store).frontmatter.transitions[0];
+    assert_eq!(transition.executor, None, "the executor is the actor");
+    assert_eq!(
+        transition.correlation, None,
+        "the placeholder correlation names no activity"
+    );
+    let text = std::fs::read_to_string(store.planning.join("story/one.md")).expect("the document");
+    assert!(
+        !text.contains("executor") && !text.contains("correlation"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_named_correlation_is_recorded_without_an_executor() {
+    let store = scratch("correlation");
+    let backend = open(&store);
+    move_under(&backend, "active", context("run-42"));
+
+    let transition = &document(&store).frontmatter.transitions[0];
+    assert_eq!(transition.executor, None);
+    assert_eq!(transition.correlation.as_deref(), Some("run-42"));
+}
+
+/// The fixture was written by the released 0.64.0 binary: `new`, three `move`s and one
+/// `evidence`. Its transitions carry neither key and must read, validate and render unchanged.
+#[test]
+fn a_document_written_by_0_64_0_parses_validates_and_renders_byte_for_byte() {
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/written-by-0.64.0");
+    let path = fixture.join("planning/story/fixture.md");
+    let text = std::fs::read_to_string(&path).expect("the fixture");
+    let document = PlanningDocument::parse(&text, Some("story/fixture.md"))
+        .expect("a 0.64.0 document parses and its frontmatter validates");
+    assert_eq!(document.frontmatter.format, PlanningFormat::V3);
+    assert_eq!(document.frontmatter.transitions.len(), 3);
+    assert!(document
+        .frontmatter
+        .transitions
+        .iter()
+        .all(|transition| transition.executor.is_none() && transition.correlation.is_none()));
+    assert_eq!(document.render(), text, "re-rendered byte for byte");
+
+    let fixture_id = ArtifactId::new("story:fixture").expect("an id");
+    let (history, unreadable) = journal::history_git(
+        &fixture.join("planning"),
+        &fixture.join("evidence"),
+        &fixture_id,
+    );
+    assert_eq!(unreadable, 0);
+    assert_eq!(history.len(), 4, "three moves and one record: {history:?}");
+}

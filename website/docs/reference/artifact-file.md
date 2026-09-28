@@ -84,6 +84,8 @@ One entry per move, oldest first, each on one line:
 | `revision` | always | the artifact's revision after the move |
 | `decided_on` | when the rung cost evidence | `{"recorded": {<kind>: <n>}}` for evidence files the move found, `{"asserted": {<kind>: <n>}}` for counts given with `move --evidence` |
 | `imported` | on migrated moves | `true` for a move carried over from an older store |
+| `executor` | when `move --executor` names something other than the actor | what ran the move, such as `agent:release-17` |
+| `correlation` | when `move --correlation` names an activity | the run, wave or other activity the move belongs to |
 
 `validate` checks that the list is a continuous walk (each `from` is the previous `to`) and that it
 ends at `status`.

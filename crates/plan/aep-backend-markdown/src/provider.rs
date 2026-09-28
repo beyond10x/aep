@@ -235,6 +235,7 @@ impl MarkdownProvider {
                     from,
                     to,
                     decided_on,
+                    ..
                 } => {
                     let text = |key: &str| {
                         payload
@@ -243,14 +244,18 @@ impl MarkdownProvider {
                             .unwrap_or_default()
                             .to_owned()
                     };
+                    let actor = text("actor");
+                    let (executor, correlation) = crate::journal::attribution(payload, &actor);
                     let transition = Transition {
                         at: text("recorded_at"),
-                        actor: text("actor"),
+                        actor,
                         revision: event.revision,
                         from,
                         to,
                         decided_on,
                         imported: false,
+                        executor,
+                        correlation,
                     };
                     if !transitions.contains(&transition) {
                         transitions.push(transition);
