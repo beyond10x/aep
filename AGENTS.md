@@ -206,7 +206,8 @@ Tags are bare semantic versions (`0.64.0`). A release:
 7. Record the release on a `plan/release-<version>-record` branch:
    `aep plan artifact evidence epic:planning-on-entity-runtime --kind test_result --source "release
    <version>: tag commit <sha>, Release run <id>; task check exit 0" --ref <Release run URL>`,
-   merged the same way.
+   plus `cargo xtask status` (the first commit after a release moves the README and website release
+   pins to it; `status-check` fails until it does), merged the same way.
 8. `cargo xtask release` (`task release-check`) prints 6/6 `ok`: version, tag on `origin/main`,
    changelog heading, pushed tag, GitHub Release, and a planning-store `test_result` naming the
    tag's commit. Only then is the release done; see *Release completion* below.

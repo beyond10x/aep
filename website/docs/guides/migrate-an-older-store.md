@@ -65,11 +65,13 @@ document. Fix the named document and run it again. `--verify` exits non-zero on 
 
 Name the rules the new project file should carry:
 
+{/* generated:release-pin:begin commit=58433bd85a1ccf939566c53d5543df86c3852b19 — kept by `cargo xtask status` */}
 ```bash
 aep plan store migrate git --verify \
-  --protocols git+https://github.com/beyond10x/aep#88836a30f28ab2fddc3ab63d1ac54956973fa25e \
+  --protocols git+https://github.com/beyond10x/aep#58433bd85a1ccf939566c53d5543df86c3852b19 \
   --profile development.standard
 ```
+{/* generated:release-pin:end */}
 
 `--protocol` defaults to `adp/1`. These three flags are refused when a `project.yaml` exists.
 

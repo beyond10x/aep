@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+- The README and the website name the current release in their install commands and pinned
+  protocol commit. `cargo xtask status` rewrites each marked release-pin region from the newest
+  release tag, and `status-check` fails while one lags. A release commit keeps pinning the
+  previous release's commit, since a commit cannot name itself; the next commit moves it forward.
+  Pasted outputs still say which `aep` produced them.
+
 ### Fixed
 
 - Loading the protocol tree of a verified Git-pinned snapshot opens no directory: its files are
