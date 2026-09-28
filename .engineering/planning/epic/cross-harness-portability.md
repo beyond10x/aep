@@ -11,7 +11,7 @@ tags:
 - trace
 relations:
 - decomposes: initiative:the-repo-governs-itself
-revision: 1
+revision: 2
 ---
 # Epic: Harness-neutral, and tested by a second harness
 
@@ -26,7 +26,7 @@ zero.
 ## Why Now
 
 Exactly one adapter exists — Claude Code `stream-json` — and *harness-neutral* is a property nothing
-has ever tested. `docs/plan/trace-wave-1-transcript-checker.md` states this on the way in rather than
+has ever tested. `docs/plan/archive/trace-wave-1-transcript-checker.md` states this on the way in rather than
 assuming it: *"a second harness is a second adapter and not a second specification language, and
 until there is one the claim is untested."* A claim tested by one implementation is the shape of
 defect this repository writes registers about.

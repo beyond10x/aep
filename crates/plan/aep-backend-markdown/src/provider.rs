@@ -1,6 +1,6 @@
 //! The plan's documents as an `entity-store` provider.
 //!
-//! Wave G, story 1 of `docs/plan/store-waves-f-g-h.md`: the markdown files under
+//! Wave G, story 1 of `docs/plan/archive/store-waves-f-g-h.md`: the markdown files under
 //! `.engineering/planning/` held to a storage suite written by somebody who has never seen them —
 //! `entity-runtime`'s — and passing it. After this, *"the markdown store is durable"* is a claim two
 //! independent suites support, and `MarkdownBackend` can be the one adapter over this provider

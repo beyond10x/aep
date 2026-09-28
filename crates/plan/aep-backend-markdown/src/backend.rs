@@ -6,7 +6,7 @@
 //!
 //! # One adapter, one provider, one projection
 //!
-//! Since wave G (`docs/plan/store-waves-f-g-h.md`), `MarkdownBackend` is
+//! Since wave G (`docs/plan/archive/store-waves-f-g-h.md`), `MarkdownBackend` is
 //! `aep_backend_entity::EntityBackend<MarkdownProvider, MarkdownProjection>` behind the same
 //! constructor and the same surface. The adapter applies every command in `aep-backend-memory`,
 //! asks the projection where the result lands, seals the event and commits it with the document in

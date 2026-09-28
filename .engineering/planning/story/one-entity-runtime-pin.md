@@ -11,7 +11,7 @@ tags:
 - store
 relations:
 - decomposes: epic:planning-store-as-backend
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 4, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 5, imported: true}
@@ -38,7 +38,7 @@ dependency"*. Three crates from that repository were in two of ours, and `entity
 bundled SQLite (a C build) that the § *Dependencies* policy says must be named with the refusal
 alternatives considered.
 
-Wave F, story 1 (`docs/plan/store-waves-f-g-h.md`). First because F2 cannot be written against two kernels.
+Wave F, story 1 (`docs/plan/archive/store-waves-f-g-h.md`). First because F2 cannot be written against two kernels.
 
 ## Acceptance
 
@@ -68,7 +68,7 @@ Wave F, story 1 (`docs/plan/store-waves-f-g-h.md`). First because F2 cannot be w
 
 ## Decision taken
 
-D-F2 (`docs/plan/store-waves-f-g-h.md` § 4): the pin is the newest release on the day, `0.9.1`.
+D-F2 (`docs/plan/archive/store-waves-f-g-h.md` § 4): the pin is the newest release on the day, `0.9.1`.
 F4 (`story:sqlite-hydrates-on-open`) needs `entity-runtime`'s `story:store-enumeration`, which is
 not in `0.9.1`; F4 moves the pin to the release that carries it, and `dep-check` is what keeps that
 move one line in three places rather than one line in one of them.

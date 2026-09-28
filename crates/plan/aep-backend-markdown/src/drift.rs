@@ -1,6 +1,6 @@
 //! A document compared with the last thing its log says happened to it.
 //!
-//! Wave G, story 4 of `docs/plan/store-waves-f-g-h.md`. Deviations **D-P2** (*an out-of-band file
+//! Wave G, story 4 of `docs/plan/archive/store-waves-f-g-h.md`. Deviations **D-P2** (*an out-of-band file
 //! edit is not tracked*) and **D-P4** (*`rm` deletes an artifact, and nothing prevents it*) were
 //! opened with the store, when there was nothing to compare a file against. Now there is: runtime
 //! R-89 says an event records the state before and after and the fields written, so the last event

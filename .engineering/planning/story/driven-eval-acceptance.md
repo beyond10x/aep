@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - depends_on: story:plugin-enforcement-hooks
-revision: 5
+revision: 6
 transitions:
 - {from: "proposed", to: "draft", at: "2026-08-28T19:58:51Z", actor: "human:operator", revision: 4, imported: true}
 - {from: "draft", to: "archived", at: "2026-08-28T19:58:51Z", actor: "human:operator", revision: 5, imported: true}
@@ -52,7 +52,7 @@ that only a run can close.
 - *One real task driven end to end, transcripts checked, records admitted* is
   `story:governed-dogfood-run`, which has since been attempted twice — `W4-1/1` (2026-08-21, blocked
   in `establish_verifiers`) and `W4-2/1` (blocked in `adversarial_verify`), both recorded on
-  `docs/plan/harness-wave-4-governed-dogfood.md`.
+  `docs/plan/archive/harness-wave-4-governed-dogfood.md`.
 - *A case that deliberately trips a `PreToolUse` deny* went with the hooks. `epic:metaharness-migration`
   (implemented) deleted `integrations/claude-code/hooks/` and moved the agent evals, their recorded
   transcripts and the deliberate-denial case to metaharness `evals/engineering-protocols/` on

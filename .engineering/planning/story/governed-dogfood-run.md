@@ -23,12 +23,12 @@ scope:
 - confidence: cited
   path: crates/edge/aep-cli/src/drive.rs
 - confidence: cited
-  path: docs/plan/harness-wave-4-governed-dogfood.md
+  path: docs/plan/archive/harness-wave-4-governed-dogfood.md
 - confidence: cited
   path: drivers/development/checks.yaml
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 12
+revision: 15
 ---
 # Story: One story from this backlog, driven end to end
 
@@ -64,7 +64,7 @@ the lock and exits 0.
 ## Read against two real runs — 2026-08-28
 
 **This story has been attempted twice and has never reached `complete`.** Both attempts are
-recorded on `docs/plan/harness-wave-4-governed-dogfood.md`, which is the acceptance line *a run that
+recorded on `docs/plan/archive/harness-wave-4-governed-dogfood.md`, which is the acceptance line *a run that
 wedges is a recorded result* holding:
 
 | run | story driven | stopped in | cost |

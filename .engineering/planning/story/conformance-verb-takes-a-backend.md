@@ -8,7 +8,7 @@ summary: The verb is hard-coded to the in-memory reference backend, so a store t
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-adapter-over-any-store
-revision: 6
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 3, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T14:44:03Z", actor: "human:operator", revision: 4, imported: true}
@@ -32,7 +32,7 @@ The suites **did** run against the markdown store and the SQLite one, in Rust te
 faulty-backend guard. What was missing was the verb, and the line that claimed it was corrected
 rather than quietly dropped.
 
-Wave F, story 5 (`docs/plan/store-waves-f-g-h.md`). After F2, because the SQLite backend the verb
+Wave F, story 5 (`docs/plan/archive/store-waves-f-g-h.md`). After F2, because the SQLite backend the verb
 opens is the adapter over `SqliteStore`.
 
 ## Acceptance

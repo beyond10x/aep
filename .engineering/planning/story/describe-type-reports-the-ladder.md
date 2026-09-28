@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-adapter-over-any-store
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T16:10:34Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T16:10:34Z", actor: "human:operator", revision: 6, imported: true}
@@ -34,7 +34,7 @@ nowhere; `story:journal-backed-store` ticked this line and a review struck it th
 decide every move, and `tests/kernel_equivalence.rs` proves it agrees with the ladder over 800
 status pairs. The descriptor is *that definition*, rendered.
 
-Wave H, story 2 (`docs/plan/store-waves-f-g-h.md`). After F2.
+Wave H, story 2 (`docs/plan/archive/store-waves-f-g-h.md`). After F2.
 
 ## Acceptance
 

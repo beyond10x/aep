@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-adapter-over-any-store
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T15:31:53Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T15:31:53Z", actor: "human:operator", revision: 6, imported: true}
@@ -33,7 +33,7 @@ by its own tests: `store.rs` (706 lines), `journal.rs` (404) and the durability 
 (883). `SqliteBackend` proved the other shape — an adapter over a `Store` — and F2 made it generic.
 What was missing was the provider: the documents themselves as an `entity_store::Store`.
 
-Wave G, story 1 — the load-bearing one (`docs/plan/store-waves-f-g-h.md`). After F2.
+Wave G, story 1 — the load-bearing one (`docs/plan/archive/store-waves-f-g-h.md`). After F2.
 
 ## Acceptance
 

@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:history-from-the-event-log
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T15:31:53Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T16:00:43Z", actor: "human:operator", revision: 6, imported: true}
@@ -37,7 +37,7 @@ Prevention was considered and is refused here: a `PreToolUse` hook is bypassed b
 design's own § 3.3 says so), and a lock on a directory of markdown files is a lock somebody deletes.
 A check that runs in the gate cannot be routed around.
 
-Wave G, story 4 (`docs/plan/store-waves-f-g-h.md`). After G3.
+Wave G, story 4 (`docs/plan/archive/store-waves-f-g-h.md`). After G3.
 
 ## Acceptance
 

@@ -11,7 +11,7 @@ tags:
 - harness
 relations:
 - decomposes: initiative:the-repo-governs-itself
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T19:59:15Z", actor: "human:operator", revision: 3, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T19:59:15Z", actor: "human:operator", revision: 4, imported: true}
@@ -40,7 +40,7 @@ the crate.
 `aep-driver-spec` and `aep-driver`, the first step map under `drivers/`, `protocol drive` with its
 run directory and store lock, and the plugin hooks that hold the per-state tool set from the other
 side. The sequence is W3.0–W3.4 of
-[`docs/plan/harness-wave-2-driver-decision.md`](../../../docs/plan/harness-wave-2-driver-decision.md);
+[`docs/plan/archive/harness-wave-2-driver-decision.md`](../../../docs/plan/archive/harness-wave-2-driver-decision.md);
 the retry and lock-UX stories are the hardening this epic does not finish without.
 
 ## Where this stands — every status read against the code, 2026-08-28

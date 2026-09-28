@@ -1,6 +1,6 @@
 //! The interaction contract over PostgreSQL.
 //!
-//! **P5**, re-scoped by wave H of `docs/plan/store-waves-f-g-h.md`: the backend an organisation
+//! **P5**, re-scoped by wave H of `docs/plan/archive/store-waves-f-g-h.md`: the backend an organisation
 //! actually runs — concurrent writers, real transactions, the backup story it already has — as a
 //! *type*. [`PostgresBackend`] is [`EntityBackend`] over `entity_postgres::PostgresStore`, exactly
 //! as `aep-backend-sqlite` is the adapter over `SqliteStore`. Nothing here decides anything: the

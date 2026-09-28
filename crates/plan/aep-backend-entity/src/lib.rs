@@ -3,7 +3,7 @@
 //! One adapter. `aep-backend-sqlite` is [`EntityBackend`] over `entity_sqlite::SqliteStore`; the
 //! next durable backend is [`EntityBackend`] over the next provider `entity-runtime` ships, and it
 //! passes the sixteen conformance suites because this adapter already does and the provider already
-//! passed the runtime's. Wave F of `docs/plan/store-waves-f-g-h.md`: story 2 extracted this from
+//! passed the runtime's. Wave F of `docs/plan/archive/store-waves-f-g-h.md`: story 2 extracted this from
 //! `SqliteBackend`, story 3 made events cross the seam, story 4 made a populated store readable.
 //!
 //! # The contract logic is not written twice

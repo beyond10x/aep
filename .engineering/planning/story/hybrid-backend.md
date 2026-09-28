@@ -14,7 +14,7 @@ relations:
 - depends_on: story:postgres-backend
 - depends_on: story:markdown-documents-as-a-store
 - depends_on: story:store-selection-in-project-yaml
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T17:37:16Z", actor: "human:operator", revision: 6, decided_on: {"recorded":{"test_result":1}}, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T17:37:16Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
@@ -71,7 +71,7 @@ words are typed in `project.yaml` (`story:store-selection-in-project-yaml`). Two
 Edges: `depends_on: story:postgres-backend` above is no longer true — a hybrid of two local stores
 needs no Postgres. `depends_on: story:markdown-documents-as-a-store` and
 `depends_on: story:store-selection-in-project-yaml` are added beside it; this line says which is live.
-Plan: `docs/plan/store-waves-f-g-h.md` § Wave H.
+Plan: `docs/plan/archive/store-waves-f-g-h.md` § Wave H.
 
 ## Delivered 2026-08-28
 

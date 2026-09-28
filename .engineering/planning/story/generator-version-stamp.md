@@ -4,7 +4,7 @@ id: story:generator-version-stamp
 kind: story
 status: implemented
 title: A generated artefact records what it was made from, not which build made it
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T20:29:47Z", actor: "human:operator", revision: 3, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T20:29:47Z", actor: "human:operator", revision: 4, imported: true}
@@ -78,7 +78,7 @@ tag. The field was `git describe` copied into 115 files, and between tags it nam
 release rather than the build. So the default *keep and document* was refused on the evidence rather
 than followed on principle, and the **Removed** branch was taken.
 
-**Nothing replaced it, and the plan's own default was refused too.** `docs/plan/next-ten-steps.md`
+**Nothing replaced it, and the plan's own default was refused too.** `docs/plan/archive/next-ten-steps.md`
 D4 proposed a digest over the generator's own source. It answers the same question no better and
 moves on **every commit to the generator** rather than once per release — the same defect with a
 shorter period. `source_digest` and `contract_digest` already content-address the input, and they

@@ -10,7 +10,7 @@ tags:
 - adoption
 - lifecycle
 - protocol
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T20:33:21Z", actor: "human:operator", revision: 7, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T20:33:21Z", actor: "human:operator", revision: 8, imported: true}
@@ -190,7 +190,7 @@ lookup it replaced over 800 ordered status pairs by
 journal landed **behind** it the same day (`ab48bc8`, 23:54, released in 0.19.0), and
 `story:journal-backed-store`'s own acceptance — the `CommandService` envelopes and the sixteen
 conformance suites — behind that on 2026-08-26, shipping in 0.27.0 as wave D
-(`docs/plan/store-waves-f-g-h.md:8`; `docs/plan/gap-register.md:37`).
+(`docs/plan/archive/store-waves-f-g-h.md:8`; `docs/plan/gap-register.md:37`).
 
 What this story predicted was that whichever shipped first would be built twice. It was not. The
 envelope work added `MoveStatus`, a command that *applies* a decision and does not take one — the
@@ -225,7 +225,7 @@ only correction there is: `story:governed-dogfood-run` carries a stale
 `depends_on: story:driven-eval-acceptance` and says so (`:76-78`); `story:driven-eval-acceptance`
 names the same edge from the other end and points at this very row (`:63-65`); and
 `story:postgres-backend` carries `depends_on` against a superseded story, tracked as D-H3
-(`docs/plan/store-waves-f-g-h.md:204`). Four instances is not an edge case. What is owed is a **vocabulary, not a verb**: *this edge was a
+(`docs/plan/archive/store-waves-f-g-h.md:204`). Four instances is not an edge case. What is owed is a **vocabulary, not a verb**: *this edge was a
 mistake* is a different fact from `supersedes`, which says the target was once right. The register
 row this story asked for is written — `docs/plan/gap-register.md` § *Open, from 2026-08-28 — using
 our own tooling from another repository* — so an author is told before making the mistake rather

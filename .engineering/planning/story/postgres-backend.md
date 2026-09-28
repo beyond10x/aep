@@ -14,7 +14,7 @@ relations:
 - depends_on: story:sqlite-backend
 - depends_on: story:sqlite-backend-adapter
 - depends_on: story:one-adapter-over-any-store
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T16:16:36Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T16:16:36Z", actor: "human:operator", revision: 6, imported: true}
@@ -90,7 +90,7 @@ and upgrade are a command"* is met by the provider's idempotent `migrate`, calle
 Edges: `depends_on: story:sqlite-backend` points at the story `story:sqlite-backend-adapter`
 superseded; the store has no `unrelate`, so `depends_on: story:sqlite-backend-adapter` and
 `depends_on: story:one-adapter-over-any-store` are beside it and this line says which is live.
-Plan: `docs/plan/store-waves-f-g-h.md` § Wave H.
+Plan: `docs/plan/archive/store-waves-f-g-h.md` § Wave H.
 
 ## Atomic-batch supersession — 2026-08-31
 

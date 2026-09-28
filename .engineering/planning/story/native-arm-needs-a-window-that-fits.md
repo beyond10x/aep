@@ -10,10 +10,10 @@ scope:
 - confidence: cited
   path: crates/edge/aep-cli
 - confidence: inferred
-  path: docs/plan/eval-program-three-arms.md
+  path: docs/plan/archive/eval-program-three-arms.md
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 7
+revision: 9
 ---
 # Story: The native arm needs a model whose window holds a driven state
 

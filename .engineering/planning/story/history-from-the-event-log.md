@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:markdown-backend-is-the-adapter
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T15:31:53Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T16:00:43Z", actor: "human:operator", revision: 6, imported: true}
@@ -33,7 +33,7 @@ backends, so they answered from what *this process* seeded. `protocol artifact h
 reads them; and `entity-runtime` 0.11.0 put the decision basis on the event
 (`story:events-carry-what-they-were-decided-on`, `DomainEvent::args`).
 
-Wave G, story 3 (`docs/plan/store-waves-f-g-h.md`). After G2 and the runtime story.
+Wave G, story 3 (`docs/plan/archive/store-waves-f-g-h.md`). After G2 and the runtime story.
 
 ## Acceptance
 

@@ -15,7 +15,7 @@ relations:
 - depends_on: story:eval-matrix-assembler
 - depends_on: story:eval-case-corpus
 - depends_on: story:instruction-render
-revision: 1
+revision: 2
 ---
 # Story: one verb runs an arm of a case and leaves the three documents the matrix reads
 
@@ -33,7 +33,7 @@ money cannot: nothing is spawned without `METAHARNESS_LIVE=1` **and** a cap.
 
 `story:eval-matrix-assembler` built the reader and `story:eval-case-corpus` built the cases, and
 between them sat a hole: seven constructed pairs and no way to produce a real one. The plan page
-called that hole R3.2 and R3.3 (`docs/plan/eval-program-three-arms.md`).
+called that hole R3.2 and R3.3 (`docs/plan/archive/eval-program-three-arms.md`).
 
 ## The decision this story is mostly about
 
