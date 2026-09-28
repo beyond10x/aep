@@ -10,12 +10,12 @@ description: Every field of .engineering/project.yaml, the file that makes a rep
 working directory upwards, up to twelve levels. `AEP_PROJECT_DIR` renames `.engineering`. Unknown
 keys are refused.
 
-{/* generated:release-pin:begin commit=58433bd85a1ccf939566c53d5543df86c3852b19 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin commit=665cd6eddd512dff037530e4503a58b679b55854 — kept by `cargo xtask status` */}
 ```yaml
 version: aep.project/5                 # the store format; see below
 protocol: adp/1                        # the protocol the project runs under
 profile: development.standard          # the profile whose rules apply
-protocols: git+https://github.com/beyond10x/aep#58433bd85a1ccf939566c53d5543df86c3852b19
+protocols: git+https://github.com/beyond10x/aep#665cd6eddd512dff037530e4503a58b679b55854
 planning_scope: shop                   # required by aep.project/5
 store:
   git: {}                              # the Git-native store, the default
