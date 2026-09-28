@@ -23,6 +23,15 @@ enum Kind {
     Scalar,
 }
 
+/// Exact comparison view for newly admitted source authority; never a floating-point codec.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum ExactJson {
+    Object(BTreeMap<String, Self>),
+    Array(Vec<Self>),
+    String(String),
+    Scalar(String),
+}
+
 struct Fields(Vec<(String, Box<RawValue>)>);
 impl<'de> Deserialize<'de> for Fields {
     fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
@@ -52,6 +61,19 @@ impl<'de> Deserialize<'de> for Fields {
 }
 
 impl Json {
+    pub fn exact(&self) -> ExactJson {
+        match &self.kind {
+            Kind::Object(values) => ExactJson::Object(
+                values
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.exact()))
+                    .collect(),
+            ),
+            Kind::Array(values) => ExactJson::Array(values.iter().map(Self::exact).collect()),
+            Kind::String(value) => ExactJson::String(value.clone()),
+            Kind::Scalar => ExactJson::Scalar(self.raw.clone()),
+        }
+    }
     pub fn parse(raw: &str, path: &str) -> Result<Self> {
         Self::parse_at(raw, path, 0)
     }

@@ -10,7 +10,7 @@ use aep_domain::ess_conformance_v2::{
 use aep_domain::time::Timestamp;
 use aep_domain::SpecDigest;
 
-/// Optional pure reader for the original suite/5 input chain and its standalone report.
+/// Optional pure reader for supported suite/5 or suite/29 chains and standalone reports.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CoverageReader;
 
@@ -80,7 +80,7 @@ pub fn adapt_json_coverage(
     })
 }
 
-/// Issues an input/1 carrier around an admitted unfiltered suite/5's exact original bytes.
+/// Issues an input/1 carrier around an admitted unfiltered suite's exact original bytes.
 ///
 /// # Errors
 /// Refuses malformed suites and explicit selections that require original parent documents.

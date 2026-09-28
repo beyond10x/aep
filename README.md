@@ -109,6 +109,10 @@ AEP treats evidence as recorded facts with provenance rather than assertions in 
 `aep observe trace check` turns a normalized agent transcript into a typed conformance report. ESS
 conformance can enter the same evidence system only through the optional report adapter.
 
+The adapter also admits the narrow ER direct-return profile in ESS suites/28 and /29.
+[Direct-return evidence](docs/design/ess-direct-return-evidence.md) states its supported types,
+integrity checks and replay compatibility; it does not imply admission of every ESS feature.
+
 ## Start here
 
 | Goal | Documentation |

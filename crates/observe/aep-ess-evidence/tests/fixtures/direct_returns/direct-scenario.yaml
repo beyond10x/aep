@@ -1,0 +1,9 @@
+type: ess-scenario/4
+domain: library.api
+scenario: pure-return
+summary: A scalar library return preserves a lossless document and an exact integer.
+timeline:
+  - at: 2026-09-28T00:00:00Z
+    command: library.api.Read
+    outcome: returned
+    response: {value: '{"number":9007199254740993}', ok: true, revision: 9007199254740993}

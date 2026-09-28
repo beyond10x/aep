@@ -866,6 +866,78 @@ fn coverage_planning_admits_original_input_as_descriptive_history() {
 }
 
 #[test]
+fn direct_return_planning_dispatches_raw_suite_and_carrier_to_the_coverage_reader() {
+    let directory = scratch("direct-return-planning");
+    let original = include_str!(
+        "../../../observe/aep-ess-evidence/tests/fixtures/direct_returns/direct-suite29.json"
+    );
+    let suite: serde_json::Value = serde_json::from_str(original).unwrap();
+    let ids = [
+        "library.api.Read/outcome/returned",
+        "library.api/authored/pure-return",
+    ];
+    let (report, _) = fixtures::pair_for(&suite, &ids, "passed", &[]);
+    let mut report: serde_json::Value = serde_json::from_str(&report).unwrap();
+    let mut reference = fixtures::reference(original);
+    reference["version"] = "ess-conformance/29".into();
+    report["suite"] = reference.clone();
+    report["spec_digest"] = suite["provenance"]["spec_digest"].clone();
+    report["specification"] = "library/v1".into();
+    let report_path = directory.join("report.json");
+    let suite_path = directory.join("suite.json");
+    let input_path = directory.join("input.json");
+    std::fs::write(&report_path, report.to_string()).unwrap();
+    std::fs::write(&suite_path, original).unwrap();
+    std::fs::write(&input_path, serde_json::json!({"format":"ess-conformance-input/1","suite_json":original,"parent_suites":[]}).to_string()).unwrap();
+    for (flag, path) in [("--suite", &suite_path), ("--suite-input", &input_path)] {
+        let store = directory.join(flag.trim_start_matches('-'));
+        success(&cli(&[
+            "plan",
+            "artifact",
+            "new",
+            "story",
+            "direct",
+            "--title",
+            "Direct fixture",
+            "--store",
+            store.to_str().unwrap(),
+        ]));
+        success(&cli(&[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:direct",
+            "--from",
+            report_path.to_str().unwrap(),
+            flag,
+            path.to_str().unwrap(),
+            "--store",
+            store.to_str().unwrap(),
+        ]));
+        let output = cli(&[
+            "plan",
+            "artifact",
+            "history",
+            "story:direct",
+            "--store",
+            store.to_str().unwrap(),
+            "--format",
+            "json",
+        ]);
+        success(&output);
+        let history: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(history.as_array().unwrap().len(), 2);
+        assert_eq!(history[1]["change"]["kind"], "ess_conformance_coverage_v1");
+        let source: serde_json::Value =
+            serde_json::from_str(history[1]["change"]["source"].as_str().unwrap()).unwrap();
+        assert_eq!(source["suite"], reference);
+        assert_eq!(source["selected_ids"], serde_json::json!(ids));
+        assert_eq!(source["counts"]["passed"], 2);
+        assert_eq!(source["coverage"]["counts"]["authored"], 1);
+    }
+}
+
+#[test]
 fn coverage_planning_wraps_exact_unfiltered_bytes_and_escapes_full_descriptive_diagnostics() {
     let directory = scratch("raw-planning");
     let mut suite = fixtures::outside_suite();

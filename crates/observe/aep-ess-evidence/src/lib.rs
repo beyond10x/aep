@@ -14,6 +14,7 @@ mod coverage;
 mod coverage_definition;
 mod coverage_suite;
 mod coverage_wire;
+mod direct_response;
 
 pub use counts::{adapt_json_v2, CountStageReader};
 pub use coverage::{adapt_json_coverage, wrap_coverage_suite, CoverageReader};

@@ -9,6 +9,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- The optional ESS evidence reader admits direct library returns in ordinary suite/28 and
+  inventory suite/29 for String, Boolean, Integer, optional strings, optional string lists and
+  transparent nominal aliases. It keeps exact suite bytes, numeric spellings, coverage inventory
+  and original parent associations. Other
+  direct-response types are explicitly refused; existing suite/1–5 admission is unchanged.
+
 ## [0.63.1] — 2026-09-28
 
 ### Fixed

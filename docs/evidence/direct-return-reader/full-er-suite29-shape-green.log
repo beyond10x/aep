@@ -1,0 +1,4 @@
+    Blocking waiting for file lock on build directory
+    Finished `dev` profile [unoptimized] target(s) in 1.08s
+     Running `target/debug/examples/local_suite_shape_probe`
+Full ER suite29 admitted with exact original bytes; no execution report claimed

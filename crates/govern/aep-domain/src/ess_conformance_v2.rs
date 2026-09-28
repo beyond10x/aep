@@ -137,7 +137,7 @@ struct RawSuiteReference {
     digest: String,
 }
 
-/// Exact original-suite identity; only the frozen count-stage profile is admitted.
+/// Exact original-suite identity for legacy count suites/1–4 and direct-return suite/28.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SuiteReference {
@@ -155,7 +155,11 @@ impl SuiteReference {
     ) -> Result<Self, EssAdmissionError> {
         if !matches!(
             version.as_str(),
-            "ess-conformance/1" | "ess-conformance/2" | "ess-conformance/3" | "ess-conformance/4"
+            "ess-conformance/1"
+                | "ess-conformance/2"
+                | "ess-conformance/3"
+                | "ess-conformance/4"
+                | "ess-conformance/28"
         ) {
             return Err(EssAdmissionError::new(
                 "UnsupportedSuiteVersion",

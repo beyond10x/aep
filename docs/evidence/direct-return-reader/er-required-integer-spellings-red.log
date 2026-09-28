@@ -1,0 +1,22 @@
+   Compiling aep-ess-evidence v0.63.1 ($HOME/.local/state/worktree/trees/b10x/aep/er-suite-evidence-admission/crates/observe/aep-ess-evidence)
+    Finished `test` profile [unoptimized] target(s) in 1.94s
+     Running unittests src/lib.rs (target/debug/deps/aep_ess_evidence-1e5c25154c2cb1e5)
+
+running 1 test
+test direct_response::tests::integer_spellings_are_checked_exactly_without_binary64_rounding ... FAILED
+
+failures:
+
+---- direct_response::tests::integer_spellings_are_checked_exactly_without_binary64_rounding stdout ----
+
+thread 'direct_response::tests::integer_spellings_are_checked_exactly_without_binary64_rounding' (1123599) panicked at crates/observe/aep-ess-evidence/src/direct_response.rs:188:86:
+called `Result::unwrap()` on an `Err` value: EssAdmissionError { issues: [EssAdmissionIssue { reason: "InvalidResponseValue", path: "$", detail: "literal must match its admitted type; integers are exact i64/u64 tokens" }] }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    direct_response::tests::integer_spellings_are_checked_exactly_without_binary64_rounding
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p aep-ess-evidence --lib`

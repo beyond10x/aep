@@ -6660,13 +6660,12 @@ struct Recorded {
 fn coverage_input_from_raw_suite(original: &str) -> Result<Option<String>> {
     // This probe chooses a versioned reader only. Admission re-reads the complete original.
     let probe = serde_json::from_str::<serde_json::Value>(original).ok();
-    if probe
+    let version = probe
         .as_ref()
         .and_then(|value| value.get("provenance"))
         .and_then(|p| p.get("suite_version"))
-        .and_then(serde_json::Value::as_str)
-        == Some("ess-conformance/5")
-    {
+        .and_then(serde_json::Value::as_str);
+    if matches!(version, Some("ess-conformance/5" | "ess-conformance/29")) {
         return Ok(Some(aep_ess_evidence::wrap_coverage_suite(original)?));
     }
     Ok(None)
