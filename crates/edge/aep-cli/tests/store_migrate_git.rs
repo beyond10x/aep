@@ -386,7 +386,22 @@ fn reverse_init_over_an_existing_plan_is_refused_and_migrate_git_adopts_it_as_v5
     );
     assert_eq!(before, contents(&project), "a refused init writes nothing");
 
-    let bare = aep(&project, &["plan", "store", "migrate", "git"]);
+    // `--engineering` names the scratch store: without it discovery climbs out of the scratch
+    // directory, and on CI the target directory sits inside this repository's own checkout, whose
+    // `.engineering/project.yaml` is already `aep.project/5`.
+    let engineering = project.join(".engineering");
+    let engineering = engineering.to_str().expect("a printable path");
+    let bare = aep(
+        &project,
+        &[
+            "plan",
+            "store",
+            "migrate",
+            "git",
+            "--engineering",
+            engineering,
+        ],
+    );
     assert_eq!(bare.status.code(), Some(1));
     assert!(
         stderr(&bare).contains("--protocols <source> --profile <profile>"),
@@ -401,6 +416,8 @@ fn reverse_init_over_an_existing_plan_is_refused_and_migrate_git_adopts_it_as_v5
             "store",
             "migrate",
             "git",
+            "--engineering",
+            engineering,
             "--protocols",
             &tree,
             "--profile",
