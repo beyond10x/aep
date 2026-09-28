@@ -22,6 +22,7 @@ therefore needs network access to that repository, or a vendored tree.
 
 ## A GitHub Actions job
 
+{/* generated:release-pin:begin version=0.64.0 — kept by `cargo xtask status` */}
 ```yaml
 name: Planning store
 on:
@@ -34,7 +35,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
-      AEP_VERSION: "0.63.1"
+      AEP_VERSION: "0.64.0"
     steps:
       - uses: actions/checkout@v4
       - name: Install aep
@@ -49,6 +50,7 @@ jobs:
       - name: Validate the planning store
         run: aep plan artifact validate
 ```
+{/* generated:release-pin:end */}
 
 Pin the checkout action to a commit if your policy requires it. The job needs no credentials: it
 reads files and writes nothing.
