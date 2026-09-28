@@ -17,12 +17,12 @@ scope:
 - confidence: cited
   path: docs/design/story-completion-evidence-design-v0.1.md
 - confidence: cited
-  path: docs/plan/harness-wave-4-governed-dogfood.md
+  path: docs/plan/archive/harness-wave-4-governed-dogfood.md
 - confidence: inferred
   path: principles/development
 - confidence: cited
   path: profiles/development-standard.yaml
-revision: 8
+revision: 11
 ---
 # Story: A story cannot reach `implemented` on somebody's word
 
@@ -57,7 +57,7 @@ is done, and what did it*; it has no consumers.
 The design this story asked a verdict on,
 [`story-completion-evidence-design-v0.1.md`](../../../docs/design/story-completion-evidence-design-v0.1.md),
 is **accepted in part**; the full text is its § 10, and it is recorded on
-[`harness-wave-4-governed-dogfood.md`](../../../docs/plan/harness-wave-4-governed-dogfood.md) § W4.3
+[`harness-wave-4-governed-dogfood.md`](../../../docs/plan/archive/harness-wave-4-governed-dogfood.md) § W4.3
 as that page's acceptance requires.
 
 - **Shipped and accepted:** the two lines above, plus the `delivers` row in

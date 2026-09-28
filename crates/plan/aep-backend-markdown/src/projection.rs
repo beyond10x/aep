@@ -1,6 +1,6 @@
 //! The plan's shape, for the adapter: where a contract entity lands as a document.
 //!
-//! Wave G, story 2 of `docs/plan/store-waves-f-g-h.md`. `aep_backend_entity::EntityBackend` owns
+//! Wave G, story 2 of `docs/plan/archive/store-waves-f-g-h.md`. `aep_backend_entity::EntityBackend` owns
 //! applying a command, sealing its event and committing to a provider; what it does not know is
 //! that a plan is one document per artifact with its prose in the body and its edges in frontmatter,
 //! that a `status` arriving on a plain update has to be checked against the kind's ladder, or that

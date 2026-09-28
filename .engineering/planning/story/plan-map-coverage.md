@@ -11,7 +11,7 @@ tags:
 - harness
 relations:
 - decomposes: epic:reference-driver
-revision: 5
+revision: 6
 ---
 # Story: A step map is refused when it cannot mint what the plan will demand
 
@@ -25,7 +25,7 @@ states in, after the model budget had been spent.
 ## Context
 
 **F-W4.2-4**, `docs/design/fact-scoped-applicability-design-v0.1.md` § 9 — carried on the plan page
-as F-W4.2-7 of `docs/plan/harness-wave-4-governed-dogfood.md` § W4.2, where the numbering differs and
+as F-W4.2-7 of `docs/plan/archive/harness-wave-4-governed-dogfood.md` § W4.2, where the numbering differs and
 the finding does not. Both call it the expensive one.
 
 `StepMap::check_run` validated the map **against the protocol** — every kind a step declares is a
@@ -101,7 +101,7 @@ separate change — see *Out of Scope*.
 
 **Owed and not done here, so the debt is named rather than assumed.** Three control documents still
 describe this finding as open: `AGENTS.md`'s proposed-design table calls F-W4.2-4 *the expensive
-one*, `docs/plan/harness-wave-4-governed-dogfood.md` § W4.2 carries it as F-W4.2-7, and
+one*, `docs/plan/archive/harness-wave-4-governed-dogfood.md` § W4.2 carries it as F-W4.2-7, and
 `docs/design/fact-scoped-applicability-design-v0.1.md` § 9 lists it among six follow-ups. This story
 does not own those files.
 

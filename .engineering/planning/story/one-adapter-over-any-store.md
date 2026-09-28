@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-entity-runtime-pin
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T14:37:24Z", actor: "human:operator", revision: 6, imported: true}
@@ -37,7 +37,7 @@ underneath, which wave G addresses; this story does not touch it.
 Extracting the generic form now is what lets F3 (events) and F4 (hydration) be written once, and
 what makes G2, H3 and H4 instantiations.
 
-Wave F, story 2 (`docs/plan/store-waves-f-g-h.md`). After F1.
+Wave F, story 2 (`docs/plan/archive/store-waves-f-g-h.md`). After F1.
 
 ## Acceptance
 

@@ -4,7 +4,7 @@
 //! § 4.9 bounds the adapter surface at **three** points and says a second harness adopts the whole
 //! published set by implementing exactly those three. Until there are two implementations that is a
 //! sentence in a design document. This file makes it a gate that can go red, and it does it inside
-//! `cargo test --workspace`, which is what `docs/plan/harness-wave-2-driver-decision.md`'s **W3.5**
+//! `cargo test --workspace`, which is what `docs/plan/archive/harness-wave-2-driver-decision.md`'s **W3.5**
 //! row asks for: the paid eval cannot be a step of `task check`, and this can.
 //!
 //! What is asserted, and why each one is the load-bearing form of its point:

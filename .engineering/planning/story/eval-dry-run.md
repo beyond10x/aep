@@ -13,7 +13,7 @@ tags:
 relations:
 - decomposes: epic:self-evaluation
 - depends_on: story:eval-runner
-revision: 1
+revision: 2
 ---
 # Story: the whole three-arm pipeline is green in the gate for nothing
 
@@ -26,7 +26,7 @@ manifest's field list lands as a failing row here rather than as a surprise in a
 
 ## Context
 
-R3.4 on `docs/plan/eval-program-three-arms.md`. Everything above it was proven in pieces: the matrix
+R3.4 on `docs/plan/archive/eval-program-three-arms.md`. Everything above it was proven in pieces: the matrix
 against constructed pairs, the corpus against its own transcripts, the runner against its refusals.
 Nothing had ever run the pieces **in sequence**, which is where a layout convention or a field name
 drifts without any single test noticing.

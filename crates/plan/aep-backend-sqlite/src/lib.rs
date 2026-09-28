@@ -8,7 +8,7 @@
 //! # This crate is a type, not a second adapter
 //!
 //! [`SqliteBackend`] is [`EntityBackend`] over `entity_sqlite::SqliteStore` — wave F, story 2 of
-//! `docs/plan/store-waves-f-g-h.md` extracted everything that was not SQLite-specific into
+//! `docs/plan/archive/store-waves-f-g-h.md` extracted everything that was not SQLite-specific into
 //! `aep-backend-entity`, and nothing in the old implementation was except the two constructors.
 //! The contract logic lives once in `aep-backend-memory`; the durability logic — apply, then commit
 //! with a **read** expectation, latch on failure, latch covers reads — lives once in the adapter;

@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:events-reach-the-store
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T15:21:59Z", actor: "human:operator", revision: 7, imported: true}
@@ -39,7 +39,7 @@ Two things were needed. From the runtime, a way to ask a store what it holds —
 (2026-08-28). From here, a hydration path that installs the **stored** identity rather than
 minting one.
 
-Wave F, story 4 (`docs/plan/store-waves-f-g-h.md`). After F3 and the runtime story.
+Wave F, story 4 (`docs/plan/archive/store-waves-f-g-h.md`). After F3 and the runtime story.
 
 ## Acceptance
 

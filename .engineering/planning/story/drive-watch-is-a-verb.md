@@ -18,12 +18,12 @@ scope:
 - confidence: inferred
   path: crates/edge/aep-cli/src/drive.rs
 - confidence: cited
-  path: docs/plan/harness-wave-4-governed-dogfood.md
+  path: docs/plan/archive/harness-wave-4-governed-dogfood.md
 - confidence: cited
   path: scripts/drive-score
 - confidence: cited
   path: scripts/drive-watch
-revision: 8
+revision: 11
 ---
 # Story: Following and scoring a driven run are `protocol drive` verbs
 
@@ -38,7 +38,7 @@ waste and cost, replacing `scripts/drive-watch` and `scripts/drive-score`.
   the actions of the test-runs"; the answer was a python script broken five times (`#2104`, `#2265`, `#2462`).
 - `431986de#1283`: `protocol drive plan` → `unrecognized subcommand`, six times across states.
 - `431986de#3389`: `drive-score` reported 0.0 % waste on a run that threw away 10 of 82 calls.
-- F-W4.2-4 (`docs/plan/harness-wave-4-governed-dogfood.md:397-495`): `drive resume` re-reads none of its
+- F-W4.2-4 (`docs/plan/archive/harness-wave-4-governed-dogfood.md:397-495`): `drive resume` re-reads none of its
   five flags and `--max-iterations` is cumulative — the printed resume line does not work. Not in the store.
 
 ## Acceptance

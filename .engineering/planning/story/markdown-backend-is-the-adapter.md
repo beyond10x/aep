@@ -13,7 +13,7 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:markdown-documents-as-a-store
 - depends_on: story:events-reach-the-store
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T15:31:53Z", actor: "human:operator", revision: 6, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T15:52:04Z", actor: "human:operator", revision: 7, imported: true}
@@ -33,7 +33,7 @@ applied, then `persist`ed: wrote the document, projected relations into frontmat
 journal, latched on failure. `EntityBackend<S>` (F2) did all of that except the plan-shaped
 projection, and `MarkdownProvider` (G1) is the `S`.
 
-Wave G, story 2 (`docs/plan/store-waves-f-g-h.md`). After G1 and F3.
+Wave G, story 2 (`docs/plan/archive/store-waves-f-g-h.md`). After G1 and F3.
 
 ## Acceptance
 

@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-adapter-over-any-store
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 5, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T14:41:26Z", actor: "human:operator", revision: 6, imported: true}
@@ -37,7 +37,7 @@ The shape the runtime expects is public: `entity_store::Recording { recorded_at,
 causation, actor }` seals `DomainEvent`s into `Envelope`s with derived, clock-free ids (R-86, R-88).
 The command envelope carries every one of those four values.
 
-Wave F, story 3 (`docs/plan/store-waves-f-g-h.md`). After F2.
+Wave F, story 3 (`docs/plan/archive/store-waves-f-g-h.md`). After F2.
 
 ## Acceptance
 

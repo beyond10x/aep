@@ -11,7 +11,7 @@ tags:
 relations:
 - decomposes: epic:checker-vocabulary-depth
 - serves: vision:O3
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-30T01:07:52Z", actor: "human:operator", revision: 3, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-30T01:07:52Z", actor: "human:operator", revision: 4, imported: true}
@@ -64,7 +64,7 @@ Derived 2026-08-30 by `story-scoper`. Every line is **cited** or **inferred**.
 - **Files:** `schemas/generated/trace-spec.schema.json` — cited, regenerated from `RawTraceSpec`, held by `task schema-check`
 - **Symbols:** `ExpectationKind`, `::NAMES`, `::name`, `RawExpectationKind`, `check::evaluate`, `TraceIr::requests`, `AssistantRequest` — cited
 - **Also likely:** the hard-coded kind count in **six** places — `crates/trace-domain/src/spec.rs:1087` (`assert_eq!(NAMES.len(), 51)`), `crates/trace-domain/src/lib.rs:12` and `:25`, `crates/trace-spec/tests/check.rs:3`, `README.md:78`, `website/docs/status/where-this-stands.md:181` — cited, each says "fifty-one" and each goes stale
-- **Documents:** `docs/plan/trace-wave-1-transcript-checker.md:55` — cited, the deferred row naming this story's three assertions
+- **Documents:** `docs/plan/archive/trace-wave-1-transcript-checker.md:55` — cited, the deferred row naming this story's three assertions
 - **Confidence:** high — the story's own symbol grepped to a path, the vocabulary is one enum behind a compiler-enforced exhaustive dispatch, and two precedent commits (`a0780f1`, `180f441`) show the exact file set an added kind touches
 - **Would collide with:** any unit touching the `trace-spec/1` expectation vocabulary — the `ExpectationKind`/`RawExpectationKind` pair, `check::evaluate`'s dispatch, the generated schema, or the kind-count literal. **Note the literal reaches `README.md`**, so this unit conflicts with any wave-mate that edits the README.
 

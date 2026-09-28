@@ -12,7 +12,7 @@ tags:
 relations:
 - decomposes: epic:metaharness-migration
 - depends_on: story:contract-result-ingestion
-revision: 1
+revision: 2
 ---
 # Story: The contract runner's record decides a transition, and arrives on a pipe
 
@@ -30,7 +30,7 @@ enters instead of reading as a clean one.
 > **Anything gating on the record.** No workflow, profile or step map requires a `contract_result`
 > about a metaharness adapter; the verb makes the fact available and nothing yet asks for it.
 
-That is what this story closes, and it is R1.5 of `docs/plan/eval-program-three-arms.md` (= HC-3).
+That is what this story closes, and it is R1.5 of `docs/plan/archive/eval-program-three-arms.md` (= HC-3).
 Its second half — reading the record from standard input — was the other named remainder of the same
 story, and is what makes the loop a pipe rather than a redirect.
 

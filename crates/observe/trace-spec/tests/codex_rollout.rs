@@ -6,7 +6,7 @@
 //!
 //! # Which acceptance tier this is
 //!
-//! `docs/plan/harness-wave-4-governed-dogfood.md` § W4.4 names three. This is **partial**: the
+//! `docs/plan/archive/harness-wave-4-governed-dogfood.md` § W4.4 names three. This is **partial**: the
 //! reader exists and is tested, and no live Codex run was made — that costs money and needs a person
 //! at the keyboard, and the gate reaches no network.
 //!

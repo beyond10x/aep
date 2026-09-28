@@ -14,7 +14,7 @@ relations:
 - depends_on: story:sqlite-hydrates-on-open
 - depends_on: story:markdown-backend-is-the-adapter
 - supersedes: story:sqlite-backend
-revision: 9
+revision: 10
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-28T17:14:04Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-28T17:14:04Z", actor: "human:operator", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
@@ -36,7 +36,7 @@ no `store` key. After F4 a SQLite store can be reopened and after G2 the markdow
 adapter, so the choice is one type parameter — which is exactly what a configuration line should
 select.
 
-Wave H, story 1 (`docs/plan/store-waves-f-g-h.md`). After F4 and G2.
+Wave H, story 1 (`docs/plan/archive/store-waves-f-g-h.md`). After F4 and G2.
 
 ## Acceptance
 

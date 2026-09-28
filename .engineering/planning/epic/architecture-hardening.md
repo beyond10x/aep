@@ -9,7 +9,7 @@ relations:
 - serves: vision:O2
 - serves: vision:O3
 - serves: vision:O6
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-30T22:08:49Z", actor: "human:operator", revision: 2, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-30T22:08:49Z", actor: "human:operator", revision: 3, imported: true}
@@ -21,4 +21,4 @@ Close the accepted architecture-review findings as one gated wave. The implement
 
 ## Source
 
-Accepted operator plan dated 2026-08-30; implementation page `docs/plan/architecture-hardening.md`.
+Accepted operator plan dated 2026-08-30; implementation page `docs/plan/archive/architecture-hardening.md`.

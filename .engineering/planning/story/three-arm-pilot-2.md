@@ -14,10 +14,10 @@ scope:
 - confidence: inferred
   path: crates/edge/aep-cli
 - confidence: cited
-  path: docs/plan/eval-program-three-arms.md
+  path: docs/plan/archive/eval-program-three-arms.md
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 11
+revision: 14
 ---
 # Story: Pilot 2 — every cell re-run on the frozen corpus, with the streams committed
 
@@ -54,7 +54,7 @@ central hypothesis — `H-arms`, that expectations-held orders `a ≤ b ≤ c` �
 term.
 
 **This is the same defect the store waves were about, one layer out.** The measurement is a phase
-table in `docs/plan/eval-program-three-arms.md` and was in no artifact of this store; the machinery
+table in `docs/plan/archive/eval-program-three-arms.md` and was in no artifact of this store; the machinery
 around it — `story:eval-runner`, `story:eval-matrix-assembler`, `story:eval-dry-run`,
 `story:eval-case-corpus` — is all `implemented`, so the plan reads as though the measurement had
 been done. This story is the thing that was missing.
