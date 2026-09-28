@@ -214,6 +214,68 @@ fn git_plan_at(path: &Path) -> Result<Option<Plan>> {
     })
 }
 
+/// Whether this process is an `aep plan …` command, the only one that suggests the Git store.
+static UPGRADE_NOTICE_ENABLED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+/// Whether the suggestion was already printed: one line per process, however many opens.
+static UPGRADE_NOTICE_PRINTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+/// Set to a non-empty value other than `0` to keep the suggestion out of a log.
+pub(crate) const NO_UPGRADE_NOTICE_ENV: &str = "AEP_NO_UPGRADE_NOTICE";
+/// The command that moves a `/1` plan to `/5`, as the suggestion and `aep doctor` name it.
+pub(crate) const MIGRATE_GIT_COMMAND: &str = "aep plan store migrate git --verify";
+
+/// Lets this process suggest the Git-native store when it opens an `aep.project/1` plan.
+///
+/// Called by `aep plan` alone: `doctor` reports the same thing as a check line, and `drive`,
+/// `observe` and `govern` read a plan without being the place its layout is managed.
+pub(crate) fn suggest_the_git_store() {
+    UPGRADE_NOTICE_ENABLED.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// What the `/1` plan that was opened looks like.
+#[derive(Debug, Clone, Copy)]
+enum UpgradeFrom {
+    /// A `project.yaml` that says `aep.project/1` with a Markdown store.
+    Configured,
+    /// No `project.yaml`, in a Git repository: the `/1` layout by default.
+    Unconfigured,
+}
+
+/// One line on stderr suggesting `aep.project/5`; stdout and the exit code are untouched.
+fn upgrade_notice(from: UpgradeFrom) {
+    use std::sync::atomic::Ordering;
+    if !UPGRADE_NOTICE_ENABLED.load(Ordering::Relaxed)
+        || std::env::var_os(NO_UPGRADE_NOTICE_ENV).is_some_and(|value| !value.is_empty() && value != "0")
+        || UPGRADE_NOTICE_PRINTED.swap(true, Ordering::Relaxed)
+    {
+        return;
+    }
+    let v1 = aep_domain::project::PROJECT_VERSION;
+    let v5 = aep_domain::project::PROJECT_VERSION_V5;
+    match from {
+        UpgradeFrom::Configured => eprintln!(
+            "note: this plan is {v1}; `{MIGRATE_GIT_COMMAND}` moves it to {v5}, the Git-native \
+             store (one file per write, no journal); {NO_UPGRADE_NOTICE_ENV}=1 hides this"
+        ),
+        UpgradeFrom::Unconfigured => eprintln!(
+            "note: this plan has no project.yaml and reads as {v1}; `aep plan store migrate git \
+             --protocols <source> --profile <profile> --verify` moves it to {v5}, the Git-native \
+             store (one file per write, no journal); {NO_UPGRADE_NOTICE_ENV}=1 hides this"
+        ),
+    }
+}
+
+/// Whether `directory` is inside a Git work tree: it or an ancestor holds `.git`.
+fn in_a_git_repository(directory: &Path) -> bool {
+    let Ok(absolute) = std::path::absolute(directory) else {
+        return false;
+    };
+    absolute
+        .ancestors()
+        .any(|ancestor| ancestor.join(".git").exists())
+}
+
 /// Where a plan is kept, resolved: what a verb opens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Plan {
@@ -261,6 +323,9 @@ impl Plan {
     pub(crate) fn for_project(engineering: &Path) -> Result<Self> {
         let config_path = engineering.join(aep_domain::project::PROJECT_FILE);
         if !config_path.exists() {
+            if in_a_git_repository(engineering) {
+                upgrade_notice(UpgradeFrom::Unconfigured);
+            }
             return Ok(Self::Markdown {
                 root: engineering.join(PLANNING_DIRECTORY),
             });
@@ -269,6 +334,11 @@ impl Plan {
             .with_context(|| format!("reading {}", config_path.display()))?;
         let config = aep_schema::parse::project(&text, Some(&config_path.display().to_string()))
             .map_err(|error| anyhow::anyhow!("{error}"))?;
+        if config.version == aep_domain::project::ProjectVersion::V1
+            && config.store == aep_domain::project::StoreConfig::Markdown
+        {
+            upgrade_notice(UpgradeFrom::Configured);
+        }
         Self::from_config(&config.store.resolved(engineering), engineering)
     }
 

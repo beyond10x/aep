@@ -41,6 +41,9 @@ fn protocol_in(project: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_protocol"))
         .args(args)
         .current_dir(project)
+        // Only the `aep.project/1` Markdown project gets the upgrade suggestion; this file
+        // compares what the stores answer, not how each suggests its own layout.
+        .env("AEP_NO_UPGRADE_NOTICE", "1")
         .output()
         .expect("the protocol binary runs")
 }

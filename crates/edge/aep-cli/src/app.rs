@@ -276,6 +276,13 @@ enum GovernCommand {
 #[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)] // Clap owns this closed command tree; boxing changes its API.
 enum PlanCommand {
+    /// Move the selected planning store to another layout: `migrate git` turns an `aep.project/1`
+    /// Markdown plan into the Git-native `aep.project/5` one.
+    Store {
+        /// Which store operation to perform.
+        #[command(subcommand)]
+        command: store_command::StoreCommand,
+    },
     /// Plan work in the markdown planning store: epics, stories, tasks and how they relate.
     ///
     /// The store is a directory of markdown files — one artifact per file, YAML frontmatter, free
@@ -824,6 +831,11 @@ mod planning;
 mod planning_writer_fence;
 mod serve;
 
+// The one store operation left after the event-log verbs went: migrating an `aep.project/1` plan to
+// `aep.project/5`. Its own module because it reads the old layout once and writes the new one
+// whole, which no other verb does.
+mod store_command;
+
 // The second module split, on the same criterion: a verb family with its own observation
 // domain, its own vocabulary and no shared state with the rest of the binary. It brings its own
 // `--format` enum too, because a check report has two useful renderings and not three.
@@ -983,7 +995,11 @@ fn govern(command: GovernCommand) -> Result<ExitCode> {
 
 /// `aep plan` — and every one of its verbs by its flat spelling.
 fn plan(command: PlanCommand) -> Result<ExitCode> {
+    if !matches!(command, PlanCommand::Store { .. }) {
+        planning::suggest_the_git_store();
+    }
     match command {
+        PlanCommand::Store { command } => store_command::run(command),
         PlanCommand::Artifact { command } => planning::run(command),
         PlanCommand::Serve {
             location,

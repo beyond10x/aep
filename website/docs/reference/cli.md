@@ -21,7 +21,7 @@ rather than on any document.
 | Area | For |
 |---|---|
 | `govern` | what the documents say and what they decide — `validate`, `resolve`, `inspect`, `evaluate`, `explain`, `describe`, `schema`, `workflow` |
-| `plan` | the work that exists and the store that holds it — `artifact`, `serve`, `entity`, `audit`, `workspace`, `conformance`, `reverse` |
+| `plan` | the work that exists and the store that holds it — `store`, `artifact`, `serve`, `entity`, `audit`, `workspace`, `conformance`, `reverse` |
 | `drive` | a run of a workflow, and the evaluation of many finished ones — `run`, `status`, `resume`, `transition`, `eval` |
 | `observe` | what actually happened, checked against what was expected — `trace`, `contract`, `property`, `specification`, `evidence` |
 | `doctor` | whether this checkout is in a state the other verbs will accept |
@@ -170,8 +170,19 @@ this store is an event-log store (aep.project/4); AEP no longer reads it — mig
 then `aep plan store migrate git --verify`
 ```
 
-The `aep plan store` verbs, `aep plan artifact resolve` and `aep plan artifact render` operated on
-those stores and are gone with them.
+The event-log `aep plan store` verbs, `aep plan artifact resolve` and `aep plan artifact render`
+operated on those stores and are gone with them.
+
+### Plan: moving an `aep.project/1` store to `aep.project/5`
+
+A new store is `aep.project/5`. An `aep.project/1` Markdown store — and a planning directory with no
+`project.yaml` inside a Git repository — still reads, and every `aep plan` command that opens one
+prints one line to stderr naming the command below; stdout and the exit code are unchanged, and
+`AEP_NO_UPGRADE_NOTICE=1` hides the line.
+
+| Command | What it does |
+|---|---|
+| `aep plan store migrate git [--engineering <dir>] [--protocols <source> --profile <profile> [--protocol adp/1]] [--dry-run \| --verify]` | turns an `aep.project/1` Markdown store into an `aep.project/5` Git-native store: every document becomes `aep.planning-md/3`, its journalled moves become its `transitions` (marked `imported`, in journal order), each journalled evidence record becomes one file under `.engineering/evidence/`, and identical records stay separate files. Other front-matter keys and bodies are kept. `project.yaml` becomes `version: aep.project/5` with `store: {git: {}}` and `planning_scope` set to the repository directory's name, keeping every other key; `journal.jsonl` and `.aep-batch.pending.json` are removed. A planning directory with no `project.yaml` migrates when `--protocols` and `--profile` say what the project file should name; they are refused when one exists. Refuses a dirty `.engineering`, and refuses the whole migration without writing when any document disagrees with its journal (a `status` its last move did not reach, a `revision` not above its move count, a journal entry with no document). `--dry-run` reports and writes nothing; `--verify` reads the new store back and compares status, revision, title, relations, body, transitions and evidence counts with the old answers. `aep.project/2`–`/4` keep the refusal above |
 
 ## Plan: the workspace surface
 
@@ -256,8 +267,8 @@ and the worst case is a report you disagree with.
 | `aep plan reverse history [root] [--recent 500] [--top 15] [--format …]` | reads what the repository's own git history says: who touches what, which areas are dormant, where change concentrates. **Writes nothing** |
 | `aep plan reverse tickets --provider <name> [--repository .] [--top 100] [--format …]` | joins the tracker keys in the history and in the plan's prose to the references the store holds: what is recorded, what an `artifact set --ref` would record, and which keys no artifact names. **Writes nothing** |
 | `aep plan reverse openapi <path> --domain <name> [--out …]` | drafts an `ess/1` domain from an OpenAPI document that already exists, including a `relations:` block on every type whose schema states one; standard output when `--out` is absent |
-| `aep plan reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify]` | writes the `project.yaml` that makes a repository an adopting project. This is the one that writes, and it resolves the protocol source first unless `--no-verify` says not to |
-| `aep doctor [--root .] [--plugin-dir <path>]… [--format text\|json]` | whether this checkout is in a state the other verbs will accept, one line per check with `ok`, `warn` or `fail`: the binary's version; whether `.engineering/project.yaml` is there and parses; whether the `protocols:` source it names resolves — a path that exists, or a pinned `git+…#<40-hex>` locator whose snapshot is already cached, and the line says which; whether the planning store is there and `artifact validate` would pass over it, decided by that verb's own accumulation; whether each plugin directory given, or the one `AEP_DRIVE_PLUGIN_DIR` names, carries a `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`; and whether the newest bare-version tag reachable from `HEAD` is this binary's version. Exit `1` on any `fail`. **Fixes nothing** — a checker that repaired could not be run to find out what is wrong — and reads no clock and opens no connection, so a pinned source is never fetched and a plan kept in PostgreSQL is reported as not checked here. `--root` is taken literally: it reports on the directory you point it at and walks up to no parent |
+| `aep plan reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify]` | writes the `project.yaml` that makes a repository an adopting project: `aep.project/5` with `store: {git: {}}` and `planning_scope` set to the repository directory's name. A `.engineering/planning` that already holds a plan is refused, naming `aep plan store migrate git --protocols <source> --profile <profile> --verify`, which writes the project file. This is the one that writes, and it resolves the protocol source first unless `--no-verify` says not to |
+| `aep doctor [--root .] [--plugin-dir <path>]… [--format text\|json]` | whether this checkout is in a state the other verbs will accept, one line per check with `ok`, `warn` or `fail`: the binary's version; whether `.engineering/project.yaml` is there and parses; whether the `protocols:` source it names resolves — a path that exists, or a pinned `git+…#<40-hex>` locator whose snapshot is already cached, and the line says which; whether the planning store is there and `artifact validate` would pass over it, decided by that verb's own accumulation, with `warn` naming `aep plan store migrate git --verify` for an `aep.project/1` store; whether each plugin directory given, or the one `AEP_DRIVE_PLUGIN_DIR` names, carries a `.claude-plugin/plugin.json` or `.codex-plugin/plugin.json`; and whether the newest bare-version tag reachable from `HEAD` is this binary's version. Exit `1` on any `fail`. **Fixes nothing** — a checker that repaired could not be run to find out what is wrong — and reads no clock and opens no connection, so a pinned source is never fetched and a plan kept in PostgreSQL is reported as not checked here. `--root` is taken literally: it reports on the directory you point it at and walks up to no parent |
 
 `--protocols` takes a path or a pinned `git+…#<40-hex>` locator: a governing document tree that
 could move under you is a gate whose meaning changes without a commit in your repository.
