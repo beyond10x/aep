@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:reverse-openapi-emits-relations
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - informed_by: epic:adopter-feedback-round-2
 - serves: vision:O2
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-02T23:28:12Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-02T23:28:12Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-02T23:28:13Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `aep reverse openapi` drafts `relations:` from `$ref` and id fields, `UNMAPPED:` where cardinality is unknown
 

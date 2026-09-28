@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T23:33:39Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:driver-router",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review",
+    "source": "audit of active artifacts, claude session",
+    "reference": ".engineering/planning/story/driver-router.md#reworded-2026-08-30"
+  }
+}

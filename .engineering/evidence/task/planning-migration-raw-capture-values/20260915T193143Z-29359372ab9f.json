@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-15T19:31:43Z",
+  "actor": "human:timo",
+  "artifact": "task:planning-migration-raw-capture-values",
+  "kind": "task",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check at 715e52a88df9abcfcdd35752c09ab64b1e5a3fb3; actual exit 0; PostgreSQL, Rust 1.85 and website executed",
+    "reference": "local-evidence:ess-evolution/waves/0005-aep-migration/raw-capture-full-gate/retry-after-scope/task-check.log#sha256=8c4c9b12777cd5ddc41b0e969e6ceaf200936cf223787022036ba95876c41e23"
+  }
+}

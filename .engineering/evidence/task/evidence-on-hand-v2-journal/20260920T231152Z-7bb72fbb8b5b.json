@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-20T23:11:52Z",
+  "actor": "human:timo",
+  "artifact": "task:evidence-on-hand-v2-journal",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "finding 2 planning.rs:6783 outcomes_of and :5561 review_history CONFIRMED introduced warning: an outcome on an artifact a review no longer reviews is invisible and --strict misreports. Fixed in bot commit 051a19346f5dda4096c292b5b7b738320eb63ad3 by refusing unrelate while a review_outcome rests on the edge, on markdown, hybrid and Eventlog alike; case an_outcome_on_an_artifact_a_review_no_longer_reviews_survives_a_migration green",
+    "review": "review-result:evidence-on-hand-review-2",
+    "outcome": "fixed"
+  }
+}

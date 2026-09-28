@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T09:41:08Z",
+  "actor": "human:operator",
+  "artifact": "story:pinned-startup-definition-bundle",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "local release gate 0.36.0"
+  }
+}

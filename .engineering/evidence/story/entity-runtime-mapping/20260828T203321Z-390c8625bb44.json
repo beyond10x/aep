@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:33:21Z",
+  "actor": "human:operator",
+  "artifact": "story:entity-runtime-mapping",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-backend-markdown --test entity_runtime_equivalence, 2026-08-28 — 6 passed, 77 edges both directions",
+    "reference": "crates/aep-backend-markdown/tests/entity_runtime_equivalence.rs"
+  }
+}

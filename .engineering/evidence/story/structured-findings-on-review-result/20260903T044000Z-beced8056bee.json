@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T04:40:00Z",
+  "actor": "human:timo",
+  "artifact": "story:structured-findings-on-review-result",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "https://github.com/beyond10x/aep/commit/8b4342a"
+  }
+}

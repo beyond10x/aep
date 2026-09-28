@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-21T13:55:31Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-store-hydrates-from-one-snapshot",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "metric_observation",
+    "source": "Same-copy A/B, three interleaved pairs, previous build against this one: plan artifact list 76.2 s to 1.25 s, plan artifact history 74.6 s to 1.14 s, plan store verify 2.47 s unchanged, list output byte-identical. Confirmed on the REAL Eventlog store at M4a: list 1.20 / 1.17 / 1.18 s, byte-identical, validate 75 artifacts 0 problems. Evidence: unit-7-one-snapshot-hydrate/ and eventlog-activation-20260921/receipts/SUMMARY.txt"
+  }
+}

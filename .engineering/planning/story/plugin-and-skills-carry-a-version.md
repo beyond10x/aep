@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:plugin-and-skills-carry-a-version
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - serves: vision:O3
 - informed_by: story:wave-skill-defects-found-by-running-it
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:03Z", actor: "agent:claude-audit", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:04Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T15:48:04Z", actor: "agent:claude-audit", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: The plugin and its skills carry a version a session can quote
 

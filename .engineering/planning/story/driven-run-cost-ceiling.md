@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:driven-run-cost-ceiling
 kind: story
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - decomposes: epic:reference-driver
 - serves: vision:O3
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-31T12:13:33Z", actor: "human:operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-31T12:13:33Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-31T12:22:52Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A driven run cannot start an unbounded paid session
 

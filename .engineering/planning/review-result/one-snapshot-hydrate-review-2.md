@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: review-result:one-snapshot-hydrate-review-2
 kind: review-result
 status: active
@@ -7,6 +7,8 @@ title: 'Independent verification pass 2: which added lines can be deleted while 
 relations:
 - reviews: story:eventlog-store-hydrates-from-one-snapshot
 revision: 2
+transitions:
+- {from: "draft", to: "active", at: "2026-09-21T09:43:38Z", actor: "human:timo", revision: 2, imported: true}
 ---
 unit: story:eventlog-store-hydrates-from-one-snapshot — commit 2d4a93126e3a7c052b31cbf014a9c47834fb1555, worktree home-path:sha256:c2c8654daef6e67dc34a2b50295b370090297dbdf1ff4dd9c67f946d5fc68130 (HEAD detached, no tracked non-test file modified)
 verdict: red

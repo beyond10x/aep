@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:journal-reconciliation
 kind: story
 status: implemented
@@ -8,6 +8,10 @@ summary: protocol artifact validate reports a frontmatter status the journal doe
 relations:
 - decomposes: epic:evidence-gated-completion
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T09:32:40Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T09:32:40Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T09:32:41Z", actor: "operator", revision: 4, decided_on: {"asserted":{"test_result":1}}, imported: true}
 ---
 # Story: A status in a file with no journal entry behind it is drift
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: initiative:the-repo-governs-itself
 kind: initiative
 status: draft

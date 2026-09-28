@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T11:22:26Z",
+  "actor": "human:operator",
+  "artifact": "story:driver-spec-crate",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task test on wave/the-driver-owes-only-tests",
+    "reference": "f61469c; aep-driver-spec + aep-engine green except no_pin_the_published_pattern_calls_valid_is_one_the_loader_refuses, red on purpose: 183 pins the schema accepts and the loader refuses"
+  }
+}

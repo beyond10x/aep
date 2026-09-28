@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T00:00:00Z",
+  "actor": "human:operator",
+  "artifact": "story:conformance-verb-takes-a-backend",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, full gate, exit 0, 2026-08-28",
+    "reference": "crates/protocol-cli/tests/cli.rs"
+  }
+}

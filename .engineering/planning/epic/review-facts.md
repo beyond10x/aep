@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:review-facts
 kind: epic
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - serves: vision:O2
 - serves: vision:O6
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-02T23:28:14Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-02T23:28:15Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-02T23:28:16Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Epic: Reviews leave facts the next review and the operator can compute over
 

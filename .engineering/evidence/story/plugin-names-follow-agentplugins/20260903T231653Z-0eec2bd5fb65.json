@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-03T23:16:53Z",
+  "actor": "human:timo",
+  "artifact": "story:plugin-names-follow-agentplugins",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check after rebase onto origin/main 080fe29 and entity-runtime 0.17.6, commit 2b58b12: exit 0, 16 steps, 2135 tests"
+  }
+}

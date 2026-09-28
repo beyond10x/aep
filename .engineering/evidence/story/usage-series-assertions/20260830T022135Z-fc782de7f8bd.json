@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T02:21:35Z",
+  "actor": "human:operator",
+  "artifact": "story:usage-series-assertions",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "124cac7"
+  }
+}

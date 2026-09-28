@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: dependency-blocker:metaharness-source-receipt
 kind: dependency-blocker
 status: open

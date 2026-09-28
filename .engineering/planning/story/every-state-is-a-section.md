@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:every-state-is-a-section
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:cross-harness-portability
 - serves: vision:O3
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T21:43:32Z", actor: "agent:claude-session", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T22:01:08Z", actor: "agent:claude-session", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T22:24:26Z", actor: "agent:claude-session", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `workflow flow` makes every state a section
 

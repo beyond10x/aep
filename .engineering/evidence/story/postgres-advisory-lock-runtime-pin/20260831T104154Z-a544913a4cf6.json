@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T10:41:54Z",
+  "actor": "human:operator",
+  "artifact": "story:postgres-advisory-lock-runtime-pin",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-backend-postgres --test conformance --locked",
+    "reference": "live PostgreSQL run, 2026-08-31"
+  }
+}

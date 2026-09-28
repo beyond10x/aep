@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:15:45Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "review",
+    "source": "source read of the worktree at 52d529c, 2026-08-29",
+    "reference": "no test compiles drivers/development/default.yaml into an argv: the only argv unit test uses the fixture step at crates/protocol-cli/src/drive.rs:3942, and crates/protocol-cli/tests/drive_cli.rs:651 reads the committed map with --max-iterations 0 so no step runs; the map does declare the keys at drivers/development/default.yaml:62-73 — acceptance bullet 4 NOT met"
+  }
+}

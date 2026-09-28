@@ -1,0 +1,12 @@
+{
+  "at": "2026-08-29T23:26:32Z",
+  "actor": "human:operator",
+  "artifact": "story:landing-page-states-what-is-true",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check — 21 steps, 192 suites, 2890 passed, 0 failed, exit 0"
+  }
+}

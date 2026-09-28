@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T11:22:14Z",
+  "actor": "human:operator",
+  "artifact": "story:default-step-map",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task test + task clippy + task fmt-check on wave/the-driver-owes-only-tests",
+    "reference": "f61469c; cargo test -p aep-engine --no-fail-fast exit 0; 6 mutants each red as required"
+  }
+}

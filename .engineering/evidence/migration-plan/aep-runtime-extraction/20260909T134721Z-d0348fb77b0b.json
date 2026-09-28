@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-09T13:47:21Z",
+  "actor": "human:timo",
+  "artifact": "migration-plan:aep-runtime-extraction",
+  "kind": "migration-plan",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check: full source, governance, MSRV and website gate passed; PostgreSQL live test explicitly skipped without ENTITY_POSTGRES_URL",
+    "reference": "home-path:sha256:5e344226eb0585597abe94f75fa5eb6bac8d2a5c5b691f92593141326aca0f29"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-09T11:10:23Z",
+  "actor": "agent:foundation-upgrade",
+  "artifact": "migration-plan:foundation-source-pins-20260909",
+  "kind": "migration-plan",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check: all 16 declared steps passed, including configured PostgreSQL, Rust 1.85 and website build; exact source composition",
+    "reference": "foundation-1788942852-970971"
+  }
+}

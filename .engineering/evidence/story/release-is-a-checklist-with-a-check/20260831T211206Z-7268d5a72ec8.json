@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T21:12:06Z",
+  "actor": "human:operator",
+  "artifact": "story:release-is-a-checklist-with-a-check",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "GitHub Release workflow 33439301417",
+    "reference": "tag 0.39.2 commit 0bf26db2388a7d2735b1743acd13c5bc392ad018; gate / Gate passed and release published"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-06T15:33:27Z",
+  "actor": "human:timo",
+  "artifact": "story:admit-ess-conformance-coverage",
+  "kind": "story",
+  "revision": 31,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "All16 declared gate steps returned0 at58fe2f3;2269workspace cases passed;PostgreSQL explicitly skipped locally",
+    "reference": "verification-report:ess-conformance-coverage-integrated"
+  }
+}

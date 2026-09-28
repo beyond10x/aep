@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:regex-matchers
 kind: story
 status: implemented
@@ -12,6 +12,10 @@ relations:
 - decomposes: epic:checker-vocabulary-depth
 - serves: vision:O3
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T21:18:52Z", actor: "human:operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T21:18:52Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T22:07:38Z", actor: "human:operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `regex` matchers, or the recorded reason there are none
 

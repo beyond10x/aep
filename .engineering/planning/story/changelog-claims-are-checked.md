@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:changelog-claims-are-checked
 kind: story
 status: implemented
@@ -8,6 +8,10 @@ summary: A `### Fixed` bullet describes something a user hit in a shipped versio
 relations:
 - decomposes: epic:evidence-gated-completion
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T09:32:41Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T09:32:41Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T09:32:41Z", actor: "operator", revision: 4, decided_on: {"asserted":{"test_result":1}}, imported: true}
 ---
 # Story: A `### Fixed` entry names a release the defect was actually in
 

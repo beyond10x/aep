@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:eval-run-pins-the-model
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:self-evaluation
 - serves: vision:O3
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-03T11:48:33Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-03T11:48:34Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-03T11:48:35Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `aep eval run --model` pins the model a paid arm asks for
 

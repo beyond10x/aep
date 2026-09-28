@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T01:10:10Z",
+  "actor": "human:timo",
+  "artifact": "task:aep-pin-verify-once-vector",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "N3 task:aep-pin-verify-once-vector NEEDS-CHANGE undecided: the acceptance named ER e535aded, which pins eventlog c698923, so satisfying it literally recreates the two-eventlog-core state its own first bullet forbids. The code pins 97d6edfb and is right; the record was stale. Acceptance rewritten to name 97d6edfb and to say why, and to require that any number the CHANGELOG quotes is measured after the pin",
+    "review": "review-result:aep-pin-vector-review-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:sqlite-backend
 kind: story
 status: archived
@@ -13,6 +13,8 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:journal-backed-store
 revision: 2
+transitions:
+- {from: "draft", to: "archived", at: "2026-08-28T17:14:04Z", actor: "human:operator", revision: 2, imported: true}
 ---
 # Story: P4 — `aep-backend-sqlite`
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: epic:reference-driver
 kind: epic
 status: active
@@ -12,6 +12,9 @@ tags:
 relations:
 - decomposes: initiative:the-repo-governs-itself
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T19:59:15Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T19:59:15Z", actor: "human:operator", revision: 4, imported: true}
 ---
 # Epic: The reference driver
 

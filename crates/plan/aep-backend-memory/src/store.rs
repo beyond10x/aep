@@ -61,6 +61,53 @@ pub struct Store {
     sequence: u64,
     /// Set when identities are derived from what they identify instead of counted.
     natural: Option<Natural>,
+    /// The undo journal of the command being applied, while one is.
+    undo: Option<Undo>,
+    /// Counts whole-store copies under test, so a test can prove a command does not make one.
+    #[expect(dead_code, reason = "held only so that copying the store is counted")]
+    probe: CloneProbe,
+}
+
+/// What a command has changed so far, kept so a refusal can put every change back.
+///
+/// A command runs against the live store and is undone on refusal, rather than run against a copy
+/// of the whole store: a copy per command makes hydrating `n` artifacts cost `n²`. The journal is
+/// proportional to what the command touched. The append-only collections are rolled back to their
+/// recorded lengths; a keyed entry keeps its first prior value (or its absence).
+#[derive(Debug, Clone)]
+struct Undo {
+    sequence: u64,
+    natural: Option<Natural>,
+    audit_len: usize,
+    events_len: usize,
+    entities: BTreeMap<EntityId, Option<StoredEntity>>,
+    locators: BTreeMap<String, Option<EntityId>>,
+    relations: BTreeMap<RelationId, Option<Relation>>,
+    /// The entities a revision record was appended to, in order, one per record.
+    history: Vec<EntityId>,
+}
+
+/// A field whose copies are counted under `cfg(test)` and cost nothing otherwise.
+#[derive(Debug, Default)]
+struct CloneProbe;
+
+impl Clone for CloneProbe {
+    fn clone(&self) -> Self {
+        #[cfg(test)]
+        STORE_CLONES.with(|count| count.set(count.get() + 1));
+        Self
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    static STORE_CLONES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times this thread has copied a whole [`Store`].
+#[cfg(test)]
+pub(crate) fn store_clones() -> usize {
+    STORE_CLONES.with(std::cell::Cell::get)
 }
 
 /// The command identities are being derived for, and how many it has minted so far.
@@ -106,6 +153,88 @@ impl Store {
     /// An empty store.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Starts journaling changes so [`Store::rollback`] can undo them.
+    ///
+    /// # Panics
+    /// Panics when a transaction is already open: they do not nest.
+    pub(crate) fn begin_transaction(&mut self) {
+        assert!(self.undo.is_none(), "store transactions do not nest");
+        self.undo = Some(Undo {
+            sequence: self.sequence,
+            natural: self.natural.clone(),
+            audit_len: self.audit.len(),
+            events_len: self.events.len(),
+            entities: BTreeMap::new(),
+            locators: BTreeMap::new(),
+            relations: BTreeMap::new(),
+            history: Vec::new(),
+        });
+    }
+
+    /// Keeps every change since [`Store::begin_transaction`].
+    pub(crate) fn commit(&mut self) {
+        self.undo = None;
+    }
+
+    /// Puts back every change since [`Store::begin_transaction`], leaving the store as it was.
+    pub(crate) fn rollback(&mut self) {
+        let Some(undo) = self.undo.take() else {
+            return;
+        };
+        self.sequence = undo.sequence;
+        self.natural = undo.natural;
+        for record in self.audit.drain(undo.audit_len..) {
+            self.audit_ids.remove(&record.audit_id);
+        }
+        self.events.truncate(undo.events_len);
+        for (id, prior) in undo.entities {
+            match prior {
+                Some(entity) => self.entities.insert(id, entity),
+                None => self.entities.remove(&id),
+            };
+        }
+        for (locator, prior) in undo.locators {
+            match prior {
+                Some(id) => self.locators.insert(locator, id),
+                None => self.locators.remove(&locator),
+            };
+        }
+        for (id, prior) in undo.relations {
+            match prior {
+                Some(relation) => self.relations.insert(id, relation),
+                None => self.relations.remove(&id),
+            };
+        }
+        for id in undo.history.into_iter().rev() {
+            if let Some(records) = self.history.get_mut(&id) {
+                records.pop();
+                if records.is_empty() {
+                    self.history.remove(&id);
+                }
+            }
+        }
+    }
+
+    /// Records the prior value of an entity before its first change in a transaction.
+    fn touch_entity(&mut self, id: &EntityId) {
+        if let Some(undo) = &mut self.undo {
+            if !undo.entities.contains_key(id) {
+                undo.entities
+                    .insert(id.clone(), self.entities.get(id).cloned());
+            }
+        }
+    }
+
+    /// Records the prior value of a relation before its first change in a transaction.
+    fn touch_relation(&mut self, id: &RelationId) {
+        if let Some(undo) = &mut self.undo {
+            if !undo.relations.contains_key(id) {
+                undo.relations
+                    .insert(id.clone(), self.relations.get(id).cloned());
+            }
+        }
     }
 
     /// Advances the sequence and returns the new value, which every generated identifier uses.
@@ -234,6 +363,12 @@ impl Store {
 
     /// Inserts a new entity and indexes its locator.
     pub fn insert_entity(&mut self, entity: StoredEntity) {
+        self.touch_entity(&entity.metadata.id);
+        if let Some(undo) = &mut self.undo {
+            let locator = entity.metadata.locator.to_string();
+            let prior = self.locators.get(&locator).cloned();
+            undo.locators.entry(locator).or_insert(prior);
+        }
         self.locators.insert(
             entity.metadata.locator.to_string(),
             entity.metadata.id.clone(),
@@ -248,6 +383,7 @@ impl Store {
 
     /// The entity with this identity, mutably.
     pub fn entity_mut(&mut self, id: &EntityId) -> Option<&mut StoredEntity> {
+        self.touch_entity(id);
         self.entities.get_mut(id)
     }
 
@@ -268,11 +404,13 @@ impl Store {
 
     /// Records a relation.
     pub fn insert_relation(&mut self, relation: Relation) {
+        self.touch_relation(&relation.id);
         self.relations.insert(relation.id.clone(), relation);
     }
 
     /// Removes a relation, returning it.
     pub fn remove_relation(&mut self, id: &RelationId) -> Option<Relation> {
+        self.touch_relation(id);
         self.relations.remove(id)
     }
 
@@ -283,6 +421,9 @@ impl Store {
 
     /// Appends a revision record to an entity's history.
     pub fn record_revision(&mut self, id: &EntityId, record: RevisionRecord) {
+        if let Some(undo) = &mut self.undo {
+            undo.history.push(id.clone());
+        }
         self.history.entry(id.clone()).or_default().push(record);
     }
 

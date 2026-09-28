@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:validate-strict-refuses-what-it-reports
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - serves: vision:O2
 - informed_by: story:completion-needs-evidence
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:15Z", actor: "agent:claude-audit", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:15Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T15:48:16Z", actor: "agent:claude-audit", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `validate --strict` refuses what `validate` only reports, and `move` refuses what `validate` would
 

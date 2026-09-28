@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T02:15:48Z",
+  "actor": "human:operator",
+  "artifact": "story:the-plan-in-a-browser",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p protocol-cli --test serve_cli a_read_only_server_answers_reads_and_refuses_every_move --locked --quiet (five consecutive runs)",
+    "reference": "crates/protocol-cli/tests/serve_cli.rs"
+  }
+}

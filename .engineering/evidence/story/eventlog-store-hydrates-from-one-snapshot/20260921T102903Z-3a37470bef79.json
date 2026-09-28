@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T10:29:03Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-store-hydrates-from-one-snapshot",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 F2 lib.rs:576 integrity CONFIRMED introduced, with pass 2 P3 lib.rs:589: a warm handle answered an unknown subject with a synthesized empty genesis instead of falling through, rewriting unknown as never-written against AGENTS.md invariant 5. Fixed in the correction round: the synthesized genesis is deleted and a capture miss is the provider's answer in both reads",
+    "review": "review-result:one-snapshot-hydrate-review-1",
+    "outcome": "fixed"
+  }
+}

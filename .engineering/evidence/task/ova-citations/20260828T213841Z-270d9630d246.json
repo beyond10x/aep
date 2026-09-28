@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T21:38:41Z",
+  "actor": "human:operator",
+  "artifact": "task:ova-citations",
+  "kind": "task",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "re-run at HEAD 2026-08-28: bash .engineering/checks/run.sh citations -> 13 pass, 0 fail; the drifted citation evidence.rs:1181 -> :1189 is repaired and the check now runs in task check as audit-check",
+    "reference": ".engineering/checks/check-citations.sh"
+  }
+}

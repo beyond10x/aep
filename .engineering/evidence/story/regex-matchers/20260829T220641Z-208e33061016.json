@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T22:06:41Z",
+  "actor": "human:operator",
+  "artifact": "story:regex-matchers",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "f567b77"
+  }
+}

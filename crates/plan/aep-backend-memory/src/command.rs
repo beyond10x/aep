@@ -83,24 +83,28 @@ fn apply(
         return Err(error);
     }
 
-    // Every valid command runs against a candidate. Several commands deliberately perform checks
+    // Every valid command runs in a transaction. Several commands deliberately perform checks
     // after their first mutation (for example, accepting an ADR may also supersede another one),
-    // so validation alone cannot make the write path atomic. Publish the candidate only once every
-    // effect and the accepted audit record have been produced successfully.
-    let mut candidate = store.clone();
-    match apply_valid(&mut candidate, envelope) {
+    // so validation alone cannot make the write path atomic. The store journals what the command
+    // changes and puts all of it back on refusal; it is kept only once every effect and the
+    // accepted audit record have been produced successfully. Journaling rather than copying the
+    // whole store keeps a command's cost proportional to what it touches, so seeding `n` artifacts
+    // is linear rather than quadratic.
+    store.begin_transaction();
+    match apply_valid(store, envelope) {
         Ok(result) => {
-            candidate.remember(
+            store.commit();
+            store.remember(
                 key,
                 AppliedCommand {
                     intent: CommandIntent::from_envelope(envelope),
                     result: result.clone(),
                 },
             );
-            *store = candidate;
             Ok(result)
         }
         Err(error) => {
+            store.rollback();
             record_rejection(store, envelope, &error);
             Err(error)
         }
@@ -665,5 +669,110 @@ fn merge(data: &mut Node, changes: &std::collections::BTreeMap<String, Node>) {
             }
             *other = Node::Map(entries);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use aep_contract::command::CommandContext;
+    use aep_domain::command::{AcceptAdr, CreateEntity};
+    use aep_domain::entity::{EntityId, EntityType};
+
+    use super::*;
+
+    fn envelope(id: &str, at: u64, payload: Command) -> CommandEnvelope<Command> {
+        let command_type = payload.kind().as_str().to_owned();
+        let target = payload.target();
+        let expected_revision = payload.expected_revision();
+        let mut envelope = CommandEnvelope::new(
+            id.parse().expect("command id"),
+            command_type,
+            payload,
+            CommandContext::new(
+                format!("request-{id}").parse().expect("request id"),
+                format!("key-{id}").parse().expect("idempotency key"),
+                "human:alice".parse().expect("actor"),
+                "correlation-rollback".parse().expect("correlation"),
+                Timestamp::from_epoch_millis(at),
+            ),
+        );
+        envelope.target = target;
+        envelope.expected_revision = expected_revision;
+        envelope
+    }
+
+    fn create_adr(store: &mut Store, natural: bool) -> VersionedEntityRef {
+        if natural {
+            store.use_natural_identities();
+        }
+        apply(
+            store,
+            &envelope(
+                "create-adr",
+                1_000,
+                Command::CreateEntity(CreateEntity {
+                    entity_type: "aep.adr/v1".parse::<EntityType>().expect("entity type"),
+                    locator: "ep://acme/architecture/adr/0007".parse().expect("locator"),
+                    data: Node::Map([("status".to_owned(), Node::from("proposed"))].into()),
+                }),
+            ),
+        )
+        .expect("ADR is created")
+        .affected[0]
+            .clone()
+    }
+
+    /// A command refused after its first mutation leaves the store byte-for-byte as a store that
+    /// only recorded the refusal — the whole store, not a handful of fields.
+    #[test]
+    fn a_refusal_after_a_mutation_is_undone_completely() {
+        for natural in [false, true] {
+            let mut store = Store::new();
+            let adr = create_adr(&mut store, natural);
+            let refused = envelope(
+                "accept-adr",
+                2_000,
+                Command::AcceptAdr(AcceptAdr {
+                    adr: adr.clone(),
+                    supersedes: Some(EntityRef::new(
+                        EntityId::new("01MISSING00000000001").expect("opaque entity id"),
+                    )),
+                }),
+            );
+
+            let mut expected = store.clone();
+            let error = apply(&mut store, &refused).expect_err("the superseded ADR is missing");
+            expected.begin_command(refused.command_id.as_str());
+            record_rejection(&mut expected, &refused, &error);
+
+            assert_eq!(
+                format!("{store:?}"),
+                format!("{expected:?}"),
+                "only the refusal audit remains (natural identities: {natural})"
+            );
+        }
+    }
+
+    /// Applying a command never copies the whole store: that copy is what made seeding `n`
+    /// artifacts cost `n²`.
+    #[test]
+    fn neither_an_accepted_nor_a_refused_command_copies_the_store() {
+        let mut store = Store::new();
+        let before = crate::store::store_clones();
+        let adr = create_adr(&mut store, false);
+        let _ = apply(
+            &mut store,
+            &envelope(
+                "accept-adr",
+                2_000,
+                Command::AcceptAdr(AcceptAdr {
+                    adr,
+                    supersedes: Some(EntityRef::new(
+                        EntityId::new("01MISSING00000000001").expect("opaque entity id"),
+                    )),
+                }),
+            ),
+        );
+        assert_eq!(crate::store::store_clones(), before);
     }
 }

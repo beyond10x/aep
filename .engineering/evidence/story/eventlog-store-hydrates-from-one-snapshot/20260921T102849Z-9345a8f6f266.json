@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T10:28:49Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-store-hydrates-from-one-snapshot",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "Cargo.toml:25 judgement note CONFIRMED introduced: the aep-domain dev-dependency carries no comment, which aep/AGENTS.md:212 requires beside every dependency. Two rules conflict here — that line, and Timo's standing instruction that manifests carry no explanatory comments (the sub-operator removed the implementor's comment under it, so the finding is the sub-operator's doing). Settled on measurement rather than on either rule: across crates/*/*/Cargo.toml there are 33 dev-dependency entries, 7 with a comment immediately above and 26 bare, including aep-driver's own workspace-internal aep-project, aep-schema, serde_yaml and trace-spec. A bare workspace-internal dev-dependency is the repository's observed convention, so nothing is owed here and the line stays bare. The real defect is that AGENTS.md:212 does not describe 26 of 33 entries; the coordinator files that as its own draft story and carries the rule conflict in CHECKPOINT.md pending Timo's reconciliation",
+    "review": "review-result:one-snapshot-hydrate-review-2",
+    "outcome": "no-op"
+  }
+}

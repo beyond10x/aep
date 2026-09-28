@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:walk-an-artifact-up-its-ladder
 kind: story
 status: draft

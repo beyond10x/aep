@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:three-arm-pilot-2
 kind: story
 status: draft

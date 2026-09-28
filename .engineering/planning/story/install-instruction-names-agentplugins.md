@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:install-instruction-names-agentplugins
 kind: story
 status: implemented
@@ -8,6 +8,10 @@ relations:
 - decomposes: epic:adopter-feedback-round-2
 - serves: vision:O3
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-02T17:40:42Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-02T17:40:42Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-02T18:18:55Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: The install instruction names the marketplace that exists
 

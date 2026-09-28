@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:21:29Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p protocol-cli: 474 passed, 0 failed, exit 0, 2026-08-29 (with cargo clippy -p protocol-cli --all-targets -- -D warnings exit 0, cargo fmt -p protocol-cli -- --check exit 0, cargo xtask fmt --check exit 0, task guard-check exit 0)",
+    "reference": "crates/protocol-cli/src/drive.rs:6693 the_committed_step_map_compiles_into_the_exact_argv_a_native_run_is_launched_with — reads drivers/development/default.yaml, takes the receive step and asserts the whole argv argv_for builds for the native arm: six --write-scope rules in declared order then one --context file; acceptance bullet 4 now MET, and the argv_for seam bullet 1 left unasserted is closed with it. Verified by mutation: &step.scope -> &[] and scope.iter().rev() each turn it red"
+  }
+}

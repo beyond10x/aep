@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:resume-names-a-flag-it-does-not-have
 kind: story
 status: implemented
@@ -7,6 +7,10 @@ title: drive resume names --restart, which it does not accept
 relations:
 - serves: vision:O3
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T06:17:28Z", actor: "agent:org-brain", revision: 2, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T06:17:29Z", actor: "agent:org-brain", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-04T06:17:29Z", actor: "agent:org-brain", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## What happens
 

@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T10:14:39Z",
+  "actor": "human:operator",
+  "artifact": "story:session-command-lifecycle-registry",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "local release gate 0.36.1"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T10:29:06Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-store-hydrates-from-one-snapshot",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 2 P4 lib.rs:573 contract-drift NEEDS-CHANGE introduced: open runs validate_legacy_boundaries, which takes the first capture, so the single-subject fall-through described by the story's acceptance, the type's doc comment and the user-visible CHANGELOG entry could not run in any process. Fixed as a records correction with the code path unchanged: all three now say retained from open, retired by a write through the handle, captured again on the next read, and the fall-through is pinned as the post-retirement path",
+    "review": "review-result:one-snapshot-hydrate-review-1",
+    "outcome": "fixed"
+  }
+}

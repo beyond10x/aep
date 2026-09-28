@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:agreed-work-serves-an-objective
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:evidence-gated-completion
 - serves: vision:O2
 revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-29T20:52:42Z", actor: "agent:claude-session", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-29T20:52:42Z", actor: "agent:claude-session", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-29T21:01:44Z", actor: "agent:claude-session", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: Agreed work names the objective it serves, and validate holds it to that
 

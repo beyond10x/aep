@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:plugin-names-follow-agentplugins
 kind: story
 status: implemented
@@ -27,6 +27,10 @@ scope:
 - confidence: cited
   path: website/docs/reference/harnesses.md
 revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-03T22:01:25Z", actor: "human:timo", revision: 4, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-03T22:01:26Z", actor: "human:timo", revision: 5, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-03T22:24:01Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: This repository names the renamed plugins
 

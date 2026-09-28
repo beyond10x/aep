@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:55:34Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "harness bash scripts/gate.sh on worktree harness-ctx (5f887f8 + patches/harness-ctx.patch, uncommitted 2026-08-29): 37 binaries, 733 passed, 0 failed, 1 ignored",
+    "reference": "harness crates/harness-cli/tests/context.rs:188 a_declared_context_file_that_is_absent_refuses_the_run_before_any_session — b10x-harness run --context <absent> exits 1 with {\"kind\":\"refused\"}, empty request record, empty --session-dir (refusal in prepare, harness-cli/src/lib.rs:1159, error built :1636-1641); :199 pins the same for --hooks (hooks.rs:162-165, lib.rs:1185-1189). Acceptance bullet 3 MET once the patch lands; the decision that the refusal is the loop's to test is docs/design/native-arm-store-integrity-design-v0.1.md § 8.7"
+  }
+}

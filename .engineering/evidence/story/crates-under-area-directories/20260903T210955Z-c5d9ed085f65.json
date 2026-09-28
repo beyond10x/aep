@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-03T21:09:55Z",
+  "actor": "human:timo",
+  "artifact": "story:crates-under-area-directories",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "correction round: 112 scope entries on 50 live artifacts rewritten via aep artifact scope; 159 body citations in 39 live artifacts via aep artifact body; docs/plan 205 rewrites; guards in xtask/tests/crate_paths_are_area_qualified.rs and layout_tests recursive walk; task check exit 0, 2122 tests",
+    "review": "review-result:adversary-area-layout-round-1",
+    "outcome": "fixed"
+  }
+}

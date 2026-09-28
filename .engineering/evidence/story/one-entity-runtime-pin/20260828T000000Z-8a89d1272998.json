@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T00:00:00Z",
+  "actor": "human:operator",
+  "artifact": "story:one-entity-runtime-pin",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, full gate, exit 0, 2026-08-28",
+    "reference": "xtask/src/main.rs"
+  }
+}

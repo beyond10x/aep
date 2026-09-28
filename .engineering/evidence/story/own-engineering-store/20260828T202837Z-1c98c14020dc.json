@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:28:37Z",
+  "actor": "human:operator",
+  "artifact": "story:own-engineering-store",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p protocol-cli --test planning_cli, 2026-08-28 — 27 passed; task plan-check exit 0",
+    "reference": "crates/protocol-cli/tests/planning_cli.rs,Taskfile.yml"
+  }
+}

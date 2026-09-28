@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T19:56:27Z",
+  "actor": "human:operator",
+  "artifact": "story:retry-budgets",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-driver --test driving --test routing, 2026-08-28",
+    "reference": "crates/aep-driver/tests/driving.rs,crates/aep-driver/tests/routing.rs"
+  }
+}

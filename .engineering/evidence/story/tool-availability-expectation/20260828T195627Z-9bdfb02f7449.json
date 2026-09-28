@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T19:56:27Z",
+  "actor": "human:operator",
+  "artifact": "story:tool-availability-expectation",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p trace-spec --lib; -p trace-domain --lib; -p aep-driver --test shell_echo, 2026-08-28",
+    "reference": "crates/trace-spec/src/check.rs,crates/trace-domain/src/raw.rs,crates/aep-driver/tests/shell_echo.rs"
+  }
+}

@@ -9,6 +9,28 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep.project/5`: a Git-native planning store (`store: { git: {} }`). Each artifact file under
+  `.engineering/planning/` is the authority, written as `aep.planning-md/3`; a move appends one
+  line to the artifact's `transitions` list, and each evidence record is one file under
+  `.engineering/evidence/<kind>/<name>/`. There is no journal, no event log and no projection: a
+  move writes one file. `validate` checks that each artifact's transitions are continuous, end in
+  its status and, for moves made in this layout, follow its lifecycle. Design:
+  `docs/design/git-native-planning-store-v0.1.md`.
+- `aep plan store migrate git [--dry-run | --verify]` turns an `aep.project/2`–`/4` event-log
+  store into an `aep.project/5` one. Recorded moves become `transitions` marked `imported`,
+  recorded evidence becomes evidence files, and `--verify` compares every artifact with what the
+  old store answered. This repository's own store is migrated.
+
+### Changed
+
+- Opening a Markdown or Git-native plan is linear in its size: a command applies to the live
+  in-memory store under an undo record instead of copying the whole store first. On this
+  repository's 333 artifacts, `new` went from 2.1 s to 0.05 s of CPU.
+- The `planning validate` workflow builds `aep` from the checked-out tree when it runs in this
+  repository, and `cargo xtask release` finds a release's `test_result` in evidence files.
+
 ### Fixed
 
 - A command verifies a pinned Git protocol snapshot once instead of once per resolution. One

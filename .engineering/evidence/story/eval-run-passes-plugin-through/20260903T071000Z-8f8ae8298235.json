@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T07:10:00Z",
+  "actor": "human:timo",
+  "artifact": "story:eval-run-passes-plugin-through",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "0e5f872"
+  }
+}

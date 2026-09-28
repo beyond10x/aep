@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-10T10:30:54Z",
+  "actor": "human:timo",
+  "artifact": "story:shared-public-gates",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "Verified shared workflow reused signed evidence with zero scanner invocations; required common and repository checks enabled",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/34466359706"
+  }
+}

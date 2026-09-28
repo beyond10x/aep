@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:aep-service-grouped-spellings
 kind: story
 status: active
@@ -16,6 +16,9 @@ scope:
 - confidence: cited
   path: aep-service:docs
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-04T02:18:30Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-04T02:18:31Z", actor: "human:timo", revision: 3, imported: true}
 ---
 # Story: aep-service teaches the grouped spellings
 

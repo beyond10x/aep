@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T23:35:16Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:driver-spec-crate",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review",
+    "source": "audit of active artifacts, claude session, 2026-08-30",
+    "reference": "cargo test -p aep-driver-spec: 35 passed, exit 0; two red-path tests still owed"
+  }
+}

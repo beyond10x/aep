@@ -57,6 +57,14 @@
 //! The other order — events first — would leave a recorded fact whose document did not change,
 //! which reads as a lie in the one file people trust most, so this provider takes the first.
 //!
+//! # The Git layout
+//!
+//! [`MarkdownProvider::open_git`] keeps no journal (`aep.project/5`): the documents are the
+//! authority. A commit whose event says `moved` appends a [`Transition`] to the document's
+//! `transitions` before writing it; one whose event says `evidence` writes one record through
+//! [`crate::journal::write_evidence`]; every other change is the document write alone. Documents
+//! are written as `aep.planning-md/3` and `events` answers nothing.
+//!
 //! The stronger [`AtomicBatchStore`] path writes the complete ordered command to
 //! [`.aep-batch.pending.json`](PENDING_BATCH) before applying any entry. If the process stops after
 //! one document or before its events, every state and event read completes that intent
@@ -78,12 +86,15 @@ use entity_store::{
 use serde_json::{Map, Value};
 
 use crate::document::PlanningDocument;
-use crate::frontmatter::{PlanningFrontmatter, PLANNING_FORMAT};
-use crate::journal::JOURNAL;
+use crate::frontmatter::{PlanningFormat, PlanningFrontmatter};
+use crate::journal::{Change, Entry, Transition, JOURNAL};
 use crate::store::MarkdownStore;
 
 /// The field a document's markdown body travels under.
 pub const BODY_FIELD: &str = "body";
+
+/// The field a document's `transitions` travel under — present only when there are some.
+pub const TRANSITIONS_FIELD: &str = "transitions";
 
 /// The recoverable intent that makes a multi-document command one logical write.
 pub const PENDING_BATCH: &str = ".aep-batch.pending.json";
@@ -168,6 +179,10 @@ impl PlanStore for MarkdownProvider {
             if name.starts_with('.') || !entry.path().is_dir() {
                 continue;
             }
+            // Evidence kept under the documents' own root is not a kind of document.
+            if matches!(&self.layout, Layout::Git { evidence } if *evidence == entry.path()) {
+                continue;
+            }
             kinds.push(name.to_owned());
         }
         kinds.sort();
@@ -175,23 +190,160 @@ impl PlanStore for MarkdownProvider {
     }
 }
 
+/// Where a provider keeps what happened, beside the documents.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Layout {
+    /// `<root>/journal.jsonl`, one sealed `DomainEvent` per line; documents in `aep.planning-md/1`.
+    Journal,
+    /// No journal (`aep.project/5`): a move is a transition appended to the document it moved, and
+    /// an observation is one file under `evidence`; documents in `aep.planning-md/3`.
+    Git {
+        /// The directory evidence records are written under, `<kind>/<name>/<record>.json`.
+        evidence: PathBuf,
+    },
+}
+
 /// A directory of planning documents, answering as an `entity_store::Store`.
 #[derive(Debug, Clone)]
 pub struct MarkdownProvider {
     store: MarkdownStore,
+    layout: Layout,
 }
 
 impl MarkdownProvider {
-    /// The provider rooted at `root`. The directory need not exist yet.
+    /// The provider rooted at `root`, journal layout. The directory need not exist yet.
     pub fn open(root: impl Into<PathBuf>) -> Self {
         Self {
             store: MarkdownStore::open(root),
+            layout: Layout::Journal,
         }
+    }
+
+    /// The provider rooted at `root`, Git-native layout, writing evidence under `evidence`.
+    ///
+    /// No journal is created or read. `commit` writes the document — with a status move appended
+    /// to its `transitions` — and, for an observation, one evidence file. Neither directory need
+    /// exist yet.
+    pub fn open_git(root: impl Into<PathBuf>, evidence: impl Into<PathBuf>) -> Self {
+        Self {
+            store: MarkdownStore::open(root),
+            layout: Layout::Git {
+                evidence: evidence.into(),
+            },
+        }
+    }
+
+    /// Which layout it writes.
+    pub const fn layout(&self) -> &Layout {
+        &self.layout
     }
 
     /// The directory it reads and writes.
     pub fn root(&self) -> &Path {
         self.store.root()
+    }
+
+    /// For the Git layout, the instance a decision leaves on disk and the evidence records it
+    /// writes; `None` in the journal layout.
+    ///
+    /// A `moved` change appends its [`Transition`](crate::journal::Transition) to the instance's
+    /// `transitions` field — once: a transition already listed is not appended again, so completing
+    /// an interrupted batch cannot double it. An `evidence` change becomes an [`Entry`]; every other
+    /// change is the document write alone.
+    fn effective(
+        &self,
+        decision: &Decision,
+    ) -> Result<Option<(EntityInstance, Vec<Entry>)>, StoreError> {
+        if self.layout == Layout::Journal {
+            return Ok(None);
+        }
+        let mut instance = decision.instance.clone();
+        let mut transitions: Vec<Transition> = match instance.fields.get(TRANSITIONS_FIELD) {
+            None => Vec::new(),
+            Some(value) => serde_json::from_value(value.clone()).map_err(|error| {
+                StoreError::Backend(format!(
+                    "`{}/{}` carries transitions that do not read: {error}",
+                    instance.entity, instance.id
+                ))
+            })?,
+        };
+        let mut records = Vec::new();
+        for event in &decision.events {
+            let Some(payload) = event.payload.as_object() else {
+                continue;
+            };
+            let Some(change) = payload.get("change") else {
+                continue;
+            };
+            let change: Change = serde_json::from_value(change.clone()).map_err(|error| {
+                StoreError::Backend(format!(
+                    "an event about `{}/{}` carries a change that does not read: {error}",
+                    event.entity, event.id
+                ))
+            })?;
+            match change {
+                Change::Moved {
+                    from,
+                    to,
+                    decided_on,
+                } => {
+                    let text = |key: &str| {
+                        payload
+                            .get(key)
+                            .and_then(Value::as_str)
+                            .unwrap_or_default()
+                            .to_owned()
+                    };
+                    let transition = Transition {
+                        at: text("recorded_at"),
+                        actor: text("actor"),
+                        revision: event.revision,
+                        from,
+                        to,
+                        decided_on,
+                        imported: false,
+                    };
+                    if !transitions.contains(&transition) {
+                        transitions.push(transition);
+                    }
+                }
+                Change::Evidence { .. } => {
+                    let entry = crate::journal::entry_of(event).ok_or_else(|| {
+                        StoreError::Backend(format!(
+                            "an observation about `{}/{}` names no instant, actor or artifact, \
+                             and an evidence record without them cannot be counted",
+                            event.entity, event.id
+                        ))
+                    })?;
+                    records.push(entry);
+                }
+                _ => {}
+            }
+        }
+        if transitions.is_empty() {
+            instance.fields.remove(TRANSITIONS_FIELD);
+        } else {
+            instance.fields.insert(
+                TRANSITIONS_FIELD.to_owned(),
+                serde_json::to_value(&transitions).map_err(|error| {
+                    StoreError::Backend(format!("serialising transitions: {error}"))
+                })?,
+            );
+        }
+        Ok(Some((instance, records)))
+    }
+
+    /// Writes each evidence record, where the Git layout keeps them. A record already written is
+    /// left as it is.
+    fn write_records(&self, records: &[Entry]) -> Result<(), StoreError> {
+        let Layout::Git { evidence } = &self.layout else {
+            return Ok(());
+        };
+        for record in records {
+            crate::journal::write_evidence(evidence, record)
+                .map_err(|error| backend("writing evidence under", evidence, &error))?;
+        }
+        Ok(())
     }
 
     /// Where the document for `entity`/`id` is.
@@ -231,6 +383,15 @@ impl MarkdownProvider {
 
     /// Applies one intended entry, completing an event append if its document already landed.
     fn apply_recoverable(&mut self, decision: &Decision, expect: Expect) -> Result<(), StoreError> {
+        if let Some((effective, records)) = self.effective(decision)? {
+            let held = self
+                .read(&effective.entity, &effective.id)?
+                .map(|document| instance_of(&effective.entity, &effective.id, &document));
+            if held.as_ref() == Some(&effective) {
+                return self.write_records(&records);
+            }
+            return self.commit(decision, expect);
+        }
         let instance = &decision.instance;
         let held = self
             .read(&instance.entity, &instance.id)?
@@ -249,6 +410,10 @@ impl MarkdownProvider {
     }
 
     fn events_raw(&self, entity: &str, id: &str) -> Result<Vec<DomainEvent>, StoreError> {
+        // The Git layout keeps no event log, and never reads one somebody left behind.
+        if self.layout != Layout::Journal {
+            return Ok(Vec::new());
+        }
         let path = self.store.root().join(JOURNAL);
         let text = match fs::read_to_string(&path) {
             Ok(text) => text,
@@ -355,6 +520,14 @@ pub fn instance_of(entity: &str, id: &str, document: &PlanningDocument) -> Entit
     if let Some(digest) = &frontmatter.model_digest {
         fields.insert("model_digest".to_owned(), Value::from(digest.as_str()));
     }
+    // Carried so a later move appends to the list rather than replacing it: the document is
+    // re-read into an instance before every write, and what this does not name is lost.
+    if !frontmatter.transitions.is_empty() {
+        fields.insert(
+            TRANSITIONS_FIELD.to_owned(),
+            serde_json::to_value(&frontmatter.transitions).unwrap_or(Value::Null),
+        );
+    }
     for (key, node) in &frontmatter.extra {
         fields.insert(
             key.clone(),
@@ -450,6 +623,12 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
         }
     };
 
+    let transitions: Vec<Transition> = match fields.remove(TRANSITIONS_FIELD) {
+        None => Vec::new(),
+        Some(value) => serde_json::from_value(value)
+            .map_err(|error| refuse(format!("the `{TRANSITIONS_FIELD}` field: {error}")))?,
+    };
+
     if instance.revision == 0 {
         return Err(refuse(
             "revision 0 names a state before the document was written".to_owned(),
@@ -465,7 +644,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
 
     Ok(PlanningDocument {
         frontmatter: PlanningFrontmatter {
-            format: crate::frontmatter::PlanningFormat::V1,
+            format: PlanningFormat::V1,
             id: artifact,
             kind,
             status,
@@ -479,6 +658,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
             withholds,
             model_digest,
             revision: instance.revision,
+            transitions,
             extra,
         },
         body,
@@ -526,9 +706,12 @@ fn identity_of(
         ));
     }
     if let Some(format) = fields.remove("format") {
-        if format != PLANNING_FORMAT {
+        if format.as_str().and_then(PlanningFormat::from_tag).is_none() {
             return Err(format!(
-                "the `format` field is {format}; this build writes `{PLANNING_FORMAT}`"
+                "the `format` field is {format}; this build writes `{}`, `{}` or `{}`",
+                PlanningFormat::V1.as_str(),
+                PlanningFormat::V2.as_str(),
+                PlanningFormat::V3.as_str()
             ));
         }
     }
@@ -638,7 +821,13 @@ impl EventProvider for MarkdownProvider {
 
 impl Store for MarkdownProvider {
     fn commit(&mut self, decision: &Decision, expect: Expect) -> Result<(), StoreError> {
-        let instance = &decision.instance;
+        // In the Git layout the instance written carries the move's transition, and the records
+        // are the observations' evidence files; in the journal layout both are the decision's own.
+        let git = self.effective(decision)?;
+        let (instance, records) = match &git {
+            Some((effective, records)) => (effective, records.as_slice()),
+            None => (&decision.instance, &[][..]),
+        };
         let (entity, id) = (instance.entity.as_str(), instance.id.as_str());
 
         // Checked before anything is written, so a refusal leaves both files exactly as they were.
@@ -650,7 +839,15 @@ impl Store for MarkdownProvider {
             existing.as_ref().map(|held| held.frontmatter.revision),
         )?;
 
-        let document = document_of(instance)?;
+        let mut document = document_of(instance)?;
+        if git.is_some() {
+            document.frontmatter.format = PlanningFormat::V3;
+            // An observation leaves its document as it was, and a write that changes nothing is
+            // not made: the record is the evidence file, not a rewritten document.
+            if existing.as_ref() == Some(&document) {
+                return self.write_records(records);
+            }
+        }
         let written = if existing.is_some() {
             self.store.update(&Self::relative(entity, id), &document)
         } else {
@@ -658,6 +855,9 @@ impl Store for MarkdownProvider {
         };
         written.map_err(|error| StoreError::Backend(error.to_string()))?;
 
+        if git.is_some() {
+            return self.write_records(records);
+        }
         // Events after the document: see the module doc for what a failure here leaves.
         self.append_events(&decision.events)
     }

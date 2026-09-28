@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:workspace-manifest
 kind: story
 status: implemented
@@ -8,6 +8,10 @@ summary: 'One file naming the members and where each store is: a path, or a pinn
 relations:
 - decomposes: epic:one-cli-many-repositories
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-26T01:50:57Z", actor: "operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-26T01:50:58Z", actor: "operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-26T01:50:58Z", actor: "operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A workspace names its member repositories, and pins them
 

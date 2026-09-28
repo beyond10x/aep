@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T00:00:00Z",
+  "actor": "human:operator",
+  "artifact": "story:markdown-documents-as-a-store",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check, full gate, exit 0, 2026-08-28",
+    "reference": "crates/aep-backend-markdown/tests/provider.rs"
+  }
+}

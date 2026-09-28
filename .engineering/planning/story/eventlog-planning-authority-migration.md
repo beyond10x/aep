@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:eventlog-planning-authority-migration
 kind: story
 status: active
@@ -75,6 +75,9 @@ scope:
 - confidence: cited
   path: xtask/
 revision: 61
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-18T23:14:36Z", actor: "human:timo", revision: 51, decided_on: {"recorded":{"review_outcome":6}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-18T23:14:37Z", actor: "human:timo", revision: 52, decided_on: {"recorded":{"review_outcome":6}}, imported: true}
 ---
 ## Outcome
 

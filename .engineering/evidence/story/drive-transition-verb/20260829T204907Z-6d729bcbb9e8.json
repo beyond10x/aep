@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T20:49:07Z",
+  "actor": "agent:claude-session",
+  "artifact": "story:drive-transition-verb",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "home-path:sha256:e78f092355c1c95f5c0355a77b781ce5b659dac8fc8d48321d2898435852d15d"
+  }
+}

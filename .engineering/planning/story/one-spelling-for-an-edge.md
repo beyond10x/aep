@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:one-spelling-for-an-edge
 kind: story
 status: implemented
@@ -21,6 +21,10 @@ scope:
 - confidence: cited
   path: website/docs/reference/cli.md
 revision: 12
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:02Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:03Z", actor: "agent:claude-audit", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-04T03:28:59Z", actor: "human:timo", revision: 12, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: One spelling for an edge, and a way to take one back
 

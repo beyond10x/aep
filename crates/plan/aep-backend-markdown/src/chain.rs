@@ -476,7 +476,7 @@ fn broken(
 }
 
 /// Lowercase hex, the spelling every other digest in this workspace is written in.
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     bytes.iter().fold(String::new(), |mut output, byte| {
         use std::fmt::Write as _;
         write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");

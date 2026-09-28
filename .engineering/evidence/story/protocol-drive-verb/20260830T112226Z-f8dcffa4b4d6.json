@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-30T11:22:26Z",
+  "actor": "human:operator",
+  "artifact": "story:protocol-drive-verb",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task test on wave/the-driver-owes-only-tests",
+    "reference": "f61469c; protocol-cli 25 suites 547 tests, 2 failed on purpose: the store-lock scope blocker and the unreadable-lock story"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:15:41Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "review",
+    "source": "read of metaharness origin/main 67fb1cd, evals/engineering-protocols/run-driven.sh, 2026-08-29",
+    "reference": "run-driven.sh:291 launches `protocol drive run --map $MAP`; :270-277 adds only machine facts a pinned map cannot carry (--b10x-endpoint/-model/-wire, token file and pointer, --b10x-cgroup-root); :172-174 is a `b10x-harness tools` catalogue pre-flight that spawns no session — the runner assembles no b10x-harness run argv, so the eval-runner half is covered by the driver's compile"
+  }
+}

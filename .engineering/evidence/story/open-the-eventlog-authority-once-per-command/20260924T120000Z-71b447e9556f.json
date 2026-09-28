@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-24T12:00:00Z",
+  "actor": "human:timo",
+  "artifact": "story:open-the-eventlog-authority-once-per-command",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "aep 0.58.0 release gate (PR #16, d85adc863)",
+    "reference": "https://github.com/beyond10x/aep/releases/tag/0.58.0"
+  }
+}

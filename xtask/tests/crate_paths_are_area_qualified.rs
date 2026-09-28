@@ -42,6 +42,7 @@
 //! |---|---|
 //! | `CHANGELOG.md` | published sections are never rewritten; that rule predates this move |
 //! | `.engineering/planning/journal.jsonl` | append-only: the record of what a command did, then |
+//! | `.engineering/evidence/` | one immutable file per recorded observation; the same record, then |
 //! | `docs/design/`, `docs/reviews/` | dated record. `docs/plan/` is **not** here: `AGENTS.md` § *Normative documents* makes accepted pages under it live, and `gap-register.md` cites current code by `file:line` |
 //! | recorded `metaharness.event/1` streams | a session in a `/work/aep` sandbox, each `tool.result` carrying a `bytes` count over its own string; rewriting a path there falsifies the count, and one of the files they name never existed in this repository at all |
 //! | the two lines that quote those streams | `conformance/eval/development-tests-after-the-code/case.yaml` narrates a transcript, and the blog post quotes a `churn` run from 2026-08-25 |
@@ -226,6 +227,10 @@ const EXCLUDED_PREFIXES: &[&str] = &[
     // digest that addresses it is computed over those bytes — so correcting one is not an edit,
     // it is a different blob that nothing references.
     ".engineering/state/",
+    // The Git-native store's evidence records (`aep.project/5`): one file per recorded
+    // observation, never rewritten. The migration carried each record over from the event log
+    // byte for byte in meaning, so a record from 2026-08 still names the paths of 2026-08.
+    ".engineering/evidence/",
 ];
 
 /// Whether this tracked path is out of the corpus, and why is in the two lists above.

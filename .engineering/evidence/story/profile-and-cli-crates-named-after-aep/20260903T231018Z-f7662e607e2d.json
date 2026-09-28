@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-03T23:10:18Z",
+  "actor": "human:timo",
+  "artifact": "story:profile-and-cli-crates-named-after-aep",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "correction round 2: findings 1-6, 8 fixed (store -p refs, guide blocks regenerated under a test, area-qualified scope guard, eval_corpus subject, narration restored, cli.md plugin-dir); task check exit 0, 2133 tests",
+    "review": "review-result:adversary-renames-round-2",
+    "outcome": "fixed"
+  }
+}

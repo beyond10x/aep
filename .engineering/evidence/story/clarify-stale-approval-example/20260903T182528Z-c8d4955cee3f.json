@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-03T18:25:28Z",
+  "actor": "human:timo",
+  "artifact": "story:clarify-stale-approval-example",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "npm run build; cargo test --locked -p aep-domain review::tests::an_approval_of_version_three_does_not_cover_version_seven -- --exact",
+    "reference": "website/build/docs/concepts/design-principles.html"
+  }
+}

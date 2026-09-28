@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:tool-availability-expectation
 kind: story
 status: implemented
@@ -12,6 +12,9 @@ tags:
 relations:
 - decomposes: epic:reference-driver
 revision: 5
+transitions:
+- {from: "proposed", to: "active", at: "2026-08-28T19:56:27Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T19:56:28Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `env.tool_available` — the 50th expectation kind
 

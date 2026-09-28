@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-03T22:00:32Z",
+  "actor": "human:timo",
+  "artifact": "story:profile-and-cli-crates-named-after-aep",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check in worktree wt-ffa0ccf1d6af on 39c66e7: exit 0, 16 steps, 2126 tests; aep/protocol --version both 0.50.0"
+  }
+}

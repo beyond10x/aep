@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: dependency-blocker:recorded-eventlog-runtime
 kind: dependency-blocker
 status: cleared
@@ -9,6 +9,8 @@ relations:
 - blocks: story:eventlog-planning-authority-migration
 withholds: test_result
 revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-09-18T23:13:05Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## Missing evidence
 

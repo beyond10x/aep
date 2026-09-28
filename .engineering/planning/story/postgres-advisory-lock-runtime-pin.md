@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:postgres-advisory-lock-runtime-pin
 kind: story
 status: implemented
@@ -8,6 +8,10 @@ summary: Publish the fresh command session against Entity Runtime's corrected te
 relations:
 - serves: vision:O2
 revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-31T10:34:41Z", actor: "human:operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-31T10:34:41Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-31T10:41:55Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## Context
 

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:artifact-waves-verb
 kind: story
 status: implemented
@@ -15,6 +15,10 @@ relations:
 - serves: vision:O2
 - supersedes: story:waves-derived-from-scope
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-02T23:27:55Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-02T23:27:56Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-02T23:27:57Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `aep artifact waves` derives waves and names collisions, and exits 2 on a cycle
 

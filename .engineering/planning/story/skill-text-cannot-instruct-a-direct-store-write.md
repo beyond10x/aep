@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:skill-text-cannot-instruct-a-direct-store-write
 kind: story
 status: archived
@@ -9,6 +9,11 @@ relations:
 - decomposes: epic:adopter-feedback-round-1
 - serves: vision:O2
 revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T13:07:50Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T13:07:50Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T19:29:00Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "implemented", to: "archived", at: "2026-08-30T20:28:24Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: a skill that instructs a direct store write fails the build
 

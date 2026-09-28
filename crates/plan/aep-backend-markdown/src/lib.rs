@@ -105,6 +105,6 @@ pub use claim::{
 pub use document::{MoveRefusal, PlanningDocument, PlanningDocumentError};
 pub use frontmatter::{
     PlanningFormat, PlanningFrontmatter, RawPlanningFrontmatter, PLANNING_FORMAT,
-    PLANNING_FORMAT_V2,
+    PLANNING_FORMAT_V2, PLANNING_FORMAT_V3,
 };
 pub use store::{MarkdownStore, StoreError, StoreFailure, StoreReport, StoredDocument};

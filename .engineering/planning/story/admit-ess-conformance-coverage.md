@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:admit-ess-conformance-coverage
 kind: story
 status: implemented
@@ -51,6 +51,10 @@ scope:
 - confidence: inferred
   path: website/docs/reference/cli.md
 revision: 33
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-06T11:59:52Z", actor: "human:timo", revision: 24, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-06T12:17:28Z", actor: "human:timo", revision: 26, decided_on: {"recorded":{"review_outcome":2}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-06T15:39:15Z", actor: "human:timo", revision: 32, decided_on: {"recorded":{"test_result":1,"review_outcome":3}}, imported: true}
 ---
 ## Outcome
 

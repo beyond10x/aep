@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:24:38Z",
+  "actor": "human:operator",
+  "artifact": "task:ova-scan-declarations",
+  "kind": "task",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "bash .engineering/checks/run.sh, 2026-08-28 — 119 pass, 0 fail, 13 of 13 units",
+    "reference": ".engineering/checks/run.sh"
+  }
+}

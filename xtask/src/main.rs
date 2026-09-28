@@ -1075,9 +1075,11 @@ fn test_bodies(text: &str) -> Vec<(String, String)> {
     found
 }
 
-/// The planning store's records as text: each line of the `aep.project/2` journal, and each
-/// history file of an `aep.project/3` tree store, whose evidence is held in its blobs. The fold
-/// cache under `.cache/` is derived and is not read.
+/// The planning store's records as text: each line of the `aep.project/2` journal, each
+/// history file of an `aep.project/3` tree store, whose evidence is held in its blobs, and each
+/// `*.json` evidence record of an `aep.project/5` store under `.engineering/evidence/`. Older
+/// layouts stay readable so an older tag still checks. The fold cache under `.cache/` is derived
+/// and is not read.
 fn planning_records(root: &Path) -> Vec<String> {
     let journal =
         fs::read_to_string(root.join(".engineering/planning/journal.jsonl")).unwrap_or_default();
@@ -1086,7 +1088,19 @@ fn planning_records(root: &Path) -> Vec<String> {
         .into_iter()
         .filter(|path| !path.components().any(|part| part.as_os_str() == ".cache"))
         .filter_map(|path| fs::read_to_string(path).ok());
-    journal.lines().map(str::to_owned).chain(tree).collect()
+    let evidence = walk(&root.join(".engineering/evidence"))
+        .into_iter()
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .filter_map(|path| fs::read_to_string(path).ok());
+    journal
+        .lines()
+        .map(str::to_owned)
+        .chain(tree)
+        .chain(evidence)
+        .collect()
 }
 
 /// Every file under `root`, recursively.
@@ -1960,7 +1974,7 @@ fn fmt(check: bool) -> Result<()> {
 mod tests {
     use std::path::PathBuf;
 
-    use super::{delivered_waves, schema, splice_generated};
+    use super::{delivered_waves, planning_records, schema, splice_generated};
 
     #[test]
     fn the_delivered_waves_table_keeps_the_tags_in_the_order_given() {
@@ -2021,6 +2035,37 @@ mod tests {
 
         schema(&root, false).expect("regeneration removes the orphan");
         assert!(!orphan.exists());
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn a_project_5_evidence_file_naming_the_commit_is_a_planning_record() {
+        let root = std::env::temp_dir().join("aep-xtask-project-5-evidence");
+        std::fs::remove_dir_all(&root).ok();
+        let directory = root.join(".engineering/evidence/epic/x");
+        std::fs::create_dir_all(&directory).expect("the fixture is writable");
+        let commit = "0123456789abcdef0123456789abcdef01234567";
+        std::fs::write(
+            directory.join("0001.json"),
+            format!(
+                "{{\"at\":\"2026-09-28T00:00:00Z\",\"actor\":\"ci\",\"artifact\":\"epic:x\",\
+                 \"kind\":\"epic\",\"revision\":3,\"change\":{{\"change\":\"evidence\",\
+                 \"kind\":\"test_result\",\"source\":\"cargo test\",\"reference\":\"{commit}\"}}}}\n"
+            ),
+        )
+        .expect("the fixture is writable");
+        std::fs::write(directory.join("notes.txt"), "test_result 0123456\n")
+            .expect("the fixture is writable");
+
+        let records = planning_records(&root);
+        assert_eq!(
+            records.len(),
+            1,
+            "only the JSON record is read: {records:?}"
+        );
+        assert!(records
+            .iter()
+            .any(|record| record.contains("\"test_result\"") && record.contains(commit)));
         std::fs::remove_dir_all(&root).ok();
     }
 }

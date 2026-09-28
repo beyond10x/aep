@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-21T10:29:05Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-store-hydrates-from-one-snapshot",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "pass 1 F3 lib.rs:451 contract-drift CONFIRMED introduced: the trait declared six reads as counted and Calls had no field for lookup_batch. Fixed: Calls gained lookups, CountingProvider::lookup_batch increments it and Calls::reads() adds it, so the 5+2N to 1 figure is stated in a total that cannot omit a read path. A read the trait grows later still needs a field by hand, which the correction report states rather than implies is machine-checked",
+    "review": "review-result:one-snapshot-hydrate-review-1",
+    "outcome": "fixed"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-04T09:40:00Z",
+  "actor": "agent:org-brain",
+  "artifact": "story:resume-names-a-flag-it-does-not-have",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-cli a_flag_a_refusal_names_is_a_flag_a_drive_verb_parses"
+  }
+}

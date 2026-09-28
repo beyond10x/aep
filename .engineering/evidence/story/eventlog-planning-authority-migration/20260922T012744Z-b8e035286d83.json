@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-22T01:27:44Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-planning-authority-migration",
+  "kind": "story",
+  "revision": 61,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "m4-activate-v3.sh ess acceptance: apply exit 0, verify current, history and list byte-identical, validate 0 problems, restart selector aep.project/2 eventlog",
+    "reference": "home-path:sha256:90e318ecdc44942b235fd35338ba44d5ee769656704c07b3812005c795bba868"
+  }
+}

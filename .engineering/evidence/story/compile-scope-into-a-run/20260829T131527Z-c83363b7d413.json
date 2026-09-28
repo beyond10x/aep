@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T13:15:27Z",
+  "actor": "human:operator",
+  "artifact": "story:compile-scope-into-a-run",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p protocol-cli --bin protocol --exact: 2 passed, 0 failed, exit 0 (2026-08-29)",
+    "reference": "crates/protocol-cli/src/drive.rs:5491 the_b10x_argv_carries_the_scope_and_never_the_frame_that_loop_would_refuse — acceptance bullet 1 (scope+context reach the argv with nobody naming a flag), met"
+  }
+}

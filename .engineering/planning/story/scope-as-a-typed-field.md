@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:scope-as-a-typed-field
 kind: story
 status: implemented
@@ -14,6 +14,10 @@ relations:
 - serves: vision:O2
 - informed_by: story:a-story-records-where-it-lands
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-02T23:27:51Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-02T23:27:52Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-02T23:27:53Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A story's scope is a typed field a verb sets
 

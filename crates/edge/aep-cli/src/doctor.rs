@@ -488,6 +488,11 @@ fn planning_store(
     // `artifact validate` does in a repository that has adopted no document tree.
     let document_root = tree.unwrap_or(root);
     let describe = plan.describe();
+    // A Git-native store (`aep.project/5`) says so, with how many evidence records it keeps.
+    let git_evidence = match &plan {
+        Plan::Git { evidence, .. } => Some(evidence_files(evidence)),
+        _ => None,
+    };
     match crate::planning::store_findings(plan, root, document_root) {
         Err(error) => Check::new(
             PLANNING_STORE,
@@ -497,10 +502,16 @@ fn planning_store(
         Ok(summary) if summary.problems.is_empty() => Check::new(
             PLANNING_STORE,
             Status::Ok,
-            format!(
-                "{}: {} artifact(s), no problems",
-                summary.store, summary.artifacts
-            ),
+            match git_evidence {
+                Some(evidence) => format!(
+                    "{} (store: git): {} artifact(s), {evidence} evidence file(s), no problems",
+                    summary.store, summary.artifacts
+                ),
+                None => format!(
+                    "{}: {} artifact(s), no problems",
+                    summary.store, summary.artifacts
+                ),
+            },
         ),
         Ok(summary) => Check::new(
             PLANNING_STORE,
@@ -515,13 +526,38 @@ fn planning_store(
     }
 }
 
+/// How many evidence records a Git-native store keeps: the `.json` files under
+/// `<evidence>/<kind>/<name>/`. A directory that is not there holds none.
+fn evidence_files(evidence: &Path) -> usize {
+    fn below(directory: &Path, depth: usize) -> usize {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            return 0;
+        };
+        entries
+            .filter_map(Result::ok)
+            .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
+            .map(|entry| entry.path())
+            .map(|path| match depth {
+                0 => usize::from(
+                    path.is_file() && path.extension().is_some_and(|found| found == "json"),
+                ),
+                _ if path.is_dir() => below(&path, depth - 1),
+                _ => 0,
+            })
+            .sum()
+    }
+    below(evidence, 2)
+}
+
 /// Where a plan says it is, when nothing is there.
 ///
 /// A Postgres plan is absent from this answer on purpose: whether a database exists is a question
 /// only a connection answers, and [`reaches_a_network`] is what reports that instead.
 fn absent(plan: &Plan) -> Option<String> {
     match plan {
-        Plan::Markdown { root } | Plan::Hybrid { root, .. } if !root.is_dir() => {
+        Plan::Markdown { root } | Plan::Git { root, .. } | Plan::Hybrid { root, .. }
+            if !root.is_dir() =>
+        {
             Some(root.display().to_string())
         }
         Plan::Sqlite { path } if !path.is_file() => Some(path.display().to_string()),
@@ -540,7 +576,9 @@ fn reaches_a_network(plan: &Plan) -> bool {
     match plan {
         Plan::Postgres { .. } => true,
         Plan::Hybrid { replica, .. } => matches!(replica, Replica::Postgres(_)),
-        Plan::Markdown { .. } | Plan::Sqlite { .. } | Plan::Eventlog { .. } => false,
+        Plan::Markdown { .. } | Plan::Git { .. } | Plan::Sqlite { .. } | Plan::Eventlog { .. } => {
+            false
+        }
     }
 }
 

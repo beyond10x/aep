@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-24T14:17:58Z",
+  "actor": "human:timo",
+  "artifact": "story:migration-mapper-reads-the-declared-workspace",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "d10fcebc5 gate 16/16, 2,150 passed",
+    "reference": "git:beyond10x/aep@d10fcebc5"
+  }
+}

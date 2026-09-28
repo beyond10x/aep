@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:compile-scope-into-a-run
 kind: story
 status: draft

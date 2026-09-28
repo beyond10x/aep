@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-29T20:59:33Z",
+  "actor": "human:operator",
+  "artifact": "story:review-result-cannot-be-authored",
+  "kind": "story",
+  "revision": 2,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "68354ba"
+  }
+}

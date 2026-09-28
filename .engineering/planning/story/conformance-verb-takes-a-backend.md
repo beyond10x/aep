@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:conformance-verb-takes-a-backend
 kind: story
 status: implemented
@@ -9,6 +9,10 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-adapter-over-any-store
 revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T14:44:03Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T14:54:58Z", actor: "human:operator", revision: 6, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `protocol conformance` runs against a backend the caller names
 

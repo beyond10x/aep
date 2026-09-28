@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:default-step-map
 kind: story
 status: implemented
@@ -13,6 +13,9 @@ relations:
 - depends_on: story:driver-spec-crate
 - serves: vision:O3
 revision: 6
+transitions:
+- {from: "proposed", to: "active", at: "2026-08-30T09:42:02Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T11:22:18Z", actor: "human:operator", revision: 6, decided_on: {"recorded":{"test_result":1,"review":1}}, imported: true}
 ---
 # Story: The first step map, and the tree row that loads it
 

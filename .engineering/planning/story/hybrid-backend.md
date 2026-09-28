@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:hybrid-backend
 kind: story
 status: implemented
@@ -15,6 +15,10 @@ relations:
 - depends_on: story:markdown-documents-as-a-store
 - depends_on: story:store-selection-in-project-yaml
 revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T17:37:16Z", actor: "human:operator", revision: 6, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T17:37:16Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T17:37:16Z", actor: "human:operator", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: P6 — `aep-backend-hybrid`, and what its atomicity actually is
 

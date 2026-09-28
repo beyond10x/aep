@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:migration-mapper-reads-the-declared-workspace
 kind: story
 status: implemented
@@ -20,6 +20,10 @@ scope:
 - confidence: cited
   path: crates/plan/aep-planning-migration/src/mapping.rs
 revision: 12
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-21T14:39:14Z", actor: "human:timo", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-23T23:24:02Z", actor: "human:timo", revision: 11, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-24T14:18:09Z", actor: "human:timo", revision: 12, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 ## Outcome
 

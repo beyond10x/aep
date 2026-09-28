@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T10:47:57Z",
+  "actor": "human:operator",
+  "artifact": "story:postgres-advisory-lock-runtime-pin",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "tag 0.36.2 commit b38a202; live PostgreSQL gate"
+  }
+}

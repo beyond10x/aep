@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T19:17:06Z",
+  "actor": "human:operator",
+  "artifact": "story:frame-subjects-from-the-step-map",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "tag 0.39.0 commit de6e4e8; local gate passed"
+  }
+}

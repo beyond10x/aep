@@ -599,3 +599,48 @@ mod tests {
         assert_eq!(locator_key("AUTH-141"), "AUTH-141");
     }
 }
+
+#[cfg(test)]
+mod linearity {
+    use aep_domain::artifact::{ArtifactKind, ArtifactLocation, ArtifactRef, RelationKind};
+
+    use super::*;
+    use crate::MemoryBackend;
+
+    /// Seeding copies the whole store zero times, however many artifacts there are. One copy per
+    /// command is what made hydrating a plan quadratic in its size.
+    #[test]
+    fn seeding_does_not_copy_the_store_per_command() {
+        let artifacts = (0..200).map(|index| {
+            let artifact = Artifact::new(
+                format!("task:t{index}").parse().expect("artifact id"),
+                ArtifactKind::Task,
+                aep_domain::artifact::ArtifactStatus::Draft,
+                ArtifactLocation::Inline,
+            );
+            if index == 0 {
+                artifact
+            } else {
+                artifact.with_relation(
+                    RelationKind::DependsOn,
+                    ArtifactRef::unpinned("task:t0".parse().expect("artifact id")),
+                )
+            }
+        });
+        let graph = ArtifactGraph::build(artifacts).expect("the graph is valid");
+        let backend = MemoryBackend::new();
+        let before = crate::store::store_clones();
+        let report = from_manifest(
+            &backend,
+            &graph,
+            "acme",
+            "payments",
+            Timestamp::from_epoch_millis(1_000),
+            &"service:aep-cli".parse().expect("actor"),
+        )
+        .expect("the manifest seeds");
+        assert_eq!(report.entities, 200);
+        assert_eq!(report.relations, 199);
+        assert_eq!(crate::store::store_clones(), before, "no whole-store copy");
+    }
+}

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:planning-migration-raw-capture-values
 kind: task
 status: implemented
@@ -8,6 +8,10 @@ relations:
 - decomposes: story:eventlog-planning-authority-migration
 - serves: vision:O2
 revision: 10
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-15T15:39:27Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-15T15:39:38Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-15T19:32:00Z", actor: "human:timo", revision: 10, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}, imported: true}
 ---
 ## Context
 

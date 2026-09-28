@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:describe-type-reports-the-ladder
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-adapter-over-any-store
 revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T16:10:34Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T16:10:34Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T16:26:23Z", actor: "human:operator", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `describe_type` reports the ladder the kernel decides with
 

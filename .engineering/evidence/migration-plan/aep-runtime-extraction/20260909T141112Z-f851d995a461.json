@@ -1,0 +1,13 @@
+{
+  "at": "2026-09-09T14:11:12Z",
+  "actor": "human:timo",
+  "artifact": "migration-plan:aep-runtime-extraction",
+  "kind": "migration-plan",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check passed after allowing execution hosts to supply their resume command; live PostgreSQL check skipped without configuration",
+    "reference": "home-path:sha256:d69e3621e5ff3223d472a2448b1960cdd60e100598170bd7ba48655e935f0e60"
+  }
+}

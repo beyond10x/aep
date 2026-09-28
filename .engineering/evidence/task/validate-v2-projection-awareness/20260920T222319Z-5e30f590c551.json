@@ -1,0 +1,14 @@
+{
+  "at": "2026-09-20T22:23:19Z",
+  "actor": "human:timo",
+  "artifact": "task:validate-v2-projection-awareness",
+  "kind": "task",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F3 planning.rs:599 pre-existing empty history for imported pre-journal documents: recorded as the bound in story:strict-advisory-classes-on-an-eventlog-plan; F4 planning.rs:6114 drift finding names no path: needs a per-file diff against a digest-only watermark, not changed, noted in correction-1-report.md",
+    "review": "review-result:validate-v2-review-2",
+    "outcome": "no-op"
+  }
+}

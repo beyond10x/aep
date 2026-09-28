@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: review-result:one-snapshot-hydrate-review-1
 kind: review-result
 status: active
@@ -7,6 +7,8 @@ title: 'Independent verification pass 1: what the retained snapshot answers, and
 relations:
 - reviews: story:eventlog-store-hydrates-from-one-snapshot
 revision: 2
+transitions:
+- {from: "draft", to: "active", at: "2026-09-21T09:41:08Z", actor: "human:timo", revision: 2, imported: true}
 ---
 # Unit 7 — independent verification, pass 1
 

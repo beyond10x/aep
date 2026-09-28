@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T18:56:34Z",
+  "actor": "human:operator",
+  "artifact": "story:relation-bumps-a-document-revision-but-not-an-entity",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "18 steps, exit 0; golden_plan 2/2 re-recorded; store_selection 6/6 exact revisions"
+  }
+}

@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:one-adapter-over-any-store
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: epic:planning-store-as-backend
 - depends_on: story:one-entity-runtime-pin
 revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T14:23:03Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T14:37:24Z", actor: "human:operator", revision: 6, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T14:54:58Z", actor: "human:operator", revision: 8, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `aep-backend-entity` — one adapter over any `entity-store` provider
 

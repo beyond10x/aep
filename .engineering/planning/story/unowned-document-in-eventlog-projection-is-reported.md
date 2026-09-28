@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:unowned-document-in-eventlog-projection-is-reported
 kind: story
 status: draft

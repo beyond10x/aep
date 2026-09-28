@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:evidence-on-hand-v2-journal
 kind: task
 status: implemented
@@ -10,6 +10,10 @@ relations:
 - serves: vision:O2
 - depends_on: task:validate-v2-projection-awareness
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-09-20T19:54:06Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-09-20T19:54:07Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-21T13:55:52Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1,"review_outcome":5}}, imported: true}
 ---
 ## Outcome
 

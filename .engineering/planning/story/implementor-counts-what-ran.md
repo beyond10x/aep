@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:implementor-counts-what-ran
 kind: story
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - serves: vision:O3
 - informed_by: story:implementor-and-adversary-agents
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:08Z", actor: "agent:claude-audit", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:08Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T15:48:08Z", actor: "agent:claude-audit", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: The implementor reports how many cases ran, and answers the class not the instance
 

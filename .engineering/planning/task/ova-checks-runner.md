@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: task:ova-checks-runner
 kind: task
 status: implemented
@@ -13,6 +13,10 @@ relations:
 - decomposes: specification:open-vocabulary-audit
 - derived_from: task:w4-2-open-vocabulary-audit
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T20:24:31Z", actor: "human:operator", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T20:24:31Z", actor: "human:operator", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T20:24:31Z", actor: "human:operator", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Task: the runner, its table and its exit code
 

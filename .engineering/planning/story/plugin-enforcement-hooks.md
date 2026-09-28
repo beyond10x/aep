@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:plugin-enforcement-hooks
 kind: story
 status: archived
@@ -14,6 +14,9 @@ relations:
 - depends_on: story:tool-availability-expectation
 - depends_on: story:protocol-drive-verb
 revision: 5
+transitions:
+- {from: "proposed", to: "draft", at: "2026-08-28T19:56:45Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "draft", to: "archived", at: "2026-08-28T19:56:45Z", actor: "human:operator", revision: 5, imported: true}
 ---
 # Story: Hooks that deny, and a record of every denial
 

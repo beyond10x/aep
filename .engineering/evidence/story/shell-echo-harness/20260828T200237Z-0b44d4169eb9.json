@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:02:37Z",
+  "actor": "human:operator",
+  "artifact": "story:shell-echo-harness",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-driver --test shell_echo; -p protocol-cli --test trace_cli, 2026-08-28",
+    "reference": "crates/aep-driver/tests/shell_echo.rs,crates/protocol-cli/tests/trace_cli.rs"
+  }
+}

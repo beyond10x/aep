@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:25:11Z",
+  "actor": "human:operator",
+  "artifact": "story:ova-relation-vocabulary",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "bash .engineering/checks/run.sh, 2026-08-28 — 119 pass, 0 fail, 13 of 13 units",
+    "reference": ".engineering/checks/run.sh,docs/guide/open-vocabulary.md"
+  }
+}

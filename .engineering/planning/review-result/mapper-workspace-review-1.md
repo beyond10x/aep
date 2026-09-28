@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: review-result:mapper-workspace-review-1
 kind: review-result
 status: active
@@ -7,6 +7,8 @@ title: 'Independent verification pass 1: does the crossing survive the migration
 relations:
 - reviews: story:migration-mapper-reads-the-declared-workspace
 revision: 2
+transitions:
+- {from: "draft", to: "active", at: "2026-09-21T15:46:58Z", actor: "human:timo", revision: 2, imported: true}
 ---
 # Unit 8 — story:migration-mapper-reads-the-declared-workspace — independent verification, pass 1
 

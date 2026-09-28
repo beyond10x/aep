@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: migration-plan:aep-runtime-extraction
 kind: migration-plan
 status: implemented
@@ -8,6 +8,9 @@ relations:
 - informed_by: epic:reference-driver
 - serves: vision:O3
 revision: 4
+transitions:
+- {from: "draft", to: "active", at: "2026-09-09T13:42:05Z", actor: "human:timo", revision: 2, imported: true}
+- {from: "active", to: "implemented", at: "2026-09-09T14:11:15Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":2}}, imported: true}
 ---
 ## Decision
 The operator approved runtime extraction on 2026-09-09. AEP retains the neutral governor, run state, command/operator driving and offline evidence ingestion. Concrete model execution belongs in Metaharness, with no upward runtime dependency from the foundation (Atlas ADR 0047).

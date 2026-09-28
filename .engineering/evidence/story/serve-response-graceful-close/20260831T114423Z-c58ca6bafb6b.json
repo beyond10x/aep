@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-31T11:44:23Z",
+  "actor": "human:operator",
+  "artifact": "story:serve-response-graceful-close",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "local stress and full live-PostgreSQL gate",
+    "reference": "500 consecutive read-only socket runs; task check with ENTITY_POSTGRES_URL"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T20:33:21Z",
+  "actor": "human:operator",
+  "artifact": "story:evidence-producers-for-the-driven-map",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "cargo test -p aep-driver --test coverage; -p protocol-cli --test evidence_producers, 2026-08-28 — 9 + 6 passed",
+    "reference": "crates/aep-driver/tests/coverage.rs,crates/protocol-cli/tests/evidence_producers.rs"
+  }
+}

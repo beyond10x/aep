@@ -1,0 +1,13 @@
+{
+  "at": "2026-08-28T00:00:00Z",
+  "actor": "human:operator",
+  "artifact": "story:store-selection-in-project-yaml",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check",
+    "reference": "18 steps, exit 0, postgres-check ran against ENTITY_POSTGRES_URL; store_selection.rs 4/4"
+  }
+}

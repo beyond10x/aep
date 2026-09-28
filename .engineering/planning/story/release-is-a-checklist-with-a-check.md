@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:release-is-a-checklist-with-a-check
 kind: story
 status: implemented
@@ -12,6 +12,10 @@ relations:
 - decomposes: epic:declared-configuration-invariants
 - serves: vision:O6
 revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-30T15:48:11Z", actor: "agent:claude-audit", revision: 2, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-30T15:48:12Z", actor: "agent:claude-audit", revision: 3, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-30T15:48:12Z", actor: "agent:claude-audit", revision: 4, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: A release is a checklist, and one command says whether it was followed
 

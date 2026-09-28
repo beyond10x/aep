@@ -1,0 +1,12 @@
+{
+  "at": "2026-09-21T13:55:30Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-store-hydrates-from-one-snapshot",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "Merged at bot commit 763d195bebc5f1789de5ea3f54df9a67e1ea27ec on integrate/ess-evolution-public-control-20260918. Gate on the merged head: 16 of 16 steps exit 0, 2,103 passed, 0 failed. Two independent passes, both red on one conclusion, one correction round; nine mutations each red on its own case. Evidence: waves/0005-aep-migration/wave-validate-v2-20260920/evidence/gate-763d195be/"
+  }
+}

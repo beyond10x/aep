@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: specification:adopter-schema-contract-tooling
 kind: specification
 status: approved

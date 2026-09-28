@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: decision-blocker:store-lock-scope
 kind: decision-blocker
 status: cleared
@@ -7,6 +7,8 @@ title: Is the store lock per store, or per project?
 relations:
 - blocks: story:protocol-drive-verb
 revision: 4
+transitions:
+- {from: "open", to: "cleared", at: "2026-08-30T11:28:00Z", actor: "human:operator", revision: 4, imported: true}
 ---
 # Blocker: is the store lock per store, or per project?
 

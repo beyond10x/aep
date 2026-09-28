@@ -546,8 +546,8 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
         for (artifact, entity) in &seeded.by_id {
             if let Some(stored) = report
                 .documents
-                .values()
-                .find(|stored| &stored.document.frontmatter.id == artifact)
+                .get(artifact)
+                .filter(|stored| &stored.document.frontmatter.id == artifact)
             {
                 self.paths.push((
                     entity.clone(),

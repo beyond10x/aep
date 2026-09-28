@@ -1,5 +1,5 @@
 ---
-format: aep.planning-md/2
+format: aep.planning-md/3
 id: story:evidence-verb-refuses-its-own-default-instant
 kind: story
 status: implemented
@@ -8,6 +8,10 @@ summary: Without --at the verb stamps now_at_the_edge() as an ISO datetime and i
 relations:
 - decomposes: epic:evidence-gated-completion
 revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-08-28T18:55:56Z", actor: "human:operator", revision: 5, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "proposed", to: "active", at: "2026-08-28T18:55:56Z", actor: "human:operator", revision: 6, decided_on: {"recorded":{"test_result":1}}, imported: true}
+- {from: "active", to: "implemented", at: "2026-08-28T18:55:56Z", actor: "human:operator", revision: 7, decided_on: {"recorded":{"test_result":1}}, imported: true}
 ---
 # Story: `protocol artifact evidence` refuses the instant it defaults to
 
