@@ -1,5 +1,7 @@
 # Planning artifacts as Entity Runtime entities on a mergeable Eventlog v0.1
 
+Superseded for the planning store by git-native-planning-store-v0.1.md (2026-09-28).
+
 Status: accepted, 2026-09-24 (#17), with the implementation plan approved the same day. It
 supersedes `eventlog-planning-authority-v0.1.md` for the planning store. Released for it:
 Eventlog 0.4.0 and Entity Runtime 0.21.0; recorded as Atlas ADR 0063. It serves the ESS evolution plan:

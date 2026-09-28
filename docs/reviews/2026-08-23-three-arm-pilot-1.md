@@ -24,7 +24,7 @@
 > the streams committed rather than left in a scratchpad. Tracked as
 > `story:three-arm-pilot-2` under `epic:self-evaluation`.
 
-Status: **measured** (R4.1 of `docs/plan/eval-program-three-arms.md`). One workflow (`adp/default`),
+Status: **measured** (R4.1 of `docs/plan/archive/eval-program-three-arms.md`). One workflow (`adp/default`),
 one case (`case:development-honest` — add a `--json` flag to `protocol artifact board`, worked
 through the development workflow), two harnesses, all three arms attempted. Judged by the committed
 trace expectations, arm-blind, from recorded `metaharness.event/1` streams. Total spend: **$4.88**

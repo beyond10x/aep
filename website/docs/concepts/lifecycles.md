@@ -55,7 +55,7 @@ A move can fail for two reasons, and the refusal says which:
 
 ```shell-session
 $ aep plan artifact move outbound-claim:q3-uptime --to cleared
-outbound-claim:q3-uptime is draft; cleared is on the ladder and not yet earned: reaching cleared needs at least 1 approval record(s). no approval record is held for this artifact — …
+outbound-claim:q3-uptime is draft; cleared is on the ladder and not yet earned: reaching cleared needs at least 1 approval record(s). no approval record is held for this artifact — `aep plan artifact evidence <id> --kind approval --source <where it came from>` records one
 $ aep plan artifact evidence outbound-claim:q3-uptime --kind approval \
     --source "legal review" --ref https://example.invalid/approvals/814
 outbound-claim:q3-uptime: approval recorded from legal review

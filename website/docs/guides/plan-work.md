@@ -70,7 +70,7 @@ Editing the body directly in the file also works. The CLI only needs you to leav
 $ aep plan artifact set story:save-card --owner payments --tag pci
 story:save-card owner, tags set (revision 3) at …/planning/story/save-card.md
 $ aep plan artifact set story:save-card --status active
-error: `status` is not a field `set` changes: a status is a decision taken against the kind's lifecycle, and `… move <id> --to <status>` is what takes it and records what it rested on
+error: `status` is not a field `set` changes: a status is a decision taken against the kind's lifecycle, and `aep plan artifact move <id> --to <status>` is what takes it and records what it rested on
 ```
 
 `set` takes `--title`, `--summary`, `--owner`, `--tag`/`--untag`, `--ref`/`--unref`, and

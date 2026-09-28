@@ -13,11 +13,11 @@
 > makes a specified workflow run strictly rather than be steered towards.** This page takes **wave
 > 2**, which produces decisions and a review and no crate. **The feasibility review is written and
 > W2.3 is applied** —
-> [`2026-08-21-driver-feasibility-review.md`](../reviews/2026-08-21-driver-feasibility-review.md),
+> [`2026-08-21-driver-feasibility-review.md`](../../reviews/2026-08-21-driver-feasibility-review.md),
 > **23 CONFIRMED · 14 NEEDS-CHANGE · 3 INFEASIBLE · 0 UNRESOLVED**. Wave 3 opens behind it, and a
 > decision not to build the driver remains a legitimate outcome of that review — it closes the gap-register row exactly as building it would, provided the
 > VISION narrowing is reverted in the same change. Design:
-> [`harness-planning-and-driver-design-v0.1.md`](../design/harness-planning-and-driver-design-v0.1.md)
+> [`harness-planning-and-driver-design-v0.1.md`](../../design/harness-planning-and-driver-design-v0.1.md)
 > §§ 4.7–4.9, the wave-2 update **as corrected by the review**; §§ 4.1–4.6 are unchanged and stay as
 > the record of what the review was originally given. Every NEEDS-CHANGE and INFEASIBLE item is
 > applied in the design and in this page's table, each citing the finding that forced it. **Nothing
@@ -115,7 +115,7 @@ precedent files are `docs/reviews/2026-08-20-next-waves-feasibility-review.md` a
 construction: its job is to find the decision that cannot be built, not to agree.
 
 **Acceptance — met, 2026-08-21.**
-[`docs/reviews/2026-08-21-driver-feasibility-review.md`](../reviews/2026-08-21-driver-feasibility-review.md),
+[`docs/reviews/2026-08-21-driver-feasibility-review.md`](../../reviews/2026-08-21-driver-feasibility-review.md),
 708 lines, twenty findings F1–F20.
 
 | criterion | how it was met |
@@ -253,7 +253,7 @@ allowlist. § 4.8 row 3 stays open and now says so.
   inwards;
 * **27 tests** in `aep-driver-spec` and **34** in `aep-driver`, package-scoped;
 * W3.1c held: both manifests carry `[lints] workspace = true`, `tests/determinism.rs` ships in each,
-  and invariant 9's list in [`AGENTS.md`](../../AGENTS.md) names both crates in the same change —
+  and invariant 9's list in [`AGENTS.md`](../../../AGENTS.md) names both crates in the same change —
   a purity claim stronger than `aep-engine`'s, which is why the lock, the pid probe and the run
   directory are `aep-cli`'s (F19);
 * `crates/drive/aep-driver/tests/evidence_scan.rs` (216 lines) is invariant 7 one layer out: the driver
@@ -435,7 +435,7 @@ SVG handed to `rsvg-convert` by the CLI, because the crate runs no programs.
 
 **What it showed about the run directory, and what that owes.** Building an overlay from a run is
 the first thing that ever read `.engineering/runs/<run>/` from outside the driver, and it found
-three absences. They are one row of [`gap-register.md`](gap-register.md), owned by wave-4 hardening,
+three absences. They are one row of [`gap-register.md`](../gap-register.md), owned by wave-4 hardening,
 and none of them is a defect in the renderer: reasons reach it **flattened into strings** because
 there is no `report.json`; there is **no per-transition record**, so the path is reconstructed from
 the snapshot's `entered` list and nothing says which transition was attempted at each step; and a
@@ -462,7 +462,7 @@ identical a month later.
   W3.5's is deliberately not one.
 * **Folding the hook-decision log into `Engine::authorize`.** The channel exists and the log is
   written; the fold is **deferred**, with its reason and what closes it in
-  [`gap-register.md`](gap-register.md). Nothing ungoverned follows from the deferral: the log is
+  [`gap-register.md`](../gap-register.md). Nothing ungoverned follows from the deferral: the log is
   already the gating record, and the decisions it holds were refusals, which change no state.
 * **Driving real work.** Every run in this wave is a fixture or an eval. The first governed task on
   this repository's own backlog is [`harness-wave-4-governed-dogfood.md`](harness-wave-4-governed-dogfood.md) § W4.1,

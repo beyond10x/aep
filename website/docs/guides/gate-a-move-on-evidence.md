@@ -147,7 +147,7 @@ the command line:
 $ aep plan artifact move story:guest-receipt --to implemented --evidence test_result=1
 story:guest-receipt moved active -> implemented (revision 4)
   decided partly on asserted evidence nothing checks: test_result=1
-  …
+  `aep plan artifact evidence story:guest-receipt --kind <kind> --source <where>` records it instead
 ```
 
 The transition records `decided_on: {"asserted": {"test_result": 1}}`. `validate` then lists the

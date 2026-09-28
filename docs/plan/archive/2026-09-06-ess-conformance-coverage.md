@@ -15,7 +15,7 @@ independent qualification, mutation and replay routes. Splitting them into indep
 leave a required admission boundary incomplete. N is one; the later ESS writer is a separate wave.
 
 The fresh global draft computation is retained verbatim in the
-[dated review record](../reviews/2026-09-06-ess-conformance-coverage-replan.md).
+[dated review record](../../reviews/2026-09-06-ess-conformance-coverage-replan.md).
 It contains fourteen candidate sets, 282 collisions and twelve unassessed unrelated AEP stories.
 Those stories are outside the user's ESS remediation task; this coordinator neither selects nor
 reserves their work. As in the count-reader prerequisite, the bounded selection uses the complete
@@ -48,7 +48,7 @@ no executed compatibility test or implementation verdict.
 ## Resource and ownership record
 
 The reused AEP coordinator is
-/home/timo/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader,
+~/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader,
 branch wave/ess-conformance-counts, lease ess-review-counts-reader, source
 62ef3a73112143453319215b9aa31a6c9626ed5f. That source matched advertised AEP main at preflight.
 Only this task's new story, journal events and proposed binding were dirty. The primary is dirty
@@ -119,12 +119,12 @@ on all direct commits were verified as the organization bot. AEP's ten opening c
 ESS's layout target and required site-build passed. These checks cover the opening records and
 unchanged existing source; no new reader implementation has been tested.
 
-The manager created /home/timo/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage
+The manager created ~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage
 at exact base4ecc1b63b53bbfcb31fd55f277e62643083375b1. Its branch is impl/ess-conformance-coverage,
 lease ess-review-coverage-implementation, build directory its target and scratch its
 target/ess-conformance-coverage. The root-written unit-brief.md and hash-verified accepted bindings
 plus source-baseline logs are there before dispatch. Test TMPDIR alone uses the explicitly assigned
-/home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-unit-tmp because the existing
+~/.cache/ess-review/2026-09-06-resume/aep-coverage-unit-tmp because the existing
 outside-project fixture requires a directory outside a project. That exception is unit-owned,
 reported and part of cleanup; no compiler output moves outside the unit target.
 
@@ -133,7 +133,7 @@ verified. The first source adversary is running under aep-drive:adversary0.8.0 i
 with tests-only ownership in the five assigned packages. Its scratch is
 target/ess-conformance-coverage/adversary-pass-1, build is the unit target, and its distinct
 explicit outside-project TMPDIR is
-/home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-1-tmp.
+~/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-1-tmp.
 The implementor relinquished all writes before freezing and review dispatch.
 
 The final five-package run executed1360 cases,0failed/ignored,65 summaries;40 cases are new.
@@ -206,7 +206,7 @@ Agent expression_review_resume is running the second and final source attack und
 installed adversary0.8.0 charter after all implementor writes were relinquished. Tests-only
 ownership remains within the five assigned packages. Scratch is the unit's
 target/ess-conformance-coverage/adversary-pass-2; build remains its target. Explicit outside-project
-TMPDIR: /home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-2-tmp.
+TMPDIR: ~/.cache/ess-review/2026-09-06-resume/aep-coverage-adversary-2-tmp.
 The complete brief and prior evidence are retained. No third source attack is authorized.
 Full repository gates, reader-first publication and actual future producer correspondence
 remain pending.
@@ -215,9 +215,9 @@ remain pending.
 
 Reserve the task-owned Website support id aep-coverage-website-verification at the exact
 Atlas-pinned runtime fc4571534765c098ed861bc326da4d3da0d1df63. Its planned worktree is
-/home/timo/.local/state/worktree/trees/b10x/website/aep-coverage-website-verification;
+~/.local/state/worktree/trees/b10x/website/aep-coverage-website-verification;
 build and scratch are target/ess-conformance-coverage beneath it. Root owns this support
-checkout. The short explicit external TMPDIR /home/timo/.cache/aep-cov-website-tmp is reserved
+checkout. The short explicit external TMPDIR ~/.cache/aep-cov-website-tmp is reserved
 for the Website gate's Unix-socket fixtures and is part of eventual exact-owned cleanup.
 
 The prepared verifier derives from the archived, successful composition delivery runner.
@@ -292,7 +292,7 @@ Full source integration gates and publication are next; these unit measurements 
 results. The prepared full-gate runner executes the16 unchanged Taskfile steps with separate
 real statuses, verifies Rust1.85 through its own toolchain and preserves the configured
 PostgreSQL skip distinction. Its explicitly assigned outside-project TMPDIR is
-/home/timo/.cache/ess-cov-aep-gate-tmp; all logs stay under the coordinator's
+~/.cache/ess-cov-aep-gate-tmp; all logs stay under the coordinator's
  target/ess-conformance-coverage/gate-<subject>. No source gate has run on the merged result yet.
 
 ## Integrated source gate
@@ -349,7 +349,7 @@ match published658cf76 exactly. Report SHA256
 2ffeaa6d3553b770878f69c7af437a57131c858f0ec710631e42c0340034c879. Actual ESS Rust/Go report/input
 correspondence through both readers/replay remains mandatory before the later writer publishes.
 
-The unit archive is /home/timo/.cache/ess-review/2026-09-06-resume/aep-coverage-unit-retirement:
+The unit archive is ~/.cache/ess-review/2026-09-06-resume/aep-coverage-unit-retirement:
 8738files,5012directories,5594897compressedbytes, SHA256
 813be3e8630fca8c245629b5727a620093bd17c4596df9d88c19d6ce173e6ac2. Root independently reread
 every archive member and18169source entries. Three explicit external TMP roots are retained
@@ -366,7 +366,7 @@ retirement was still being sealed at that observation; its completion follows.
 ## Joint Website retirement and reader closure
 
 The sealed archive at
-`/home/timo/.cache/ess-review/2026-09-06-resume/joint-coverage-schema-website-retirement`
+`~/.cache/ess-review/2026-09-06-resume/joint-coverage-schema-website-retirement`
 contains 25,170,415 compressed bytes, SHA256
 `8c571049f5c4b05cdee14db820b81dbc144f630a631aacecba061b54ee72daf3`.
 Root independently reread all 2,455 regular payloads (73,566,441 bytes), 621 directories,

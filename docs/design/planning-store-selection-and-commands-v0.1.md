@@ -1,5 +1,7 @@
 # Planning authority selection and migration commands v0.1
 
+Superseded for the planning store by git-native-planning-store-v0.1.md (2026-09-28).
+
 Status: command/config companion to eventlog-planning-authority-v0.1.md under the same migration
 owner. The public command and foreground Linux writer-control path are implemented in the current
 source; real-store activation still needs observed operator custody for that store.

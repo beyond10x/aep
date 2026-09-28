@@ -59,7 +59,7 @@ $ aep plan artifact move story:pay-by-card --to active --via
 story:pay-by-card moved draft -> proposed (revision 2)
 story:pay-by-card moved proposed -> active (revision 3)
 $ aep plan artifact move story:pay-by-card --to implemented
-story:pay-by-card is active; implemented is on the ladder and not yet earned: reaching implemented needs at least 1 test_result record(s). …
+story:pay-by-card is active; implemented is on the ladder and not yet earned: reaching implemented needs at least 1 test_result record(s). no test_result record is held for this artifact — `aep plan artifact evidence <id> --kind test_result --source <where it came from>` records one
 $ aep plan artifact evidence story:pay-by-card --kind test_result --source "cargo test -p checkout"
 story:pay-by-card: test_result recorded from cargo test -p checkout
   on hand: test_result=1

@@ -1,9 +1,9 @@
 # Feasibility review — the wave 4 and wave 5 designs against the code that exists
 
 Reviewed at `3647f80` (`main`, CI green, 916 tests). Subjects:
-[`ess-closed-loop-execution-conformance-design-v0.1.md`](../design/ess-closed-loop-execution-conformance-design-v0.1.md)
+[`ess-closed-loop-execution-conformance-design-v0.1.md`](https://github.com/beyond10x/ess/blob/main/docs/design/ess-closed-loop-execution-conformance-design-v0.1.md)
 (proposed wave 4, 2180 lines) and
-[`ess-structural-synthesis-obligations-realizations-design-v0.1.md`](../design/ess-structural-synthesis-obligations-realizations-design-v0.1.md)
+[`ess-structural-synthesis-obligations-realizations-design-v0.1.md`](https://github.com/beyond10x/ess/blob/main/docs/design/ess-structural-synthesis-obligations-realizations-design-v0.1.md)
 (proposed wave 5, 1977 lines), both landed unreviewed in `3647f80`. This review answers the
 reconciliation the wave-4 header asks for: *"Reconcile names with the actual local API rather than
 creating duplicate abstractions."* Read-only; nothing outside this file was changed.

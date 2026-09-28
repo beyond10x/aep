@@ -289,6 +289,7 @@ $ aep govern evaluate --task examples/development-passkeys/task.yaml \
     --evidence examples/development-passkeys/evidence/04-review.yaml \
     --evidence examples/development-passkeys/evidence/05-provenance.yaml \
     --advance
+inputs      . and examples/development-passkeys/task.yaml
 state       complete (Complete)
 transitions
   (none: this state is terminal)

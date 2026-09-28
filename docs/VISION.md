@@ -119,16 +119,14 @@ key and no attestation anywhere in the workspace. A proposed shape now exists �
 [`docs/plan/gap-register.md`](plan/gap-register.md) D-3 — and is not accepted, so this is a gap with
 an owner rather than a horizon.
 
-One thing standing near D-3 has landed, and it is worth keeping apart from it rather than allowed to
-read as progress against it. A markdown plan's `journal.jsonl` is now a hash chain: each record
-carries the digest of the record before it, and `aep plan artifact validate` walks the chain and
-fails at the exact record where it stops holding, naming that record
-([`crates/plan/aep-backend-markdown/src/chain.rs`](../crates/plan/aep-backend-markdown/src/chain.rs)).
-That is tamper-evidence **within** a log, and it is not attestation. The chain is computed from the
-bytes it protects, so it does not detect a log replaced wholesale, and it does not detect one
-truncated at the tail; and it prevents nothing, because prevention needs to know who wrote a file.
-Both limits close only by holding the head of the chain somewhere the log does not control, which is
-D-3 — still proposed, still carrying no signature and no key.
+What the planning store offers near D-3 is not progress against it. Since 0.62.0 the plan is the
+Git-native `aep.project/5` store: each artifact file carries its own `transitions`, each evidence
+record is a file of its own, and Git's content addressing is the integrity check for committed
+bytes; `aep plan artifact validate` refuses transitions that are not continuous or do not end in
+the artifact's status ([`git-native-planning-store-v0.1.md`](design/git-native-planning-store-v0.1.md)).
+That is tamper-evidence, and it is not attestation: a transition's `actor` and a commit's author are
+what the writer said, and prevention needs to know who wrote a file. That is D-3 — still proposed,
+still carrying no signature and no key.
 
 ## Where this stands
 
@@ -150,16 +148,18 @@ than a delivery claim. Its accepting surfaces are the plan pages and planning st
 Design documents in [`docs/design/`](design/) propose extending this. They are listed here with
 their status so that reading the newest file in that directory cannot be mistaken for reading what
 this project has agreed to build. The tally is deliberately not stated in a sentence: a count in a
-preamble is the first thing to go stale, and the status column is the answer.
+preamble is the first thing to go stale, and the status column is the answer. The four ESS designs
+now live in the ESS repository; the status of every AEP design, accepted or superseded as well as
+proposed, is in [`docs/design/README.md`](design/README.md).
 
 | proposed design | what it would add | status |
 |---|---|---|
-| [closed-loop execution and conformance](design/ess-closed-loop-execution-conformance-design-v0.1.md) | the specification becomes an *oracle* — a verdict on an implementation, not only a projection of a model | **delivered** as ESS wave 4 |
-| [semantic diff, impact and evolution](design/ess-semantic-diff-impact-evolution-design-v0.1.md) | the system changing over time, impact closure, what a revision invalidates | **core accepted** into the thesis above and sequenced as ESS wave 5; reviewed, and its proposal-evaluation and architecture-search sections rejected rather than deferred |
-| [structural synthesis, obligations and realizations](design/ess-structural-synthesis-obligations-realizations-design-v0.1.md) | generated applications, and human or agent work carried as typed obligations | proposed; reviewed once and not reconciled — that review reads it as four waves, not one; unsequenced |
-| [infrastructure discovery and multi-cloud realization](design/semantic-infrastructure-discovery-specification-conformance-multicloud-design-v0.1.md) | a **fourth domain**: infrastructure, with `InfraSpec` and `InfraIr` beside the ESS pair | reviewed, and deferred whole with two ideas harvested; unsequenced |
+| [closed-loop execution and conformance](https://github.com/beyond10x/ess/blob/main/docs/design/ess-closed-loop-execution-conformance-design-v0.1.md) | the specification becomes an *oracle* — a verdict on an implementation, not only a projection of a model | **delivered** as ESS wave 4 |
+| [semantic diff, impact and evolution](https://github.com/beyond10x/ess/blob/main/docs/design/ess-semantic-diff-impact-evolution-design-v0.1.md) | the system changing over time, impact closure, what a revision invalidates | **core accepted** into the thesis above and sequenced as ESS wave 5; reviewed, and its proposal-evaluation and architecture-search sections rejected rather than deferred |
+| [structural synthesis, obligations and realizations](https://github.com/beyond10x/ess/blob/main/docs/design/ess-structural-synthesis-obligations-realizations-design-v0.1.md) | generated applications, and human or agent work carried as typed obligations | proposed; reviewed once and not reconciled — that review reads it as four waves, not one; unsequenced |
+| [infrastructure discovery and multi-cloud realization](https://github.com/beyond10x/ess/blob/main/docs/design/semantic-infrastructure-discovery-specification-conformance-multicloud-design-v0.1.md) | a **fourth domain**: infrastructure, with `InfraSpec` and `InfraIr` beside the ESS pair | reviewed, and deferred whole with two ideas harvested; unsequenced |
 | [the planning store and the reference driver](design/harness-planning-and-driver-design-v0.1.md) | a durable store for planning artifacts, a Claude Code plugin that uses it, and the first in-repository implementation of the harness contract | **Phase 1 accepted as harness wave 1; driver decided and sketched, build unsequenced.** The narrowing it rests on is the one recorded above |
-| [transcript conformance](design/transcript-conformance-design-v0.1.md) | a typed, executable specification over an *agent-run transcript* — the `infra-spec/1` pattern pointed at a third observation domain, with the same three verdicts and a checker that contains no model | **accepted, in implementation** as trace wave 1 (`docs/plan/trace-wave-1-transcript-checker.md`). It is what makes a behavioural claim about an agent admissible as evidence, which the driver's `llm` step needs and no other mechanism supplies. Its per-request *series* assertions and its streaming checker stay proposed, by name |
+| [transcript conformance](design/transcript-conformance-design-v0.1.md) | a typed, executable specification over an *agent-run transcript* — the `infra-spec/1` pattern pointed at a third observation domain, with the same three verdicts and a checker that contains no model | **accepted, in implementation** as trace wave 1 (`docs/plan/archive/trace-wave-1-transcript-checker.md`). It is what makes a behavioural claim about an agent admissible as evidence, which the driver's `llm` step needs and no other mechanism supplies. Its per-request *series* assertions and its streaming checker stay proposed, by name |
 | [store integrity on the native arm](design/native-arm-store-integrity-design-v0.1.md) | nothing to the protocol — it says what the **evaluation table** may claim about the arm that has no seam: a store-integrity cell on the `native`/`b10x` column is *compliance*, not *enforcement*, until the step map declares a write scope, and the arm's refusals are readable in its record | **proposed, not accepted, 2026-08-29.** Its § 6 O1 is a reporting rule, its O2 is one key on one document in `metaharness`, and its O5 reports a route in flight — the driver's own rule spawned from the native loop's `before-call` hook, uncommitted in a peer session's tree on 2026-08-29, which adds the content tier a write scope cannot express without giving the b10x adapter a seam. None is a work order and no plan page has taken any. Its § 9 refusals — no seam for the b10x adapter, no reading absence as enforcement — bind whether or not the rest is accepted |
 | [AEP service wire and client](design/aep-service-wire-v0.1.md) | a strict authenticated network projection of the existing command/query contract, an official client and shared constructed wire vectors for the private central service | **accepted and active, 2026-08-31.** All five review questions are decided. `aep-client` carries the strict version-1 documents, direct `CommandService`/`QueryService` implementation and constructed corpus; release, service consumption and `protocol` backend selection remain open under `story:aep-service-wire-and-client` |
 
@@ -193,12 +193,12 @@ is published in [`docs/guide/harness.md`](guide/harness.md) and mandated by the 
 consolidated design, and it is implemented by no program in this repository. A contract with zero
 implementations is the same defect as an invariant enforced by nothing. The driver is that
 implementation, and the line it does not move is the one that mattered: the engine still evaluates
-and never acts (invariant 7 unchanged — an agent's own statement never satisfies an independence
+and never acts (the engine still never manufactures evidence — an agent's own statement never satisfies an independence
 requirement), gates are still evaluated by the engine and never by the driver, and "external systems
 do the work; this project decides what the results permit" remains true — the driver is the first of
 those external systems, kept in-tree the way the website is: a deliverable beside the specification,
-consuming only its public surface. Decided by the operator, 2026-08-21; designed, not yet built —
-building it waits behind its own reviewed design.
+consuming only its public surface. Decided by the operator, 2026-08-21, and built as `aep-driver` and `aep drive`; model-backed
+execution has since moved to `metaharness aep drive`.
 
 **Not a deployment platform**, and the infrastructure design does not change that — it makes the line
 worth drawing precisely. Generating an artifact is in scope: this project may compile a specification

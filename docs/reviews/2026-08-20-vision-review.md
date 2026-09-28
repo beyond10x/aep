@@ -7,7 +7,7 @@ stated ambitions are in tension with each other.
 
 Sources read in full: `docs/VISION.md`, `AGENTS.md`, `README.md`,
 `docs/design/reconciliation-v0.2.md`, `docs/design/ess-review-v0.1.md`,
-`docs/plan/ess-roadmap.md`, `docs/plan/ess-wave-3-projections.md`, `docs/plan/wave-4-dogfooding.md`,
+`docs/plan/ess-roadmap.md`, `docs/plan/ess-wave-3-projections.md`, `docs/plan/archive/wave-4-dogfooding.md`,
 `docs/guide/harness.md`, and both new designs
 (`ess-closed-loop-execution-conformance-design-v0.1.md`,
 `ess-structural-synthesis-obligations-realizations-design-v0.1.md`) end to end;
@@ -282,7 +282,7 @@ compile to an IR (`0.3.1-ess-wave-2`), project into four artifact families (`0.3
 
 AEP's has not started.
 
-- `docs/plan/wave-4-dogfooding.md:3` — still **"In progress."** W4.1 (project discovery) shipped as
+- `docs/plan/archive/wave-4-dogfooding.md:3` — still **"In progress."** W4.1 (project discovery) shipped as
   `0.2.1`. W4.2 ("`.engineering/` for this repository") and W4.3 ("What it says about the last three
   waves") have not begun.
 - `ls -a .engineering` → **no such directory.** The capability to be governed shipped; the
@@ -306,7 +306,7 @@ the only meaningful steering input in the project, and it has gone to ESS four t
 by tests it writes for itself, away from the half whose claims can only be discharged by contact with
 work somebody actually did. That is not an accident of preference; it is the gradient. ESS work
 produces green tests and tag messages. Dogfooding produces findings, most of them uncomfortable, and
-`docs/plan/wave-4-dogfooding.md:41` says so in advance: *"The interesting output is what it
+`docs/plan/archive/wave-4-dogfooding.md:41` says so in advance: *"The interesting output is what it
 **refuses**. A rule we cannot express, or one that fires when it should not, is a finding about the
 protocol rather than about the repository."*
 
