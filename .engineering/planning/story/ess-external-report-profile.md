@@ -2,15 +2,16 @@
 format: aep.planning-md/3
 id: story:ess-external-report-profile
 kind: story
-status: active
+status: implemented
 title: Evidence admits an ESS report from an outside runner
 relations:
 - informed_by: epic:evidence-gated-completion
 - serves: vision:O2
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-30T08:09:46Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-09-30T08:09:46Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-09-30T08:44:54Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
