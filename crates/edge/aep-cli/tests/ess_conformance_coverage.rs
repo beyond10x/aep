@@ -1024,6 +1024,141 @@ fn coverage_planning_records_an_externally_supplied_report_as_external_with_its_
     }
 }
 
+const CURRENT_SUITES: &str = "crates/observe/aep-ess-evidence/tests/fixtures/current-suites";
+
+fn refuse_changed_and_unknown_current_suites(
+    directory: &Path,
+    record: &dyn Fn(&Path, &Path) -> std::process::Output,
+) {
+    let fixture = |name: &str| root().join(CURRENT_SUITES).join(name);
+    // Bytes that differ from the report's digest are refused.
+    let changed = directory.join("changed-27.json");
+    let original = std::fs::read_to_string(fixture("suite-27.json")).unwrap();
+    std::fs::write(&changed, format!("{original}\n")).unwrap();
+    let output = record(&fixture("report-27-external.json"), &changed);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("SuiteDigestMismatch"), "{stderr}");
+    // A version newer than this build knows is refused by name.
+    let newer = directory.join("suite-35.json");
+    let original = std::fs::read_to_string(fixture("suite-31.json")).unwrap();
+    let relabelled = original.replace(
+        "\"suite_version\": \"ess-conformance/31\"",
+        "\"suite_version\": \"ess-conformance/35\"",
+    );
+    assert_ne!(relabelled, original);
+    std::fs::write(&newer, relabelled).unwrap();
+    let output = record(&fixture("report-31-external.json"), &newer);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("UnsupportedSuiteVersion") && stderr.contains("ess-conformance/35"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn coverage_planning_records_the_current_suite_versions_ess_writes_and_refuses_unknown_ones() {
+    let directory = scratch("current-suites");
+    let store = directory.join("store");
+    let fixture = |name: &str| root().join(CURRENT_SUITES).join(name);
+    success(&cli(&[
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "current",
+        "--title",
+        "Current ESS suites",
+        "--store",
+        store.to_str().unwrap(),
+    ]));
+    let record = |report: &Path, suite: &Path| {
+        cli(&[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:current",
+            "--from",
+            report.to_str().unwrap(),
+            "--suite",
+            suite.to_str().unwrap(),
+            "--store",
+            store.to_str().unwrap(),
+        ])
+    };
+    let admitted = [
+        (
+            "report-27-external.json",
+            "suite-27.json",
+            "ess-conformance/27",
+            "inconclusive",
+        ),
+        (
+            "report-27-run.json",
+            "suite-27.json",
+            "ess-conformance/27",
+            "failed",
+        ),
+        (
+            "report-31-external.json",
+            "suite-31.json",
+            "ess-conformance/31",
+            "passed",
+        ),
+        (
+            "report-27-aggregate-external.json",
+            "suite-27-aggregate.json",
+            "ess-conformance/27",
+            "passed",
+        ),
+        (
+            "report-27-retry-external.json",
+            "suite-27-retry.json",
+            "ess-conformance/27",
+            "passed",
+        ),
+    ];
+    for (report, suite, _, _) in admitted {
+        success(&record(&fixture(report), &fixture(suite)));
+    }
+    refuse_changed_and_unknown_current_suites(&directory, &record);
+    let output = cli(&[
+        "plan",
+        "artifact",
+        "history",
+        "story:current",
+        "--store",
+        store.to_str().unwrap(),
+        "--format",
+        "json",
+    ]);
+    success(&output);
+    let history: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let recorded = history.as_array().unwrap();
+    assert_eq!(recorded.len(), admitted.len(), "refusals record nothing");
+    // History orders observations by their report instants, not by recording order.
+    let mut actual: Vec<(String, String)> = recorded
+        .iter()
+        .map(|entry| {
+            let source: serde_json::Value =
+                serde_json::from_str(entry["change"]["source"].as_str().unwrap()).unwrap();
+            assert_eq!(source["input_transport"], "wrapped_raw_suite");
+            (
+                source["suite"]["version"].as_str().unwrap().to_owned(),
+                source["conformance_status"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    let mut expected: Vec<(String, String)> = admitted
+        .iter()
+        .map(|(_, _, version, status)| ((*version).to_owned(), (*status).to_owned()))
+        .collect();
+    actual.sort();
+    expected.sort();
+    assert_eq!(actual, expected);
+}
+
 #[test]
 fn coverage_opt_in_profile_composes_without_inheriting_count_requirements() {
     let task = aep_schema::parse::task("id: COVERAGE-POLICY\nkind: feature\nobjective: complete exact coverage\nprotocol: adp-ess-conformance-coverage/1\nprofile: development.ess-conformance-coverage\nsubject: service:demo\n", None).unwrap();

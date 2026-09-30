@@ -1,0 +1,94 @@
+{
+  "completed_at": 1700000004800,
+  "conformance_status": "failed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 7,
+    "skipped": 0,
+    "total": 23,
+    "unsupported": 16
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 23,
+      "outside": 0,
+      "refused": 1
+    },
+    "knowledge": "complete_inventory",
+    "refused": [
+      {
+        "code": "ESS-SYNTH-008",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-008]: outcome desk.ticket.Comment/no-such-ticket has no scenario `desk.ticket.Comment/outcome/no-such-ticket`\n  its strategy is `default_branch` and it declares no guard\n  help: `TestStrategy` and `OutcomeCondition` have drifted apart in `ess-domain`",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "desk.ticket.Comment/outcome/no-such-ticket",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "outcome",
+          "name": {
+            "command": "desk.ticket.Comment",
+            "outcome": "no-such-ticket"
+          }
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "failed",
+  "format": "ess-conformance-report/2",
+  "implementation": "interpreted 0.48.0",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "desk.ticket.CloseTicket/outcome/no-such-ticket",
+      "desk.ticket.DeleteTicket/outcome/no-such-ticket",
+      "desk.ticket.Escalate/outcome/escalated",
+      "desk.ticket.Escalate/outcome/pager-refused",
+      "desk.ticket.Escalate/outcome/throttled",
+      "desk.ticket.OpenTicket/outcome/negative-estimate",
+      "desk.ticket.ReopenTicket/outcome/no-such-ticket"
+    ],
+    "skipped": [],
+    "unsupported": [
+      "desk.ticket.CloseTicket/outcome/closed",
+      "desk.ticket.Comment/outcome/commented",
+      "desk.ticket.Comment/outcome/refused-closed",
+      "desk.ticket.DeleteTicket/outcome/deleted",
+      "desk.ticket.Escalate/outcome/quiet",
+      "desk.ticket.OpenTicket/outcome/opened",
+      "desk.ticket.ReopenTicket/outcome/reopened",
+      "desk.ticket.Reprioritize/outcome/forbidden",
+      "desk.ticket.Reprioritize/outcome/kept-high",
+      "desk.ticket.Reprioritize/outcome/no-such-ticket",
+      "desk.ticket.Reprioritize/outcome/reprioritized",
+      "desk.ticket.Ticket/state/Closed/refuses/desk.ticket.CloseTicket",
+      "desk.ticket.Ticket/state/Closed/refuses/desk.ticket.Comment",
+      "desk.ticket.Ticket/state/Open/refuses/desk.ticket.ReopenTicket",
+      "desk.ticket.Ticket/transition/close/by/desk.ticket.CloseTicket/closed",
+      "desk.ticket.Ticket/transition/reopen/by/desk.ticket.ReopenTicket/reopened"
+    ]
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "1953c645f2e626e71630aedb67172a979809947f628e53a64a4642da8b8a4520",
+  "specification": "desk/v1",
+  "suite": {
+    "digest": "sha256:3628e133a07823be09f7d34c75b9e817427203fc52506e8236a4347095a2da8b",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/27"
+  }
+}

@@ -1,0 +1,2011 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 7,
+      "outside": 0,
+      "refused": 1
+    },
+    "generated": [
+      "metrics.session.Complete/outcome/completed",
+      "metrics.session.QueueTotals/aggregate",
+      "metrics.session.Record/outcome/recorded",
+      "metrics.session.Session/state/Completed/refuses/metrics.session.Complete",
+      "metrics.session.Session/transition/complete/by/metrics.session.Complete/completed",
+      "metrics.session.SessionsByAgentChannel/aggregate",
+      "metrics.session.TalkTimeByAgent/aggregate"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [
+      {
+        "code": "ESS-SYNTH-012",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-012]: entity metrics.session.Session has no scenario `metrics.session.Session/state/Completed/refuses/metrics.session.Complete`\n  `metrics.session.Complete` on a `metrics.session.Session` in `Completed` is refused and the specification does not say how: no `wrong_state:` outcome and no declared error, so the scenario can only require that nothing happened\n  help: give the command a `wrong_state:` outcome naming the error it reports; the states it answers in are already declared, as the states its transitions do not run from",
+        "needs": [],
+        "origin": "generated",
+        "retained": {
+          "origin": "generated",
+          "source": null
+        },
+        "scenario": "metrics.session.Session/state/Completed/refuses/metrics.session.Complete",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "f4b5c703737c39f92183903f366b9fc04eb4bce7f4691ddf2888254e1750f59a",
+    "spec_digest": "80c40e72d6579ae38d038e7e324006c97fe079d6c3779385e6cbd19db5c9e0f6",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/17",
+    "system": "metrics"
+  },
+  "scenarios": {
+    "metrics.session.Complete/outcome/completed": {
+      "purpose": "`metrics.session.Complete` answers `completed` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Recorded"
+        }
+      ],
+      "steps": [
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "metrics.session.Completed",
+          "shape": {
+            "session_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "metrics.session.Recorded",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "metrics.session.QueueTotals/aggregate": {
+      "purpose": "`metrics.session.QueueTotals` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Recorded"
+        },
+        {
+          "kind": "view",
+          "name": "metrics.session.QueueTotals"
+        }
+      ],
+      "steps": [
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/in"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-2",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/in"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-3",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/in"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 3.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-4",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/in"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 97.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-5",
+          "step": "capture_instance"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "longest_wait": {
+                "kind": "literal",
+                "value": 3.0
+              },
+              "sessions": {
+                "kind": "literal",
+                "value": 3.0
+              }
+            }
+          },
+          "params": {
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/in"
+            }
+          },
+          "step": "eventually_view",
+          "view": "metrics.session.QueueTotals"
+        },
+        {
+          "expectation": {
+            "at_least": 1,
+            "at_most": 1,
+            "expect": "counts"
+          },
+          "params": {
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/in"
+            }
+          },
+          "step": "eventually_view",
+          "view": "metrics.session.QueueTotals"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "longest_wait": {
+                "kind": "literal",
+                "value": null
+              },
+              "sessions": {
+                "kind": "literal",
+                "value": 0.0
+              }
+            }
+          },
+          "params": {
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/empty"
+            }
+          },
+          "step": "eventually_view",
+          "view": "metrics.session.QueueTotals"
+        },
+        {
+          "expectation": {
+            "at_least": 1,
+            "at_most": 1,
+            "expect": "counts"
+          },
+          "params": {
+            "queue_id": {
+              "kind": "literal",
+              "value": "metrics.session.QueueTotals/empty"
+            }
+          },
+          "step": "eventually_view",
+          "view": "metrics.session.QueueTotals"
+        }
+      ]
+    },
+    "metrics.session.Record/outcome/recorded": {
+      "purpose": "`metrics.session.Record` answers `recorded` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "metrics.session.Channel"
+        },
+        {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Recorded"
+        }
+      ],
+      "steps": [
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "metrics.session.Recorded",
+          "shape": {
+            "session_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "metrics.session.Completed",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "metrics.session.Session/state/Completed/refuses/metrics.session.Complete": {
+      "purpose": "`metrics.session.Complete` does not move a `metrics.session.Session` that is in `Completed`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Recorded"
+        }
+      ],
+      "steps": [
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "event": "metrics.session.Completed",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "metrics.session.Recorded",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "metrics.session.Session/transition/complete/by/metrics.session.Complete/completed": {
+      "purpose": "`metrics.session.Complete` on `completed` moves a `metrics.session.Session` to `Completed` along `complete`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Recorded"
+        }
+      ],
+      "steps": [
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "agent_id"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "metrics.session.Completed",
+          "shape": {
+            "session_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "metrics.session.Recorded",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "metrics.session.SessionsByAgentChannel/aggregate": {
+      "purpose": "`metrics.session.SessionsByAgentChannel` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "type",
+          "name": "metrics.session.Channel"
+        },
+        {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Recorded"
+        },
+        {
+          "kind": "view",
+          "name": "metrics.session.SessionsByAgentChannel"
+        }
+      ],
+      "steps": [
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.SessionsByAgentChannel/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-2",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.SessionsByAgentChannel/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-3",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.SessionsByAgentChannel/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-4",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.SessionsByAgentChannel/B"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Chat"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 85.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-5",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-5",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.SessionsByAgentChannel/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 97.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-6",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.SessionsByAgentChannel/C"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 93.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-7",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.SessionsByAgentChannel/B"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "caller"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 87.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-8",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-8",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "metrics.session.SessionsByAgentChannel"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "agent_id": {
+                "kind": "literal",
+                "value": "metrics.session.SessionsByAgentChannel/A"
+              },
+              "channel": {
+                "kind": "literal",
+                "value": "Voice"
+              },
+              "sessions": {
+                "kind": "literal",
+                "value": 3.0
+              },
+              "talk_seconds": {
+                "kind": "literal",
+                "value": 5.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "metrics.session.SessionsByAgentChannel"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "agent_id": {
+                "kind": "literal",
+                "value": "metrics.session.SessionsByAgentChannel/B"
+              },
+              "channel": {
+                "kind": "literal",
+                "value": "Chat"
+              },
+              "sessions": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "talk_seconds": {
+                "kind": "literal",
+                "value": 85.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "metrics.session.SessionsByAgentChannel"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "agent_id": {
+                "kind": "literal",
+                "value": "metrics.session.SessionsByAgentChannel/C"
+              },
+              "channel": {
+                "kind": "literal",
+                "value": "Voice"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "metrics.session.SessionsByAgentChannel"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "agent_id": {
+                "kind": "literal",
+                "value": "metrics.session.SessionsByAgentChannel/B"
+              },
+              "channel": {
+                "kind": "literal",
+                "value": "Voice"
+              },
+              "sessions": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "talk_seconds": {
+                "kind": "literal",
+                "value": 87.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "metrics.session.SessionsByAgentChannel"
+        }
+      ]
+    },
+    "metrics.session.TalkTimeByAgent/aggregate": {
+      "purpose": "`metrics.session.TalkTimeByAgent` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "metrics.session.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "metrics.session.Recorded"
+        },
+        {
+          "kind": "view",
+          "name": "metrics.session.TalkTimeByAgent"
+        }
+      ],
+      "steps": [
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/201"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 101.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-2",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/201"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 101.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-3",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/201"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 101.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-4",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/201"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 7.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 103.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-5",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-5",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/203"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 13.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 107.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-6",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-6",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/207"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 21.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 113.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-7",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-7",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/B"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/285"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 85.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 185.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-8",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Complete",
+          "input": {
+            "session_id": {
+              "instance": "session-8",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/A"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/297"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 97.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 197.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-9",
+          "step": "capture_instance"
+        },
+        {
+          "command": "metrics.session.Record",
+          "input": {
+            "agent_id": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/C"
+            },
+            "caller": {
+              "kind": "literal",
+              "value": "metrics.session.TalkTimeByAgent/caller/293"
+            },
+            "channel": {
+              "kind": "literal",
+              "value": "Voice"
+            },
+            "queue_id": {
+              "kind": "literal",
+              "value": "queue_id"
+            },
+            "talk_seconds": {
+              "kind": "literal",
+              "value": 93.0
+            },
+            "wait_seconds": {
+              "kind": "literal",
+              "value": 193.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "metrics.session.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "metrics.session.Session",
+          "event": "metrics.session.Recorded",
+          "field": "session_id",
+          "instance": "session-10",
+          "step": "capture_instance"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "agent_id": {
+                "kind": "literal",
+                "value": "metrics.session.TalkTimeByAgent/A"
+              },
+              "distinct_callers": {
+                "kind": "literal",
+                "value": 3.0
+              },
+              "longest_wait": {
+                "kind": "literal",
+                "value": 113.0
+              },
+              "mean_talk": {
+                "kind": "literal",
+                "value": 7.666667
+              },
+              "sessions": {
+                "kind": "literal",
+                "value": 6.0
+              },
+              "talk_seconds": {
+                "kind": "literal",
+                "value": 46.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "metrics.session.TalkTimeByAgent"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "agent_id": {
+                "kind": "literal",
+                "value": "metrics.session.TalkTimeByAgent/B"
+              },
+              "distinct_callers": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "longest_wait": {
+                "kind": "literal",
+                "value": 185.0
+              },
+              "mean_talk": {
+                "kind": "literal",
+                "value": 85.0
+              },
+              "sessions": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "talk_seconds": {
+                "kind": "literal",
+                "value": 85.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "metrics.session.TalkTimeByAgent"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "agent_id": {
+                "kind": "literal",
+                "value": "metrics.session.TalkTimeByAgent/C"
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "metrics.session.TalkTimeByAgent"
+        }
+      ]
+    }
+  }
+}

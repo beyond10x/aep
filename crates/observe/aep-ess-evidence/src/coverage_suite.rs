@@ -1,9 +1,9 @@
-//! Complete suite/5 inventory and offline original parent-chain admission.
+//! Complete coverage-suite inventory and offline original parent-chain admission.
 use crate::count_json::{Json, Result};
 use aep_domain::ess_conformance_coverage::{
-    ordered_ids, original_digest, validate_needs, Filter, Inventory, Origin, Outside,
-    OutsideReason, RefusalEffect, RefusalScope, Retained, Scope, SourceDisposition, SourceIdentity,
-    SuiteReference,
+    is_coverage_suite_version, ordered_ids, original_digest, validate_needs, Filter, Inventory,
+    Origin, Outside, OutsideReason, RefusalEffect, RefusalScope, Retained, Scope,
+    SourceDisposition, SourceIdentity, SuiteReference,
 };
 use aep_domain::ess_conformance_v2::{EssAdmissionError, ScenarioId};
 use aep_domain::SpecDigest;
@@ -84,11 +84,6 @@ pub(crate) fn wrap_suite(original: &str) -> Result<String> {
 }
 
 fn admit_suite(original: &str) -> Result<AdmittedSuite> {
-    let reference = SuiteReference::new(
-        "ess-conformance/5".into(),
-        "sha256-json-bytes/1".into(),
-        digest(original),
-    )?;
     let document = Json::parse(original, "$suite")?;
     let fields = document.closed(&["provenance", "scenarios", "coverage"], &[])?;
     let provenance = fields["provenance"].closed(
@@ -101,10 +96,23 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
         ],
         &["component"],
     )?;
-    if provenance["suite_version"].text()? != "ess-conformance/5" {
-        return Err(provenance["suite_version"]
-            .error("UnsupportedSuiteVersion", "coverage requires suite/5"));
+    let version = provenance["suite_version"].text()?;
+    if !is_coverage_suite_version(version) {
+        return Err(provenance["suite_version"].error(
+            "UnsupportedSuiteVersion",
+            format!("{version} is not a coverage suite version this build admits"),
+        ));
     }
+    // The reference binds every original byte; the report must name exactly this digest.
+    let reference = SuiteReference::new(
+        version.into(),
+        "sha256-json-bytes/1".into(),
+        digest(original),
+    )?;
+    // Suite/5 is the one major whose scenario grammar AEP transcribed, and it keeps that closed
+    // check. Later majors grow ESS's step vocabulary; ESS admitted the suite before reporting on
+    // it and owns that grammar, so AEP reads only their scenario keys and compares bodies exactly.
+    let transcribed = version == TRANSCRIBED_SUITE_VERSION;
     provenance["system"].text()?;
     provenance["specification_version"].text()?;
     let parse_digest = |value: &Json| {
@@ -113,8 +121,14 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
     };
     let spec_digest = parse_digest(&provenance["spec_digest"])?;
     parse_digest(&provenance["contract_digest"])?;
-    let ids = crate::count_suite::admit_scenarios(&fields["scenarios"])?;
+    let ids = if transcribed {
+        crate::count_suite::admit_scenarios(&fields["scenarios"])?
+    } else {
+        scenario_keys(&fields["scenarios"])?
+    };
+    admit_id_forms(version, &ids, &fields["scenarios"])?;
     let inventory = crate::coverage_wire::inventory(&fields["coverage"])?;
+    admit_refusal_codes(version, &inventory, &fields["coverage"])?;
     let component = provenance
         .get("component")
         .filter(|value| !value.null())
@@ -131,7 +145,7 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
         ));
     }
     validate_inventory(&inventory, &ids)?;
-    let definitions = crate::coverage_definition::Definitions::read(&document)?;
+    let definitions = crate::coverage_definition::Definitions::read(&document, transcribed)?;
     Ok(AdmittedSuite {
         definitions,
         inventory,
@@ -139,6 +153,84 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
         spec_digest,
         ids,
     })
+}
+
+/// The coverage major whose complete scenario vocabulary `count_suite` transcribes.
+const TRANSCRIBED_SUITE_VERSION: &str = "ess-conformance/5";
+
+/// Scenario-id forms ESS added after suite/5, each with the first ordinary major that carries it.
+///
+/// ESS `aggregate::admit_suite` (`ORDINARY` 16) and `bounded_retry::admit_format` (`ORDINARY` 26)
+/// refuse a suite whose scenario keys use the form below that major; the coverage counterpart is
+/// one above it.
+const LATER_ID_FORMS: [(&[&str], u32); 2] =
+    [(&["aggregate"], 16), (&["binding", "final-failure"], 26)];
+
+fn major(version: &str) -> u32 {
+    version
+        .strip_prefix("ess-conformance/")
+        .and_then(|digits| digits.parse().ok())
+        .expect("an admitted coverage version")
+}
+
+/// Refusal codes ESS added after suite/5, each with the first coverage major that admits it.
+///
+/// ESS `Inventory::validate` (`coverage.rs`): `ESS-SYNTH-015` needs suite/7, and
+/// `aggregate::is_aggregate_refusal` (`ESS-SYNTH-016`, `-017`) suite/17 (`aggregate::COVERAGE`).
+const LATER_REFUSAL_CODES: [(&str, u32); 3] = [
+    ("ESS-SYNTH-015", 7),
+    ("ESS-SYNTH-016", 17),
+    ("ESS-SYNTH-017", 17),
+];
+
+fn admit_refusal_codes(version: &str, inventory: &Inventory, coverage: &Json) -> Result<()> {
+    let major = major(version);
+    for refusal in &inventory.refused {
+        if let Some((code, coverage_major)) = LATER_REFUSAL_CODES
+            .iter()
+            .find(|(code, first)| refusal.code == *code && major < *first)
+        {
+            return Err(coverage.error(
+                "UnsupportedVocabulary",
+                format!("refusal {code} requires suite/{coverage_major}"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn admit_id_forms(version: &str, ids: &[ScenarioId], scenarios: &Json) -> Result<()> {
+    let major = major(version);
+    for id in ids {
+        let parts: Vec<&str> = id.as_str().split('/').collect();
+        if let Some((form, ordinary)) = LATER_ID_FORMS
+            .iter()
+            .find(|(form, ordinary)| parts[1..] == **form && major < *ordinary)
+        {
+            let form = form.join("/");
+            return Err(scenarios.error(
+                "UnsupportedVocabulary",
+                format!(
+                    "{id} uses the `{form}` form, which requires suite/{ordinary} or /{}",
+                    ordinary + 1,
+                    id = id.as_str()
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Scenario identities of a suite whose bodies ESS alone interprets.
+fn scenario_keys(scenarios: &Json) -> Result<Vec<ScenarioId>> {
+    scenarios
+        .object()?
+        .iter()
+        .map(|(id, scenario)| {
+            ScenarioId::new(id.clone())
+                .map_err(|error| scenario.error("MalformedScenarioId", error.to_string()))
+        })
+        .collect()
 }
 
 fn invalid(reason: &'static str, detail: impl Into<String>) -> EssAdmissionError {

@@ -1,0 +1,100 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 3,
+    "skipped": 0,
+    "total": 3,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 3,
+      "outside": 0,
+      "refused": 3
+    },
+    "knowledge": "complete_inventory",
+    "refused": [
+      {
+        "code": "ESS-SYNTH-010",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-010]: binding project has no scenario `project/binding/delivery`\n  `project` delivers at most once, which has no second delivery to observe\n  help: `at_most_once` has no redelivery by design; write `at_least_once` if the transport really may deliver the event again",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "project/binding/delivery",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "binding",
+          "name": "project"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-015",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-015]: binding project has no scenario `project/binding/mapping`\n  `project` has no accessor observation: AmbiguousOptionalObservation: nested terminal Optional with equal target\n  help: provide a separately executable host conversion or an unambiguous observable assignment",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "project/binding/mapping",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "binding",
+          "name": "project"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-010",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-010]: binding project has no scenario `project/binding/on-failure`\n  `project` gives up silently, which the model publishes nothing for\n  help: `drop` is unobservable by design; write `escalate:` with an event if the failure has to be provable",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "project/binding/on-failure",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "binding",
+          "name": "project"
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "project/binding/flow",
+      "projection.core.Publish/outcome/accepted",
+      "projection.core.Receive/outcome/accepted"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "b6aca055e0f00ca88006cbd2678df6624a4c25d10a7fb8bad8ea1f677d8e2fa6",
+  "specification": "projection/v1",
+  "suite": {
+    "digest": "sha256:08e3094bf09f3a80443e7f1c7516e851a6f5f6645aeb17e51ebffd0944bb2cd1",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/7"
+  }
+}

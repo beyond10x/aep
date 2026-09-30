@@ -1,0 +1,1511 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 6,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "demo.orders.DurationByCustomer/aggregate",
+      "demo.orders.DurationForCustomer/aggregate",
+      "demo.orders.DurationTotal/aggregate",
+      "demo.orders.PerCustomerChannel/aggregate",
+      "demo.orders.PerGroup/aggregate",
+      "demo.orders.Place/outcome/placed"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "63769030b1a6518c86b2165bcfc4ccd30e941fd18b2a25bedaa113acda16e7c6",
+    "spec_digest": "8e927ba1c6a57a09e787d5ddec94774fbcb59f0a41f2a9f0f6fded1216a17fab",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/27",
+    "system": "demo"
+  },
+  "scenarios": {
+    "demo.orders.DurationByCustomer/aggregate": {
+      "purpose": "`demo.orders.DurationByCustomer` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.orders.Order"
+        },
+        {
+          "kind": "command",
+          "name": "demo.orders.Place"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.orders.Placed"
+        },
+        {
+          "kind": "view",
+          "name": "demo.orders.DurationByCustomer"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationByCustomer/A"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationByCustomer/A"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationByCustomer/A"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationByCustomer/A"
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-5",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationByCustomer/B"
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-6",
+          "step": "capture_instance"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "customer": {
+                "kind": "literal",
+                "value": "demo.orders.DurationByCustomer/A"
+              },
+              "durations": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "longest": {
+                "kind": "literal",
+                "value": 3.0
+              },
+              "mean": {
+                "kind": "literal",
+                "value": 1.666667
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 4.0
+              },
+              "shortest": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "total": {
+                "kind": "literal",
+                "value": 5.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationByCustomer"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "customer": {
+                "kind": "literal",
+                "value": "demo.orders.DurationByCustomer/B"
+              },
+              "durations": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "longest": {
+                "kind": "literal",
+                "value": null
+              },
+              "mean": {
+                "kind": "literal",
+                "value": null
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "shortest": {
+                "kind": "literal",
+                "value": null
+              },
+              "total": {
+                "kind": "literal",
+                "value": null
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationByCustomer"
+        }
+      ]
+    },
+    "demo.orders.DurationForCustomer/aggregate": {
+      "purpose": "`demo.orders.DurationForCustomer` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.orders.Order"
+        },
+        {
+          "kind": "command",
+          "name": "demo.orders.Place"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.orders.Placed"
+        },
+        {
+          "kind": "view",
+          "name": "demo.orders.DurationForCustomer"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/in"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/in"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/in"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/in"
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-5",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/out"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 97.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-6",
+          "step": "capture_instance"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "mean": {
+                "kind": "literal",
+                "value": 1.666667
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 4.0
+              },
+              "total": {
+                "kind": "literal",
+                "value": 5.0
+              }
+            }
+          },
+          "params": {
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/in"
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationForCustomer"
+        },
+        {
+          "expectation": {
+            "at_least": 1,
+            "at_most": 1,
+            "expect": "counts"
+          },
+          "params": {
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/in"
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationForCustomer"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "mean": {
+                "kind": "literal",
+                "value": null
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "total": {
+                "kind": "literal",
+                "value": null
+              }
+            }
+          },
+          "params": {
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/empty"
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationForCustomer"
+        },
+        {
+          "expectation": {
+            "at_least": 1,
+            "at_most": 1,
+            "expect": "counts"
+          },
+          "params": {
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.DurationForCustomer/empty"
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationForCustomer"
+        }
+      ]
+    },
+    "demo.orders.DurationTotal/aggregate": {
+      "purpose": "`demo.orders.DurationTotal` changes by exactly what the rows this scenario made add; its absolute value also counts rows other users made, and is not asserted",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.orders.Order"
+        },
+        {
+          "kind": "command",
+          "name": "demo.orders.Place"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.orders.Placed"
+        },
+        {
+          "kind": "view",
+          "name": "demo.orders.DurationTotal"
+        }
+      ],
+      "steps": [
+        {
+          "step": "query_view",
+          "view": "demo.orders.DurationTotal"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "demo.orders.DurationTotal"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-5",
+          "step": "capture_instance"
+        },
+        {
+          "expectation": {
+            "absent_is_zero": [
+              "total"
+            ],
+            "expect": "changed_by",
+            "fields": {
+              "total": 5.0
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationTotal"
+        },
+        {
+          "expectation": {
+            "at_least": 1,
+            "at_most": 1,
+            "expect": "counts"
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.DurationTotal"
+        }
+      ]
+    },
+    "demo.orders.PerCustomerChannel/aggregate": {
+      "purpose": "`demo.orders.PerCustomerChannel` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.orders.Channel"
+        },
+        {
+          "kind": "entity",
+          "name": "demo.orders.Order"
+        },
+        {
+          "kind": "command",
+          "name": "demo.orders.Place"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.orders.Placed"
+        },
+        {
+          "kind": "view",
+          "name": "demo.orders.PerCustomerChannel"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.PerCustomerChannel/A"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.PerCustomerChannel/A"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.PerCustomerChannel/A"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.PerCustomerChannel/A"
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-5",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Phone"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.PerCustomerChannel/B"
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-6",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.PerCustomerChannel/B"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 87.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-7",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "customer": {
+              "kind": "literal",
+              "value": "demo.orders.PerCustomerChannel/B"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 89.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-8",
+          "step": "capture_instance"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "channel": {
+                "kind": "literal",
+                "value": "Web"
+              },
+              "customer": {
+                "kind": "literal",
+                "value": "demo.orders.PerCustomerChannel/A"
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 4.0
+              },
+              "total": {
+                "kind": "literal",
+                "value": 5.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.PerCustomerChannel"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "channel": {
+                "kind": "literal",
+                "value": "Phone"
+              },
+              "customer": {
+                "kind": "literal",
+                "value": "demo.orders.PerCustomerChannel/B"
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "total": {
+                "kind": "literal",
+                "value": null
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.PerCustomerChannel"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "channel": {
+                "kind": "literal",
+                "value": "Web"
+              },
+              "customer": {
+                "kind": "literal",
+                "value": "demo.orders.PerCustomerChannel/B"
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "total": {
+                "kind": "literal",
+                "value": 87.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.PerCustomerChannel"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "channel": {
+                "kind": "literal",
+                "value": null
+              },
+              "customer": {
+                "kind": "literal",
+                "value": "demo.orders.PerCustomerChannel/B"
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "total": {
+                "kind": "literal",
+                "value": 89.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.PerCustomerChannel"
+        }
+      ]
+    },
+    "demo.orders.PerGroup/aggregate": {
+      "purpose": "`demo.orders.PerGroup` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.orders.Group"
+        },
+        {
+          "kind": "entity",
+          "name": "demo.orders.Order"
+        },
+        {
+          "kind": "command",
+          "name": "demo.orders.Place"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.orders.Placed"
+        },
+        {
+          "kind": "view",
+          "name": "demo.orders.PerGroup"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "demo.orders.PerGroup/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "demo.orders.PerGroup/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "demo.orders.PerGroup/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "demo.orders.PerGroup/B"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-5",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.orders.Order",
+          "event": "demo.orders.Placed",
+          "field": "order_id",
+          "instance": "order-6",
+          "step": "capture_instance"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "group": {
+                "kind": "literal",
+                "value": "demo.orders.PerGroup/A"
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 3.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.PerGroup"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "group": {
+                "kind": "literal",
+                "value": "demo.orders.PerGroup/B"
+              },
+              "orders": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.PerGroup"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "group": {
+                "kind": "literal",
+                "value": null
+              }
+            }
+          },
+          "step": "eventually_view",
+          "view": "demo.orders.PerGroup"
+        }
+      ]
+    },
+    "demo.orders.Place/outcome/placed": {
+      "purpose": "`demo.orders.Place` answers `placed` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.orders.Channel"
+        },
+        {
+          "kind": "type",
+          "name": "demo.orders.Group"
+        },
+        {
+          "kind": "entity",
+          "name": "demo.orders.Order"
+        },
+        {
+          "kind": "command",
+          "name": "demo.orders.Place"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.orders.Placed"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.orders.Place",
+          "input": {
+            "channel": {
+              "kind": "literal",
+              "value": "Web"
+            },
+            "customer": {
+              "kind": "literal",
+              "value": "customer"
+            },
+            "duration": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "group": {
+              "kind": "literal",
+              "value": "group"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.orders.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.orders.Placed",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        }
+      ]
+    }
+  }
+}

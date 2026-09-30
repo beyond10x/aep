@@ -1,0 +1,57 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 6,
+    "skipped": 0,
+    "total": 6,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 6,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "demo.inbox.RecordMessage/outcome/recorded",
+      "demo.inbox.RecordMessage/outcome/unavailable",
+      "received/binding/delivery",
+      "received/binding/flow",
+      "received/binding/mapping",
+      "received/binding/on-failure"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "afb43b637e6c8e3eb7743c0a7549e622c7bb317ce856891f30aa5e88c69881d7",
+  "specification": "demo/v1",
+  "suite": {
+    "digest": "sha256:9fcb8996c3c4a3d689204b2837ab529eb7a0774217ddc3a0f1cdd17b425e7800",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/31"
+  }
+}

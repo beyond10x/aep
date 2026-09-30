@@ -59,17 +59,54 @@ arithmetic, ordering, selection and status invariants; original-byte parsing and
 remain adapter responsibilities. Reusable count/scalar helpers may be factored without broadening
 the frozen count SuiteReference or constructor behavior.
 
+## Coverage suite versions
+
+Amended 2026-09-30. "Suite/5" in this document means any coverage suite: an `ess-conformance/<N>`
+whose `N` is in `COVERAGE_SUITE_MAJORS` (`crates/govern/aep-domain/src/ess_conformance_coverage/values.rs`),
+which is `/5` and the odd majors `/7` through `/33`, transcribed from ESS's own
+`is_coverage_version` at ESS 0.48.0. ESS gives each ordinary major from `/6` on an odd coverage
+counterpart; the ordinary majors carry no coverage block and are refused here. The `coverage`
+block has one shape across all of them. What differs is the scenario vocabulary and which refusal
+codes a major may carry (for example `ESS-SYNTH-015` from `/7`, the aggregate refusals from `/17`),
+and ESS checks both before it writes a report.
+
+`SuiteReference::new` is the one gate, so report/2 `suite.version`, an explicit filter's
+`parent.version` and a task's expected `suite.version` accept the same set. A major that is not in
+the list, including one newer than `/33`, refuses with `UnsupportedSuiteVersion` naming the
+version. Adding the next major is a deliberate edit to the list.
+
+The suite is bound by its `sha256-json-bytes/1` digest over the original bytes, which must equal
+the report's `suite.digest`. From every coverage suite AEP reads the provenance, the scenario keys
+and the `coverage` block, and checks the inventory against the keys as below. Suite/5 keeps the
+closed scenario-body check this document describes. Above `/5` the scenario bodies are opaque:
+ESS admitted the suite before reporting on it and owns its grammar. A selected child's surviving
+bodies must equal its parent's as JSON values, since AEP applies no declared defaults to a
+vocabulary it does not transcribe.
+
+Scenario ids and refusal codes in a coverage suite and its report follow the grammar ESS
+`origin/main` `1bd946d6b3` admits, whatever the major: `ScenarioId::new` mirrors ESS
+`ScenarioId::parse`, adding `<view>/aggregate` and the `final-failure` binding aspect to the
+suite/1–4 forms, and `Refusal::validate` mirrors ESS `Inventory::validate_refusal`
+(`ESS-SYNTH-001`–`017`, with 005, 011, 012, 014, 016 and 017 omitting a check; every
+`ESS-AUTHOR` cause but 036). As in ESS, the suite reader then refuses a form or code in a major
+older than the one that introduced it, with `UnsupportedVocabulary`: an aggregate id below `/16`,
+a `final-failure` id below `/26`, `ESS-SYNTH-015` below `/7`, `ESS-SYNTH-016` and `-017` below
+`/17`. `ESS-AUTHOR-037` has no such floor in ESS and is admitted in suite/5 too. The count reader
+keeps the suite/1–4 id grammar (`ScenarioId::frozen`).
+
 ## Complete original-byte admission
 
 `ess-conformance-input/1` is exactly `{format, suite_json, parent_suites}`. The format marker is
-required. Parents are original UTF-8 suite/5 strings in nearest-parent-first order. A suite hash
+required. Parents are original UTF-8 coverage-suite strings of the child's own version, in
+nearest-parent-first order. A suite hash
 is over the inner original suite string's UTF-8 bytes, never the carrier or a reserialized value.
 Hash every original byte, then perform strict parsing; changed layout or newline changes identity.
 
 Reject duplicate keys and unknown fields in the carrier, every suite envelope and typed nested
 structure, and every report envelope. Declared scenario payload maps remain payload data.
 Admit the whole inherited suite/4 execution vocabulary under suite/5, including unused scenario
-metadata/dependencies. A count-suite allowlist edit is not this admission boundary.
+metadata/dependencies; later coverage majors leave scenario bodies to ESS (see *Coverage suite
+versions*). A count-suite allowlist edit is not this admission boundary.
 
 Admit every ancestor before its child. Exact explicit-parent references must match the next
 original document; the final parent has `filter: all`. Reject missing, reordered, repeated,
@@ -105,7 +142,7 @@ Add optional closed `constraints.ess_conformance_coverage_v1` with exactly:
 | Field | Meaning |
 | --- | --- |
 | `model` | Independently chosen executable-system-specification ArtifactRef. |
-| `suite` | Exact suite/5 version, digest profile and original-byte digest. |
+| `suite` | Exact coverage-suite version, digest profile and original-byte digest. |
 | `selection` | Complete ESS Selection: scope/component, origins, filter and exact parent when explicit. |
 | `selected_ids` | Sorted distinct exact selected ScenarioIds, including an explicitly empty list. |
 
@@ -160,7 +197,7 @@ emits the fact, including zero counts and false booleans. No numeric fact passes
 | `producer_profile` | Text: `rust-scenario-status/1`, `go-scenario-status/1`, `external-scenario-status/1` or `external-scenario-status/1;runner=<name>@<version>`, exactly as the report spells it, runner included. | Every admitted reading. |
 | `policy` | Text: exactly `complete-selection/1`. | Every admitted reading. |
 | `spec_digest` | Text: the admitted existing 64-lowercase-hex model digest. | Every admitted reading. |
-| `suite.version` | Text: exactly `ess-conformance/5`. | Every admitted reading. |
+| `suite.version` | Text: the admitted coverage-suite version, `ess-conformance/5` through `/33`. | Every admitted reading. |
 | `suite.digest_profile` | Text: exactly `sha256-json-bytes/1`. | Every admitted reading. |
 | `suite.digest` | Text: the exact inner selected suite byte digest, `sha256:` plus 64 lowercase hex digits. | Every admitted reading. |
 | `coverage.knowledge` | Text: `complete_inventory` or `unknown`. | Every admitted reading. |
@@ -168,7 +205,7 @@ emits the fact, including zero counts and false booleans. No numeric fact passes
 | `selection.scope.component` | Text: the checked selected ComponentName without transformation. | Component scope only; absent for system. |
 | `selection.origins` | Text: `generated`, `authored` or `generated_and_authored`. | Every admitted reading. |
 | `selection.filter.kind` | Text: `all` or `explicit`. | Every admitted reading. |
-| `selection.filter.parent.version` | Text: exactly `ess-conformance/5`. | Explicit filter only; absent for all. |
+| `selection.filter.parent.version` | Text: the parent's coverage-suite version, equal to `suite.version`. | Explicit filter only; absent for all. |
 | `selection.filter.parent.digest_profile` | Text: exactly `sha256-json-bytes/1`. | Explicit filter only; absent for all. |
 | `selection.filter.parent.digest` | Text: the admitted immediate parent's exact original-byte digest. | Explicit filter only; absent for all. |
 | `nonempty` | Bool: exact report total is greater than zero. | Every admitted reading. |
@@ -231,11 +268,12 @@ Planning adds `--suite-input` beside `--suite`, mutually exclusive and only vali
 Report/1 refuses either pairing control, preserving its original unpaired route. Detailed run/2
 is not standalone report/2 and remains refused. Manual kind/source/at/review/outcome conflicts stay.
 
-For report/2 with `--suite`, raw suite/1–4 uses the unchanged count reader. An unfiltered raw
-suite/5 uses the new coverage reader after the edge wraps its exact string in a newly issued
-input/1 with no parents. Raw explicit suite/5 refuses missing lineage. With `--suite-input`, require
-input/1 and suite/5 and retain the original carrier bytes. Never infer coverage by discarding fields
-or route a suite/5 report through the frozen count carrier.
+For report/2 with `--suite`, raw suite/1–4 uses the unchanged count reader. Every raw suite from
+`/5` on goes to the coverage reader, which refuses a major it does not list by name; an unfiltered
+coverage suite is admitted after the edge wraps its exact string in a newly issued input/1 with no
+parents. A raw explicit coverage suite refuses missing lineage. With `--suite-input`, require
+input/1 and a coverage suite and retain the original carrier bytes. Never infer coverage by
+discarding fields or route a coverage-suite report through the frozen count carrier.
 
 Planning records truthful descriptive categories, statuses, coverage, selection, refusals, exact
 time, model/suite identity and actual input references after complete admission. Escape supplied

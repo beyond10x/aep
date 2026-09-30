@@ -1,0 +1,104 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 4,
+    "skipped": 0,
+    "total": 4,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 4,
+      "outside": 0,
+      "refused": 3
+    },
+    "knowledge": "complete_inventory",
+    "refused": [
+      {
+        "code": "ESS-SYNTH-012",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-012]: entity metrics.session.Session has no scenario `metrics.session.Session/state/Completed/refuses/metrics.session.Complete`\n  `metrics.session.Complete` on a `metrics.session.Session` in `Completed` is refused and the specification does not say how: no `wrong_state:` outcome and no declared error, so the scenario can only require that nothing happened\n  help: give the command a `wrong_state:` outcome naming the error it reports; the states it answers in are already declared, as the states its transitions do not run from",
+        "needs": [],
+        "origin": "generated",
+        "retained": {
+          "origin": "generated",
+          "source": null
+        },
+        "scenario": "metrics.session.Session/state/Completed/refuses/metrics.session.Complete",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-016",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-016]: view metrics.session.ByChannel has no scenario `metrics.session.ByChannel/aggregate`\n  `metrics.session.ByChannel` reports exact aggregates, and no group key or parameter lets this scenario keep its rows apart from every other scenario's on a shared target\n  help: group by, or filter by a parameter over, a `String` or `Uuid` field the creating command sets from its input",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "metrics.session.ByChannel/aggregate",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "view",
+          "name": "metrics.session.ByChannel"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-017",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-017]: view metrics.session.Either has no scenario `metrics.session.Either/aggregate`\n  `metrics.session.Either` cannot be arranged: the parameter `queue_id` is read other than by one top-level `field == param.queue_id` conjunct over a field that is not a group key\n  help: let the creating command set every field the view groups by or aggregates from its input, and read a parameter only as `field == param.name` at the top of the filter",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "metrics.session.Either/aggregate",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "view",
+          "name": "metrics.session.Either"
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "metrics.session.Complete/outcome/completed",
+      "metrics.session.Record/outcome/recorded",
+      "metrics.session.Session/state/Completed/refuses/metrics.session.Complete",
+      "metrics.session.Session/transition/complete/by/metrics.session.Complete/completed"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "ac4292e3e7dac920cf07788b40f774186918797004cb98b35f6c5a29d67d9f9b",
+  "specification": "metrics/v1",
+  "suite": {
+    "digest": "sha256:eefaece8410c99a2fe2df08775262599360317482545d5027b3efed1dffce964",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/17"
+  }
+}

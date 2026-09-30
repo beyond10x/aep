@@ -3,10 +3,11 @@
 pub(crate) mod qualification;
 mod values;
 pub use values::{
-    ordered_ids, original_digest, validate_needs, AuthoredSource, CoverageCounts, CoverageSummary,
-    Filter, Inventory, Knowledge, Origin, Origins, OutcomeReference, Outside, OutsideReason,
-    Refusal, RefusalEffect, RefusalScope, Retained, Scope, Selection, SemanticReference,
-    SourceDisposition, SourceIdentity, SuiteReference, TransitionReference,
+    is_coverage_suite_version, ordered_ids, original_digest, validate_needs, AuthoredSource,
+    CoverageCounts, CoverageSummary, Filter, Inventory, Knowledge, Origin, Origins,
+    OutcomeReference, Outside, OutsideReason, Refusal, RefusalEffect, RefusalScope, Retained,
+    Scope, Selection, SemanticReference, SourceDisposition, SourceIdentity, SuiteReference,
+    TransitionReference, COVERAGE_SUITE_MAJORS,
 };
 
 use crate::artifact::ArtifactRef;
@@ -25,7 +26,7 @@ use std::sync::Arc;
 pub struct EssEvidenceReaders {
     /// Frozen count-stage reader for report/2 paired with suite/1–4.
     pub count: Option<Arc<dyn EssConformanceV2Reader>>,
-    /// Separate complete-selection reader for report/2 paired with input/1 and suite/5.
+    /// Separate complete-selection reader for report/2 paired with input/1 and a coverage suite.
     pub coverage: Option<Arc<dyn EssConformanceCoverageReader>>,
 }
 

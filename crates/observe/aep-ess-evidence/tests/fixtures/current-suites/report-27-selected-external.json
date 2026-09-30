@@ -1,0 +1,83 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 3,
+    "skipped": 0,
+    "total": 3,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 3,
+      "outside": 20,
+      "refused": 1
+    },
+    "knowledge": "complete_inventory",
+    "refused": [
+      {
+        "code": "ESS-SYNTH-008",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-008]: outcome desk.ticket.Comment/no-such-ticket has no scenario `desk.ticket.Comment/outcome/no-such-ticket`\n  its strategy is `default_branch` and it declares no guard\n  help: `TestStrategy` and `OutcomeCondition` have drifted apart in `ess-domain`",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "desk.ticket.Comment/outcome/no-such-ticket",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "outcome",
+          "name": {
+            "command": "desk.ticket.Comment",
+            "outcome": "no-such-ticket"
+          }
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "ids": [
+          "desk.ticket.CloseTicket/outcome/closed",
+          "desk.ticket.CloseTicket/outcome/no-such-ticket",
+          "desk.ticket.Comment/outcome/commented"
+        ],
+        "kind": "explicit",
+        "parent": {
+          "digest": "sha256:3628e133a07823be09f7d34c75b9e817427203fc52506e8236a4347095a2da8b",
+          "digest_profile": "sha256-json-bytes/1",
+          "version": "ess-conformance/27"
+        }
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-ticket-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "desk.ticket.CloseTicket/outcome/closed",
+      "desk.ticket.CloseTicket/outcome/no-such-ticket",
+      "desk.ticket.Comment/outcome/commented"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "1953c645f2e626e71630aedb67172a979809947f628e53a64a4642da8b8a4520",
+  "specification": "desk/v1",
+  "suite": {
+    "digest": "sha256:a39e3619685f9a5b9de9e7b7f90a0856dfed697d3b714e03e8bfbaa6a8477802",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/27"
+  }
+}

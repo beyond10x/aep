@@ -1,0 +1,60 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 9,
+    "skipped": 0,
+    "total": 9,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 9,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "demo.ledger.Place/outcome/placed",
+      "demo.ledger.Record/outcome/recorded",
+      "demo.ledger.Record/outcome/rejected",
+      "demo.ledger.Record/outcome/unavailable",
+      "notify-ledger/binding/delivery",
+      "notify-ledger/binding/final-failure",
+      "notify-ledger/binding/flow",
+      "notify-ledger/binding/mapping",
+      "notify-ledger/binding/on-failure"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "1b50dc46831a57655b349ab0fd6b814c32325069fde6bb37f593682c20d5eee4",
+  "specification": "demo/v1",
+  "suite": {
+    "digest": "sha256:1db1d7a064813039d908abb3129cd0cfe8e53e08db02da00aa2b0fcfd57f5543",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/27"
+  }
+}

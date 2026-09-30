@@ -9,6 +9,23 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.67.0] — 2026-09-30
+
+### Changed
+
+- `aep plan artifact evidence --from <report> --suite <suite>` and `--suite-input` admit every
+  coverage-bearing ESS suite version current ESS writes — `ess-conformance/5`, `/7`, `/9` … `/33` —
+  not only `/5`, and a report/2 `suite.version` may name any of them. The suite is bound by its
+  `sha256-json-bytes/1` digest; above `/5` AEP reads its provenance, scenario keys and `coverage`
+  block and leaves scenario bodies to ESS, comparing a selected child's bodies with its parent's
+  exactly. An ordinary major (`/6`, `/8` …) or one newer than `/33` refuses with
+  `UnsupportedSuiteVersion` naming the version. Suite/1–4 are read as before.
+- Coverage evidence reads scenario ids and refusal codes in the grammar current ESS writes:
+  `<view>/aggregate` and `<binding>/binding/final-failure` ids, generated refusals
+  `ESS-SYNTH-015`–`017` and the authored refusal `ESS-AUTHOR-037` (which current ESS also writes
+  in suite/5). A form or code in a suite older than the major ESS introduced it with refuses with
+  `UnsupportedVocabulary`, as ESS does. The count reader keeps the suite/1–4 id grammar.
+
 ## [0.66.0] — 2026-09-30
 
 ### Added

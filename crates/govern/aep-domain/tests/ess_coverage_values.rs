@@ -359,3 +359,95 @@ fn coverage_checked_constructor_refuses_profile_counts_order_selection_and_statu
         "ProfileOutcomeMismatch"
     );
 }
+
+#[test]
+fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other() {
+    let digest = format!("sha256:{}", "a".repeat(64));
+    let reference = |version: &str| {
+        SuiteReference::new(version.into(), "sha256-json-bytes/1".into(), digest.clone())
+    };
+    // ESS writes declared coverage in the odd suite majors from /5 through /33 (ESS 0.48.0).
+    for major in (5..=33).step_by(2) {
+        let version = format!("ess-conformance/{major}");
+        let admitted = reference(&version).unwrap_or_else(|error| panic!("{version}: {error}"));
+        assert_eq!(admitted.version(), version);
+        let wire = serde_json::json!({"version":version, "digest_profile":"sha256-json-bytes/1", "digest":digest});
+        assert_eq!(
+            serde_json::from_value::<SuiteReference>(wire).unwrap(),
+            admitted
+        );
+    }
+    for version in [
+        "ess-conformance/4",
+        "ess-conformance/6",
+        "ess-conformance/32",
+        "ess-conformance/34",
+        "ess-conformance/35",
+        "ess-conformance/05",
+        "ess-conformance/+7",
+        "ess-conformance/",
+        "ess-conformance-input/1",
+    ] {
+        let error = reference(version).expect_err(version);
+        let issue = &error.issues[0];
+        assert_eq!(issue.reason, "UnsupportedSuiteVersion", "{version}");
+        assert_eq!(issue.path, "$.suite.version");
+        assert!(
+            issue.detail.contains(version),
+            "{version}: {}",
+            issue.detail
+        );
+    }
+}
+
+/// Every form ESS's `ScenarioId::parse` reads (ESS `crates/verify/ess-conformance/src/scenario.rs`
+/// at `origin/main` `1bd946d6b3`), one example each.
+const CURRENT_IDS: [&str; 10] = [
+    "billing.invoice.CreateInvoice/outcome/rejected",
+    "billing.invoice.Invoice/transition/settle/by/billing.invoice.PayInvoice/settled",
+    "billing.invoice.Invoice/state/Paid/refuses/billing.invoice.CancelInvoice",
+    "billing.invoice.Invoice/state/Ended/accepts/billing.invoice.EndCall",
+    "billing.invoice.Invoice/invariant/after/billing.invoice.CreateInvoice/accepted",
+    "billing.invoice.Money/invariant/at/billing.invoice.InvoiceById/line.unit_price",
+    "notify-on-invoice-created/binding/on-failure",
+    "billing.invoice/authored/two-issued-invoices-rank-latest-first",
+    "metrics.session.ByAgent/aggregate",
+    "notify-ledger/binding/final-failure",
+];
+
+#[test]
+fn scenario_ids_follow_the_grammar_current_ess_parses_and_no_wider() {
+    for id in CURRENT_IDS {
+        let parsed = ScenarioId::new(id).unwrap_or_else(|error| panic!("{id}: {error}"));
+        assert_eq!(parsed.as_str(), id);
+        let wire: ScenarioId = serde_json::from_value(serde_json::json!(id)).unwrap();
+        assert_eq!(wire, parsed);
+    }
+    for id in [
+        "metrics.session.ByAgent/aggregate/extra",
+        "/aggregate",
+        "metrics..ByAgent/aggregate",
+        "metrics.session.1ByAgent/aggregate",
+        "metrics.session.By Agent/aggregate",
+        "metrics.session.ByAgent/aggregates",
+        "notify-ledger/binding/final_failure",
+        "notify-ledger/binding/finalfailure",
+        "Notify-ledger/binding/final-failure",
+        "notify-ledger/binding",
+    ] {
+        let error = ScenarioId::new(id).expect_err(id);
+        assert_eq!(error.issues[0].reason, "MalformedScenarioId", "{id}");
+        assert_eq!(error.issues[0].detail, id);
+    }
+}
+
+#[test]
+fn the_frozen_count_grammar_still_refuses_forms_later_ess_added() {
+    for id in &CURRENT_IDS[..8] {
+        assert!(ScenarioId::frozen(*id).is_ok(), "{id}");
+    }
+    for id in &CURRENT_IDS[8..] {
+        let error = ScenarioId::frozen(*id).expect_err(id);
+        assert_eq!(error.issues[0].reason, "MalformedScenarioId", "{id}");
+    }
+}
