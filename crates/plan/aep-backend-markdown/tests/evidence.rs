@@ -176,7 +176,7 @@ fn the_shipped_ladders_cost_what_this_repository_thinks_they_cost() {
                     path.file_stem().expect("a stem").to_string_lossy(),
                     status.as_str(),
                     requirement.at_least,
-                    requirement.evidence.as_str()
+                    requirement.kinds_phrase()
                 ));
             }
         }
@@ -188,7 +188,9 @@ fn the_shipped_ladders_cost_what_this_repository_thinks_they_cost() {
         vec![
             // A specification is `conforming` because a suite ran against an implementation and
             // the report says so, never because somebody moved it there.
-            "executable-system-specification: conforming needs 1 ess_conformance".to_owned(),
+            "executable-system-specification: conforming needs 1 ess_conformance, ess_conformance_v2 or \
+             ess_conformance_coverage_v1"
+                .to_owned(),
             // Nothing leaves the boundary unapproved.
             "outbound-claim: cleared needs 1 approval".to_owned(),
             // Two: one to send it, one to correct it. See the ladder's own note — at one, the
@@ -233,7 +235,11 @@ fn a_specification_reaches_conforming_only_on_a_report_that_a_suite_actually_ran
         } => {
             assert_eq!(
                 unobserved,
-                vec!["$args.evidence.ess_conformance".to_owned()]
+                vec![
+                    "$args.evidence.ess_conformance".to_owned(),
+                    "$args.evidence.ess_conformance_coverage_v1".to_owned(),
+                    "$args.evidence.ess_conformance_v2".to_owned(),
+                ]
             );
             assert!(message.contains("conforming"), "{message}");
         }
@@ -248,6 +254,32 @@ fn a_specification_reaches_conforming_only_on_a_report_that_a_suite_actually_ran
         ),
         "one ess_conformance record pays for the rung"
     );
+
+    // A report/2 arrives as one of two further kinds, and either pays on its own: the ladder names
+    // them with `or:`. Whether the record passed against this digest is decided before the count.
+    for kind in [
+        EvidenceKind::EssConformanceV2,
+        EvidenceKind::EssConformanceCoverageV1,
+    ] {
+        assert!(
+            matches!(decide(&on_hand(&[(kind, 1)])), Verdict::Permitted),
+            "one {} record pays for the rung",
+            kind.as_str()
+        );
+    }
+    // Presented and none counted reads as not earned, naming every kind that would pay.
+    match decide(&on_hand(&[(EvidenceKind::EssConformanceCoverageV1, 0)])) {
+        Verdict::Unobservable { message, .. } | Verdict::NotEarned { message } => {
+            for kind in [
+                "ess_conformance",
+                "ess_conformance_v2",
+                "ess_conformance_coverage_v1",
+            ] {
+                assert!(message.contains(kind), "{message}");
+            }
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
 
     // A test result is not a conformance report. The kinds are not interchangeable, and a rung
     // that accepted any evidence would be the unchecked claim this module replaced.

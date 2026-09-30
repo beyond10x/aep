@@ -2180,10 +2180,48 @@ pub struct StatusRequirement {
     /// requirement that requires nothing, written by somebody who believed it required something.
     #[serde(default = "one")]
     pub at_least: usize,
+    /// Further kinds any one of which pays for the rung in place of [`Self::evidence`].
+    ///
+    /// Empty by default, which is the requirement as it was before this field existed. A rung
+    /// that one observation can arrive at in several admitted shapes — an ESS conformance report
+    /// is read as `ess_conformance`, `ess_conformance_v2` or `ess_conformance_coverage_v1`,
+    /// depending on its format and its suite — names the others here, so the ladder itself says
+    /// which shapes are accepted and a refusal can list them. `at_least` applies to each kind on
+    /// its own: the rung is paid when any one kind holds that many.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub or: Vec<crate::evidence::EvidenceKind>,
 }
 
 fn one() -> usize {
     1
+}
+
+impl StatusRequirement {
+    /// Every kind that pays for this requirement, [`Self::evidence`] first, each once.
+    #[must_use]
+    pub fn kinds(&self) -> Vec<crate::evidence::EvidenceKind> {
+        let mut kinds = vec![self.evidence];
+        for kind in &self.or {
+            if !kinds.contains(kind) {
+                kinds.push(*kind);
+            }
+        }
+        kinds
+    }
+
+    /// The kinds as a reader reads them: `a`, `a or b`, `a, b or c`.
+    #[must_use]
+    pub fn kinds_phrase(&self) -> String {
+        let names: Vec<&str> = self
+            .kinds()
+            .into_iter()
+            .map(crate::evidence::EvidenceKind::as_str)
+            .collect();
+        match names.split_last() {
+            Some((last, rest)) if !rest.is_empty() => format!("{} or {last}", rest.join(", ")),
+            _ => names.concat(),
+        }
+    }
 }
 
 impl ArtifactLifecycle {

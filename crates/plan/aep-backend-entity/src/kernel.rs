@@ -184,10 +184,26 @@ pub fn definition_for(
                 .map(|requirement| {
                     let kind = requirement.evidence.as_str();
                     let at_least = requirement.at_least;
+                    let kinds = requirement.kinds();
+                    if kinds.len() == 1 {
+                        return json!({
+                            "name": format!("evidence: {kind}"),
+                            "message": format!("reaching {to} needs at least {at_least} {kind} record(s)"),
+                            "assert": { "gte": [format!("$args.evidence.{kind}"), at_least] },
+                        });
+                    }
+                    // One `gte` per kind under `any`: the kernel's three-valued `or` makes the
+                    // rung earned when any one kind holds enough, whatever the others read — an
+                    // absent kind is unknown, and `true or unknown` is `true`.
+                    let alternatives: Vec<serde_json::Value> = kinds
+                        .iter()
+                        .map(|kind| json!({ "gte": [format!("$args.evidence.{}", kind.as_str()), at_least] }))
+                        .collect();
+                    let phrase = requirement.kinds_phrase();
                     json!({
-                        "name": format!("evidence: {kind}"),
-                        "message": format!("reaching {to} needs at least {at_least} {kind} record(s)"),
-                        "assert": { "gte": [format!("$args.evidence.{kind}"), at_least] },
+                        "name": format!("evidence: {phrase}"),
+                        "message": format!("reaching {to} needs at least {at_least} record(s) of one of {phrase}"),
+                        "assert": { "any": alternatives },
                     })
                 })
                 .collect();
@@ -331,6 +347,22 @@ pub fn describe(
             )
         })
         .collect();
+    let or = lifecycle
+        .requires
+        .iter()
+        .flat_map(|(rung, requirements)| {
+            requirements
+                .iter()
+                .filter(|requirement| requirement.kinds().len() > 1)
+                .map(move |requirement| {
+                    (
+                        rung.clone(),
+                        requirement.evidence,
+                        requirement.kinds().into_iter().skip(1).collect(),
+                    )
+                })
+        })
+        .collect();
     Some(aep_contract::registry::LifecycleDescriptor {
         initial: status(&definition.lifecycle.initial),
         statuses,
@@ -339,6 +371,7 @@ pub fn describe(
             .map(|(from, to)| (from, to.into_iter().collect()))
             .collect(),
         requires,
+        or,
     })
 }
 

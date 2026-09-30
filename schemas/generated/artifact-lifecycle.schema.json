@@ -168,6 +168,13 @@
               "$ref": "#/definitions/EvidenceKind"
             }
           ]
+        },
+        "or": {
+          "description": "Further kinds any one of which pays for the rung in place of [`Self::evidence`].\n\nEmpty by default, which is the requirement as it was before this field existed. A rung that one observation can arrive at in several admitted shapes — an ESS conformance report is read as `ess_conformance`, `ess_conformance_v2` or `ess_conformance_coverage_v1`, depending on its format and its suite — names the others here, so the ladder itself says which shapes are accepted and a refusal can list them. `at_least` applies to each kind on its own: the rung is paid when any one kind holds that many.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/EvidenceKind"
+          }
         }
       },
       "additionalProperties": false

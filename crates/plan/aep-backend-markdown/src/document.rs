@@ -478,6 +478,20 @@ impl fmt::Display for MoveRefusal {
 /// as it came, because inventing advice for it would be worse than the leak it replaces.
 fn what_to_do(unobserved: &str) -> String {
     if let Some(kind) = unobserved.strip_prefix("$args.evidence.") {
+        // A conformance record is read out of the runner's report, never typed: the move counts
+        // one only when its source says it passed against the specification's digest, and a
+        // typed source says neither.
+        if matches!(
+            aep_domain::evidence::EvidenceKind::parse(kind),
+            Ok(aep_domain::evidence::EvidenceKind::EssConformance
+                | aep_domain::evidence::EvidenceKind::EssConformanceV2
+                | aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1)
+        ) {
+            return format!(
+                "no {kind} record is held for this artifact — `aep plan artifact evidence <id> \
+                 --from <report.json>` records one, with `--suite <suite.json>` for a report/2"
+            );
+        }
         format!(
             "no {kind} record is held for this artifact — `aep plan artifact evidence <id> --kind \
              {kind} --source <where it came from>` records one"
