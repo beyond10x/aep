@@ -74,7 +74,7 @@ impl EssConformanceCoverageReading {
         }
         let selected_ids = checked_outcomes(&input)?;
         input.coverage.validate(&selected_ids)?;
-        let expected = execution_status(&input.counts, input.producer_profile)?;
+        let expected = execution_status(&input.counts, &input.producer_profile)?;
         if input.execution_status != expected {
             return Err(EssAdmissionError::new(
                 "ExecutionStatusMismatch",
@@ -140,7 +140,7 @@ impl EssConformanceCoverageReading {
             ("completed_at", d.completed_at.epoch_millis().to_string()),
             ("execution_status", d.execution_status.as_str().into()),
             ("conformance_status", d.conformance_status.as_str().into()),
-            ("producer_profile", d.producer_profile.as_str().into()),
+            ("producer_profile", d.producer_profile.wire()),
             ("policy", "complete-selection/1".into()),
             ("spec_digest", d.spec_digest.as_str().into()),
         ] {
@@ -263,10 +263,10 @@ fn checked_outcomes(input: &ReadingInput) -> Result<Vec<ScenarioId>, EssAdmissio
 }
 fn execution_status(
     counts: &ScenarioCounts,
-    profile: ProducerProfile,
+    profile: &ProducerProfile,
 ) -> Result<CountStatus, EssAdmissionError> {
     match profile {
-        ProducerProfile::Rust => {
+        ProducerProfile::Rust | ProducerProfile::External { .. } => {
             if counts.skipped != 0 {
                 return Err(EssAdmissionError::new(
                     "ProfileOutcomeMismatch",

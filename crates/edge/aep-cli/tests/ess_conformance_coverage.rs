@@ -1,6 +1,8 @@
 //! Actual coverage source admission through the public CLI and its replay routes.
 #[path = "../../../observe/aep-ess-evidence/tests/support/count_reader_pass1.rs"]
 mod count_fixtures;
+#[path = "../../../observe/aep-ess-evidence/tests/support/external_profile.rs"]
+mod external;
 #[path = "../../../observe/aep-ess-evidence/tests/support/coverage.rs"]
 mod fixtures;
 
@@ -944,6 +946,82 @@ fn coverage_planning_wraps_exact_unfiltered_bytes_and_escapes_full_descriptive_d
     );
     assert_eq!(source["coverage"]["refused"][0]["message"], message);
     assert_eq!(source["conformance_status"], "passed");
+}
+
+#[test]
+fn coverage_planning_records_an_externally_supplied_report_as_external_with_its_runner() {
+    let directory = scratch("external-planning");
+    let store = directory.join("store");
+    let suite_path = directory.join("suite.json");
+    std::fs::write(&suite_path, external::SUITE).unwrap();
+    success(&cli(&[
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "external",
+        "--title",
+        "Externally supplied results",
+        "--store",
+        store.to_str().unwrap(),
+    ]));
+    let record = |name: &str, profile: &str| {
+        let mut report: serde_json::Value = serde_json::from_str(external::REPORT).unwrap();
+        report["producer_profile"] = profile.into();
+        let path = directory.join(name);
+        std::fs::write(&path, report.to_string()).unwrap();
+        cli(&[
+            "plan",
+            "artifact",
+            "evidence",
+            "story:external",
+            "--from",
+            path.to_str().unwrap(),
+            "--suite",
+            suite_path.to_str().unwrap(),
+            "--store",
+            store.to_str().unwrap(),
+        ])
+    };
+    for (index, profile) in external::ACCEPTED.into_iter().enumerate() {
+        success(&record(&format!("accepted-{index}.json"), profile));
+    }
+    for (index, profile) in external::REFUSED.into_iter().enumerate() {
+        let output = record(&format!("refused-{index}.json"), profile);
+        assert!(!output.status.success(), "{profile:?} must refuse");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("UnsupportedProducerProfile"),
+            "{profile:?}: {stderr}"
+        );
+    }
+    let output = cli(&[
+        "plan",
+        "artifact",
+        "history",
+        "story:external",
+        "--store",
+        store.to_str().unwrap(),
+        "--format",
+        "json",
+    ]);
+    success(&output);
+    let history: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    // Refusals recorded nothing: one observation per accepted spelling, in order.
+    let recorded: Vec<serde_json::Value> = history
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|entry| serde_json::from_str(entry["change"]["source"].as_str().unwrap()).unwrap())
+        .collect();
+    assert_eq!(recorded.len(), external::ACCEPTED.len());
+    for (source, profile) in recorded.iter().zip(external::ACCEPTED) {
+        assert_eq!(source["producer_profile"], profile);
+        assert_eq!(source["implementation"], "downstream-impl 2.0");
+        assert_eq!(source["input_transport"], "wrapped_raw_suite");
+        assert_eq!(source["conformance_status"], "passed");
+        assert_eq!(source["counts"]["passed"], 32);
+    }
 }
 
 #[test]

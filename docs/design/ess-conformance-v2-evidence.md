@@ -57,7 +57,7 @@ The v2 report is closed. All of these fields are required:
 | format | Exactly `ess-conformance-report/2`. |
 | specification, implementation | Existing source labels retained without inventing authorization or artifact identity from them. |
 | spec_digest | Existing 64-hex model digest; must agree with the paired suite's provenance.spec_digest. Its algorithm/spelling is unchanged. |
-| producer_profile | Exactly `rust-scenario-status/1` or `go-scenario-status/1`. |
+| producer_profile | Exactly `rust-scenario-status/1`, `go-scenario-status/1`, `external-scenario-status/1` or `external-scenario-status/1;runner=<name>@<version>` (`<name>` and `<version>` nonempty, split at the last `@`, no whitespace, control character or `;`). An external profile marks results a runner outside ESS supplied; it aggregates with Rust categories and is recorded with its runner. |
 | suite | Closed `{version, digest_profile, digest}`; version exactly suite/1, /2, /3 or /4; digest_profile exactly `sha256-json-bytes/1`; digest is `sha256:` plus 64 lowercase hex digits. |
 | execution_status | passed, failed or inconclusive, recomputed from the selected producer profile. |
 | counts | Exactly total, passed, failed, error, unsupported, skipped; each exact u64. |

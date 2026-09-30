@@ -259,20 +259,90 @@ impl CountStatus {
 }
 
 /// Producer aggregation policy, independent of complete conformance.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProducerProfile {
     /// Rust passed/failed/error/unsupported final categories.
     Rust,
     /// Go passed/failed/skipped final categories.
     Go,
+    /// Results a runner outside ESS supplied and ESS assembled into the report; ESS executed
+    /// nothing. Rust final categories.
+    External {
+        /// The runner the report names, when it names one.
+        runner: Option<ExternalRunner>,
+    },
 }
+
+const EXTERNAL_PROFILE: &str = "external-scenario-status/1";
+const RUNNER_MARK: &str = ";runner=";
+
 impl ProducerProfile {
-    /// Exact versioned wire spelling.
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::Rust => "rust-scenario-status/1",
-            Self::Go => "go-scenario-status/1",
+    /// Reads an exact wire spelling: `rust-scenario-status/1`, `go-scenario-status/1`,
+    /// `external-scenario-status/1` or `external-scenario-status/1;runner=<name>@<version>`.
+    pub fn from_wire(text: &str) -> Option<Self> {
+        match text {
+            "rust-scenario-status/1" => Some(Self::Rust),
+            "go-scenario-status/1" => Some(Self::Go),
+            EXTERNAL_PROFILE => Some(Self::External { runner: None }),
+            other => {
+                let runner = other
+                    .strip_prefix(EXTERNAL_PROFILE)?
+                    .strip_prefix(RUNNER_MARK)?;
+                Some(Self::External {
+                    runner: Some(ExternalRunner::parse(runner)?),
+                })
+            }
         }
+    }
+    /// Exact versioned wire spelling; an external profile keeps the runner it named.
+    pub fn wire(&self) -> String {
+        match self {
+            Self::Rust => "rust-scenario-status/1".into(),
+            Self::Go => "go-scenario-status/1".into(),
+            Self::External { runner: None } => EXTERNAL_PROFILE.into(),
+            Self::External {
+                runner: Some(runner),
+            } => format!(
+                "{EXTERNAL_PROFILE}{RUNNER_MARK}{}@{}",
+                runner.name, runner.version
+            ),
+        }
+    }
+    /// Whether a runner outside ESS supplied the results.
+    pub const fn is_external(&self) -> bool {
+        matches!(self, Self::External { .. })
+    }
+}
+
+/// The runner an external profile names, as `<name>@<version>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalRunner {
+    name: String,
+    version: String,
+}
+impl ExternalRunner {
+    /// Splits at the last `@`; both halves nonempty, no whitespace, control characters or `;`.
+    /// The same grammar ESS writes.
+    pub fn parse(text: &str) -> Option<Self> {
+        if text
+            .chars()
+            .any(|c| c.is_whitespace() || c.is_control() || c == ';')
+        {
+            return None;
+        }
+        let (name, version) = text.rsplit_once('@')?;
+        (!name.is_empty() && !version.is_empty()).then(|| Self {
+            name: name.into(),
+            version: version.into(),
+        })
+    }
+    /// The runner's name.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// The runner's version.
+    pub fn version(&self) -> &str {
+        &self.version
     }
 }
 
@@ -403,7 +473,7 @@ impl EssConformanceV2Reading {
     ) -> CountStatus {
         let c = &input.counts;
         match input.producer_profile {
-            ProducerProfile::Rust => {
+            ProducerProfile::Rust | ProducerProfile::External { .. } => {
                 if c.skipped != 0 {
                     issue(
                         "ProfileOutcomeMismatch",
@@ -463,7 +533,7 @@ impl EssConformanceV2Reading {
             ("completed_at", d.completed_at.epoch_millis().to_string()),
             ("execution_status", d.execution_status.as_str().into()),
             ("conformance_status", d.conformance_status.as_str().into()),
-            ("producer_profile", d.producer_profile.as_str().into()),
+            ("producer_profile", d.producer_profile.wire()),
             ("policy", "complete-selection/1".into()),
             ("spec_digest", d.spec_digest.as_str().into()),
         ] {

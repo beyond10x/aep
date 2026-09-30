@@ -1,4 +1,6 @@
 //! Complete-selection admission against independently authored sources.
+#[path = "support/external_profile.rs"]
+mod external;
 #[path = "support/coverage.rs"]
 mod fixtures;
 
@@ -653,4 +655,59 @@ fn coverage_flat_parent_lineage_has_no_artificial_chain_length_limit() {
     }
     let (report, input) = fixtures::pair_for(&suite, &[fixtures::SELECTED], "passed", &parents);
     adapt_json_coverage(&report, &input).unwrap();
+}
+
+/// The producer profile an admitted report records among its facts.
+fn recorded_coverage_profile(report: &str) -> String {
+    let input = aep_ess_evidence::wrap_coverage_suite(external::SUITE).unwrap();
+    let reading = CoverageReader
+        .read(&EssConformanceCoverageSources::new(report.into(), input))
+        .unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(reading.data().conformance_status, CountStatus::Passed);
+    let facts = reading.facts();
+    let (_, value) = facts
+        .iter()
+        .find(|(path, _)| path.segments() == ["ess_conformance_coverage_v1", "producer_profile"])
+        .expect("an admitted reading states its producer profile");
+    value.as_text().unwrap().to_owned()
+}
+
+#[test]
+fn coverage_externally_supplied_report_records_its_exact_external_profile_and_runner() {
+    assert_eq!(
+        recorded_coverage_profile(external::REPORT),
+        external::RUNNER_PROFILE
+    );
+    for profile in external::ACCEPTED {
+        let report = altered(external::REPORT, |r| r["producer_profile"] = profile.into());
+        assert_eq!(recorded_coverage_profile(&report), profile);
+    }
+    // The same suite executed by ESS records the ESS profile, so the two stay distinguishable.
+    assert_eq!(
+        recorded_coverage_profile(external::EXECUTED),
+        "rust-scenario-status/1"
+    );
+}
+
+#[test]
+fn coverage_unknown_or_malformed_external_profiles_still_refuse() {
+    let input = aep_ess_evidence::wrap_coverage_suite(external::SUITE).unwrap();
+    for profile in external::REFUSED {
+        let report = altered(external::REPORT, |r| r["producer_profile"] = profile.into());
+        refuses(&report, &input, "UnsupportedProducerProfile");
+    }
+}
+
+#[test]
+fn coverage_external_profile_keeps_rust_categories_and_refuses_skipped() {
+    let input = aep_ess_evidence::wrap_coverage_suite(external::SUITE).unwrap();
+    let report = altered(external::REPORT, |r| {
+        let moved = r["outcomes"]["passed"].as_array_mut().unwrap().remove(0);
+        r["outcomes"]["skipped"] = json!([moved]);
+        r["counts"]["passed"] = 31.into();
+        r["counts"]["skipped"] = 1.into();
+        r["execution_status"] = "inconclusive".into();
+        r["conformance_status"] = "inconclusive".into();
+    });
+    refuses(&report, &input, "ProfileOutcomeMismatch");
 }

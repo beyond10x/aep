@@ -1,4 +1,7 @@
 //! Original-byte count-stage admission, independent of an ESS writer release.
+#[path = "support/external_profile.rs"]
+mod external;
+
 use aep_domain::ess_conformance_v2::{
     CountStatus, EssConformanceV2Reader, EssConformanceV2Sources,
 };
@@ -574,4 +577,39 @@ fn zero_and_mixed_terminal_selections_keep_each_profile_aggregate_truthful() {
                     && *value == aep_domain::FactValue::bool(false)
             ));
     }
+}
+
+/// The producer profile an admitted count-stage reading records among its facts.
+fn recorded_count_profile(report: &str, suite: &str) -> String {
+    let reading = CountStageReader
+        .read(&EssConformanceV2Sources::new(report.into(), suite.into()))
+        .unwrap_or_else(|error| panic!("{error}"));
+    let facts = reading.facts();
+    let (_, value) = facts
+        .iter()
+        .find(|(path, _)| path.to_string() == "ess_conformance_v2.producer_profile")
+        .expect("an admitted reading states its producer profile");
+    value.as_text().unwrap().to_owned()
+}
+
+#[test]
+fn count_stage_external_profiles_record_exactly_and_near_misses_refuse() {
+    let (report, suite) = pair(4);
+    for profile in external::ACCEPTED {
+        let report = changed(&report, |r| r["producer_profile"] = profile.into());
+        assert_eq!(recorded_count_profile(&report, &suite), profile);
+    }
+    for profile in external::REFUSED {
+        let report = changed(&report, |r| r["producer_profile"] = profile.into());
+        refuses(&report, &suite, "UnsupportedProducerProfile");
+    }
+    let skipped = changed(&report, |r| {
+        r["producer_profile"] = external::RUNNER_PROFILE.into();
+        r["counts"]["passed"] = 0.into();
+        r["counts"]["skipped"] = 1.into();
+        r["outcomes"]["skipped"] = r["outcomes"]["passed"].clone();
+        r["outcomes"]["passed"] = serde_json::json!([]);
+        r["execution_status"] = "inconclusive".into();
+    });
+    refuses(&skipped, &suite, "ProfileOutcomeMismatch");
 }

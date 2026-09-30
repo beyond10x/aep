@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan artifact evidence --from <report> --suite <suite>` admits an `ess-conformance-report/2`
+  whose `producer_profile` is `external-scenario-status/1` or
+  `external-scenario-status/1;runner=<name>@<version>`: the report ESS 0.48.0's
+  `ess verify conform report` writes from an outside runner's per-scenario results. It aggregates
+  with Rust categories (no `skipped`). The recorded evidence and the reading's
+  `producer_profile` fact keep the exact profile, runner included, so supplied results are never
+  read as a run ESS executed. Other spellings still refuse with `UnsupportedProducerProfile`.
+
 ## [0.65.0] — 2026-09-28
 
 ### Added
