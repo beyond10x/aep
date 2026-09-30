@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.68.0] — 2026-09-30
+
 ### Added
 
 - A lifecycle `requires:` line may name `or: [<kind>, …]`: further evidence kinds any one of which

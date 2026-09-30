@@ -22,7 +22,7 @@ therefore needs network access to that repository, or a vendored tree.
 
 ## A GitHub Actions job
 
-{/* generated:release-pin:begin version=0.67.0 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin version=0.68.0 — kept by `cargo xtask status` */}
 ```yaml
 name: Planning store
 on:
@@ -35,7 +35,7 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     env:
-      AEP_VERSION: "0.67.0"
+      AEP_VERSION: "0.68.0"
     steps:
       - uses: actions/checkout@v4
       - name: Install aep
