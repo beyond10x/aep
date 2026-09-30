@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:conforming-counts-report-2
 kind: story
-status: active
+status: implemented
 title: A passed report/2 moves a specification to conforming
 refs:
 - provider: github
@@ -10,10 +10,11 @@ refs:
 relations:
 - serves: vision:O2
 - informed_by: epic:evidence-gated-completion
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-30T15:45:20Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-09-30T15:45:20Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-09-30T18:26:31Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
