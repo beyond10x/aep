@@ -55,7 +55,7 @@ impl fmt::Display for EssAdmissionError {
 }
 impl std::error::Error for EssAdmissionError {}
 
-/// The frozen suite/1–4 scenario identity grammar; it is not an inventory claim.
+/// An ESS scenario identity in a checked grammar; it is not an inventory claim.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, schemars::JsonSchema)]
 #[serde(transparent)]
 pub struct ScenarioId(String);
@@ -81,8 +81,29 @@ pub fn lower_kebab(value: &str) -> bool {
 }
 
 impl ScenarioId {
-    /// Parses a scenario identity without inventing selected coverage.
+    /// Parses a scenario identity in the grammar current ESS reads, without inventing coverage.
+    ///
+    /// Mirrors ESS `ScenarioId::parse` (`crates/verify/ess-conformance/src/scenario.rs` at ESS
+    /// `origin/main` `1bd946d6b3`): the [`frozen`](Self::frozen) forms plus `<view>/aggregate`
+    /// and the `final-failure` binding aspect. Like ESS, the grammar is independent of the suite
+    /// major; which major may carry a form is the suite reader's check.
     pub fn new(value: impl Into<String>) -> Result<Self, EssAdmissionError> {
+        let value = value.into();
+        let parts: Vec<_> = value.split('/').collect();
+        let valid = match parts.as_slice() {
+            [view, "aggregate"] => qualified_name(view),
+            [binding, "binding", "final-failure"] => lower_kebab(binding),
+            _ => return Self::frozen(value),
+        };
+        if valid {
+            Ok(Self(value))
+        } else {
+            Err(EssAdmissionError::new("MalformedScenarioId", "$", value))
+        }
+    }
+
+    /// Parses a scenario identity in the frozen suite/1–4 grammar the count reader keeps.
+    pub fn frozen(value: impl Into<String>) -> Result<Self, EssAdmissionError> {
         let value = value.into();
         let parts: Vec<_> = value.split('/').collect();
         let local = |name: &str| !name.contains('.') && qualified_name(name);

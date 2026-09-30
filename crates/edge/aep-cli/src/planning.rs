@@ -1223,7 +1223,7 @@ pub(crate) enum ArtifactCommand {
             conflicts_with = "suite_input"
         )]
         suite: Option<PathBuf>,
-        /// Original ess-conformance-input/1 carrying suite/5 and its complete parent lineage.
+        /// Original ess-conformance-input/1 carrying a coverage suite and its complete parent lineage.
         #[arg(
             long,
             value_name = "INPUT",
@@ -6445,14 +6445,17 @@ struct Recorded {
 /// Wraps an unfiltered coverage suite while leaving other majors for their existing reader.
 fn coverage_input_from_raw_suite(original: &str) -> Result<Option<String>> {
     // This probe chooses a versioned reader only. Admission re-reads the complete original.
+    // Every major from /5 on goes to the coverage reader, which admits the coverage majors it
+    // knows and refuses any other by name; only suite/1–4 keeps the frozen count reader.
     let probe = serde_json::from_str::<serde_json::Value>(original).ok();
-    if probe
+    let major = probe
         .as_ref()
         .and_then(|value| value.get("provenance"))
         .and_then(|p| p.get("suite_version"))
         .and_then(serde_json::Value::as_str)
-        == Some("ess-conformance/5")
-    {
+        .and_then(|version| version.strip_prefix("ess-conformance/"))
+        .and_then(|digits| digits.parse::<u64>().ok());
+    if major.is_some_and(|major| major >= 5) {
         return Ok(Some(aep_ess_evidence::wrap_coverage_suite(original)?));
     }
     Ok(None)

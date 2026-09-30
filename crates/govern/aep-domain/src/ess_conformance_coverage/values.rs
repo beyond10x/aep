@@ -1,4 +1,4 @@
-//! Closed values for the ESS suite/5 selection and inventory contract.
+//! Closed values for the ESS coverage-suite selection and inventory contract.
 use std::collections::BTreeMap;
 
 use crate::ess_conformance_v2::{lower_kebab, qualified_name, EssAdmissionError, ScenarioId};
@@ -45,7 +45,25 @@ pub fn original_digest(value: &str) -> bool {
     })
 }
 
-/// Checked exact suite/5 reference. It does not broaden the frozen count reference.
+/// The `ess-conformance/<N>` majors that carry declared coverage, in the order ESS added them.
+///
+/// Transcribed from ESS `crates/verify/ess-conformance/src/coverage.rs` (`is_coverage_version`)
+/// at ESS 0.48.0: each ordinary suite major from /6 on has an odd coverage counterpart, and
+/// /33 is the newest ESS writes. Adding the next one is a deliberate edit here, never inferred
+/// from its number, so a suite from a newer ESS is refused by name until AEP knows it.
+pub const COVERAGE_SUITE_MAJORS: &[u32] =
+    &[5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33];
+
+/// Whether `version` spells a coverage-bearing suite major exactly as ESS writes it.
+pub fn is_coverage_suite_version(version: &str) -> bool {
+    version
+        .strip_prefix("ess-conformance/")
+        .filter(|digits| !digits.starts_with('0') && digits.bytes().all(|b| b.is_ascii_digit()))
+        .and_then(|digits| digits.parse::<u32>().ok())
+        .is_some_and(|major| COVERAGE_SUITE_MAJORS.contains(&major))
+}
+
+/// Checked exact coverage-suite reference. It does not broaden the frozen count reference.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct SuiteReference {
@@ -67,7 +85,7 @@ impl SuiteReference {
         digest_profile: String,
         digest: String,
     ) -> Result<Self, EssAdmissionError> {
-        if version != "ess-conformance/5" {
+        if !is_coverage_suite_version(&version) {
             return Err(EssAdmissionError::new(
                 "UnsupportedSuiteVersion",
                 "$.suite.version",
@@ -94,7 +112,7 @@ impl SuiteReference {
             digest,
         })
     }
-    /// Exactly ess-conformance/5.
+    /// One of the [`COVERAGE_SUITE_MAJORS`], as `ess-conformance/<N>`.
     pub fn version(&self) -> &str {
         &self.version
     }
@@ -438,27 +456,33 @@ impl Refusal {
                 &other.message,
             ))
     }
-    /// Checks the frozen code-to-effect mapping and local refusal structure.
+    /// Checks the code-to-effect mapping ESS admits and the local refusal structure.
+    ///
+    /// Mirrors ESS `Inventory::validate_refusal` (`crates/verify/ess-conformance/src/coverage.rs`
+    /// at ESS `origin/main` `1bd946d6b3`): generated codes `ESS-SYNTH-001`–`017`, of which 005,
+    /// 011, 012, 014, 016 and 017 omit a check and the rest a candidate; authored codes are every
+    /// `ESS-AUTHOR` cause but 036 (`authored::names_file_refusal`), each omitting a candidate.
+    /// Which suite major may carry a code is the suite reader's check.
     pub fn validate(&self) -> Result<(), EssAdmissionError> {
-        let expected = match self.code.as_str() {
-            "ESS-SYNTH-005" | "ESS-SYNTH-011" | "ESS-SYNTH-012" | "ESS-SYNTH-014"
-                if self.origin == Origin::Generated =>
-            {
-                Some(RefusalEffect::CheckNotEmitted)
-            }
-            "ESS-SYNTH-001" | "ESS-SYNTH-002" | "ESS-SYNTH-003" | "ESS-SYNTH-004"
-            | "ESS-SYNTH-006" | "ESS-SYNTH-007" | "ESS-SYNTH-008" | "ESS-SYNTH-009"
-            | "ESS-SYNTH-010" | "ESS-SYNTH-013"
-                if self.origin == Origin::Generated =>
-            {
-                Some(RefusalEffect::CandidateNotEmitted)
-            }
-            code if self.origin == Origin::Authored
-                && (1..=35).any(|number| code == format!("ESS-AUTHOR-{number:03}")) =>
-            {
-                Some(RefusalEffect::CandidateNotEmitted)
-            }
-            _ => None,
+        let number = |family: &str| {
+            self.code
+                .strip_prefix(family)
+                .filter(|digits| digits.len() == 3 && digits.bytes().all(|b| b.is_ascii_digit()))
+                .and_then(|digits| digits.parse::<u16>().ok())
+        };
+        let expected = match self.origin {
+            Origin::Generated => number("ESS-SYNTH-")
+                .filter(|code| (1..=17).contains(code))
+                .map(|code| {
+                    if matches!(code, 5 | 11 | 12 | 14 | 16 | 17) {
+                        RefusalEffect::CheckNotEmitted
+                    } else {
+                        RefusalEffect::CandidateNotEmitted
+                    }
+                }),
+            Origin::Authored => number("ESS-AUTHOR-")
+                .filter(|code| (1..=35).contains(code) || *code == 37)
+                .map(|_| RefusalEffect::CandidateNotEmitted),
         };
         let Some(effect) = expected else {
             return Err(EssAdmissionError::new(

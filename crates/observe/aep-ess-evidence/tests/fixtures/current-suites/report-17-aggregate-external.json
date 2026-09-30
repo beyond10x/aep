@@ -1,0 +1,77 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 7,
+    "skipped": 0,
+    "total": 7,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 7,
+      "outside": 0,
+      "refused": 1
+    },
+    "knowledge": "complete_inventory",
+    "refused": [
+      {
+        "code": "ESS-SYNTH-012",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-012]: entity metrics.session.Session has no scenario `metrics.session.Session/state/Completed/refuses/metrics.session.Complete`\n  `metrics.session.Complete` on a `metrics.session.Session` in `Completed` is refused and the specification does not say how: no `wrong_state:` outcome and no declared error, so the scenario can only require that nothing happened\n  help: give the command a `wrong_state:` outcome naming the error it reports; the states it answers in are already declared, as the states its transitions do not run from",
+        "needs": [],
+        "origin": "generated",
+        "retained": {
+          "origin": "generated",
+          "source": null
+        },
+        "scenario": "metrics.session.Session/state/Completed/refuses/metrics.session.Complete",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "metrics.session.Session"
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "metrics.session.Complete/outcome/completed",
+      "metrics.session.QueueTotals/aggregate",
+      "metrics.session.Record/outcome/recorded",
+      "metrics.session.Session/state/Completed/refuses/metrics.session.Complete",
+      "metrics.session.Session/transition/complete/by/metrics.session.Complete/completed",
+      "metrics.session.SessionsByAgentChannel/aggregate",
+      "metrics.session.TalkTimeByAgent/aggregate"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "80c40e72d6579ae38d038e7e324006c97fe079d6c3779385e6cbd19db5c9e0f6",
+  "specification": "metrics/v1",
+  "suite": {
+    "digest": "sha256:00a824e9ab7a71e1dcad0e7c655533154ddca5bec9d1d325481ef32a39e4aa8e",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/17"
+  }
+}

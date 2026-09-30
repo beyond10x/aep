@@ -67,7 +67,7 @@ pub(crate) fn admit_scenarios(scenarios: &Json) -> Result<Vec<ScenarioId>> {
     let mut ids = Vec::new();
     for (id, scenario) in scenarios.object()? {
         ids.push(
-            ScenarioId::new(id.clone())
+            ScenarioId::frozen(id.clone())
                 .map_err(|error| scenario.error("MalformedScenarioId", error.to_string()))?,
         );
         let s = scenario.closed(&["purpose", "steps", "source"], &[])?;

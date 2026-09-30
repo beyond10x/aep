@@ -1,0 +1,12 @@
+type: ess-scenario/1
+domain: billing.email
+scenario: a-scenario
+summary: What this scenario proves, in one line.
+timeline:
+  - at: 2026-01-05T09:00:00Z
+    command: billing.email.SendEmail
+    input:
+      recipient: nobody@example.test
+      template: welcome
+    error:
+      name: billing.email.Undeliverable

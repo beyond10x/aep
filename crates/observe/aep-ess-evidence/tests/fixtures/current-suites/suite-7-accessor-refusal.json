@@ -1,0 +1,369 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 3,
+      "outside": 0,
+      "refused": 3
+    },
+    "generated": [
+      "project/binding/flow",
+      "projection.core.Publish/outcome/accepted",
+      "projection.core.Receive/outcome/accepted"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [
+      {
+        "code": "ESS-SYNTH-010",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-010]: binding project has no scenario `project/binding/delivery`\n  `project` delivers at most once, which has no second delivery to observe\n  help: `at_most_once` has no redelivery by design; write `at_least_once` if the transport really may deliver the event again",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "project/binding/delivery",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "binding",
+          "name": "project"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-015",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-015]: binding project has no scenario `project/binding/mapping`\n  `project` has no accessor observation: AmbiguousOptionalObservation: nested terminal Optional with equal target\n  help: provide a separately executable host conversion or an unambiguous observable assignment",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "project/binding/mapping",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "binding",
+          "name": "project"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-010",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-010]: binding project has no scenario `project/binding/on-failure`\n  `project` gives up silently, which the model publishes nothing for\n  help: `drop` is unobservable by design; write `escalate:` with an event if the failure has to be provable",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "project/binding/on-failure",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "binding",
+          "name": "project"
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "47efa783eb9b5f6b4ca2f2dd448db133442ea5736861b1fee0f08168760730a8",
+    "spec_digest": "b6aca055e0f00ca88006cbd2678df6624a4c25d10a7fb8bad8ea1f677d8e2fa6",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/7",
+    "system": "projection"
+  },
+  "scenarios": {
+    "project/binding/flow": {
+      "purpose": "`projection.core.Arrived` invokes `projection.core.Receive`, which publishes `projection.core.Done`",
+      "source": [
+        {
+          "kind": "command",
+          "name": "projection.core.Publish"
+        },
+        {
+          "kind": "command",
+          "name": "projection.core.Receive"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "projection.core.Publish",
+            "outcome": "accepted"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "projection.core.Receive",
+            "outcome": "accepted"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "projection.core.Arrived"
+        },
+        {
+          "kind": "event",
+          "name": "projection.core.Done"
+        },
+        {
+          "kind": "binding",
+          "name": "project"
+        },
+        {
+          "kind": "component",
+          "name": "projection-service"
+        }
+      ],
+      "steps": [
+        {
+          "command": "projection.core.Publish",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "projection.core.Publish",
+            "outcome": "accepted"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "projection.core.Arrived",
+          "shape": {
+            "choice": {
+              "holds": "union"
+            },
+            "data.nested": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "data.status": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "partial.nested": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "partial.status": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "wrapped.body.nested": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "wrapped.body.status": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "projection.core.Done",
+          "shape": {
+            "result": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "projection.core.Publish/outcome/accepted": {
+      "purpose": "`projection.core.Publish` answers `accepted` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "projection.core.Body"
+        },
+        {
+          "kind": "type",
+          "name": "projection.core.Choice"
+        },
+        {
+          "kind": "type",
+          "name": "projection.core.Wrapped"
+        },
+        {
+          "kind": "type",
+          "name": "projection.core.Wrapper"
+        },
+        {
+          "kind": "command",
+          "name": "projection.core.Publish"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "projection.core.Publish",
+            "outcome": "accepted"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "projection.core.Arrived"
+        },
+        {
+          "kind": "event",
+          "name": "projection.core.Done"
+        }
+      ],
+      "steps": [
+        {
+          "command": "projection.core.Publish",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "projection.core.Publish",
+            "outcome": "accepted"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "projection.core.Arrived",
+          "shape": {
+            "choice": {
+              "holds": "union"
+            },
+            "data.nested": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "data.status": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "partial.nested": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "partial.status": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "wrapped.body.nested": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "wrapped.body.status": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "projection.core.Done",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "projection.core.Receive/outcome/accepted": {
+      "purpose": "`projection.core.Receive` answers `accepted` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "projection.core.Body"
+        },
+        {
+          "kind": "command",
+          "name": "projection.core.Receive"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "projection.core.Receive",
+            "outcome": "accepted"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "projection.core.Arrived"
+        },
+        {
+          "kind": "event",
+          "name": "projection.core.Done"
+        }
+      ],
+      "steps": [
+        {
+          "command": "projection.core.Receive",
+          "input": {
+            "choice": {
+              "kind": "literal",
+              "value": "choice"
+            },
+            "deeper": {
+              "kind": "literal",
+              "value": "deeper"
+            },
+            "nested": {
+              "kind": "literal",
+              "value": "nested"
+            },
+            "partial": {
+              "kind": "literal",
+              "value": "partial"
+            },
+            "text": {
+              "kind": "literal",
+              "value": "text"
+            },
+            "through_wrapper": {
+              "kind": "literal",
+              "value": "through_wrapper"
+            },
+            "whole": {
+              "kind": "literal",
+              "value": {
+                "nested": "whole.nested",
+                "status": "whole.status"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "projection.core.Receive",
+            "outcome": "accepted"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "projection.core.Done",
+          "shape": {
+            "result": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "projection.core.Arrived",
+          "step": "expect_no_event"
+        }
+      ]
+    }
+  }
+}

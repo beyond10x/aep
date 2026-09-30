@@ -102,7 +102,7 @@ fn read_report(report_json: &str) -> Result<EssConformanceV2Reading> {
             .array()?
             .iter()
             .map(|id| {
-                ScenarioId::new(id.text()?.to_owned()).map_err(|mut error| {
+                ScenarioId::frozen(id.text()?.to_owned()).map_err(|mut error| {
                     for issue in &mut error.issues {
                         issue.path.clone_from(&id.path);
                     }

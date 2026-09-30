@@ -1,0 +1,761 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 9,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "demo.ledger.Place/outcome/placed",
+      "demo.ledger.Record/outcome/recorded",
+      "demo.ledger.Record/outcome/rejected",
+      "demo.ledger.Record/outcome/unavailable",
+      "notify-ledger/binding/delivery",
+      "notify-ledger/binding/final-failure",
+      "notify-ledger/binding/flow",
+      "notify-ledger/binding/mapping",
+      "notify-ledger/binding/on-failure"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "9cc34451b4f9794f28716922a8c0e089b0b7830293534266ab0ffcc69bd644fe",
+    "spec_digest": "1b50dc46831a57655b349ab0fd6b814c32325069fde6bb37f593682c20d5eee4",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/27",
+    "system": "demo"
+  },
+  "scenarios": {
+    "demo.ledger.Place/outcome/placed": {
+      "purpose": "`demo.ledger.Place` answers `placed` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Place"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.Recorded"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Place",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "payload": {
+            "order_id": "order_id"
+          },
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.ledger.Recorded",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.ledger.Record/outcome/recorded": {
+      "purpose": "`demo.ledger.Record` answers `recorded` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.Recorded"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Record",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Record",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.ledger.Recorded",
+          "payload": {
+            "order_id": "order_id"
+          },
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.ledger.Record/outcome/rejected": {
+      "purpose": "`demo.ledger.Record` answers `rejected` for the cause it declares as external, injected",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Record",
+            "outcome": "rejected"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.Recorded"
+        },
+        {
+          "kind": "error",
+          "name": "demo.ledger.Unknown"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.ledger.Record",
+            "outcome": "rejected"
+          },
+          "step": "configure_external_outcome"
+        },
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Record",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Record",
+            "outcome": "rejected"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "demo.ledger.Unknown",
+          "step": "expect_error"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.ledger.Recorded",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.ledger.Record/outcome/unavailable": {
+      "purpose": "`demo.ledger.Record` answers `unavailable` for the cause it declares as external, injected",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Record",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.Recorded"
+        },
+        {
+          "kind": "error",
+          "name": "demo.ledger.Unavailable"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.ledger.Record",
+            "outcome": "unavailable"
+          },
+          "step": "configure_external_outcome"
+        },
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Record",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Record",
+            "outcome": "unavailable"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "demo.ledger.Unavailable",
+          "step": "expect_error"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.ledger.Recorded",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "notify-ledger/binding/delivery": {
+      "purpose": "`demo.ledger.OrderPlaced` delivered twice still leaves `demo.ledger.Recorded` observable, and no count is required",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Place"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.Recorded"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        },
+        {
+          "kind": "binding",
+          "name": "notify-ledger"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Place",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "step": "redeliver_event"
+        },
+        {
+          "event": "demo.ledger.Recorded",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "notify-ledger/binding/final-failure": {
+      "purpose": "`notify-ledger` makes one attempt at `demo.ledger.Record` when it is answered with the final `rejected`",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Place"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Record",
+            "outcome": "rejected"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        },
+        {
+          "kind": "binding",
+          "name": "notify-ledger"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.ledger.Record",
+            "outcome": "rejected"
+          },
+          "step": "configure_external_outcome"
+        },
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Place",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "binding": "notify-ledger",
+          "command": "demo.ledger.Record",
+          "count": 1,
+          "step": "expect_invocation"
+        }
+      ]
+    },
+    "notify-ledger/binding/flow": {
+      "purpose": "`demo.ledger.OrderPlaced` invokes `demo.ledger.Record`, which publishes `demo.ledger.Recorded`",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Place"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Record",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.Recorded"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        },
+        {
+          "kind": "binding",
+          "name": "notify-ledger"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Place",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.ledger.Recorded",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "notify-ledger/binding/mapping": {
+      "purpose": "`notify-ledger` fills `demo.ledger.Record` from `demo.ledger.OrderPlaced` as it is mapped",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Place"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        },
+        {
+          "kind": "binding",
+          "name": "notify-ledger"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Place",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "binding": "notify-ledger",
+          "command": "demo.ledger.Record",
+          "input": {
+            "order_id": {
+              "event": "demo.ledger.OrderPlaced",
+              "field": "order_id",
+              "kind": "observed"
+            }
+          },
+          "step": "expect_invocation"
+        }
+      ]
+    },
+    "notify-ledger/binding/on-failure": {
+      "purpose": "`notify-ledger` stops after 3 attempts at `demo.ledger.Record`, each answered `unavailable`",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.ledger.OrderId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Place"
+        },
+        {
+          "kind": "command",
+          "name": "demo.ledger.Record"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.ledger.Record",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.ledger.OrderPlaced"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.ledger.Clerk"
+        },
+        {
+          "kind": "binding",
+          "name": "notify-ledger"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.ledger.Record",
+            "outcome": "unavailable"
+          },
+          "step": "configure_external_outcome",
+          "times": 3
+        },
+        {
+          "actor": "demo.ledger.Clerk",
+          "command": "demo.ledger.Place",
+          "input": {
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.ledger.Place",
+            "outcome": "placed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.ledger.OrderPlaced",
+          "shape": {
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "binding": "notify-ledger",
+          "command": "demo.ledger.Record",
+          "count": 3,
+          "step": "expect_invocation"
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-//! Equality of already-admitted suite/4 definitions inherited by coverage suite/5.
+//! Equality of the surviving definitions a coverage child inherits from its parent.
 //!
 //! This is a comparison view, never a wire-admission route or a replacement for original bytes.
 //! Defaults and Node values follow their declared ESS scenario owners. Ordered metadata and u64
@@ -12,20 +12,40 @@ use crate::count_json::{Json, Result};
 
 pub(super) struct Definitions {
     pub provenance: Provenance,
-    pub scenarios: BTreeMap<String, Scenario>,
+    pub scenarios: BTreeMap<String, Body>,
+}
+
+/// A surviving scenario as a parent comparison sees it.
+#[derive(PartialEq, Eq)]
+pub(super) enum Body {
+    /// Suite/5: the transcribed vocabulary, with its declared defaults.
+    Transcribed(Scenario),
+    /// A later major: ESS owns the vocabulary, so the value must be exactly the parent's.
+    Opaque(serde_json::Value),
 }
 
 impl Definitions {
     // Called only after the complete source has passed the existing closed admission checks.
-    pub fn read(value: &Json) -> Result<Self> {
+    pub fn read(value: &Json, transcribed: bool) -> Result<Self> {
         fn decode<T: serde::de::DeserializeOwned>(value: &Json) -> Result<T> {
             serde_json::from_str(&value.raw)
                 .map_err(|error| value.error("InvalidShape", error.to_string()))
         }
         let fields = value.object()?;
+        let scenarios = if transcribed {
+            decode::<BTreeMap<String, Scenario>>(&fields["scenarios"])?
+                .into_iter()
+                .map(|(id, scenario)| (id, Body::Transcribed(scenario)))
+                .collect()
+        } else {
+            decode::<BTreeMap<String, serde_json::Value>>(&fields["scenarios"])?
+                .into_iter()
+                .map(|(id, scenario)| (id, Body::Opaque(scenario)))
+                .collect()
+        };
         Ok(Self {
             provenance: decode(&fields["provenance"])?,
-            scenarios: decode(&fields["scenarios"])?,
+            scenarios,
         })
     }
 }

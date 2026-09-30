@@ -615,7 +615,7 @@
       "additionalProperties": false
     },
     "SuiteReference2": {
-      "description": "Checked exact suite/5 reference. It does not broaden the frozen count reference.",
+      "description": "Checked exact coverage-suite reference. It does not broaden the frozen count reference.",
       "type": "object",
       "required": [
         "digest",

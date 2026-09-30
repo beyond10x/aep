@@ -1,0 +1,1 @@
+{"format":"ess-conformance-results/1","completed_at":1790000000000,"results":[{"scenario_id":"project/binding/flow","status":"passed"},{"scenario_id":"projection.core.Publish/outcome/accepted","status":"passed"},{"scenario_id":"projection.core.Receive/outcome/accepted","status":"passed"}]}

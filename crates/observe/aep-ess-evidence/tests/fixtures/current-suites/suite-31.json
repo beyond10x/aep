@@ -1,0 +1,520 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 6,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "demo.inbox.RecordMessage/outcome/recorded",
+      "demo.inbox.RecordMessage/outcome/unavailable",
+      "received/binding/delivery",
+      "received/binding/flow",
+      "received/binding/mapping",
+      "received/binding/on-failure"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "ea642f28d67f4e9b021ebdadb7d5e189a3674b47d7efd93028dffeb84b7bba5f",
+    "spec_digest": "afb43b637e6c8e3eb7743c0a7549e622c7bb317ce856891f30aa5e88c69881d7",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/31",
+    "system": "demo"
+  },
+  "scenarios": {
+    "demo.inbox.RecordMessage/outcome/recorded": {
+      "purpose": "`demo.inbox.RecordMessage` answers `recorded` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.inbox.AccountId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.inbox.RecordMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageRecorded"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.inbox.RecordMessage",
+          "input": {
+            "account_id": {
+              "kind": "literal",
+              "value": "account_id"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "peer": {
+              "kind": "literal",
+              "value": "peer"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "recorded"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.inbox.MessageRecorded",
+          "payload": {
+            "account_id": "account_id",
+            "message_id": "message_id"
+          },
+          "shape": {
+            "account_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.inbox.MessageReceived",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.inbox.RecordMessage/outcome/unavailable": {
+      "purpose": "`demo.inbox.RecordMessage` answers `unavailable` for the cause it declares as external, injected",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.inbox.AccountId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.inbox.RecordMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "demo.inbox.Unavailable"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "unavailable"
+          },
+          "step": "configure_external_outcome"
+        },
+        {
+          "command": "demo.inbox.RecordMessage",
+          "input": {
+            "account_id": {
+              "kind": "literal",
+              "value": "account_id"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "peer": {
+              "kind": "literal",
+              "value": "peer"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "unavailable"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "demo.inbox.Unavailable",
+          "step": "expect_error"
+        },
+        {
+          "event": "demo.inbox.MessageReceived",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.inbox.MessageRecorded",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "received/binding/delivery": {
+      "purpose": "`demo.inbox.MessageReceived` redelivered carries the context it was delivered with, and no count is required",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.inbox.AccountId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.inbox.RecordMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageRecorded"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "authority": "account-messages",
+          "context": {
+            "account_id": "account_id"
+          },
+          "event": "demo.inbox.MessageReceived",
+          "payload": {
+            "from": "from",
+            "message_id": "message_id"
+          },
+          "step": "deliver_event"
+        },
+        {
+          "authority": "account-messages",
+          "context": {
+            "account_id": "account_id-1"
+          },
+          "event": "demo.inbox.MessageReceived",
+          "payload": {
+            "from": "from-1",
+            "message_id": "message_id-1"
+          },
+          "step": "deliver_event"
+        },
+        {
+          "event": "demo.inbox.MessageReceived",
+          "step": "redeliver_event"
+        },
+        {
+          "binding": "received",
+          "command": "demo.inbox.RecordMessage",
+          "input": {
+            "account_id": {
+              "kind": "literal",
+              "value": "account_id-1"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id-1"
+            },
+            "peer": {
+              "kind": "literal",
+              "value": "from-1"
+            }
+          },
+          "selecting": {
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id-1"
+            },
+            "peer": {
+              "kind": "literal",
+              "value": "from-1"
+            }
+          },
+          "step": "expect_every_invocation"
+        },
+        {
+          "event": "demo.inbox.MessageRecorded",
+          "shape": {
+            "account_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "received/binding/flow": {
+      "purpose": "`demo.inbox.MessageReceived` delivered from `account-messages` invokes `demo.inbox.RecordMessage`, which publishes `demo.inbox.MessageRecorded`",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.inbox.AccountId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.inbox.RecordMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageRecorded"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "authority": "account-messages",
+          "context": {
+            "account_id": "account_id"
+          },
+          "event": "demo.inbox.MessageReceived",
+          "payload": {
+            "from": "from",
+            "message_id": "message_id"
+          },
+          "step": "deliver_event"
+        },
+        {
+          "event": "demo.inbox.MessageRecorded",
+          "shape": {
+            "account_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "received/binding/mapping": {
+      "purpose": "`received` fills `demo.inbox.RecordMessage` from each delivery of `demo.inbox.MessageReceived`, its context included",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.inbox.AccountId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.inbox.RecordMessage"
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageReceived"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "authority": "account-messages",
+          "context": {
+            "account_id": "account_id"
+          },
+          "event": "demo.inbox.MessageReceived",
+          "payload": {
+            "from": "from",
+            "message_id": "message_id"
+          },
+          "step": "deliver_event"
+        },
+        {
+          "binding": "received",
+          "command": "demo.inbox.RecordMessage",
+          "input": {
+            "account_id": {
+              "kind": "literal",
+              "value": "account_id"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "peer": {
+              "kind": "literal",
+              "value": "from"
+            }
+          },
+          "step": "expect_invocation"
+        },
+        {
+          "authority": "account-messages",
+          "context": {
+            "account_id": "account_id-1"
+          },
+          "event": "demo.inbox.MessageReceived",
+          "payload": {
+            "from": "from-1",
+            "message_id": "message_id-1"
+          },
+          "step": "deliver_event"
+        },
+        {
+          "binding": "received",
+          "command": "demo.inbox.RecordMessage",
+          "input": {
+            "account_id": {
+              "kind": "literal",
+              "value": "account_id-1"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id-1"
+            },
+            "peer": {
+              "kind": "literal",
+              "value": "from-1"
+            }
+          },
+          "step": "expect_invocation"
+        }
+      ]
+    },
+    "received/binding/on-failure": {
+      "purpose": "`received` retries a failed `demo.inbox.RecordMessage` until `demo.inbox.MessageRecorded` is published",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.inbox.AccountId"
+        },
+        {
+          "kind": "command",
+          "name": "demo.inbox.RecordMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.inbox.MessageRecorded"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.inbox.RecordMessage",
+            "outcome": "unavailable"
+          },
+          "step": "configure_external_outcome"
+        },
+        {
+          "authority": "account-messages",
+          "context": {
+            "account_id": "account_id"
+          },
+          "event": "demo.inbox.MessageReceived",
+          "payload": {
+            "from": "from",
+            "message_id": "message_id"
+          },
+          "step": "deliver_event"
+        },
+        {
+          "event": "demo.inbox.MessageRecorded",
+          "shape": {
+            "account_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    }
+  }
+}
