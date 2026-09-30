@@ -2,15 +2,16 @@
 format: aep.planning-md/3
 id: story:current-ess-coverage-suites
 kind: story
-status: active
+status: implemented
 title: Evidence admits every coverage suite ESS writes
 relations:
 - serves: vision:O2
 - informed_by: epic:evidence-gated-completion
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-30T12:08:58Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-09-30T12:08:58Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-09-30T12:27:10Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 
