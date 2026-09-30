@@ -9,6 +9,26 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.68.0] — 2026-09-30
+
+### Added
+
+- A lifecycle `requires:` line may name `or: [<kind>, …]`: further evidence kinds any one of which
+  pays for the rung in place of `evidence:`, each against `at_least` on its own. The type
+  descriptor reports them beside `requires` as `or`, and `explain` shows `a, b or c` with the
+  best-held count.
+
+### Fixed
+
+- An `executable-system-specification` reaches `conforming` on a passed report/2: the rung now
+  accepts `ess_conformance`, `ess_conformance_v2` or `ess_conformance_coverage_v1`, where it
+  accepted only `ess_conformance`.
+- On a specification, an ESS conformance record counts toward a move only when it passed and its
+  `spec_digest` is the specification's `model_digest`; a failed or inconclusive record, one for
+  another digest, and every record on a specification with no `model_digest` no longer count. A
+  refused move prints each record it did not count and why. This applies to report/1 records too:
+  one reporting failed scenarios moved a specification to `conforming` before.
+
 ## [0.67.0] — 2026-09-30
 
 ### Changed

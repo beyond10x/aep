@@ -21,6 +21,7 @@ transitions:                      # status -> the statuses that may follow it
 requires:                         # status -> what reaching it costs
   rehearsed:
     - evidence: test_result       # an evidence kind the protocol declares
+      or: [ess_conformance]       # further kinds, any one of which pays instead
   applied:
     - evidence: approval
       at_least: 2                 # default 1
@@ -38,7 +39,7 @@ descriptions:                     # status -> one line, shown by `board --format
 | `kind` | no | kebab-case kind | the kind governed; absent means this is the fallback for kinds with no nearer lifecycle (at most one per tree) |
 | `initial` | yes | status | the status an artifact is created at |
 | `transitions` | no | map of status → list of statuses | the legal moves; a status mapped to `[]` is terminal |
-| `requires` | no | map of status → list of `{evidence, at_least}` | evidence records of that kind, held for the artifact, needed to reach the status |
+| `requires` | no | map of status → list of `{evidence, or, at_least}` | evidence records of that kind, held for the artifact, needed to reach the status; `or` lists further kinds any one of which pays instead, each against `at_least` on its own |
 | `when` | no | map of status → `{after, before}` | each names a **front-matter key** of the artifact holding a date; `after: due` means *not until the instant is past this artifact's `due`* |
 | `descriptions` | no | map of status → string | what being at the status means |
 
@@ -47,7 +48,10 @@ now. An empty guard constrains nothing.
 
 `requires` is deliberately smaller than a principle's evidence requirement. It counts records of a
 kind and does not judge who produced them or whether they are independent. Those judgements belong
-to the [engine](../concepts/governance.md).
+to the [engine](../concepts/governance.md). One judgement is made before the count: on an artifact
+that records a `model_digest`, an ESS conformance record (`ess_conformance`, `ess_conformance_v2`,
+`ess_conformance_coverage_v1`) counts only when it passed and its `spec_digest` is that digest, and
+a refused move names each record that did not count and why.
 
 ## How a kind finds its lifecycle
 

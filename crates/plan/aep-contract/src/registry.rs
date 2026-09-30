@@ -37,6 +37,14 @@ pub struct LifecycleDescriptor {
     /// `:39` read from the far side.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requires: Vec<(ArtifactStatus, Vec<(EvidenceKind, usize)>)>,
+    /// The further kinds that pay for a requirement in `requires` in place of its own kind —
+    /// `(to, kind, [or])`, one entry per requirement whose ladder line names `or:`.
+    ///
+    /// Beside `requires` rather than inside it, so a reader that predates the field reads the same
+    /// `(kind, at_least)` pairs it always did; one that knows it learns that the pair is also
+    /// paid by any of these.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub or: Vec<(ArtifactStatus, EvidenceKind, Vec<EvidenceKind>)>,
 }
 
 /// A command this type accepts.

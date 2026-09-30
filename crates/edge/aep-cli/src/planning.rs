@@ -47,6 +47,8 @@ pub(crate) const OUTCOME_DAYS: u64 = 14;
 mod waves;
 // What Git has committed about a Git-native plan: the history `validate` compares against.
 mod git_record;
+// Which recorded ESS conformance records pay for a specification's move.
+mod conformance_count;
 
 /// Where a new document's body is seeded from, relative to the document tree.
 const TEMPLATE_DIRECTORY: &str = "artifacts/templates";
@@ -617,12 +619,35 @@ impl Opened {
         &self,
         id: &ArtifactId,
     ) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
-        if let Plan::Git { root, evidence } = &self.plan {
-            return Ok(aep_backend_markdown::journal::evidence_on_hand_git(
-                root, evidence, id,
-            ));
-        }
-        evidence_from_events(self.backend()?, id)
+        Ok(self.judged_evidence(id)?.0)
+    }
+
+    /// [`Self::evidence_on_hand`], and the ESS conformance records it did not count, with why.
+    ///
+    /// On a specification that records a `model_digest`, an ESS conformance record counts only
+    /// when it passed against that digest (`conformance_count`). Elsewhere every record counts,
+    /// as it always has.
+    fn judged_evidence(
+        &self,
+        id: &ArtifactId,
+    ) -> Result<(
+        aep_backend_markdown::kernel::EvidenceOnHand,
+        Vec<conformance_count::Discounted>,
+    )> {
+        let entries = if let Plan::Git { root, evidence } = &self.plan {
+            aep_backend_markdown::journal::history_git(root, evidence, id).0
+        } else {
+            evidence_from_events(self.backend()?, id)?
+        };
+        let Some(stored) = self.report.documents.get(id) else {
+            return Ok(conformance_count::count(&entries, None, None));
+        };
+        let front = &stored.document.frontmatter;
+        Ok(conformance_count::count(
+            &entries,
+            Some(&front.kind),
+            front.model_digest.as_ref(),
+        ))
     }
 
     /// Everything the plan's own record holds, oldest first, and how many records did not read:
@@ -765,8 +790,8 @@ pub(crate) fn report_from_backend(backend: &PlanBackend) -> Result<StoreReport> 
     Ok(report)
 }
 
-/// How much evidence is on hand about `id`, in a plan without a journal: counted from the entity's
-/// own events, as `history` reads them.
+/// The evidence recorded about `id`, in a plan without a journal: read from the entity's own
+/// events, as `history` reads them, for [`Opened::judged_evidence`] to count.
 ///
 /// Not from the audit trail: an accepted command's record names its subject and nothing about what
 /// kind of evidence it recorded — the contract keeps `decision` for refusals — so the trail could
@@ -776,7 +801,7 @@ pub(crate) fn report_from_backend(backend: &PlanBackend) -> Result<StoreReport> 
 fn evidence_from_events(
     backend: &PlanBackend,
     id: &ArtifactId,
-) -> Result<aep_backend_markdown::kernel::EvidenceOnHand> {
+) -> Result<Vec<aep_backend_markdown::journal::Entry>> {
     use aep_backend_markdown::journal::Change;
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
@@ -791,13 +816,12 @@ fn evidence_from_events(
     .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
     let target = block_on(backend.resolve(&locator))
         .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
-    let mut counted = aep_backend_markdown::kernel::EvidenceOnHand::new();
-    for entry in backend.entries_of(&target, id)?.0 {
-        if let Change::Evidence { kind, .. } = entry.change {
-            *counted.entry(kind).or_default() += 1;
-        }
-    }
-    Ok(counted)
+    Ok(backend
+        .entries_of(&target, id)?
+        .0
+        .into_iter()
+        .filter(|entry| matches!(entry.change, Change::Evidence { .. }))
+        .collect())
 }
 
 /// What can be done with the plan.
@@ -2662,7 +2686,25 @@ fn move_status(
             from,
             refusal: Some(refusal),
             ..
-        } => outln!("{id} is {from}; {refusal}"),
+        } => {
+            outln!("{id} is {from}; {refusal}");
+            // The record somebody just made and expected to pay for the rung is named with why
+            // it did not, rather than leaving them to wonder why the count reads zero.
+            if matches!(
+                refusal.reason,
+                aep_backend_markdown::document::RefusalReason::Unobservable { .. }
+                    | aep_backend_markdown::document::RefusalReason::NotEarned { .. }
+            ) {
+                for record in opened.judged_evidence(&id)?.1 {
+                    outln!(
+                        "  not counted: the {} record observed at {}: {}",
+                        record.kind.as_str(),
+                        record.at,
+                        record.reason
+                    );
+                }
+            }
+        }
         MoveStopped::GuardedRungOnAWalk {
             from,
             rung,
@@ -6878,9 +6920,16 @@ fn next_rungs(
                 .requirements_for(status)
                 .iter()
                 .map(|requirement| Need {
-                    kind: requirement.evidence.as_str().to_owned(),
+                    // `a or b` for a line naming `or:`. `at_least` binds each kind on its own, so
+                    // the count to compare it with is the best-held kind's, not a sum.
+                    kind: requirement.kinds_phrase(),
                     at_least: requirement.at_least,
-                    held: held.get(&requirement.evidence).copied().unwrap_or_default(),
+                    held: requirement
+                        .kinds()
+                        .iter()
+                        .map(|kind| held.get(kind).copied().unwrap_or_default())
+                        .max()
+                        .unwrap_or_default(),
                 })
                 .collect(),
         })
