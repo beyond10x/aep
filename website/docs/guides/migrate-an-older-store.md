@@ -70,10 +70,10 @@ document. Fix the named document and run it again. `--verify` exits non-zero on 
 
 Name the rules the new project file should carry:
 
-{/* generated:release-pin:begin commit=665cd6eddd512dff037530e4503a58b679b55854 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin commit=f427749006d7b98c09c9c65452e73fb309f480af — kept by `cargo xtask status` */}
 ```bash
 aep plan store migrate git --verify \
-  --protocols git+https://github.com/beyond10x/aep#665cd6eddd512dff037530e4503a58b679b55854 \
+  --protocols git+https://github.com/beyond10x/aep#f427749006d7b98c09c9c65452e73fb309f480af \
   --profile development.standard
 ```
 {/* generated:release-pin:end */}
