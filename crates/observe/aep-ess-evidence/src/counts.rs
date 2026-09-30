@@ -70,11 +70,9 @@ fn read_report(report_json: &str) -> Result<EssConformanceV2Reading> {
         ],
         &[],
     )?;
-    let producer_profile = match r["producer_profile"].text()? {
-        "rust-scenario-status/1" => ProducerProfile::Rust,
-        "go-scenario-status/1" => ProducerProfile::Go,
-        other => return Err(r["producer_profile"].error("UnsupportedProducerProfile", other)),
-    };
+    let profile = r["producer_profile"].text()?;
+    let producer_profile = ProducerProfile::from_wire(profile)
+        .ok_or_else(|| r["producer_profile"].error("UnsupportedProducerProfile", profile))?;
     exact(&r["policy"], "complete-selection/1", "UnsupportedPolicy")?;
     let s = r["suite"].closed(&["version", "digest_profile", "digest"], &[])?;
     let suite = SuiteReference::new(

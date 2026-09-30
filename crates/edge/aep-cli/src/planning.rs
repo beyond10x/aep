@@ -6502,7 +6502,7 @@ fn recorded_from_report(
         let source = serde_json::json!({
             "format":"ess-conformance-report/2", "report_input":path.display().to_string(), "suite_input":suite_path.display().to_string(),
             "specification":data.specification, "implementation":data.implementation, "spec_digest":data.spec_digest,
-            "producer_profile":data.producer_profile.as_str(), "suite":data.suite,
+            "producer_profile":data.producer_profile.wire(), "suite":data.suite,
             "execution_status":data.execution_status.as_str(), "conformance_status":data.conformance_status.as_str(),
             "coverage":{"knowledge":"unknown"}, "policy":"complete-selection/1",
             "counts":{"total":data.counts.total,"passed":data.counts.passed,"failed":data.counts.failed,"error":data.counts.error,"unsupported":data.counts.unsupported,"skipped":data.counts.skipped},
@@ -6621,7 +6621,7 @@ fn recorded_coverage(
     let source = serde_json::json!({
         "format":"ess-conformance-report/2", "report_input":path.display().to_string(), "suite_input":input_path.display().to_string(), "input_transport":transport,
         "specification":data.specification, "implementation":data.implementation, "spec_digest":data.spec_digest,
-        "producer_profile":data.producer_profile.as_str(), "suite":data.suite, "selection":data.coverage.selection,
+        "producer_profile":data.producer_profile.wire(), "suite":data.suite, "selection":data.coverage.selection,
         "execution_status":data.execution_status.as_str(), "conformance_status":data.conformance_status.as_str(),
         "coverage":data.coverage, "policy":"complete-selection/1", "selected_ids":reading.selected_ids(),
         "counts":{"total":data.counts.total,"passed":data.counts.passed,"failed":data.counts.failed,"error":data.counts.error,"unsupported":data.counts.unsupported,"skipped":data.counts.skipped},
