@@ -312,7 +312,7 @@ mod tests {
         // Initialising emits task-created, protocol-resolved and state-entered. None of them is a
         // decision, and a trail padded with them is a trail nobody reads.
         assert!(execution.event_count() >= 3);
-        assert!(audit_trail(&execution).is_empty());
+        assert_eq!(audit_trail(&execution), [] as [aep_domain::AuditRecord; 0]);
     }
 
     #[test]

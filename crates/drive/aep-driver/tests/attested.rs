@@ -373,7 +373,10 @@ fn an_approval_by_an_agent_nobody_named_stops_the_run_again_and_names_who_would_
     );
     assert_eq!(report.status(), RunStatus::AwaitingOperator);
     assert!(report.cursor.owed.is_some(), "the step is still owed");
-    assert!(report.cursor.answers.is_empty());
+    assert_eq!(
+        report.cursor.answers,
+        [] as [aep_driver_spec::cursor::OperatorAnswer; 0]
+    );
     let note = report
         .notes
         .iter()
@@ -408,7 +411,7 @@ fn the_runs_own_actor_cannot_answer_its_own_operator_step_even_when_it_was_named
     };
     let (report, asked) = resumed(&root, &run, &options, &[]);
 
-    assert!(asked.is_empty());
+    assert_eq!(asked, [] as [usize; 0]);
     assert_eq!(report.status(), RunStatus::AwaitingOperator);
     let note = report
         .notes
@@ -431,7 +434,10 @@ fn a_person_who_recorded_nothing_still_walks_on_and_the_report_says_the_record_h
 
     assert_eq!(asked, vec![1]);
     assert_eq!(report.transitions.len(), 1, "the run walked on as before");
-    assert!(report.cursor.answers.is_empty());
+    assert_eq!(
+        report.cursor.answers,
+        [] as [aep_driver_spec::cursor::OperatorAnswer; 0]
+    );
     assert_eq!(report.cursor.owed, None);
     assert!(
         report
@@ -477,7 +483,7 @@ fn with_an_approver_named_a_resume_that_found_nothing_recorded_stops_again() {
 
     let (report, asked) = resumed(&root, &run, &options, &[]);
 
-    assert!(asked.is_empty());
+    assert_eq!(asked, [] as [usize; 0]);
     assert_eq!(report.status(), RunStatus::AwaitingOperator);
     let note = report
         .notes

@@ -3023,7 +3023,7 @@ advisory:
     fn a_bare_list_is_read_as_predicates() {
         let requirement = parse("- tests.unit.failed == 0\n- specification.satisfied");
         assert_eq!(requirement.predicates.len(), 2);
-        assert!(requirement.evidence.is_empty());
+        assert_eq!(requirement.evidence.len(), 0);
     }
 
     #[test]

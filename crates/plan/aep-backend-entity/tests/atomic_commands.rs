@@ -157,8 +157,17 @@ fn a_failed_provider_batch_publishes_neither_durable_nor_local_prefix() {
             store.received > 1,
             "the complete command arrived as one batch"
         );
-        assert!(store.inner.ids("aep.entity").expect("ids").is_empty());
-        assert!(store.inner.ids("aep.audit").expect("ids").is_empty());
-        assert!(store.inner.ids("aep.applied").expect("ids").is_empty());
+        assert_eq!(
+            store.inner.ids("aep.entity").expect("ids"),
+            [] as [std::string::String; 0]
+        );
+        assert_eq!(
+            store.inner.ids("aep.audit").expect("ids"),
+            [] as [std::string::String; 0]
+        );
+        assert_eq!(
+            store.inner.ids("aep.applied").expect("ids"),
+            [] as [std::string::String; 0]
+        );
     });
 }

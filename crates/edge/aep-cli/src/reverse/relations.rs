@@ -448,7 +448,7 @@ mod tests {
 
     #[test]
     fn a_schema_whose_properties_are_all_scalars_has_no_relations() {
-        assert!(read("Customer").is_empty());
-        assert!(read("Warehouse").is_empty());
+        assert_eq!(read("Customer").len(), 0);
+        assert_eq!(read("Warehouse").len(), 0);
     }
 }

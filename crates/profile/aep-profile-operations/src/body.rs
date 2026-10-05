@@ -824,7 +824,7 @@ mod tests {
             vec![IncidentStatus::Triaged]
         );
         assert!(IncidentStatus::Resolved.is_terminal());
-        assert!(IncidentStatus::Resolved.successors().is_empty());
+        assert_eq!(IncidentStatus::Resolved.successors().len(), 0);
     }
 
     #[test]

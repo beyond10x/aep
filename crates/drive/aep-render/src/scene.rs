@@ -775,7 +775,7 @@ mod tests {
             .edges
             .iter()
             .all(|edge| edge.accent == EdgeAccent::Idle));
-        assert!(scene.reasons.is_empty());
+        assert_eq!(scene.reasons.len(), 0);
         assert_eq!(scene.run_line(), None);
     }
 

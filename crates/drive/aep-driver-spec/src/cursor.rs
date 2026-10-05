@@ -485,7 +485,7 @@ mod tests {
         );
         let read: DriverCursor = serde_json::from_value(without).expect("an older cursor reads");
         assert_eq!(read.owed, None);
-        assert!(read.answers.is_empty());
+        assert_eq!(read.answers.len(), 0);
 
         let mut owing = cursor();
         owing.owed = Some(OwedAnswer {

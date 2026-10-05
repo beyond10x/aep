@@ -570,7 +570,7 @@ profile: test.standard
             plan.principles.is_empty(),
             "test-driven applies to features and bugfixes, not incidents"
         );
-        assert!(plan.obligations.is_empty());
+        assert_eq!(plan.obligations, [] as [aep_domain::ResolvedObligation; 0]);
     }
 
     #[test]
@@ -588,7 +588,7 @@ principles:
 ",
         );
         let plan = resolve(&task, &registry).expect("resolves");
-        assert!(plan.principles.is_empty());
+        assert_eq!(plan.principles, [] as [aep_domain::Principle; 0]);
         assert_eq!(
             plan.dropped_principles
                 .iter()

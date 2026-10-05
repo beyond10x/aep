@@ -101,7 +101,7 @@ fn the_record_carries_the_digest_pair_the_report_computed() {
     assert_eq!(result.status, VerificationStatus::Passed);
     assert_eq!(result.expectations_total, checked.summary.total);
     assert_eq!(result.expectations_gapped, 0);
-    assert!(result.gapped_expectations.is_empty());
+    assert_eq!(result.gapped_expectations, [] as [std::string::String; 0]);
     assert_eq!(
         result.adapter.as_deref(),
         Some("claude-code/stream-json (written against 2.1.238)"),

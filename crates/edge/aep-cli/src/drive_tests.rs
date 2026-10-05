@@ -479,7 +479,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         // the session then writes as the operator did before, which is honest, and never as
         // somebody else.
         let slashed = ExecutionId::new("W4-3/1").expect("an execution id may carry a slash");
-        assert!(session_env(&slashed).is_empty());
+        assert_eq!(session_env(&slashed).len(), 0);
     }
 /// The `--write-scope` words are the words a step map is written in.
     ///

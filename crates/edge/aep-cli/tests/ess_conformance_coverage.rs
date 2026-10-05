@@ -530,7 +530,10 @@ fn coverage_both_decision_routes_and_replay_share_the_exact_record_with_atomic_r
     let before_facts = execution.fact_store().clone();
     let before_time = execution.evaluated_at();
     let raw: aep_engine::execution::Snapshot = serde_json::from_slice(&before).unwrap();
-    assert!(raw.evidence[0].record.facts().is_empty());
+    assert_eq!(
+        raw.evidence[0].record.facts(),
+        [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+    );
     let restored = engine
         .restore(coverage_task(), c.graph.clone(), raw)
         .unwrap();
@@ -701,7 +704,10 @@ fn coverage_actual_driver_reads_typed_record_and_re_admits_on_status_and_resume(
         )
     });
     assert_eq!(snapshot.evidence.len(), 1);
-    assert!(snapshot.evidence[0].record.facts().is_empty());
+    assert_eq!(
+        snapshot.evidence[0].record.facts(),
+        [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+    );
     let aep_domain::Evidence::EssConformanceCoverageV1(sources) =
         &snapshot.evidence[0].record.value
     else {

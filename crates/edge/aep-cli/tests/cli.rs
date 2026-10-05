@@ -438,7 +438,7 @@ fn output_survives_a_reader_that_stops_reading() {
         reader
             .read_line(&mut first)
             .expect("the first line arrives");
-        assert!(!first.is_empty());
+        assert_ne!(first, "");
     }
 
     let output = child.wait_with_output().expect("the child finishes");

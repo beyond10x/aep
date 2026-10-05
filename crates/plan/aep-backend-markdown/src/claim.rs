@@ -1032,7 +1032,7 @@ mod tests {
         let result =
             scan("Verify: 2026-02-30 — the leap year does not stretch that far. (horizon: 7d)\n");
 
-        assert!(result.records.is_empty());
+        assert_eq!(result.records.len(), 0);
         assert_eq!(
             result.rejections.first().map(|rejection| rejection.reason),
             Some(ClaimRejectionReason::ImpossibleDate)

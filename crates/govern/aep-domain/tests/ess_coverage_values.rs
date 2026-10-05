@@ -267,9 +267,10 @@ fn coverage_raw_admitted_cloned_replaced_failed_and_replayed_fact_transitions_ar
         let reader = Reader(input(&case));
         let mut sources =
             EssConformanceCoverageSources::new("report bytes".into(), "input bytes".into());
-        assert!(Evidence::EssConformanceCoverageV1(sources.clone())
-            .facts()
-            .is_empty());
+        assert_eq!(
+            Evidence::EssConformanceCoverageV1(sources.clone()).facts(),
+            [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+        );
         sources.admit(&reader).unwrap();
         let admitted = Evidence::EssConformanceCoverageV1(sources.clone());
         let expected = admitted.facts();
@@ -277,7 +278,10 @@ fn coverage_raw_admitted_cloned_replaced_failed_and_replayed_fact_transitions_ar
         let wire = serde_json::to_string(&admitted).unwrap();
         assert!(!wire.contains("reading"));
         let raw: Evidence = serde_json::from_str(&wire).unwrap();
-        assert!(raw.facts().is_empty());
+        assert_eq!(
+            raw.facts(),
+            [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+        );
         let Evidence::EssConformanceCoverageV1(mut replayed) = raw else {
             panic!("coverage");
         };
@@ -290,17 +294,19 @@ fn coverage_raw_admitted_cloned_replaced_failed_and_replayed_fact_transitions_ar
             sources.report_json().into(),
             "replacement bytes".into(),
         );
-        assert!(Evidence::EssConformanceCoverageV1(changed)
-            .facts()
-            .is_empty());
+        assert_eq!(
+            Evidence::EssConformanceCoverageV1(changed).facts(),
+            [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+        );
         assert_eq!(
             sources.admit(&Refusing).unwrap_err().issues[0].reason,
             "ReaderRefusal"
         );
         assert!(sources.reading().is_none());
-        assert!(Evidence::EssConformanceCoverageV1(sources.clone())
-            .facts()
-            .is_empty());
+        assert_eq!(
+            Evidence::EssConformanceCoverageV1(sources.clone()).facts(),
+            [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+        );
         sources.admit(&reader).unwrap();
         assert_eq!(
             Evidence::EssConformanceCoverageV1(sources).facts(),
