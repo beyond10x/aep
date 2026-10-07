@@ -1,0 +1,10 @@
+type: ess-scenario/4
+domain: desk.tickets
+scenario: visitor-is-refused
+summary: A visitor may not open a ticket.
+timeline:
+  - at: 2026-01-05T09:00:00Z
+    command: desk.tickets.OpenTicket
+    actor: desk.tickets.Visitor
+    input: {id: t-1, title: first}
+    refused: not_granted

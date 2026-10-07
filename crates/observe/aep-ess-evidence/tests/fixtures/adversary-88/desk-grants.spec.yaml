@@ -1,0 +1,56 @@
+format: ess/22
+system: desk
+version: v1
+domain: desk.tickets
+entities:
+  - name: desk.tickets.Ticket
+    identity: {name: id, type: String}
+    fields:
+      - {name: title, type: String}
+    lifecycle: {initial: Open, states: [Open], terminal: [Open], transitions: []}
+events:
+  - name: desk.tickets.Opened
+    fields:
+      - {name: id, type: String}
+commands:
+  - name: desk.tickets.OpenTicket
+    input:
+      - {name: id, type: String}
+      - {name: title, type: String}
+    outcomes:
+      - name: opened
+        creates: desk.tickets.Ticket
+        instance: id
+        sets: {title: input.title}
+        emits: [desk.tickets.Opened]
+        payload:
+          desk.tickets.Opened: {id: input.id}
+views:
+  - name: desk.tickets.Board
+    source: desk.tickets.Ticket
+    consistency: read_your_writes
+    fields:
+      - {name: id, type: String}
+      - {name: title, type: String}
+  - name: desk.tickets.Titles
+    source: desk.tickets.Ticket
+    consistency: read_your_writes
+    fields:
+      - {name: title, type: String}
+actors:
+  - name: desk.tickets.Clerk
+    may:
+      - desk.tickets.OpenTicket
+      - desk.tickets.Board
+  - name: desk.tickets.Watcher
+    may:
+      - desk.tickets.OpenTicket
+  - name: desk.tickets.Visitor
+    may:
+      - desk.tickets.Titles
+components:
+  - component: desk-service
+    owns: {domains: [desk.tickets]}
+    accepts: {commands: [desk.tickets.OpenTicket]}
+    publishes: {events: [desk.tickets.Opened]}
+    reached_by: network

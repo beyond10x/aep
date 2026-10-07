@@ -1,0 +1,346 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 4,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk",
+      "desk.tickets.Board/grant/read/denied",
+      "desk.tickets.OpenTicket/grant/admitted/desk.tickets.Watcher",
+      "desk.tickets.OpenTicket/outcome/opened"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "4fe0a00390ea1c8cc40b3bc19579fe25aeb255a13a3e33ecdf2edc76cbdd36e1",
+    "scenario_initial_state": "empty",
+    "spec_digest": "768011a1da97a93f1ff684278afa2db17c7defcc242c2b4f9640ed650dce2d24",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/35",
+    "system": "desk"
+  },
+  "scenarios": {
+    "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk": {
+      "purpose": "`desk.tickets.Board` read as `desk.tickets.Clerk`, whose grant names it, is served",
+      "source": [
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "expectation": {
+            "at_least": 0,
+            "expect": "counts"
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Board"
+        }
+      ]
+    },
+    "desk.tickets.Board/grant/read/denied": {
+      "purpose": "`desk.tickets.Board` read as `desk.tickets.Watcher`, whose grant does not name it, and as no actor is refused before anything is read",
+      "source": [
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Watcher"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Watcher",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "actor": "desk.tickets.Watcher",
+          "step": "expect_not_granted"
+        },
+        {
+          "actor": null,
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "actor": null,
+          "step": "expect_not_granted"
+        }
+      ]
+    },
+    "desk.tickets.OpenTicket/grant/admitted/desk.tickets.Watcher": {
+      "purpose": "`desk.tickets.OpenTicket` sent as `desk.tickets.Watcher`, which the specification grants it, is accepted",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "desk.tickets.Ticket"
+        },
+        {
+          "kind": "command",
+          "name": "desk.tickets.OpenTicket"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "desk.tickets.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Titles"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Watcher"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Watcher",
+          "command": "desk.tickets.OpenTicket",
+          "input": {
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "desk.tickets.Opened",
+          "payload": {
+            "id": "id"
+          },
+          "shape": {
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "event": "desk.tickets.Opened",
+                "field": "id",
+                "kind": "observed"
+              },
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Titles"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Titles"
+        }
+      ]
+    },
+    "desk.tickets.OpenTicket/outcome/opened": {
+      "purpose": "`desk.tickets.OpenTicket` answers `opened` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "desk.tickets.Ticket"
+        },
+        {
+          "kind": "command",
+          "name": "desk.tickets.OpenTicket"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "desk.tickets.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Titles"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Clerk",
+          "command": "desk.tickets.OpenTicket",
+          "input": {
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "desk.tickets.Opened",
+          "payload": {
+            "id": "id"
+          },
+          "shape": {
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "event": "desk.tickets.Opened",
+                "field": "id",
+                "kind": "observed"
+              },
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Titles"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Titles"
+        }
+      ]
+    }
+  }
+}

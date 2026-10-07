@@ -1,0 +1,66 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 15,
+    "skipped": 0,
+    "total": 15,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 15,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "demo.ledger.Place/outcome/placed",
+      "demo.ledger.Record/outcome/at-limit",
+      "demo.ledger.Record/outcome/busy",
+      "demo.ledger.Record/outcome/recorded",
+      "demo.ledger.Record/outcome/rejected",
+      "demo.ledger.Record/outcome/unavailable",
+      "demo.ledger.Record/outcome/wrong-state",
+      "notify-ledger/binding/delivery",
+      "notify-ledger/binding/flow",
+      "notify-ledger/binding/mapping",
+      "notify-ledger/binding/refusal/at-limit",
+      "notify-ledger/binding/refusal/busy",
+      "notify-ledger/binding/refusal/rejected",
+      "notify-ledger/binding/refusal/unavailable",
+      "notify-ledger/binding/refusal/wrong-state"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "c4d0ffe9df2a2ef8955ff751f35a34c5ee483813ae8593e03ffb64f01c723b5c",
+  "specification": "demo/v1",
+  "suite": {
+    "digest": "sha256:ae10140b67755d6b57f0785569d083a47b09fb4113d9da759d85774bf2939d6f",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/37"
+  }
+}

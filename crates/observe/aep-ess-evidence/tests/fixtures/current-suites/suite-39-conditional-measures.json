@@ -1,0 +1,1855 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 9,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "demo.cases.Case/state/Completed/accepts/demo.cases.Complete",
+      "demo.cases.Case/transition/complete/by/demo.cases.Complete/completed",
+      "demo.cases.Complete/outcome/completed",
+      "demo.cases.Complete/outcome/unavailable",
+      "demo.cases.Escalations/aggregate",
+      "demo.cases.Open/outcome/opened",
+      "demo.cases.Scorecard/aggregate",
+      "demo.cases.Tagged/aggregate",
+      "demo.cases.Urgent/aggregate"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "d97bee480bb5e0a63caf02b637a79c0994f3f74b8e357515f70003cde4514ffd",
+    "scenario_initial_state": "empty",
+    "spec_digest": "08020d0eb62548bf626fc0f6883e4fcd4ea03c099b54cc8c7548e5d209279c39",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/39",
+    "system": "demo"
+  },
+  "scenarios": {
+    "demo.cases.Case/state/Completed/accepts/demo.cases.Complete": {
+      "purpose": "`demo.cases.Complete` is accepted on a `demo.cases.Case` that is in `Completed`, and does not move it",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Complete",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "team"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Complete",
+          "input": {
+            "case_id": {
+              "instance": "case",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "demo.cases.Complete",
+          "input": {
+            "case_id": {
+              "instance": "case",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Complete",
+            "outcome": "unavailable"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.cases.Completed",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.cases.Opened",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.cases.Case/transition/complete/by/demo.cases.Complete/completed": {
+      "purpose": "`demo.cases.Complete` on `completed` moves a `demo.cases.Case` to `Completed` along `complete`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "team"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Complete",
+          "input": {
+            "case_id": {
+              "instance": "case",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.cases.Completed",
+          "payload": {
+            "case_id": {
+              "instance": "case",
+              "kind": "instance"
+            }
+          },
+          "shape": {
+            "case_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "event": "demo.cases.Opened",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.cases.Complete/outcome/completed": {
+      "purpose": "`demo.cases.Complete` answers `completed` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "team"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Complete",
+          "input": {
+            "case_id": {
+              "instance": "case",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.cases.Completed",
+          "payload": {
+            "case_id": {
+              "instance": "case",
+              "kind": "instance"
+            }
+          },
+          "shape": {
+            "case_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "event": "demo.cases.Opened",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.cases.Complete/outcome/unavailable": {
+      "purpose": "`demo.cases.Complete` for an identity no record carries takes `unavailable`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Complete"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Complete",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Complete",
+          "input": {
+            "case_id": {
+              "kind": "literal",
+              "value": "00000000-0000-4000-8000-de1a341e6e35"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Complete",
+            "outcome": "unavailable"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.cases.Completed",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.cases.Opened",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.cases.Escalations/aggregate": {
+      "purpose": "`demo.cases.Escalations` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "demo.cases.Escalations"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 101.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/label/001"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "High"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 101.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/label/001"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "High"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 101.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/label/003"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 103.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/label/007"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "High"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-5",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 107.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/label/013"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-6",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 115.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/label/021"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-7",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 185.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/label/085"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Escalations/B"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-8",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.cases.Escalations"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "cases": {
+                "kind": "literal",
+                "value": 6.0
+              },
+              "cheapest": {
+                "kind": "literal",
+                "value": 107.0
+              },
+              "cost": {
+                "kind": "literal",
+                "value": 107.0
+              },
+              "dearest": {
+                "kind": "literal",
+                "value": 107.0
+              },
+              "escalated": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "labels": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "mean": {
+                "kind": "literal",
+                "value": 101.666667
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Escalations/A"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Escalations"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "cases": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "cheapest": {
+                "kind": "literal",
+                "value": null
+              },
+              "cost": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "dearest": {
+                "kind": "literal",
+                "value": null
+              },
+              "escalated": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "labels": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "mean": {
+                "kind": "literal",
+                "value": null
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Escalations/B"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Escalations"
+        }
+      ]
+    },
+    "demo.cases.Open/outcome/opened": {
+      "purpose": "`demo.cases.Open` answers `opened` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.cases.Priority"
+        },
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Completed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "team"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.cases.Opened",
+          "shape": {
+            "case_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.cases.Completed",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.cases.Scorecard/aggregate": {
+      "purpose": "`demo.cases.Scorecard` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "demo.cases.Scorecard"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Scorecard/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Complete",
+          "input": {
+            "case_id": {
+              "instance": "case-2",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Scorecard/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Scorecard/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 85.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Scorecard/B"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-5",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.cases.Scorecard"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "completed": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "escalated_cost": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Scorecard/A"
+              },
+              "total": {
+                "kind": "literal",
+                "value": 3.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Scorecard"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "completed": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "escalated_cost": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Scorecard/B"
+              },
+              "total": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Scorecard"
+        }
+      ]
+    },
+    "demo.cases.Tagged/aggregate": {
+      "purpose": "`demo.cases.Tagged` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "demo.cases.Tagged"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "rush"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Tagged/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": []
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Tagged/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": []
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Tagged/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": []
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Tagged/B"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-5",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.cases.Tagged"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "cases": {
+                "kind": "literal",
+                "value": 3.0
+              },
+              "rushed": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Tagged/A"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Tagged"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "cases": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "rushed": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Tagged/B"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Tagged"
+        }
+      ]
+    },
+    "demo.cases.Urgent/aggregate": {
+      "purpose": "`demo.cases.Urgent` reports every group's exact aggregates over rows this scenario made, and no empty group",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.cases.Case"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Complete"
+        },
+        {
+          "kind": "command",
+          "name": "demo.cases.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.cases.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "demo.cases.Urgent"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": true
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Urgent/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-2",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Complete",
+          "input": {
+            "case_id": {
+              "instance": "case-2",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Complete",
+            "outcome": "completed"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "High"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Urgent/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-3",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 3.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Urgent/A"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-4",
+          "step": "capture_instance"
+        },
+        {
+          "command": "demo.cases.Open",
+          "input": {
+            "cents": {
+              "kind": "literal",
+              "value": 85.0
+            },
+            "escalated": {
+              "kind": "literal",
+              "value": false
+            },
+            "label": {
+              "kind": "literal",
+              "value": "label"
+            },
+            "priority": {
+              "kind": "literal",
+              "value": "Low"
+            },
+            "tags": {
+              "kind": "literal",
+              "value": [
+                "tags.0"
+              ]
+            },
+            "team": {
+              "kind": "literal",
+              "value": "demo.cases.Urgent/B"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.cases.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "demo.cases.Case",
+          "event": "demo.cases.Opened",
+          "field": "case_id",
+          "instance": "case-5",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.cases.Urgent"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "cases": {
+                "kind": "literal",
+                "value": 3.0
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Urgent/A"
+              },
+              "urgent": {
+                "kind": "literal",
+                "value": 2.0
+              },
+              "urgent_cost": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Urgent"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "cases": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "team": {
+                "kind": "literal",
+                "value": "demo.cases.Urgent/B"
+              },
+              "urgent": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "urgent_cost": {
+                "kind": "literal",
+                "value": 0.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "demo.cases.Urgent"
+        }
+      ]
+    }
+  }
+}

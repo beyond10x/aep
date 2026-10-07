@@ -48,11 +48,13 @@ pub fn original_digest(value: &str) -> bool {
 /// The `ess-conformance/<N>` majors that carry declared coverage, in the order ESS added them.
 ///
 /// Transcribed from ESS `crates/verify/ess-conformance/src/coverage.rs` (`is_coverage_version`)
-/// at ESS 0.48.0: each ordinary suite major from /6 on has an odd coverage counterpart, and
-/// /33 is the newest ESS writes. Adding the next one is a deliberate edit here, never inferred
-/// from its number, so a suite from a newer ESS is refused by name until AEP knows it.
-pub const COVERAGE_SUITE_MAJORS: &[u32] =
-    &[5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33];
+/// at ESS 0.55.0: each ordinary suite major from /6 on has an odd coverage counterpart, and
+/// /45 is the newest ESS writes. Adding the next one is a deliberate edit here, never inferred
+/// from its number, so a suite from a newer ESS is refused by name until AEP knows it; the suite
+/// reader gates what each major added that AEP reads.
+pub const COVERAGE_SUITE_MAJORS: &[u32] = &[
+    5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45,
+];
 
 /// Whether `version` spells a coverage-bearing suite major exactly as ESS writes it.
 pub fn is_coverage_suite_version(version: &str) -> bool {
@@ -459,10 +461,10 @@ impl Refusal {
     /// Checks the code-to-effect mapping ESS admits and the local refusal structure.
     ///
     /// Mirrors ESS `Inventory::validate_refusal` (`crates/verify/ess-conformance/src/coverage.rs`
-    /// at ESS `origin/main` `1bd946d6b3`): generated codes `ESS-SYNTH-001`–`017`, of which 005,
-    /// 011, 012, 014, 016 and 017 omit a check and the rest a candidate; authored codes are every
-    /// `ESS-AUTHOR` cause but 036 (`authored::names_file_refusal`), each omitting a candidate.
-    /// Which suite major may carry a code is the suite reader's check.
+    /// at ESS 0.55.0): generated codes `ESS-SYNTH-001`–`017`, of which 005, 011, 012, 014, 016
+    /// and 017 omit a check and the rest a candidate; authored codes are every `ESS-AUTHOR` cause
+    /// of the authored catalogue, 001–041, but 036 (`authored::names_file_refusal`), each
+    /// omitting a candidate. Which suite major may carry a code is the suite reader's check.
     pub fn validate(&self) -> Result<(), EssAdmissionError> {
         let number = |family: &str| {
             self.code
@@ -481,7 +483,7 @@ impl Refusal {
                     }
                 }),
             Origin::Authored => number("ESS-AUTHOR-")
-                .filter(|code| (1..=35).contains(code) || *code == 37)
+                .filter(|code| (1..=41).contains(code) && *code != 36)
                 .map(|_| RefusalEffect::CandidateNotEmitted),
         };
         let Some(effect) = expected else {

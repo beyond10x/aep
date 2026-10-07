@@ -1,0 +1,1520 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 14,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Issue/issued/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Issue/issued/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Read/read/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/denied/credentials.api.Read/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/origin/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/origin/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/retry/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/retry/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/rotation/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/rotation/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/outcome/issued",
+      "credentials.api.Read/outcome/read"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "9e0c1751435236f862e44a06cee7d22c431a4b84aeb43cd563debacea4b0f3b3",
+    "scenario_initial_state": "empty",
+    "spec_digest": "35bd1c58e9c789aed305603a6bea5884360213a0313f5ff8a736aa4b52c861fb",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/35",
+    "system": "credentials"
+  },
+  "scenarios": {
+    "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Issue/issued/as/actor/credentials.api.Guest": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Issue/issued/as/actor/credentials.api.Owner": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Owner"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Read/read/as/actor/credentials.api.Owner": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "command",
+          "name": "credentials.api.Read"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Read",
+            "outcome": "read"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Owner"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Read",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Read",
+            "outcome": "read"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Read",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "summary",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Read",
+              "outcome": "read"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/denied/credentials.api.Read/as/actor/credentials.api.Guest": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "command",
+          "name": "credentials.api.Read"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Read",
+          "step": "execute_command"
+        },
+        {
+          "actor": "credentials.api.Guest",
+          "step": "expect_not_granted"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/origin/as/actor/credentials.api.Guest": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/origin/as/actor/credentials.api.Owner": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Owner"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Guest": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "credentials.api.Records"
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "step": "query_view",
+          "view": "credentials.api.Records"
+        },
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "step": "query_view",
+          "view": "credentials.api.Records"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Owner": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "credentials.api.Records"
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Owner"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "step": "query_view",
+          "view": "credentials.api.Records"
+        },
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "step": "query_view",
+          "view": "credentials.api.Records"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/retry/as/actor/credentials.api.Guest": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/retry/as/actor/credentials.api.Owner": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Owner"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/rotation/as/actor/credentials.api.Guest": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/disclosure/issued/secret/rotation/as/actor/credentials.api.Owner": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Owner"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        },
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Issue/outcome/issued": {
+      "one_time_response": {
+        "event_windows": [],
+        "events": [],
+        "origins": [
+          {
+            "command": "credentials.api.Issue",
+            "fields": [
+              "secret"
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            },
+            "response": {
+              "constraints": {},
+              "declarations": {},
+              "fields": [
+                {
+                  "name": "secret",
+                  "type": "String"
+                }
+              ]
+            }
+          }
+        ],
+        "required_origins": [
+          {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        ]
+      },
+      "purpose": "`credentials.api.Issue` answers `issued` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Issue"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Guest"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Guest",
+          "command": "credentials.api.Issue",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Issue",
+            "outcome": "issued"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Issue",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "secret",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Issue",
+              "outcome": "issued"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    },
+    "credentials.api.Read/outcome/read": {
+      "purpose": "`credentials.api.Read` answers `read` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "credentials.api.Read"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "credentials.api.Read",
+            "outcome": "read"
+          }
+        },
+        {
+          "kind": "actor",
+          "name": "credentials.api.Owner"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "credentials.api.Owner",
+          "command": "credentials.api.Read",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "credentials.api.Read",
+            "outcome": "read"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "response": {
+            "command": "credentials.api.Read",
+            "declarations": {},
+            "expected": {},
+            "fields": [
+              {
+                "name": "summary",
+                "type": "String"
+              }
+            ],
+            "outcome": {
+              "command": "credentials.api.Read",
+              "outcome": "read"
+            }
+          },
+          "step": "expect_direct_response"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 17,
+    "skipped": 0,
+    "total": 17,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 17,
+      "outside": 0,
+      "refused": 5
+    },
+    "knowledge": "complete_inventory",
+    "refused": [
+      {
+        "code": "ESS-SYNTH-011",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-011]: entity gatepass.visit.Visit has no scenario `gatepass.visit.Visit/invariant/after/gatepass.visit.AdmitVisitor/admitted`\n  `deposit.amount >= 0` cannot be read after this branch: no view of `gatepass.visit.Visit` holds an instance in `OnSite`\n  help: declare a view that holds an instance in this state, or the invariant cannot be read after this branch",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "gatepass.visit.Visit/invariant/after/gatepass.visit.AdmitVisitor/admitted",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "gatepass.visit.Visit"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-011",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-011]: entity gatepass.visit.Visit has no scenario `gatepass.visit.Visit/invariant/after/gatepass.visit.AdmitVisitor/admitted`\n  `expected_minutes > 0` reads what no view of `gatepass.visit.Visit` publishes\n    - `expected_minutes` is published by no view of the entity\n  help: publish the fields the invariant reads in a view of this entity, or state the invariant over what one already publishes",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "gatepass.visit.Visit/invariant/after/gatepass.visit.AdmitVisitor/admitted",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "gatepass.visit.Visit"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-011",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-011]: entity gatepass.visit.Visit has no scenario `gatepass.visit.Visit/invariant/after/gatepass.visit.RegisterVisit/registered`\n  `expected_minutes > 0` reads what no view of `gatepass.visit.Visit` publishes\n    - `expected_minutes` is published by no view of the entity\n  help: publish the fields the invariant reads in a view of this entity, or state the invariant over what one already publishes",
+        "needs": [],
+        "origin": "generated",
+        "retained": {
+          "origin": "generated",
+          "source": null
+        },
+        "scenario": "gatepass.visit.Visit/invariant/after/gatepass.visit.RegisterVisit/registered",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "gatepass.visit.Visit"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-011",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-011]: entity gatepass.visit.Visit has no scenario `gatepass.visit.Visit/invariant/after/gatepass.visit.SignOutVisitor/signed-out`\n  `deposit.amount >= 0` cannot be read after this branch: no view of `gatepass.visit.Visit` holds an instance in `Departed`\n  help: declare a view that holds an instance in this state, or the invariant cannot be read after this branch",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "gatepass.visit.Visit/invariant/after/gatepass.visit.SignOutVisitor/signed-out",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "gatepass.visit.Visit"
+        }
+      },
+      {
+        "code": "ESS-SYNTH-011",
+        "effect": "check_not_emitted",
+        "message": "refusal[ESS-SYNTH-011]: entity gatepass.visit.Visit has no scenario `gatepass.visit.Visit/invariant/after/gatepass.visit.SignOutVisitor/signed-out`\n  `expected_minutes > 0` reads what no view of `gatepass.visit.Visit` publishes\n    - `expected_minutes` is published by no view of the entity\n  help: publish the fields the invariant reads in a view of this entity, or state the invariant over what one already publishes",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "gatepass.visit.Visit/invariant/after/gatepass.visit.SignOutVisitor/signed-out",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "entity",
+          "name": "gatepass.visit.Visit"
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "gatepass.visit.AdmitVisitor/grant/denied",
+      "gatepass.visit.AdmitVisitor/outcome/admitted",
+      "gatepass.visit.AdmitVisitor/outcome/wrong-state",
+      "gatepass.visit.Deposit/invariant/at/gatepass.visit.ExpectedVisits/deposit",
+      "gatepass.visit.RegisterVisit/grant/denied",
+      "gatepass.visit.RegisterVisit/outcome/refused",
+      "gatepass.visit.RegisterVisit/outcome/registered",
+      "gatepass.visit.SignOutVisitor/grant/denied",
+      "gatepass.visit.SignOutVisitor/outcome/signed-out",
+      "gatepass.visit.SignOutVisitor/outcome/wrong-state",
+      "gatepass.visit.Visit/invariant/after/gatepass.visit.RegisterVisit/registered",
+      "gatepass.visit.Visit/state/Departed/refuses/gatepass.visit.AdmitVisitor",
+      "gatepass.visit.Visit/state/Departed/refuses/gatepass.visit.SignOutVisitor",
+      "gatepass.visit.Visit/state/Expected/refuses/gatepass.visit.SignOutVisitor",
+      "gatepass.visit.Visit/state/OnSite/refuses/gatepass.visit.AdmitVisitor",
+      "gatepass.visit.Visit/transition/arrive/by/gatepass.visit.AdmitVisitor/admitted",
+      "gatepass.visit.Visit/transition/depart/by/gatepass.visit.SignOutVisitor/signed-out"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "7d021b6ebe1c4715096f165d6564389be0f46311f67d791ed748f627314d611c",
+  "specification": "gatepass/v1",
+  "suite": {
+    "digest": "sha256:57211c1fc8687b810584a2e5b9f3b3facbd2ee497b01f0866d47508e70a24a60",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/35"
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 7,
+    "skipped": 0,
+    "total": 7,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 7,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "component": "desk-service",
+        "kind": "component"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk",
+      "desk.tickets.Board/grant/read/denied",
+      "desk.tickets.OpenTicket/grant/admitted/desk.tickets.Watcher",
+      "desk.tickets.OpenTicket/grant/denied",
+      "desk.tickets.OpenTicket/outcome/opened",
+      "desk.tickets.Titles/grant/read/admitted/desk.tickets.Visitor",
+      "desk.tickets.Titles/grant/read/denied"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "6fcc787c55f2e5e9498a6f99ce806e3e8c136d1f28670f9a08af31fab312a1e2",
+  "specification": "desk/v1",
+  "suite": {
+    "digest": "sha256:be792d10420f8f5108157d7d55642eb92fb54b15a5b2c2bcd6af871dc2433951",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/35"
+  }
+}

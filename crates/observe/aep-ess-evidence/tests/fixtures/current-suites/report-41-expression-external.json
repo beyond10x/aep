@@ -1,0 +1,58 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 7,
+    "skipped": 0,
+    "total": 7,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 7,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "pool.lease.Lease/invariant/after/pool.lease.Open/opened",
+      "pool.lease.Open/outcome/inverted",
+      "pool.lease.Open/outcome/opened",
+      "pool.lease.Open/outcome/over-cap",
+      "pool.lease.Open/outcome/too-late",
+      "pool.lease.Open/outcome/too-soon",
+      "pool.lease.Open/outcome/too-wide"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "725f8d7d794bccd1982245757bcb7cbd7fe0a03e5e0c77219e4f908ef84de67c",
+  "specification": "pool/v1",
+  "suite": {
+    "digest": "sha256:11547d8e48eb57ce3386912267ab579e3e874f8e0c8af24d3a3b85ac664f5e14",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/41"
+  }
+}

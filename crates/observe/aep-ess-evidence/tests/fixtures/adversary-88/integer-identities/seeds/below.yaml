@@ -1,0 +1,14 @@
+type: ess-scenario/2
+domain: counter.model
+scenario: counter-below-max
+summary: A counter established one below its signed maximum.
+arrange:
+  - instance: below-max
+    entity: counter.model.Counter
+    setup:
+      identity: 9007199254740992
+      fields: {revision: 9223372036854775806}
+      state: Active
+assert:
+  - view: counter.model.Counters
+    contains: {id: {$instance: below-max}, revision: 9223372036854775806}

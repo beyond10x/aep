@@ -1,0 +1,67 @@
+format: ess/22
+system: pool
+version: v1
+domain: pool.lease
+entities:
+  - name: pool.lease.Lease
+    identity: {name: lease_id, type: Uuid}
+    fields:
+      - {name: lower, type: Integer}
+      - {name: upper, type: Integer}
+      - {name: issued_at, type: Timestamp}
+      - {name: expires_at, type: Timestamp}
+    invariants:
+      - upper <= lower + 100
+      - expires_at <= issued_at + 24h
+    lifecycle: {initial: Open, states: [Open], terminal: [Open]}
+errors:
+  - {name: pool.lease.TooWide, summary: The range is too wide.}
+  - {name: pool.lease.Inverted, summary: The range is inverted.}
+  - {name: pool.lease.TooLate, summary: The lease ends too late.}
+  - {name: pool.lease.TooSoon, summary: The lease ends too soon.}
+  - {name: pool.lease.OverCap, summary: The range is over its cap.}
+events:
+  - name: pool.lease.Opened
+    fields:
+      - {name: lease_id, type: Uuid}
+commands:
+  - name: pool.lease.Open
+    input:
+      - {name: lower, type: Integer}
+      - {name: upper, type: Integer}
+      - {name: cap, type: Optional<Integer>}
+      - {name: issued_at, type: Timestamp}
+      - {name: expires_at, type: Timestamp}
+    outcomes:
+      - name: too-wide
+        when: upper > lower + 5
+        error: pool.lease.TooWide
+      - name: inverted
+        when: upper < lower - 3
+        error: pool.lease.Inverted
+      - name: too-late
+        when: expires_at >= issued_at + 1h
+        error: pool.lease.TooLate
+      - name: too-soon
+        when: expires_at < issued_at + 5m
+        error: pool.lease.TooSoon
+      - name: over-cap
+        when: upper > cap + 10
+        error: pool.lease.OverCap
+      - name: opened
+        creates: pool.lease.Lease
+        instance: lease_id
+        emits: [pool.lease.Opened]
+        payload:
+          pool.lease.Opened: {lease_id: {generated: true}}
+        sets: {lower: input.lower, upper: input.upper, issued_at: input.issued_at, expires_at: input.expires_at}
+views:
+  - name: pool.lease.Leases
+    source: pool.lease.Lease
+    consistency: read_your_writes
+    fields:
+      - {name: lease_id, type: Uuid}
+      - {name: lower, type: Integer}
+      - {name: upper, type: Integer}
+      - {name: issued_at, type: Timestamp}
+      - {name: expires_at, type: Timestamp}

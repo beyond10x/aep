@@ -1,0 +1,65 @@
+{
+  "completed_at": 1700000010700,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 14,
+    "skipped": 0,
+    "total": 14,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 14,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "one-time-protected-target ",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Issue/issued/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Issue/issued/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Read/read/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/denied/credentials.api.Read/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/origin/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/origin/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/retry/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/retry/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/disclosure/issued/secret/rotation/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/rotation/as/actor/credentials.api.Owner",
+      "credentials.api.Issue/outcome/issued",
+      "credentials.api.Read/outcome/read"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "35bd1c58e9c789aed305603a6bea5884360213a0313f5ff8a736aa4b52c861fb",
+  "specification": "credentials/v1",
+  "suite": {
+    "digest": "sha256:35002b72ca86953b43c9e356acd73bb8f2060fb63369ff4937ac6f58ddfae3fb",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/35"
+  }
+}
