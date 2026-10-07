@@ -50,7 +50,9 @@ impl Definitions {
     }
 }
 
+// Every member the suite reader admits, so a child that changes any of them is refused.
 #[derive(Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Provenance {
     suite_version: String,
     system: String,
@@ -59,6 +61,11 @@ pub(super) struct Provenance {
     contract_digest: String,
     #[serde(default)]
     component: Option<String>,
+    #[serde(default)]
+    scenario_initial_state: Option<String>,
+    // ESS owns the record's meaning; a child must carry its parent's exactly.
+    #[serde(default)]
+    synthesis_seeds: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, PartialEq, Eq)]

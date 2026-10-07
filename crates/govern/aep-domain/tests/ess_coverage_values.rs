@@ -372,8 +372,8 @@ fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other(
     let reference = |version: &str| {
         SuiteReference::new(version.into(), "sha256-json-bytes/1".into(), digest.clone())
     };
-    // ESS writes declared coverage in the odd suite majors from /5 through /33 (ESS 0.48.0).
-    for major in (5..=33).step_by(2) {
+    // ESS writes declared coverage in the odd suite majors from /5 through /45 (ESS 0.55.0).
+    for major in (5..=45).step_by(2) {
         let version = format!("ess-conformance/{major}");
         let admitted = reference(&version).unwrap_or_else(|error| panic!("{version}: {error}"));
         assert_eq!(admitted.version(), version);
@@ -388,7 +388,9 @@ fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other(
         "ess-conformance/6",
         "ess-conformance/32",
         "ess-conformance/34",
-        "ess-conformance/35",
+        "ess-conformance/44",
+        "ess-conformance/46",
+        "ess-conformance/47",
         "ess-conformance/05",
         "ess-conformance/+7",
         "ess-conformance/",
@@ -406,9 +408,11 @@ fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other(
     }
 }
 
-/// Every form ESS's `ScenarioId::parse` reads (ESS `crates/verify/ess-conformance/src/scenario.rs`
-/// at `origin/main` `1bd946d6b3`), one example each.
-const CURRENT_IDS: [&str; 10] = [
+/// Every form ESS's `ScenarioId::parse` reads (ESS 0.55.0,
+/// `crates/verify/ess-conformance/src/scenario.rs`), one example each; every disclosure aspect
+/// and both callers (`one_time_response/cells.rs` `Cell::parse`). The first eight are the frozen
+/// suite/1–4 forms.
+const CURRENT_IDS: [&str; 24] = [
     "billing.invoice.CreateInvoice/outcome/rejected",
     "billing.invoice.Invoice/transition/settle/by/billing.invoice.PayInvoice/settled",
     "billing.invoice.Invoice/state/Paid/refuses/billing.invoice.CancelInvoice",
@@ -419,7 +423,159 @@ const CURRENT_IDS: [&str; 10] = [
     "billing.invoice/authored/two-issued-invoices-rank-latest-first",
     "metrics.session.ByAgent/aggregate",
     "notify-ledger/binding/final-failure",
+    "billing.invoice.IssueInvoice/grant/denied",
+    "desk.ops.Tally/grant/admitted/desk.ops.Watcher",
+    "desk.tickets.Board/grant/read/denied",
+    "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk",
+    "notify-ledger/binding/refusal/at-limit",
+    "notify-ledger/binding/condition-false",
+    "notify-ledger/binding/condition-absent",
+    "auth.keys.Issue/disclosure/issued/secret/origin/as/anonymous",
+    "auth.keys.Issue/disclosure/issued/secret/retry/as/actor/auth.keys.Owner",
+    "auth.keys.Issue/disclosure/issued/_url/rotation/as/anonymous",
+    "auth.keys.Issue/disclosure/issued/secret/read/auth.keys.KeyById/as/actor/auth.keys.Owner",
+    "auth.keys.Issue/disclosure/issued/secret/command/auth.keys.Revoke/revoked/as/anonymous",
+    "auth.keys.Issue/disclosure/issued/secret/denied/auth.keys.Revoke/as/actor/auth.keys.Other",
+    "auth.keys.Issue/disclosure/issued/secret/origin/as/actor/anonymous",
 ];
+
+fn authored_refusal(code: &str) -> Refusal {
+    serde_json::from_value(serde_json::json!({"origin":"authored","scenario":null,"subject":null,"source":"refused.yaml","code":code,"message":"original authored cause","effect":"candidate_not_emitted","retained":null,"scope":"in_scope","needs":[]})).unwrap()
+}
+
+#[test]
+fn every_authored_refusal_code_ess_0_55_names_a_file_with_is_admitted_and_no_other() {
+    // ESS 0.55.0 `authored::names_file_refusal` (`authored.rs`): every key of the authored
+    // catalogue, 001 through 041, but 036, which refuses the model before any file is read.
+    for code in (1..=35).chain(37..=41) {
+        let code = format!("ESS-AUTHOR-{code:03}");
+        authored_refusal(&code)
+            .validate()
+            .unwrap_or_else(|error| panic!("{code}: {error}"));
+    }
+    for code in [
+        "ESS-AUTHOR-036",
+        "ESS-AUTHOR-042",
+        "ESS-AUTHOR-000",
+        "ESS-AUTHOR-38",
+    ] {
+        let error = authored_refusal(code).validate().expect_err(code);
+        assert_eq!(error.issues[0].reason, "UnsupportedRefusalCode", "{code}");
+        assert_eq!(error.issues[0].detail, code);
+    }
+}
+
+/// Refuses each id as `MalformedScenarioId`, naming the id.
+fn assert_malformed(ids: &[&str]) {
+    for id in ids {
+        let error = ScenarioId::new(*id).expect_err(id);
+        assert_eq!(error.issues[0].reason, "MalformedScenarioId", "{id}");
+        assert_eq!(error.issues[0].detail, *id);
+        let wire = serde_json::from_value::<ScenarioId>(serde_json::json!(id)).expect_err(id);
+        assert!(
+            wire.to_string().contains("MalformedScenarioId"),
+            "{id}: {wire}"
+        );
+    }
+}
+
+#[test]
+fn a_later_scenario_form_with_an_empty_segment_is_malformed() {
+    assert_malformed(&[
+        "/grant/denied",
+        "billing.invoice.IssueInvoice/grant/admitted/",
+        "/grant/read/denied",
+        "desk.tickets.Board/grant/read/admitted/",
+        "/binding/refusal/at-limit",
+        "notify-ledger/binding/refusal/",
+        "/binding/condition-false",
+        "auth.keys.Issue/disclosure//secret/origin/as/anonymous",
+        "auth.keys.Issue/disclosure/issued//origin/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret//as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/read//as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as/actor/",
+        "/disclosure/issued/secret/origin/as/anonymous",
+    ]);
+}
+
+#[test]
+fn a_later_scenario_form_with_a_malformed_name_is_malformed() {
+    assert_malformed(&[
+        "billing..IssueInvoice/grant/denied",
+        "1IssueInvoice/grant/denied",
+        "desk.ops.Tally/grant/admitted/desk.ops.Watcher.",
+        "desk.ops.Tally/grant/admitted/desk ops.Watcher",
+        "desk.tickets.Board./grant/read/denied",
+        "desk.tickets.Board/grant/read/admitted/desk.1Clerk",
+        "Notify-ledger/binding/refusal/at-limit",
+        "notify-ledger/binding/refusal/At-limit",
+        "notify-ledger/binding/refusal/at--limit",
+        "notify-ledger/binding/refusal/at-limit-",
+        "notify_ledger/binding/condition-false",
+        "Notify-ledger/binding/condition-absent",
+        "auth..keys.Issue/disclosure/issued/secret/origin/as/anonymous",
+        "auth.keys.Issue/disclosure/Issued/secret/origin/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/se-cret/origin/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/_/origin/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/1secret/origin/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/read/auth.keys.1KeyById/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/command/auth.keys.Revoke/Revoked/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/denied/auth keys/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as/actor/auth..Owner",
+    ]);
+}
+
+#[test]
+fn a_later_scenario_form_with_an_unknown_keyword_is_malformed() {
+    assert_malformed(&[
+        "billing.invoice.IssueInvoice/grant/refused",
+        "billing.invoice.IssueInvoice/grants/denied",
+        "billing.invoice.IssueInvoice/grant/allowed/desk.ops.Watcher",
+        "desk.tickets.Board/grant/read/refused",
+        "desk.tickets.Board/grant/write/denied",
+        "desk.tickets.Board/grant/read/allowed/desk.tickets.Clerk",
+        "notify-ledger/binding/refusals/at-limit",
+        "notify-ledger/binding/condition-true",
+        "notify-ledger/binding/condition_false",
+        "notify-ledger/binding/conditionabsent",
+        "auth.keys.Issue/disclosure/issued/secret/replay/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as/someone",
+        "auth.keys.Issue/disclosure/issued/secret/origin/by/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as/user/auth.keys.Owner",
+        "auth.keys.Issue/disclosures/issued/secret/origin/as/anonymous",
+    ]);
+}
+
+#[test]
+fn a_later_scenario_form_missing_or_adding_a_segment_is_malformed() {
+    assert_malformed(&[
+        "billing.invoice.IssueInvoice/grant",
+        "billing.invoice.IssueInvoice/grant/denied/extra",
+        "billing.invoice.IssueInvoice/grant/admitted",
+        "desk.ops.Tally/grant/admitted/desk.ops.Watcher/extra",
+        "desk.tickets.Board/grant/read",
+        "desk.tickets.Board/grant/read/denied/extra",
+        "desk.tickets.Board/grant/read/admitted",
+        "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk/extra",
+        "notify-ledger/binding/refusal",
+        "notify-ledger/binding/refusal/at-limit/extra",
+        "notify-ledger/binding/condition-false/extra",
+        "auth.keys.Issue/disclosure",
+        "auth.keys.Issue/disclosure/issued",
+        "auth.keys.Issue/disclosure/issued/secret",
+        "auth.keys.Issue/disclosure/issued/secret/origin",
+        "auth.keys.Issue/disclosure/issued/secret/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as/actor",
+        "auth.keys.Issue/disclosure/issued/secret/origin/extra/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/read/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/read/auth.keys.KeyById/extra/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/command/auth.keys.Revoke/as/anonymous",
+        "auth.keys.Issue/disclosure/issued/secret/denied/as/actor/auth.keys.Other",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as/actor/auth.keys.Owner/extra",
+        "auth.keys.Issue/disclosure/issued/secret/origin/as/anonymous/extra",
+    ]);
+}
 
 #[test]
 fn scenario_ids_follow_the_grammar_current_ess_parses_and_no_wider() {

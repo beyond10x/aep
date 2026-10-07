@@ -1,0 +1,84 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 8,
+    "skipped": 0,
+    "total": 8,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 1,
+      "generated": 7,
+      "outside": 0,
+      "refused": 2
+    },
+    "knowledge": "complete_inventory",
+    "refused": [
+      {
+        "code": "ESS-AUTHOR-038",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-AUTHOR-038]: `desk.tickets/authored/clerk-is-refused` in clerk-refused.yaml\n  `desk.tickets.Clerk` is granted `desk.tickets.OpenTicket`, so it is not refused as not granted\n  help: act as an actor the specification does not grant the command, or drop `refused: not_granted` and claim what the command answers",
+        "needs": [],
+        "origin": "authored",
+        "retained": null,
+        "scenario": "desk.tickets/authored/clerk-is-refused",
+        "scope": "in_scope",
+        "source": "clerk-refused.yaml",
+        "subject": null
+      },
+      {
+        "code": "ESS-AUTHOR-039",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-AUTHOR-039]: `desk.tickets/authored/nobody-is-refused` in nobody-refused.yaml\n  `desk.tickets.OpenTicket` is expected refused as not granted, which contradicts a missing `actor:`\n  help: a refused command takes no branch, reports no declared error and returns nothing: keep `actor:` beside `refused: not_granted`, drop `outcome`, `error`, `response`, `events` and `capture`, and list under `no_events:` what must not appear anywhere in the target's log after the refused send",
+        "needs": [],
+        "origin": "authored",
+        "retained": null,
+        "scenario": "desk.tickets/authored/nobody-is-refused",
+        "scope": "in_scope",
+        "source": "nobody-refused.yaml",
+        "subject": null
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated_and_authored",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk",
+      "desk.tickets.Board/grant/read/denied",
+      "desk.tickets.OpenTicket/grant/admitted/desk.tickets.Watcher",
+      "desk.tickets.OpenTicket/grant/denied",
+      "desk.tickets.OpenTicket/outcome/opened",
+      "desk.tickets.Titles/grant/read/admitted/desk.tickets.Visitor",
+      "desk.tickets.Titles/grant/read/denied",
+      "desk.tickets/authored/visitor-is-refused"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "6fcc787c55f2e5e9498a6f99ce806e3e8c136d1f28670f9a08af31fab312a1e2",
+  "specification": "desk/v1",
+  "suite": {
+    "digest": "sha256:36cc8c154dedb2618c6ecca0d42c0da3169d5853d745a8eea76a02aceb99fd7e",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/35"
+  }
+}

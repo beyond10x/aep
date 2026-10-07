@@ -1,0 +1,66 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 4,
+    "skipped": 0,
+    "total": 4,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 4,
+      "outside": 10,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "ids": [
+          "credentials.api.Issue/disclosure/issued/secret/denied/credentials.api.Read/as/actor/credentials.api.Guest",
+          "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Guest",
+          "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Owner",
+          "credentials.api.Read/outcome/read"
+        ],
+        "kind": "explicit",
+        "parent": {
+          "digest": "sha256:35002b72ca86953b43c9e356acd73bb8f2060fb63369ff4937ac6f58ddfae3fb",
+          "digest_profile": "sha256-json-bytes/1",
+          "version": "ess-conformance/35"
+        }
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "credentials.api.Issue/disclosure/issued/secret/denied/credentials.api.Read/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Guest",
+      "credentials.api.Issue/disclosure/issued/secret/read/credentials.api.Records/as/actor/credentials.api.Owner",
+      "credentials.api.Read/outcome/read"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "35bd1c58e9c789aed305603a6bea5884360213a0313f5ff8a736aa4b52c861fb",
+  "specification": "credentials/v1",
+  "suite": {
+    "digest": "sha256:b9a1d5b887c5894079c928c0dd92a9a74c60bcb6c86406f2ecf31d7f05c6c747",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/35"
+  }
+}

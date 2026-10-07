@@ -1,0 +1,56 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 5,
+    "skipped": 0,
+    "total": 5,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 5,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "credentials.api.Issue/disclosure/issued/secret/command/credentials.api.Issue/issued/as/anonymous",
+      "credentials.api.Issue/disclosure/issued/secret/origin/as/anonymous",
+      "credentials.api.Issue/disclosure/issued/secret/retry/as/anonymous",
+      "credentials.api.Issue/disclosure/issued/secret/rotation/as/anonymous",
+      "credentials.api.Issue/outcome/issued"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "a099e5f6b0d62a9e2d535fe73b6dafc1e778468425bde1f5649ecb50c007a0fe",
+  "specification": "credentials/v1",
+  "suite": {
+    "digest": "sha256:a8f8904a838f3a4626f106e3bc99971c46ebd7229a430f104e23eddafd5c3958",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/35"
+  }
+}
