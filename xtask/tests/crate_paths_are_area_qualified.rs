@@ -102,6 +102,16 @@ fn crate_directory_names(root: &Path) -> BTreeSet<String> {
 /// named, not a finding this rule lets through.
 const SYNTHETIC_PATHS: &[&str] = &["crates/govern/group/aep-nested"];
 
+/// Paths in the ESS repository that a fixture's provenance cites, and whose area is also an AEP
+/// area, so they read as `crates/<area>/<crate>` of this tree.
+///
+/// `crates/edge/ess-cli/tests/fixtures/synthesis-seeds` is where the `aep-ess-evidence` fixtures
+/// `current-suites/` and `adversary-88/` took their seed model from; their READMEs record the
+/// command as it was run in the ESS checkout. ESS paths under its other areas (`generate`,
+/// `verify`, `specify`) are not AEP areas and never match. Each entry is one cited path, not a
+/// crate, so a new citation fails red until it is named here.
+const FOREIGN_PATHS: &[&str] = &["crates/edge/ess-cli/tests/fixtures/synthesis-seeds"];
+
 /// Every `(area, crate)` pair the tree actually has, read off `crates/<area>/<crate>/Cargo.toml`.
 fn area_crate_directories(root: &Path) -> BTreeSet<(String, String)> {
     let mut pairs = BTreeSet::new();
@@ -628,7 +638,8 @@ fn no_tracked_file_names_a_crate_this_tree_does_not_have() {
             };
             if SYNTHETIC_PATHS
                 .iter()
-                .any(|synthetic| token.starts_with(synthetic))
+                .chain(FOREIGN_PATHS)
+                .any(|exempt| token.starts_with(exempt))
             {
                 continue;
             }
