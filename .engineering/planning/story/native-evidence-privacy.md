@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:native-evidence-privacy
 kind: story
-status: proposed
+status: rejected
 title: Withhold a private evidence reference without losing the record
 refs:
 - provider: github
@@ -23,9 +23,10 @@ scope:
   path: crates/govern/aep-domain/src/project.rs
 - confidence: cited
   path: crates/plan/aep-backend-markdown/src/journal.rs
-revision: 3
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:07:13Z", actor: "human:timo", revision: 2}
+- {from: "proposed", to: "rejected", at: "2026-10-07T08:09:46Z", actor: "human:timo", revision: 5}
 ---
 ## Outcome
 
@@ -85,3 +86,12 @@ where that model lives is part of the same decision.
 
 Not assessed for a wave: no implementation is scheduled until the blocker is cleared. The design's
 § 1 lists the source surfaces at 0.68.0.
+
+## Decision
+
+Decided 2026-10-07: option C. Committed evidence never changes, in any store version; no
+in-place representation is built. Adopters keep private paths out of new references. A repository
+whose historical evidence carries a personal path handles it with a Gates baseline move.
+`story:native-evidence-privacy` is rejected; `design:native-evidence-privacy` stays as written, a
+record of the option that was not taken. https://github.com/beyond10x/aep/issues/90 is closed as
+not planned.

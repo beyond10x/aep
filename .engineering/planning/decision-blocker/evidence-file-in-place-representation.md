@@ -2,11 +2,13 @@
 format: aep.planning-md/3
 id: decision-blocker:evidence-file-in-place-representation
 kind: decision-blocker
-status: open
+status: cleared
 title: Nobody has decided whether a /6 store may replace a committed evidence file in place
 relations:
 - blocks: story:native-evidence-privacy
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-07T08:09:45Z", actor: "human:timo", revision: 3}
 ---
 ## Question
 
@@ -37,3 +39,12 @@ private custody?
 ## Clears when
 
 The decision is recorded, with the Atlas ADR number if A or B.
+
+## Decision
+
+Decided 2026-10-07: option C. Committed evidence never changes, in any store version; no
+in-place representation is built. Adopters keep private paths out of new references. A repository
+whose historical evidence carries a personal path handles it with a Gates baseline move.
+`story:native-evidence-privacy` is rejected; `design:native-evidence-privacy` stays as written, a
+record of the option that was not taken. https://github.com/beyond10x/aep/issues/90 is closed as
+not planned.
