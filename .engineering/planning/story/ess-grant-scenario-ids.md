@@ -29,7 +29,7 @@ scope:
   path: crates/observe/aep-ess-evidence/tests/current_suites.rs
 - confidence: cited
   path: crates/observe/aep-ess-evidence/tests/fixtures/current-suites
-revision: 6
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:06:11Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-07T08:06:11Z", actor: "human:timo", revision: 5}
@@ -85,3 +85,21 @@ external ESS format AEP already reads. Rust types stay the source of truth (`sch
 - cited: `crates/govern/aep-domain/tests/ess_coverage_values.rs`
 - cited: `crates/observe/aep-ess-evidence/src/coverage_suite.rs`
 - inferred: `crates/observe/aep-ess-evidence/tests/`
+
+## Found during the fix
+
+Recorded 2026-10-07 from the implementation and two adversary passes; not fixed in this story.
+
+- Seed-record refusals that are about references (unknown source or selection, a scenario the
+  suite does not hold, an authored target, a duplicate identity, ordering, counts) are reported as
+  `InvalidShape`, which elsewhere in the coverage reader means a JSON type mismatch; the detail
+  text tells them apart. ESS names them `InvalidSynthesisSeeds`. A separate code is a new outcome
+  for consumers and was left out of a defect fix.
+- Steps that establish and address a seed row read scenario bodies, which AEP leaves to ESS; a
+  hand-built suite whose steps disagree with its seed record is admitted.
+- Scenario ids named in `coverage.refused[].scenario` are not gated by major; ESS's reader gates
+  only scenario keys, which is what AEP mirrors.
+
+- The transcribed suite/5 lineage compares payloads as `aep_domain::Node`, whose numbers are
+  `f64`, so a selected child that changed an integer above 2^53 to its neighbour compares equal to
+  its parent and is admitted (pre-existing). Fixing it changes `aep_domain::Number`.
