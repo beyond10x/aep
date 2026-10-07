@@ -849,9 +849,21 @@ fn unpaired<T: PartialEq>(old: &[T], new: &[T]) -> (Vec<usize>, Vec<usize>) {
     let new_middle = &new[prefix..new.len() - suffix];
     let (rows, columns) = (old_middle.len(), new_middle.len());
     if rows.saturating_mul(columns) > ALIGNED_CELLS {
+        // Each item against the one at its position: an equal pair is paired, the rest and the
+        // longer side's overhang are left over.
+        let differing = |position: &usize| old_middle[*position] != new_middle[*position];
+        let shared = rows.min(columns);
         return (
-            (prefix..prefix + rows).collect(),
-            (prefix..prefix + columns).collect(),
+            (0..shared)
+                .filter(differing)
+                .chain(shared..rows)
+                .map(|position| prefix + position)
+                .collect(),
+            (0..shared)
+                .filter(differing)
+                .chain(shared..columns)
+                .map(|position| prefix + position)
+                .collect(),
         );
     }
     // `longest[row * width + column]`: the longest common subsequence of `old_middle[row..]` and
@@ -1433,6 +1445,81 @@ mod tests {
             "only the title changed"
         );
         assert_no_value(&differences, &[title]);
+    }
+
+    /// `ALIGNED_CELLS` promises that beyond the table "every item is compared with the one at its
+    /// position": an equal pair at one position is not a difference there, however long the run.
+    #[test]
+    fn beyond_the_aligned_table_equal_records_at_their_positions_are_not_reported() {
+        let inner = 2048;
+        let item = |source: &str| {
+            record(SAME_SECOND, test_result(source, "run-aligned-0001"))
+        };
+        let shared: Vec<Entry> = (0..inner)
+            .map(|index| item(&format!("shared suite {index}")))
+            .collect();
+        let old: Vec<Entry> = std::iter::once(item("old head"))
+            .chain(shared.iter().cloned())
+            .chain(std::iter::once(item("old tail")))
+            .collect();
+        let new: Vec<Entry> = std::iter::once(item("new head"))
+            .chain(shared.iter().cloned())
+            .chain(std::iter::once(item("new tail")))
+            .collect();
+        assert!(
+            old.len() * new.len() > super::ALIGNED_CELLS,
+            "the run is beyond the aligned table"
+        );
+        let differences =
+            super::sequence_differences(&observed(), "evidence record", &old, &new, |_| None);
+        assert_eq!(
+            differences,
+            [
+                "story:observed: evidence record 1 differs in change.source".to_owned(),
+                format!(
+                    "story:observed: evidence record {} differs in change.source",
+                    inner + 2
+                ),
+            ],
+            "only the first and last records differ; {} lines were reported",
+            differences.len()
+        );
+    }
+
+    /// Two records in one second at falling revisions, and a byte-identical copy of the first:
+    /// the new store answers them by revision, then file sequence, and the old store's records
+    /// are sorted the same way, so the faithful migration verifies clean.
+    #[test]
+    fn same_second_records_at_falling_revisions_verify_clean_in_revision_order() {
+        let at_revision = |revision: u64, source: &str| Entry {
+            revision,
+            ..record(SAME_SECOND, test_result(source, "run-revision-0002"))
+        };
+        let journal = [
+            at_revision(2, "revision two"),
+            at_revision(1, "revision one"),
+            at_revision(2, "revision two"),
+        ];
+        let (plan, planning, evidence) = migrated("adversary-falling-revisions", &journal);
+        let (records, unreadable) =
+            aep_backend_markdown::journal::evidence_records_git(&planning, &evidence, &observed());
+        assert_eq!(unreadable, 0, "every record reads");
+        let sources: Vec<String> = records
+            .iter()
+            .filter_map(|(_, entry)| match &entry.change {
+                Change::Evidence { source, .. } => Some(source.clone()),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            sources,
+            ["revision one", "revision two", "revision two"],
+            "the new store answers revision first, then file sequence"
+        );
+        assert_eq!(
+            verify(&plan.answered, &planning, &evidence),
+            Vec::<String>::new()
+        );
     }
 
     #[test]
