@@ -1603,20 +1603,27 @@ struct Inputs {
 ///
 /// The order matters. A flag is an instruction; discovery is a convenience. Silently preferring the
 /// project would make `--task other.yaml` do something other than what it says.
+///
+/// `--task` chooses the task and nothing else. Inside a project the documents still come from the
+/// project's `protocols` source, because only `--root` names a tree: a `--task` that also switched
+/// discovery off read the working directory instead, which for a project with an external source
+/// holds no protocol at all. Outside any project, `--task` reads `--root` or the working directory.
 fn inputs(args: &ExecutionArgs) -> Result<Inputs> {
-    if let (Some(task), root) = (&args.task, &args.root) {
-        let root = root.clone().unwrap_or_else(|| PathBuf::from("."));
-        let registry = load(&root)?;
-        let artifacts = match &args.artifacts {
-            Some(path) => read_artifacts(path)?,
-            None => ArtifactGraph::new(),
+    if let Some(task) = &args.task {
+        let project = if args.root.is_some() {
+            None
+        } else {
+            let here = std::env::current_dir().context("reading the working directory")?;
+            aep_project::project::discover(&here)
         };
-        return Ok(Inputs {
-            registry,
-            task: read_task(task)?,
-            artifacts,
-            origin: format!("{} and {}", root.display(), task.display()),
-        });
+        return match project {
+            Some(root) => project_inputs(&root, args),
+            None => flag_inputs(
+                args.root.as_deref().unwrap_or_else(|| Path::new(".")),
+                task,
+                args,
+            ),
+        };
     }
 
     let here = std::env::current_dir().context("reading the working directory")?;
@@ -1627,16 +1634,42 @@ fn inputs(args: &ExecutionArgs) -> Result<Inputs> {
             here.display()
         )
     })?;
+    project_inputs(&root, args)
+}
+
+/// Execution inputs from flags alone: the tree at `root`, the task at `task`, and `--artifacts`.
+fn flag_inputs(root: &Path, task: &Path, args: &ExecutionArgs) -> Result<Inputs> {
+    let registry = load(root)?;
+    let artifacts = match &args.artifacts {
+        Some(path) => read_artifacts(path)?,
+        None => ArtifactGraph::new(),
+    };
+    Ok(Inputs {
+        registry,
+        task: read_task(task)?,
+        artifacts,
+        origin: format!("{} and {}", root.display(), task.display()),
+    })
+}
+
+/// Execution inputs from the project at `root`, with `--task` and `--artifacts` over it.
+fn project_inputs(root: &Path, args: &ExecutionArgs) -> Result<Inputs> {
     let project =
-        aep_project::project::load(&root).map_err(|errors| anyhow::anyhow!("{errors}"))?;
+        aep_project::project::load(root).map_err(|errors| anyhow::anyhow!("{errors}"))?;
 
     // A flag still overrides what the project says, so a one-off run needs no edit to the project.
-    let task = match &args.task {
-        Some(path) => read_task(path)?,
-        None => project
-            .require_task()
-            .map_err(|reason| anyhow::anyhow!("{reason}"))?
-            .clone(),
+    let (task, origin) = match &args.task {
+        Some(path) => (
+            read_task(path)?,
+            format!("project {} and {}", root.display(), path.display()),
+        ),
+        None => (
+            project
+                .require_task()
+                .map_err(|reason| anyhow::anyhow!("{reason}"))?
+                .clone(),
+            format!("project {}", root.display()),
+        ),
     };
     let artifacts = match &args.artifacts {
         Some(path) => read_artifacts(path)?,
@@ -1647,7 +1680,7 @@ fn inputs(args: &ExecutionArgs) -> Result<Inputs> {
         registry: project.registry,
         task,
         artifacts,
-        origin: format!("project {}", root.display()),
+        origin,
     })
 }
 
