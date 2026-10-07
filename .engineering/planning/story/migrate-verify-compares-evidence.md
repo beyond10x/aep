@@ -15,9 +15,9 @@ scope:
   path: crates/edge/aep-cli/src/store_command/migrate_git.rs
 - confidence: cited
   path: crates/edge/aep-cli/tests/store_migrate_git.rs
-- confidence: inferred
+- confidence: cited
   path: crates/plan/aep-backend-markdown/src/journal.rs
-revision: 5
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 5}
@@ -65,3 +65,16 @@ what it already reads.
 - cited: `crates/edge/aep-cli/src/store_command/migrate_git.rs`
 - cited: `crates/edge/aep-cli/tests/store_migrate_git.rs`
 - inferred: `crates/plan/aep-backend-markdown/src/journal.rs`
+
+## Found during the fix
+
+Recorded 2026-10-07 from the implementation and two adversary passes; not fixed in this story.
+
+- An evidence file for an artifact with no document is not checked by `--verify` (pre-existing).
+  The migration's writer never produces one.
+- The per-second evidence sequence is three digits (`{:03}`), so more than 999 records in one second
+  for one artifact would misorder. The largest seen in 20 real `/1` journals is 8.
+- A document that fails to read back is still reported with the store loader's detail text, which
+  can quote content.
+- Transitions are compared in journal order, not re-sorted. 0 of 1063 moves in 20 real `/1`
+  journals are out of order, so no faithful migration fails on it.

@@ -12,9 +12,13 @@ relations:
 scope:
 - confidence: cited
   path: crates/edge/aep-cli/src/app.rs
-- confidence: inferred
+- confidence: cited
   path: crates/edge/aep-cli/tests/govern_resolve_task_in_project.rs
-revision: 5
+- confidence: cited
+  path: docs/guide/README.md
+- confidence: cited
+  path: website/docs/guides/govern-a-task.md
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 5}
@@ -56,3 +60,16 @@ documents.
 
 - cited: `crates/edge/aep-cli/src/app.rs`
 - inferred: `crates/edge/aep-cli/tests/govern_resolve_task_in_project.rs`
+
+## Found during the fix
+
+Recorded by the implementor, 2026-10-07; not fixed in this story.
+
+- Inside a project, `--root` given without `--task` is ignored: `aep govern resolve --root <empty
+  dir>` exits 0 and reads the project (probed against the fixed build). The CLI reference says each
+  flag defaults to the project's value, which implies the flag wins when given.
+- With `--task` given inside a project, a broken project task file or artifact manifest still
+  fails the project load, though neither is used. Tolerating it needs a separate loader in
+  `aep-project`.
+- `aep drive` (`crates/edge/aep-cli/src/drive.rs:441`) already discovered the project when
+  `--task` was given; only `govern resolve`, `evaluate` and `explain` went through `inputs`.

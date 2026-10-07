@@ -12,14 +12,24 @@ relations:
 - informed_by: epic:evidence-gated-completion
 scope:
 - confidence: cited
+  path: crates/edge/aep-cli/tests/ess_conformance_coverage.rs
+- confidence: cited
+  path: crates/govern/aep-domain/src/ess_conformance_coverage/values.rs
+- confidence: cited
   path: crates/govern/aep-domain/src/ess_conformance_v2.rs
 - confidence: cited
   path: crates/govern/aep-domain/tests/ess_coverage_values.rs
 - confidence: cited
+  path: crates/observe/aep-ess-evidence/src/coverage_definition.rs
+- confidence: cited
   path: crates/observe/aep-ess-evidence/src/coverage_suite.rs
 - confidence: inferred
   path: crates/observe/aep-ess-evidence/tests
-revision: 5
+- confidence: cited
+  path: crates/observe/aep-ess-evidence/tests/current_suites.rs
+- confidence: cited
+  path: crates/observe/aep-ess-evidence/tests/fixtures/current-suites
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:06:11Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-07T08:06:11Z", actor: "human:timo", revision: 5}
