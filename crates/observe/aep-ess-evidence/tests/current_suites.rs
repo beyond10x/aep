@@ -1065,3 +1065,39 @@ fn each_later_form_is_admitted_from_its_first_coverage_major_and_refused_below_i
         }
     }
 }
+
+const SUITE_INTEGER_IDENTITIES: &str =
+    include_str!("fixtures/adversary-88/integer-identities/suite-43-integer-identities.json");
+const REPORT_INTEGER_IDENTITIES: &str = include_str!(
+    "fixtures/adversary-88/integer-identities/report-43-integer-identities-external.json"
+);
+
+#[test]
+fn seed_identities_are_one_row_exactly_when_ess_0_55_renders_them_alike() {
+    // Each change was given to `ess 0.55.0 verify conform report --suite`. The integer token
+    // `9007199254740992` renders as `9007199254740992.0`, the other row's identity, so ESS refused
+    // it: "two selections share one qualified identity".
+    let same = SUITE_INTEGER_IDENTITIES.replace(
+        "\"identity\": 9007199254740993",
+        "\"identity\": 9007199254740992",
+    );
+    assert_ne!(same, SUITE_INTEGER_IDENTITIES);
+    let error = admit_raw(&rebound(REPORT_INTEGER_IDENTITIES, &same), &same)
+        .expect_err("two identities rendered alike");
+    let located = refusal(&error, "InvalidShape");
+    assert!(
+        located.starts_with("$suite.provenance.synthesis_seeds")
+            && located.contains("two selections share one qualified identity"),
+        "{located}"
+    );
+    // `9.007199254740992e15` is the binary64 `9007199254740992.0` again, still not
+    // `9007199254740993`: ESS admitted it and passed all eight.
+    let exponent = SUITE_INTEGER_IDENTITIES.replace(
+        "\"identity\": 9007199254740992.0",
+        "\"identity\": 9.007199254740992e15",
+    );
+    assert_ne!(exponent, SUITE_INTEGER_IDENTITIES);
+    let reading = admit_raw(&rebound(REPORT_INTEGER_IDENTITIES, &exponent), &exponent)
+        .expect("an exponent spelling of one binary64 beside an integer it does not carry");
+    assert_eq!(reading.data().counts.passed, 8);
+}

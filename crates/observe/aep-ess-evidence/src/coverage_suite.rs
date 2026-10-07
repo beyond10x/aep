@@ -303,11 +303,11 @@ struct SeedApplication<'a> {
 /// with `admission::setup_row`) and `admit_applications` (`synthesis_seeds.rs:266-334`). Every
 /// refusal names ESS's own cause.
 ///
-/// Two of ESS's checks read what AEP leaves to ESS. Whether an application's steps establish and
-/// address its row, and whether every generated row is bound, read scenario steps. ESS orders
-/// applications by its scenario-id type, not by spelling, so AEP checks only what that order
-/// implies whatever the type: applications are distinct, and those naming one scenario are
-/// adjacent and ordered by step.
+/// Two of ESS's checks read what AEP leaves to ESS: whether an application's steps establish and
+/// address its row, and whether every generated row is bound, read scenario steps. Applications
+/// are ordered by `(scenario, establish_step)` (`synthesis_seeds.rs:275`), and ESS orders a
+/// scenario id by its rendered name (`impl Ord for ScenarioId`, `scenario.rs:1045`), which for an
+/// admitted id is its spelling.
 fn admit_seed_record(
     major: u32,
     seeds: &Json,
@@ -376,9 +376,7 @@ fn admit_seed_selections(
             return Err(refuse("a selection names an unknown source"));
         }
         used.insert(selection.source);
-        let identity = &selection.record["identity"];
-        let identity: aep_domain::Node = serde_json::from_str(&identity.raw)
-            .map_err(|error| identity.error("InvalidShape", error.to_string()))?;
+        let identity = Rendered::of(&selection.record["identity"])?;
         if identities.contains(&(selection.entity, identity.clone())) {
             return Err(refuse("two selections share one qualified identity"));
         }
@@ -402,17 +400,10 @@ fn admit_seed_applications(
     inventory: &Inventory,
 ) -> Result<()> {
     let refuse = |detail: &str| seeds.error("InvalidShape", detail);
-    let mut distinct = BTreeSet::new();
-    for (at, application) in applications.iter().enumerate() {
-        let earlier = applications[..at]
-            .iter()
-            .rposition(|other| other.scenario == application.scenario);
-        let ordered = earlier.is_none_or(|before| {
-            before + 1 == at && applications[before].establish_step < application.establish_step
-        });
-        if !distinct.insert((application.scenario, application.establish_step)) || !ordered {
-            return Err(refuse("applications must be sorted and distinct"));
-        }
+    if !applications.windows(2).all(|pair| {
+        (pair[0].scenario, pair[0].establish_step) < (pair[1].scenario, pair[1].establish_step)
+    }) {
+        return Err(refuse("applications must be sorted and distinct"));
     }
     for application in applications {
         if !selections.iter().any(|selection| {
@@ -486,6 +477,98 @@ fn setup_row(record: &BTreeMap<String, Json>) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// The magnitude up to which ESS carries an integral binary64 as the integer it is (ESS 0.55.0
+/// `ess_primitives::facts::INTEGER_CARRIER`, `facts.rs:73`).
+const INTEGER_CARRIER: f64 = 9_223_372_036_854_775_808.0;
+
+/// A seed identity as ESS 0.55.0 renders it to tell two rows apart: `admit_selections` compares
+/// `serde_json::to_string(&record.identity)` (`synthesis_seeds.rs:250`), so two identities are one
+/// exactly when their rendered texts are equal.
+///
+/// ESS reads an integer token that fits 64 bits exactly and every other number through binary64
+/// (`Number`'s `visit_i64`, `visit_u64` and `visit_f64`, `facts.rs:113-142`). It writes a number
+/// as its binary64 where that carries the exact value and as the integer where it does not
+/// (`impl Serialize for Number`, `facts.rs:173`, deciding with `canonical_decimal`,
+/// `facts.rs:409`). So `9007199254740992`, `9007199254740992.0` and `9.007199254740992e15` are one
+/// identity and `9007199254740993` is another. The key is built from the original tokens, so no
+/// `serde_json` number feature unified into a build decides it.
+#[derive(Clone, PartialEq)]
+enum Rendered {
+    Null,
+    Bool(bool),
+    /// An integer its binary64 does not carry, written exactly.
+    Integer(i128),
+    /// Every other number, by its binary64's bits.
+    Binary64(u64),
+    Text(String),
+    Seq(Vec<Rendered>),
+    /// Members by name, in order, as ESS's `Node::Map` holds them.
+    Map(Vec<(String, Rendered)>),
+}
+
+impl Rendered {
+    fn of(value: &Json) -> Result<Self> {
+        if let Ok(members) = value.object() {
+            return members
+                .iter()
+                .map(|(name, member)| Ok((name.clone(), Self::of(member)?)))
+                .collect::<Result<_>>()
+                .map(Self::Map);
+        }
+        if let Ok(items) = value.array() {
+            return items
+                .iter()
+                .map(Self::of)
+                .collect::<Result<_>>()
+                .map(Self::Seq);
+        }
+        if let Ok(text) = value.text() {
+            return Ok(Self::Text(text.to_owned()));
+        }
+        if value.null() {
+            return Ok(Self::Null);
+        }
+        if let Ok(flag) = value.boolean() {
+            return Ok(Self::Bool(flag));
+        }
+        Self::number(value)
+    }
+
+    fn number(value: &Json) -> Result<Self> {
+        let raw = value.raw.as_str();
+        // `serde_json` reads `-0` as the binary64 `-0.0`, whose sign survives in ESS's writing.
+        let exact = if raw.contains(['.', 'e', 'E']) || raw.starts_with("-0") {
+            None
+        } else {
+            raw.parse::<i64>()
+                .map(i128::from)
+                .or_else(|_| raw.parse::<u64>().map(i128::from))
+                .ok()
+        };
+        let Some(integer) = exact else {
+            return raw
+                .parse::<f64>()
+                .map(|binary| Self::Binary64(binary.to_bits()))
+                .map_err(|error| value.error("InvalidShape", error.to_string()));
+        };
+        // `canonical_decimal`: an integral binary64 up to 2^63 is that integer; past it, the
+        // integer its shortest decimal spells.
+        #[allow(clippy::cast_precision_loss)]
+        let binary = integer as f64;
+        #[allow(clippy::cast_possible_truncation)]
+        let carried = if binary.abs() <= INTEGER_CARRIER {
+            binary as i128 == integer
+        } else {
+            format!("{binary}").parse::<i128>().ok() == Some(integer)
+        };
+        Ok(if carried {
+            Self::Binary64(binary.to_bits())
+        } else {
+            Self::Integer(integer)
+        })
+    }
 }
 
 /// How deep the deepest member of a literal sits below it.
@@ -908,7 +991,7 @@ fn admit_child(child: &AdmittedSuite, parent: &AdmittedSuite) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{admit_id_forms, id_form, IdForm, LATER_ID_FORMS};
+    use super::{admit_id_forms, id_form, IdForm, Rendered, LATER_ID_FORMS};
     use crate::count_json::Json;
     use aep_domain::ess_conformance_v2::ScenarioId;
 
@@ -951,6 +1034,31 @@ mod tests {
         for major in [5, 7, 33, 45] {
             admit_id_forms(&format!("ess-conformance/{major}"), &ids, &scenarios)
                 .unwrap_or_else(|error| panic!("/{major}: {error}"));
+        }
+    }
+
+    #[test]
+    fn seed_identities_compare_as_ess_renders_them() {
+        // Read off `ess_primitives::facts` at ESS 0.55.0 (`visit_*`, `Serialize`,
+        // `canonical_decimal`); the first two pairs were also measured on `ess 0.55.0`.
+        let key = |text: &str| Rendered::of(&Json::parse(text, "$").unwrap()).unwrap();
+        for (left, right, same) in [
+            ("9007199254740992", "9007199254740992.0", true),
+            ("9007199254740993", "9.007199254740992e15", false),
+            ("9007199254740992.0", "9.007199254740992e15", true),
+            ("1", "1.0", true),
+            ("-0", "0", false),
+            ("-0", "-0.0", true),
+            ("9223372036854775807", "9223372036854775806", false),
+            ("9223372036854775808", "9.223372036854776e18", true),
+            ("18446744073709551615", "1.8446744073709552e19", false),
+            ("10000000000000000000", "1e19", true),
+            ("\"1\"", "1", false),
+            ("null", "\"null\"", false),
+            ("{\"b\": 1, \"a\": [2]}", "{\"a\": [2.0], \"b\": 1.0}", true),
+            ("[1, 2]", "[2, 1]", false),
+        ] {
+            assert_eq!(key(left) == key(right), same, "{left} vs {right}");
         }
     }
 }

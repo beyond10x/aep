@@ -18,3 +18,15 @@ Written by `ess 0.55.0`, run from this directory; no byte was edited afterwards.
 | `input-35-one-time-actors-selected.json` | `ess verify conform select --suite suite-35-one-time-actors.json --ids ids-35-one-time-actors-selected.json --out input-35-one-time-actors-selected.json` |
 | `results-35-one-time-actors-selected.json` | the results command above, over `jq -r .suite_json input-35-one-time-actors-selected.json` |
 | `report-35-one-time-actors-selected-external.json` | `ess verify conform report --suite input-35-one-time-actors-selected.json --results results-35-one-time-actors-selected.json --implementation example-service --runner example-runner@1.0.0 --report-out report-35-one-time-actors-selected-external.json` |
+
+## Integer identities above 2^53 (pass 2)
+
+In `integer-identities/`, run from that directory.
+
+| File | Source or command |
+| --- | --- |
+| `model/`, `seeds/` | ESS's `crates/edge/ess-cli/tests/fixtures/synthesis-seeds` at tag `0.55.0`, every `Uuid` made `Integer` and the two seed identities set to `9007199254740993` (`max.yaml`) and `9007199254740992` (`below.yaml`) |
+| `suite-43-integer-identities.json` | `ess verify conform synthesize --path model --suite-format 5 --out suite-43-integer-identities.json --synthesis-seed seeds/max.yaml at-max --synthesis-seed seeds/below.yaml below-max` |
+| `results-43-integer-identities.json` | the results command above |
+| `report-43-integer-identities-external.json` | `ess verify conform report --suite suite-43-integer-identities.json --results results-43-integer-identities.json --implementation example-service --runner example-runner@1.0.0 --report-out report-43-integer-identities-external.json` |
+| `report-43-integer-identities-run.json` | `ess verify conform run --target interpreted --path model --suite suite-43-integer-identities.json --report-format 2 --report-out report-43-integer-identities-run.json` |

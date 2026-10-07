@@ -1,0 +1,14 @@
+type: ess-scenario/2
+domain: counter.model
+scenario: counter-at-max
+summary: A counter established at its signed maximum.
+arrange:
+  - instance: at-max
+    entity: counter.model.Counter
+    setup:
+      identity: 9007199254740993
+      fields: {revision: 9223372036854775807}
+      state: Active
+assert:
+  - view: counter.model.Counters
+    contains: {id: {$instance: at-max}, revision: 9223372036854775807}

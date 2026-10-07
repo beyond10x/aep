@@ -1,0 +1,4 @@
+format: ess/20
+system: counter
+version: v1
+domains: [counter.model]
