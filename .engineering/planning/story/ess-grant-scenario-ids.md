@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:ess-grant-scenario-ids
 kind: story
-status: active
+status: implemented
 title: Evidence admits the scenario ids ESS 0.55.0 synthesizes, including grant forms
 refs:
 - provider: github
@@ -29,10 +29,11 @@ scope:
   path: crates/observe/aep-ess-evidence/tests/current_suites.rs
 - confidence: cited
   path: crates/observe/aep-ess-evidence/tests/fixtures/current-suites
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:06:11Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-07T08:06:11Z", actor: "human:timo", revision: 5}
+- {from: "active", to: "implemented", at: "2026-10-07T22:44:02Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":4}}}
 ---
 ## Outcome
 
