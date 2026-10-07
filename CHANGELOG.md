@@ -11,6 +11,14 @@ belongs in the commit message or in `docs/design/`.
 
 ## [0.69.0] — 2026-10-07
 
+### Added
+
+- `aep plan artifact evidence --suite` admits the `scenario_initial_state` and `synthesis_seeds`
+  provenance members and authored refusals `ESS-AUTHOR-038`–`041` that ESS 0.55.0 writes. Either
+  member is refused as `UnsupportedVocabulary` in a suite older than the major that introduced it,
+  and a `synthesis_seeds` record ESS refuses on its own terms (an unknown source or selection,
+  unsorted selections, an application naming an authored scenario, a malformed name) is refused.
+
 ### Fixed
 
 - `aep plan artifact evidence --suite` admits every coverage suite ESS 0.55.0 writes
@@ -19,12 +27,9 @@ belongs in the commit message or in `docs/design/`.
   grants (`<command>/grant/denied`, `<command>/grant/admitted/<actor>`,
   `<view>/grant/read/denied`, `<view>/grant/read/admitted/<actor>`), one-time disclosure cells,
   `<binding>/binding/refusal/<outcome>` and the `condition-false` and `condition-absent` binding
-  aspects; they were refused as `MalformedScenarioId`. The `scenario_initial_state` and
-  `synthesis_seeds` provenance members and authored refusals `ESS-AUTHOR-038`–`041` are admitted
-  too. Each later form or member is refused as `UnsupportedVocabulary`, naming the form and the
-  major, in a suite older than the major that introduced it, the transcribed suite/5 included; a
-  `synthesis_seeds` record ESS refuses on its own terms (an unknown source or selection, unsorted
-  selections, an application naming an authored scenario, a malformed name) is refused.
+  aspects; they were refused as `MalformedScenarioId`. Each later form is refused as
+  `UnsupportedVocabulary`, naming the form and the major, in a suite older than the major that
+  introduced it, the transcribed suite/5 included.
 - `aep govern resolve`, `evaluate` and `explain` given `--task` inside a project load the project's
   configured `protocols` source and its artifact manifest, instead of reading the working directory
   as the document tree. A project with an external or pinned protocol source no longer refuses
