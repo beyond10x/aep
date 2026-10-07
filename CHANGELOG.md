@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.69.0] — 2026-10-07
+
 ### Fixed
 
 - `aep plan artifact evidence --suite` admits every coverage suite ESS 0.55.0 writes
