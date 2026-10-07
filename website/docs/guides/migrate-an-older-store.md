@@ -44,7 +44,7 @@ An `aep.project/1` store keeps Markdown documents plus a `journal.jsonl` of move
    not carried (Git history holds them): 1 created
    …/.engineering/project.yaml now selects `aep.project/5` with `planning_scope: old`: 1 document(s), 2 transition(s), 1 evidence file(s) written
    removed …/.engineering/planning/journal.jsonl; Git history holds it
-   verified 1 artifact(s): status, revision, title, relations, body, transitions and evidence equal what the old store answered
+   verified 1 artifact(s) and 1 evidence record(s): status, revision, title, relations, body, transitions and every evidence record, field by field and in order, equal what the old store answered
    ```
 
 4. Review the diff, run `aep plan artifact validate`, and commit.
@@ -64,7 +64,9 @@ What changes:
 
 The migration refuses **before writing anything** when a document disagrees with its journal: a
 status the last move did not reach, a revision not above its move count, or a journal entry with no
-document. Fix the named document and run it again. `--verify` exits non-zero on any difference.
+document. Fix the named document and run it again. `--verify` exits non-zero on any difference. It
+compares each evidence record field by field and in order, and a difference names the artifact,
+the record's position, its file and the differing fields, never their values.
 
 ## From a planning directory with no project file
 

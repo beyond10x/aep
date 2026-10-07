@@ -344,6 +344,178 @@ fn a_v1_store_migrates_with_verify_keeping_its_moves_and_evidence_and_dropping_i
     ok(&project, &["validate"]);
 }
 
+/// `--verify` compares every evidence record in order, so a faithful migration of two distinct
+/// records made in one second, and of one record journalled twice, must still verify clean: the
+/// new store answers them in the old order and keeps both copies.
+#[test]
+fn same_second_records_and_identical_duplicates_verify_clean_in_order_and_multiplicity() {
+    let project = v1_project("same-second");
+    let planning = project.join(".engineering/planning");
+    std::fs::create_dir_all(planning.join("story")).expect("the store is writable");
+    std::fs::write(
+        planning.join("story/observed.md"),
+        story("observed", "draft", 1),
+    )
+    .expect("the document is writable");
+    let observation = |at: &str, source: &str, reference: &str| {
+        entry_line(
+            at,
+            "story:observed",
+            1,
+            &serde_json::json!({
+                "change": "evidence",
+                "kind": "test_result",
+                "source": source,
+                "reference": reference
+            }),
+        )
+    };
+    let lines = [
+        entry_line(
+            "2026-09-28T09:00:00Z",
+            "story:observed",
+            1,
+            &serde_json::json!({"change": "created", "status": "draft"}),
+        ),
+        observation("2026-09-28T10:00:00Z", "first suite", "run-1"),
+        observation("2026-09-28T10:00:00Z", "second suite", "run-2"),
+        observation("2026-09-28T10:01:00Z", "repeated suite", "run-3"),
+        observation("2026-09-28T10:01:00Z", "repeated suite", "run-3"),
+    ];
+    std::fs::write(planning.join("journal.jsonl"), lines.join("\n") + "\n")
+        .expect("the journal is writable");
+    commit_all(&project);
+
+    let migrated = aep(&project, &["plan", "store", "migrate", "git", "--verify"]);
+    assert!(
+        migrated.status.success(),
+        "{}{}",
+        stdout(&migrated),
+        stderr(&migrated)
+    );
+    assert!(
+        stdout(&migrated).contains("verified 1 artifact(s) and 4 evidence record(s)"),
+        "{}",
+        stdout(&migrated)
+    );
+
+    let history = ok(&project, &["history", "story:observed"]);
+    let sources: Vec<&str> = history
+        .lines()
+        .filter_map(|line| {
+            ["first suite", "second suite", "repeated suite"]
+                .into_iter()
+                .find(|source| line.contains(source))
+        })
+        .collect();
+    assert_eq!(
+        sources,
+        [
+            "first suite",
+            "second suite",
+            "repeated suite",
+            "repeated suite"
+        ],
+        "the same-second pair keeps its order and the duplicate both copies: {history}"
+    );
+}
+
+/// A `/1` recorder took `--at`, so a journal can hold a record about one artifact observed before
+/// one journalled ahead of it. Both records are migrated, each into its own file: the migration
+/// is faithful, and an unmodified migration verifies clean.
+#[test]
+fn a_journal_with_backdated_evidence_migrates_and_verifies_clean() {
+    let project = v1_project("backdated");
+    let planning = project.join(".engineering/planning");
+    std::fs::create_dir_all(planning.join("story")).expect("the store is writable");
+    std::fs::write(
+        planning.join("story/observed.md"),
+        story("observed", "draft", 2),
+    )
+    .expect("the document is writable");
+    let observation = |at: &str, revision: u64, source: &str| {
+        entry_line(
+            at,
+            "story:observed",
+            revision,
+            &serde_json::json!({"change": "evidence", "kind": "test_result", "source": source}),
+        )
+    };
+    let lines = [
+        entry_line(
+            "2026-09-28T09:00:00Z",
+            "story:observed",
+            1,
+            &serde_json::json!({"change": "created", "status": "draft"}),
+        ),
+        observation("2026-09-28T10:00:00Z", 1, "recorded first"),
+        observation("2026-09-28T09:30:00Z", 2, "observed earlier"),
+    ];
+    std::fs::write(planning.join("journal.jsonl"), lines.join("\n") + "\n")
+        .expect("the journal is writable");
+    commit_all(&project);
+
+    let migrated = aep(&project, &["plan", "store", "migrate", "git", "--verify"]);
+    assert!(
+        migrated.status.success(),
+        "a faithful migration of backdated evidence must verify clean:\n{}{}",
+        stdout(&migrated),
+        stderr(&migrated)
+    );
+}
+
+/// Records of different kinds observed at one instant share the artifact's evidence directory and
+/// its per-second sequence, so they keep journal order whatever their kinds' order.
+#[test]
+fn records_of_different_kinds_at_one_instant_verify_clean_in_journal_order() {
+    let project = v1_project("one-instant-kinds");
+    let planning = project.join(".engineering/planning");
+    std::fs::create_dir_all(planning.join("story")).expect("the store is writable");
+    std::fs::write(
+        planning.join("story/observed.md"),
+        story("observed", "draft", 1),
+    )
+    .expect("the document is writable");
+    let observation = |kind: &str, source: &str| {
+        entry_line(
+            "2026-09-28T10:00:00Z",
+            "story:observed",
+            1,
+            &serde_json::json!({"change": "evidence", "kind": kind, "source": source}),
+        )
+    };
+    let lines = [
+        observation("review", "kind review"),
+        observation("approval", "kind approval"),
+        observation("test_result", "kind test result"),
+    ];
+    std::fs::write(planning.join("journal.jsonl"), lines.join("\n") + "\n")
+        .expect("the journal is writable");
+    commit_all(&project);
+
+    let migrated = aep(&project, &["plan", "store", "migrate", "git", "--verify"]);
+    assert!(
+        migrated.status.success(),
+        "{}{}",
+        stdout(&migrated),
+        stderr(&migrated)
+    );
+    let history = ok(&project, &["history", "story:observed"]);
+    let sources: Vec<&str> = history
+        .lines()
+        .filter_map(|line| {
+            ["kind review", "kind approval", "kind test result"]
+                .into_iter()
+                .find(|source| line.contains(source))
+        })
+        .collect();
+    assert_eq!(
+        sources,
+        ["kind review", "kind approval", "kind test result"],
+        "one instant keeps journal order across kinds: {history}"
+    );
+}
+
 /// A `/1` store first committed in the same commit as its migration — a squash of the two — is
 /// valid: an artifact the journal never moved carries its status as one imported transition, so
 /// `validate` does not depend on a history that begins in `aep.planning-md/1`.
