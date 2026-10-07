@@ -462,6 +462,67 @@ pub fn evidence_on_hand_git(
     counted
 }
 
+/// The evidence records about one artifact in a Git-native store, each with the file it was read
+/// from, in the order [`history_git`] answers them, and how many evidence files did not read.
+///
+/// [`history_git`] answers the same records without their files. A caller that must point at the
+/// one file a record came from — a verifier naming where two stores differ — reads them here. The
+/// directories read are [`history_git`]'s: the artifact's own `evidence/<kind>/<name>/` when its
+/// document is filed at `<namespace>/<name>.md`, and every evidence directory otherwise. Within one
+/// second, records keep the order of their file names, which carry their sequence; identical
+/// copies are each one record.
+#[must_use]
+pub fn evidence_records_git(
+    root: &Path,
+    evidence: &Path,
+    artifact: &ArtifactId,
+) -> (Vec<(PathBuf, Entry)>, usize) {
+    let document = root
+        .join(artifact.namespace())
+        .join(format!("{}.md", artifact.name()));
+    let directories = if document.is_file() {
+        vec![evidence_directory(evidence, artifact)]
+    } else {
+        subdirectories(evidence)
+            .iter()
+            .flat_map(|kind| subdirectories(kind))
+            .collect()
+    };
+    let mut records = Vec::new();
+    let mut unreadable = 0;
+    for directory in directories {
+        for path in files_with(&directory, "json") {
+            match std::fs::read_to_string(&path)
+                .ok()
+                .and_then(|text| serde_json::from_str::<Entry>(&text).ok())
+            {
+                Some(entry) if matches!(entry.change, Change::Evidence { .. }) => {
+                    records.push((path, entry));
+                }
+                _ => unreadable += 1,
+            }
+        }
+    }
+    records.retain(|(_, entry)| &entry.artifact == artifact);
+    // Stable, so equal keys keep file order, as they do in `history_git`.
+    records.sort_by(|(_, left), (_, right)| history_order(left, right));
+    (records, unreadable)
+}
+
+/// The order a Git-native history answers entries in: `at`, then artifact, then revision.
+///
+/// Every reader of that layout sorts with it, stably, so entries the key cannot tell apart keep
+/// the order they were read in: evidence files of one second by the sequence in their names. A
+/// caller holding entries from elsewhere — the journal a migration read — sorts them with this,
+/// stably, to have them in the order the Git-native store will answer them.
+#[must_use]
+pub fn history_order(left: &Entry, right: &Entry) -> std::cmp::Ordering {
+    left.at
+        .cmp(&right.at)
+        .then_with(|| left.artifact.cmp(&right.artifact))
+        .then_with(|| left.revision.cmp(&right.revision))
+}
+
 /// Writes one evidence record into a Git-native store and answers where it went.
 ///
 /// `<evidence>/<kind>/<name>/<compact at>-<three-digit sequence within that second>-<first 12 hex of the SHA-256 of the file>.json`, where
@@ -646,12 +707,7 @@ fn listed(directory: &Path, keep: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
 
 /// The order a Git-native history is answered in: `at`, then artifact, then revision.
 fn sort_entries(entries: &mut [Entry]) {
-    entries.sort_by(|left, right| {
-        left.at
-            .cmp(&right.at)
-            .then_with(|| left.artifact.cmp(&right.artifact))
-            .then_with(|| left.revision.cmp(&right.revision))
-    });
+    entries.sort_by(history_order);
 }
 
 /// Lower-case hexadecimal of `bytes`, as an evidence file's name carries its digest.
@@ -661,4 +717,163 @@ fn hex(bytes: &[u8]) -> String {
         write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
         output
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    use aep_domain::artifact::{ArtifactId, ArtifactKind};
+    use aep_domain::evidence::EvidenceKind;
+
+    use super::{evidence_records_git, history_git, write_evidence_occurrence, Change, Entry};
+
+    /// An empty store for one test under the test binary's own target directory, which a unit
+    /// test reaches without `CARGO_TARGET_TMPDIR`: `<target>/<profile>/deps/<binary>`.
+    fn scratch(name: &str) -> (PathBuf, PathBuf) {
+        let binary = std::env::current_exe().expect("the test binary has a path");
+        let target = binary
+            .ancestors()
+            .nth(3)
+            .expect("the test binary sits under <target>/<profile>/deps");
+        let directory = target.join("tmp").join(format!("journal-unit-{name}"));
+        if directory.exists() {
+            std::fs::remove_dir_all(&directory).expect("the previous scratch store is removable");
+        }
+        let (planning, evidence) = (directory.join("planning"), directory.join("evidence"));
+        std::fs::create_dir_all(planning.join("story")).expect("the scratch is writable");
+        (planning, evidence)
+    }
+
+    fn id(text: &str) -> ArtifactId {
+        ArtifactId::new(text).expect("a valid id")
+    }
+
+    fn record(artifact: &str, at: &str, revision: u64, source: &str) -> Entry {
+        Entry {
+            at: at.to_owned(),
+            actor: "human:recorder".to_owned(),
+            artifact: id(artifact),
+            kind: ArtifactKind::Story,
+            revision,
+            change: Change::Evidence {
+                kind: EvidenceKind::TestResult,
+                source: source.to_owned(),
+                reference: None,
+                review: None,
+                outcome: None,
+            },
+        }
+    }
+
+    /// Records about `story:observed` written out of `at` order, two in one second at falling
+    /// revisions, one twice, one misfiled under another artifact's directory, and one about
+    /// another artifact.
+    fn store(name: &str) -> (PathBuf, PathBuf) {
+        let (planning, evidence) = scratch(name);
+        let duplicate = record("story:observed", "2026-09-28T10:03:00Z", 1, "copied");
+        let writes = [
+            (
+                record("story:observed", "2026-09-28T10:02:00Z", 1, "later"),
+                0,
+            ),
+            (
+                record("story:observed", "2026-09-28T10:01:00Z", 2, "revised"),
+                0,
+            ),
+            (
+                record("story:observed", "2026-09-28T10:01:00Z", 1, "first"),
+                0,
+            ),
+            (duplicate.clone(), 0),
+            (duplicate, 1),
+            (
+                record("story:other", "2026-09-28T10:00:00Z", 1, "elsewhere"),
+                0,
+            ),
+        ];
+        let mut written = Vec::new();
+        for (entry, occurrence) in &writes {
+            written.push(
+                write_evidence_occurrence(&evidence, entry, *occurrence)
+                    .expect("the record writes"),
+            );
+        }
+        std::fs::copy(
+            &written[0],
+            evidence.join("story/other/20260928T100200Z-009-misfiled.json"),
+        )
+        .expect("the misfiled copy writes");
+        (planning, evidence)
+    }
+
+    fn sources(entries: impl Iterator<Item = Entry>) -> Vec<String> {
+        entries
+            .filter_map(|entry| match entry.change {
+                Change::Evidence { source, .. } => Some(source),
+                _ => None,
+            })
+            .collect()
+    }
+
+    /// The reader answers `history_git`'s evidence records in `history_git`'s order, and each
+    /// with the file that holds it.
+    fn assert_agrees_with_history(planning: &Path, evidence: &Path, expected: &[&str]) {
+        let observed = id("story:observed");
+        let (records, unreadable) = evidence_records_git(planning, evidence, &observed);
+        assert_eq!(unreadable, 0, "every evidence file reads");
+        let (history, _) = history_git(planning, evidence, &observed);
+        assert_eq!(
+            records
+                .iter()
+                .map(|(_, entry)| entry.clone())
+                .collect::<Vec<_>>(),
+            history
+                .into_iter()
+                .filter(|entry| matches!(entry.change, Change::Evidence { .. }))
+                .collect::<Vec<_>>(),
+            "the records and their order are history_git's"
+        );
+        assert_eq!(
+            sources(records.iter().map(|(_, entry)| entry.clone())),
+            expected,
+            "ordered by instant, then revision, then file name"
+        );
+        for (path, entry) in &records {
+            let text = std::fs::read_to_string(path).expect("the named file reads");
+            let read: Entry = serde_json::from_str(&text).expect("the named file is a record");
+            assert_eq!(
+                &read,
+                entry,
+                "{} holds the record it is named for",
+                path.display()
+            );
+        }
+        let mut files: Vec<_> = records.iter().map(|(path, _)| path).collect();
+        files.sort();
+        files.dedup();
+        assert_eq!(files.len(), records.len(), "each record is its own file");
+    }
+
+    #[test]
+    fn evidence_records_follow_history_order_when_the_document_is_filed_by_its_id() {
+        let (planning, evidence) = store("filed");
+        std::fs::write(planning.join("story/observed.md"), "not read here\n")
+            .expect("the document is writable");
+        assert_agrees_with_history(
+            &planning,
+            &evidence,
+            &["first", "revised", "later", "copied", "copied"],
+        );
+    }
+
+    #[test]
+    fn evidence_records_follow_history_order_across_every_directory_without_a_filed_document() {
+        let (planning, evidence) = store("unfiled");
+        assert_agrees_with_history(
+            &planning,
+            &evidence,
+            &["first", "revised", "later", "later", "copied", "copied"],
+        );
+    }
 }
