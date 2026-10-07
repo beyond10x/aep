@@ -1,0 +1,580 @@
+{
+  "coverage": {
+    "authored": [
+      "desk.tickets/authored/visitor-is-refused"
+    ],
+    "authored_sources": {
+      "clerk-refused.yaml": {
+        "digest": "sha256:a7f88faf228ea35acb785a2379e54242a7ffd62432ab474dd981a65a337dfd2a",
+        "disposition": "refused",
+        "scenario": "desk.tickets/authored/clerk-is-refused"
+      },
+      "nobody-refused.yaml": {
+        "digest": "sha256:215e84f111106b1140949ca7c802ab218f890fe6df97413e424050d4c526d1c9",
+        "disposition": "refused",
+        "scenario": "desk.tickets/authored/nobody-is-refused"
+      },
+      "visitor-refused.yaml": {
+        "digest": "sha256:5c8fdcc52c77e03809a5f4ee1e6c7f675675da9316b68bd616dbe7d0c9bf692d",
+        "disposition": "accepted",
+        "scenario": "desk.tickets/authored/visitor-is-refused"
+      }
+    },
+    "counts": {
+      "authored": 1,
+      "generated": 7,
+      "outside": 0,
+      "refused": 2
+    },
+    "generated": [
+      "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk",
+      "desk.tickets.Board/grant/read/denied",
+      "desk.tickets.OpenTicket/grant/admitted/desk.tickets.Watcher",
+      "desk.tickets.OpenTicket/grant/denied",
+      "desk.tickets.OpenTicket/outcome/opened",
+      "desk.tickets.Titles/grant/read/admitted/desk.tickets.Visitor",
+      "desk.tickets.Titles/grant/read/denied"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [
+      {
+        "code": "ESS-AUTHOR-038",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-AUTHOR-038]: `desk.tickets/authored/clerk-is-refused` in clerk-refused.yaml\n  `desk.tickets.Clerk` is granted `desk.tickets.OpenTicket`, so it is not refused as not granted\n  help: act as an actor the specification does not grant the command, or drop `refused: not_granted` and claim what the command answers",
+        "needs": [],
+        "origin": "authored",
+        "retained": null,
+        "scenario": "desk.tickets/authored/clerk-is-refused",
+        "scope": "in_scope",
+        "source": "clerk-refused.yaml",
+        "subject": null
+      },
+      {
+        "code": "ESS-AUTHOR-039",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-AUTHOR-039]: `desk.tickets/authored/nobody-is-refused` in nobody-refused.yaml\n  `desk.tickets.OpenTicket` is expected refused as not granted, which contradicts a missing `actor:`\n  help: a refused command takes no branch, reports no declared error and returns nothing: keep `actor:` beside `refused: not_granted`, drop `outcome`, `error`, `response`, `events` and `capture`, and list under `no_events:` what must not appear anywhere in the target's log after the refused send",
+        "needs": [],
+        "origin": "authored",
+        "retained": null,
+        "scenario": "desk.tickets/authored/nobody-is-refused",
+        "scope": "in_scope",
+        "source": "nobody-refused.yaml",
+        "subject": null
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated_and_authored",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "5c7271d34a00f18ae9319a297b6381046c818eebb0ed19176bc5002c9c990344",
+    "scenario_initial_state": "empty",
+    "spec_digest": "6fcc787c55f2e5e9498a6f99ce806e3e8c136d1f28670f9a08af31fab312a1e2",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/35",
+    "system": "desk"
+  },
+  "scenarios": {
+    "desk.tickets.Board/grant/read/admitted/desk.tickets.Clerk": {
+      "purpose": "`desk.tickets.Board` read as `desk.tickets.Clerk`, whose grant names it, is served",
+      "source": [
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "expectation": {
+            "at_least": 0,
+            "expect": "counts"
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Board"
+        }
+      ]
+    },
+    "desk.tickets.Board/grant/read/denied": {
+      "purpose": "`desk.tickets.Board` read as `desk.tickets.Visitor`, whose grant does not name it, and as no actor is refused before anything is read",
+      "source": [
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Visitor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Visitor",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "actor": "desk.tickets.Visitor",
+          "step": "expect_not_granted"
+        },
+        {
+          "actor": null,
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "actor": null,
+          "step": "expect_not_granted"
+        }
+      ]
+    },
+    "desk.tickets.OpenTicket/grant/admitted/desk.tickets.Watcher": {
+      "purpose": "`desk.tickets.OpenTicket` sent as `desk.tickets.Watcher`, which the specification grants it, is accepted",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "desk.tickets.Ticket"
+        },
+        {
+          "kind": "command",
+          "name": "desk.tickets.OpenTicket"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "desk.tickets.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Titles"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Visitor"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Watcher"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Watcher",
+          "command": "desk.tickets.OpenTicket",
+          "input": {
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "desk.tickets.Opened",
+          "payload": {
+            "id": "id"
+          },
+          "shape": {
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "event": "desk.tickets.Opened",
+                "field": "id",
+                "kind": "observed"
+              },
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "actor": "desk.tickets.Visitor",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Titles"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Titles"
+        }
+      ]
+    },
+    "desk.tickets.OpenTicket/grant/denied": {
+      "purpose": "`desk.tickets.OpenTicket` sent as `desk.tickets.Visitor`, which the specification does not grant it, is refused before it runs",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "desk.tickets.Ticket"
+        },
+        {
+          "kind": "command",
+          "name": "desk.tickets.OpenTicket"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "desk.tickets.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Titles"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Visitor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Visitor",
+          "command": "desk.tickets.OpenTicket",
+          "input": {
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "actor": "desk.tickets.Visitor",
+          "step": "expect_not_granted",
+          "unpublished": [
+            "desk.tickets.Opened"
+          ]
+        }
+      ]
+    },
+    "desk.tickets.OpenTicket/outcome/opened": {
+      "purpose": "`desk.tickets.OpenTicket` answers `opened` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "desk.tickets.Ticket"
+        },
+        {
+          "kind": "command",
+          "name": "desk.tickets.OpenTicket"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "desk.tickets.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Board"
+        },
+        {
+          "kind": "view",
+          "name": "desk.tickets.Titles"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Visitor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Clerk",
+          "command": "desk.tickets.OpenTicket",
+          "input": {
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "desk.tickets.OpenTicket",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "desk.tickets.Opened",
+          "payload": {
+            "id": "id"
+          },
+          "shape": {
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "event": "desk.tickets.Opened",
+                "field": "id",
+                "kind": "observed"
+              },
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Board"
+        },
+        {
+          "actor": "desk.tickets.Visitor",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Titles"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "title": {
+                "kind": "literal",
+                "value": "title"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Titles"
+        }
+      ]
+    },
+    "desk.tickets.Titles/grant/read/admitted/desk.tickets.Visitor": {
+      "purpose": "`desk.tickets.Titles` read as `desk.tickets.Visitor`, whose grant names it, is served",
+      "source": [
+        {
+          "kind": "view",
+          "name": "desk.tickets.Titles"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Visitor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Visitor",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Titles"
+        },
+        {
+          "expectation": {
+            "at_least": 0,
+            "expect": "counts"
+          },
+          "step": "expect_view",
+          "view": "desk.tickets.Titles"
+        }
+      ]
+    },
+    "desk.tickets.Titles/grant/read/denied": {
+      "purpose": "`desk.tickets.Titles` read as `desk.tickets.Clerk`, whose grant does not name it, and as no actor is refused before anything is read",
+      "source": [
+        {
+          "kind": "view",
+          "name": "desk.tickets.Titles"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Clerk"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Titles"
+        },
+        {
+          "actor": "desk.tickets.Clerk",
+          "step": "expect_not_granted"
+        },
+        {
+          "actor": null,
+          "step": "read_as"
+        },
+        {
+          "step": "query_view",
+          "view": "desk.tickets.Titles"
+        },
+        {
+          "actor": null,
+          "step": "expect_not_granted"
+        }
+      ]
+    },
+    "desk.tickets/authored/visitor-is-refused": {
+      "purpose": "A visitor may not open a ticket.",
+      "source": [
+        {
+          "kind": "domain",
+          "name": "desk.tickets"
+        },
+        {
+          "kind": "command",
+          "name": "desk.tickets.OpenTicket"
+        },
+        {
+          "kind": "actor",
+          "name": "desk.tickets.Visitor"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "desk.tickets.Visitor",
+          "command": "desk.tickets.OpenTicket",
+          "input": {
+            "id": {
+              "kind": "literal",
+              "value": "t-1"
+            },
+            "title": {
+              "kind": "literal",
+              "value": "first"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "actor": "desk.tickets.Visitor",
+          "step": "expect_not_granted"
+        }
+      ]
+    }
+  }
+}

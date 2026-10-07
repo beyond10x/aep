@@ -1,0 +1,845 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 7,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "pool.lease.Lease/invariant/after/pool.lease.Open/opened",
+      "pool.lease.Open/outcome/inverted",
+      "pool.lease.Open/outcome/opened",
+      "pool.lease.Open/outcome/over-cap",
+      "pool.lease.Open/outcome/too-late",
+      "pool.lease.Open/outcome/too-soon",
+      "pool.lease.Open/outcome/too-wide"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "81d0c9f3c8599970c7becd4682c9efdbf03f109be7efc2133cf2c0945decd665",
+    "scenario_initial_state": "empty",
+    "spec_digest": "725f8d7d794bccd1982245757bcb7cbd7fe0a03e5e0c77219e4f908ef84de67c",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/41",
+    "system": "pool"
+  },
+  "scenarios": {
+    "pool.lease.Lease/invariant/after/pool.lease.Open/opened": {
+      "purpose": "a `pool.lease.Lease` still satisfies what it declares after `pool.lease.Open` on `opened`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "pool.lease.Lease"
+        },
+        {
+          "kind": "command",
+          "name": "pool.lease.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "pool.lease.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "pool.lease.Leases"
+        }
+      ],
+      "steps": [
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:05:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "pool.lease.Leases"
+        },
+        {
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "upper": {
+                "lte": {
+                  "offset": {
+                    "add": 100.0,
+                    "fact": "lower"
+                  }
+                }
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "pool.lease.Leases"
+        },
+        {
+          "step": "query_view",
+          "view": "pool.lease.Leases"
+        },
+        {
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "expires_at": {
+                "lte": {
+                  "offset": {
+                    "add": "24h",
+                    "fact": "issued_at"
+                  }
+                }
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "pool.lease.Leases"
+        }
+      ]
+    },
+    "pool.lease.Open/outcome/inverted": {
+      "purpose": "`pool.lease.Open` answers `inverted` for an input that satisfies that branch's guard",
+      "source": [
+        {
+          "kind": "command",
+          "name": "pool.lease.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "pool.lease.Open",
+            "outcome": "inverted"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "pool.lease.Opened"
+        },
+        {
+          "kind": "error",
+          "name": "pool.lease.Inverted"
+        }
+      ],
+      "steps": [
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:05:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 5.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "inverted"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.Inverted",
+          "step": "expect_error"
+        },
+        {
+          "event": "pool.lease.Opened",
+          "step": "expect_no_event"
+        },
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 5.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "inverted"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.Inverted",
+          "step": "expect_error"
+        },
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": -10.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 5.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "inverted"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.Inverted",
+          "step": "expect_error"
+        }
+      ]
+    },
+    "pool.lease.Open/outcome/opened": {
+      "purpose": "`pool.lease.Open` answers `opened` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "pool.lease.Lease"
+        },
+        {
+          "kind": "command",
+          "name": "pool.lease.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "pool.lease.Open",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "pool.lease.Opened"
+        },
+        {
+          "kind": "view",
+          "name": "pool.lease.Leases"
+        }
+      ],
+      "steps": [
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:05:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "pool.lease.Opened",
+          "shape": {
+            "lease_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "step": "query_view",
+          "view": "pool.lease.Leases"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "expires_at": {
+                "kind": "literal",
+                "value": "2020-01-01T00:05:00Z"
+              },
+              "issued_at": {
+                "kind": "literal",
+                "value": "2020-01-01T00:00:00Z"
+              },
+              "lease_id": {
+                "event": "pool.lease.Opened",
+                "field": "lease_id",
+                "kind": "observed"
+              },
+              "lower": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "upper": {
+                "kind": "literal",
+                "value": 2.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "pool.lease.Leases"
+        }
+      ]
+    },
+    "pool.lease.Open/outcome/over-cap": {
+      "purpose": "`pool.lease.Open` answers `over-cap` for an input that satisfies that branch's guard",
+      "source": [
+        {
+          "kind": "command",
+          "name": "pool.lease.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "pool.lease.Open",
+            "outcome": "over-cap"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "pool.lease.Opened"
+        },
+        {
+          "kind": "error",
+          "name": "pool.lease.OverCap"
+        }
+      ],
+      "steps": [
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": -10.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:05:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "over-cap"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.OverCap",
+          "step": "expect_error"
+        },
+        {
+          "event": "pool.lease.Opened",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "pool.lease.Open/outcome/too-late": {
+      "purpose": "`pool.lease.Open` answers `too-late` for an input that satisfies that branch's guard",
+      "source": [
+        {
+          "kind": "command",
+          "name": "pool.lease.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "pool.lease.Open",
+            "outcome": "too-late"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "pool.lease.Opened"
+        },
+        {
+          "kind": "error",
+          "name": "pool.lease.TooLate"
+        }
+      ],
+      "steps": [
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T01:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-late"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooLate",
+          "step": "expect_error"
+        },
+        {
+          "event": "pool.lease.Opened",
+          "step": "expect_no_event"
+        },
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": -10.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T01:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-late"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooLate",
+          "step": "expect_error"
+        }
+      ]
+    },
+    "pool.lease.Open/outcome/too-soon": {
+      "purpose": "`pool.lease.Open` answers `too-soon` for an input that satisfies that branch's guard",
+      "source": [
+        {
+          "kind": "command",
+          "name": "pool.lease.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "pool.lease.Open",
+            "outcome": "too-soon"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "pool.lease.Opened"
+        },
+        {
+          "kind": "error",
+          "name": "pool.lease.TooSoon"
+        }
+      ],
+      "steps": [
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-soon"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooSoon",
+          "step": "expect_error"
+        },
+        {
+          "event": "pool.lease.Opened",
+          "step": "expect_no_event"
+        },
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": -10.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-soon"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooSoon",
+          "step": "expect_error"
+        }
+      ]
+    },
+    "pool.lease.Open/outcome/too-wide": {
+      "purpose": "`pool.lease.Open` answers `too-wide` for an input that satisfies that branch's guard",
+      "source": [
+        {
+          "kind": "command",
+          "name": "pool.lease.Open"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "pool.lease.Open",
+            "outcome": "too-wide"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "pool.lease.Opened"
+        },
+        {
+          "kind": "error",
+          "name": "pool.lease.TooWide"
+        }
+      ],
+      "steps": [
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:05:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": -5.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-wide"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooWide",
+          "step": "expect_error"
+        },
+        {
+          "event": "pool.lease.Opened",
+          "step": "expect_no_event"
+        },
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T01:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": -5.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-wide"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooWide",
+          "step": "expect_error"
+        },
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": -5.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-wide"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooWide",
+          "step": "expect_error"
+        },
+        {
+          "command": "pool.lease.Open",
+          "input": {
+            "cap": {
+              "kind": "literal",
+              "value": -10.0
+            },
+            "expires_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "issued_at": {
+              "kind": "literal",
+              "value": "2020-01-01T00:00:00Z"
+            },
+            "lower": {
+              "kind": "literal",
+              "value": -5.0
+            },
+            "upper": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "pool.lease.Open",
+            "outcome": "too-wide"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "pool.lease.TooWide",
+          "step": "expect_error"
+        }
+      ]
+    }
+  }
+}

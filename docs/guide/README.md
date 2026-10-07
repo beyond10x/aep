@@ -54,7 +54,7 @@ nothing else stated:
 
 ```console
 $ $B govern resolve --task examples/development-passkeys/task.yaml
-inputs      . and examples/development-passkeys/task.yaml
+inputs      project …/aep and examples/development-passkeys/task.yaml
 task        AUTH-142 (feature)
 objective   add-passkey-support
 protocol    adp/1
@@ -106,7 +106,7 @@ $ $B govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
     --advance
-inputs      . and examples/development-passkeys/task.yaml
+inputs      project …/aep and examples/development-passkeys/task.yaml
 state       implement (Implement)
 transitions
   implement -> verify [blocked]

@@ -1,0 +1,1490 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 13,
+      "outside": 0,
+      "refused": 1
+    },
+    "generated": [
+      "demo.messages.LogMessage/outcome/logged",
+      "demo.messages.MessageEvent/outcome/messaged",
+      "demo.messages.MessageEvent/outcome/unavailable",
+      "demo.messages.ReceiveMessage/outcome/received",
+      "logged/binding/delivery",
+      "logged/binding/flow",
+      "logged/binding/mapping",
+      "received/binding/condition-absent",
+      "received/binding/condition-false",
+      "received/binding/delivery",
+      "received/binding/flow",
+      "received/binding/mapping",
+      "received/binding/on-failure"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [
+      {
+        "code": "ESS-SYNTH-010",
+        "effect": "candidate_not_emitted",
+        "message": "refusal[ESS-SYNTH-010]: binding logged has no scenario `logged/binding/on-failure`\n  `logged` declares a failure policy, and no branch of `demo.messages.LogMessage` can be forced to fail\n  help: declare the branch that fails `external:`, which is what lets a scenario force it",
+        "needs": [],
+        "origin": "generated",
+        "retained": null,
+        "scenario": "logged/binding/on-failure",
+        "scope": "in_scope",
+        "source": null,
+        "subject": {
+          "kind": "binding",
+          "name": "logged"
+        }
+      }
+    ],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "0ac7c872d29eba0595ec5fac7ddf51fdeffe6bd787aa3a64f35be877867c9431",
+    "scenario_initial_state": "empty",
+    "spec_digest": "41c33a47403983a387039e494221cc0f75dc949a21a4e998e7bb27dc0610dd6c",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/37",
+    "system": "demo"
+  },
+  "scenarios": {
+    "demo.messages.LogMessage/outcome/logged": {
+      "purpose": "`demo.messages.LogMessage` answers `logged` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "demo.messages.LogMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.LogMessage",
+            "outcome": "logged"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageLogged"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.OrderMessaged"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.LogMessage",
+          "input": {
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.LogMessage",
+            "outcome": "logged"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageLogged",
+          "payload": {
+            "message_id": "message_id"
+          },
+          "shape": {
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.messages.OrderMessaged",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.messages.MessageEvent/outcome/messaged": {
+      "purpose": "`demo.messages.MessageEvent` answers `messaged` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "messaged"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageLogged"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.OrderMessaged"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.MessageEvent",
+          "input": {
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "messaged"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.OrderMessaged",
+          "payload": {
+            "message_id": "message_id",
+            "order_id": "order_id"
+          },
+          "shape": {
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.MessageLogged",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.messages.MessageEvent/outcome/unavailable": {
+      "purpose": "`demo.messages.MessageEvent` answers `unavailable` for the cause it declares as external, injected",
+      "source": [
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageLogged"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.OrderMessaged"
+        },
+        {
+          "kind": "error",
+          "name": "demo.messages.Unavailable"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "unavailable"
+          },
+          "step": "configure_external_outcome"
+        },
+        {
+          "command": "demo.messages.MessageEvent",
+          "input": {
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order_id": {
+              "kind": "literal",
+              "value": "order_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "unavailable"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "demo.messages.Unavailable",
+          "step": "expect_error"
+        },
+        {
+          "event": "demo.messages.MessageLogged",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.messages.OrderMessaged",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "demo.messages.ReceiveMessage/outcome/received": {
+      "purpose": "`demo.messages.ReceiveMessage` answers `received` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageLogged"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.OrderMessaged"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "note"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "payload": {
+            "kind": "note",
+            "message_id": "message_id",
+            "order": {
+              "id": "order.id",
+              "note": "order.note"
+            }
+          },
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.MessageLogged",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "demo.messages.OrderMessaged",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "logged/binding/delivery": {
+      "purpose": "`demo.messages.MessageReceived` delivered twice still leaves `demo.messages.MessageLogged` observable, and no count is required",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.LogMessage"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.LogMessage",
+            "outcome": "logged"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageLogged"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "binding",
+          "name": "logged"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "note"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "step": "redeliver_event"
+        },
+        {
+          "event": "demo.messages.MessageLogged",
+          "shape": {
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "logged/binding/flow": {
+      "purpose": "`demo.messages.MessageReceived` invokes `demo.messages.LogMessage`, which publishes `demo.messages.MessageLogged`",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.LogMessage"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.LogMessage",
+            "outcome": "logged"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageLogged"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "binding",
+          "name": "logged"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "note"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.MessageLogged",
+          "shape": {
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "logged/binding/mapping": {
+      "purpose": "`logged` fills `demo.messages.LogMessage` from `demo.messages.MessageReceived` as it is mapped",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.LogMessage"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "binding",
+          "name": "logged"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "note"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "binding": "logged",
+          "command": "demo.messages.LogMessage",
+          "input": {
+            "message_id": {
+              "event": "demo.messages.MessageReceived",
+              "field": "message_id",
+              "kind": "observed"
+            }
+          },
+          "step": "expect_invocation"
+        }
+      ]
+    },
+    "received/binding/condition-absent": {
+      "purpose": "`received` invokes `demo.messages.MessageEvent` no times for a `demo.messages.MessageReceived` its condition does not hold for",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "binding",
+          "name": "logged"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "ship"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "binding": "logged",
+          "command": "demo.messages.LogMessage",
+          "step": "expect_invocation"
+        },
+        {
+          "binding": "received",
+          "command": "demo.messages.MessageEvent",
+          "step": "expect_no_invocation"
+        }
+      ]
+    },
+    "received/binding/condition-false": {
+      "purpose": "`received` invokes `demo.messages.MessageEvent` no times for a `demo.messages.MessageReceived` its condition does not hold for",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "binding",
+          "name": "logged"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "note"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "binding": "logged",
+          "command": "demo.messages.LogMessage",
+          "step": "expect_invocation"
+        },
+        {
+          "binding": "received",
+          "command": "demo.messages.MessageEvent",
+          "step": "expect_no_invocation"
+        }
+      ]
+    },
+    "received/binding/delivery": {
+      "purpose": "`demo.messages.MessageReceived` delivered twice still leaves `demo.messages.OrderMessaged` observable, and no count is required",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "messaged"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.OrderMessaged"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "ship"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "step": "redeliver_event"
+        },
+        {
+          "event": "demo.messages.OrderMessaged",
+          "shape": {
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "received/binding/flow": {
+      "purpose": "`demo.messages.MessageReceived` invokes `demo.messages.MessageEvent`, which publishes `demo.messages.OrderMessaged`",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "messaged"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.OrderMessaged"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "ship"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.OrderMessaged",
+          "shape": {
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    },
+    "received/binding/mapping": {
+      "purpose": "`received` fills `demo.messages.MessageEvent` from `demo.messages.MessageReceived` as it is mapped",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "ship"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "binding": "received",
+          "command": "demo.messages.MessageEvent",
+          "input": {
+            "message_id": {
+              "event": "demo.messages.MessageReceived",
+              "field": "message_id",
+              "kind": "observed"
+            },
+            "order_id": {
+              "accessor": {
+                "plan": {
+                  "nodes": [
+                    {
+                      "depth": 1,
+                      "leaf": "String",
+                      "may_miss": false,
+                      "operation": {
+                        "kind": "leaf"
+                      },
+                      "position": 2,
+                      "shape": {
+                        "kind": "primitive",
+                        "name": "string"
+                      },
+                      "source": "String"
+                    },
+                    {
+                      "depth": 2,
+                      "leaf": "String",
+                      "may_miss": false,
+                      "operation": {
+                        "field": {
+                          "name": "id",
+                          "type": "String"
+                        },
+                        "kind": "field",
+                        "next": 0
+                      },
+                      "position": 1,
+                      "shape": {
+                        "kind": "object"
+                      },
+                      "source": "demo.messages.Ref"
+                    },
+                    {
+                      "depth": 3,
+                      "leaf": "String",
+                      "may_miss": true,
+                      "operation": {
+                        "kind": "optional",
+                        "next": 1
+                      },
+                      "position": 1,
+                      "shape": {
+                        "kind": "optional",
+                        "of": {
+                          "kind": "object"
+                        }
+                      },
+                      "source": "Optional<demo.messages.Ref>"
+                    }
+                  ],
+                  "root": {
+                    "name": "order",
+                    "type": "Optional<demo.messages.Ref>"
+                  },
+                  "segments": [
+                    "order",
+                    "id"
+                  ],
+                  "start": 2
+                },
+                "target": "Optional<String>",
+                "types": {
+                  "nodes": {}
+                }
+              },
+              "event": "demo.messages.MessageReceived",
+              "kind": "observed_accessor"
+            }
+          },
+          "step": "expect_invocation"
+        }
+      ]
+    },
+    "received/binding/on-failure": {
+      "purpose": "`received` retries a failed `demo.messages.MessageEvent` until `demo.messages.OrderMessaged` is published",
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.messages.Kind"
+        },
+        {
+          "kind": "type",
+          "name": "demo.messages.Ref"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.MessageEvent"
+        },
+        {
+          "kind": "command",
+          "name": "demo.messages.ReceiveMessage"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "messaged"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "unavailable"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.MessageReceived"
+        },
+        {
+          "kind": "event",
+          "name": "demo.messages.OrderMessaged"
+        },
+        {
+          "kind": "binding",
+          "name": "received"
+        }
+      ],
+      "steps": [
+        {
+          "force": {
+            "command": "demo.messages.MessageEvent",
+            "outcome": "unavailable"
+          },
+          "step": "configure_external_outcome"
+        },
+        {
+          "command": "demo.messages.ReceiveMessage",
+          "input": {
+            "kind": {
+              "kind": "literal",
+              "value": "ship"
+            },
+            "message_id": {
+              "kind": "literal",
+              "value": "message_id"
+            },
+            "order": {
+              "kind": "literal",
+              "value": {
+                "id": "order.id",
+                "note": "order.note"
+              }
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.messages.ReceiveMessage",
+            "outcome": "received"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.messages.MessageReceived",
+          "shape": {
+            "kind": {
+              "holds": "enum",
+              "variants": [
+                "note",
+                "ship"
+              ]
+            },
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order.id": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            },
+            "order.note": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.messages.OrderMessaged",
+          "shape": {
+            "message_id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "order_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "eventually_event"
+        }
+      ]
+    }
+  }
+}

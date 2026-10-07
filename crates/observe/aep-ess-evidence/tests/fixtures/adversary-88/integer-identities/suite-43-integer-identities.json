@@ -1,0 +1,1272 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 8,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "counter.model.Authorize/outcome/authorized",
+      "counter.model.Authorize/outcome/invalid",
+      "counter.model.Authorize/outcome/revision-exhausted",
+      "counter.model.Authorize/outcome/stale",
+      "counter.model.Authorize/outcome/unknown",
+      "counter.model.Counter/invariant/after/counter.model.Authorize/authorized",
+      "counter.model.Counter/invariant/after/counter.model.Create/created",
+      "counter.model.Create/outcome/created"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "aa787092b29597d3848f8b2174a5f53046e4c7892a28bbc88eb26577a2d5dddd",
+    "scenario_initial_state": "empty",
+    "spec_digest": "47dfb29985e9788dae2c7e8a0809f1960878e6b03baf25994682cc7f3369254a",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/43",
+    "synthesis_seeds": {
+      "applications": [
+        {
+          "command_step": 15,
+          "establish_step": 12,
+          "instance": "below-max",
+          "scenario": "counter.model.Authorize/outcome/authorized",
+          "source": "below.yaml"
+        },
+        {
+          "command_step": 8,
+          "establish_step": 5,
+          "instance": "at-max",
+          "scenario": "counter.model.Authorize/outcome/revision-exhausted",
+          "source": "max.yaml"
+        }
+      ],
+      "selections": [
+        {
+          "entity": "counter.model.Counter",
+          "fields": {
+            "revision": 9223372036854775806
+          },
+          "identity": 9007199254740992.0,
+          "instance": "below-max",
+          "source": "below.yaml",
+          "state": "Active"
+        },
+        {
+          "entity": "counter.model.Counter",
+          "fields": {
+            "revision": 9223372036854775807
+          },
+          "identity": 9007199254740993,
+          "instance": "at-max",
+          "source": "max.yaml",
+          "state": "Active"
+        }
+      ],
+      "sources": {
+        "below.yaml": "sha256:0f8260062a958d2038026fbd55114047fd3bc39fdf79be0fbf0fc6b0c48a9e99",
+        "max.yaml": "sha256:b3e11b3008d79f78f61ca467f800f643b033d36567270f7418d2f0d6d4da5e1d"
+      }
+    },
+    "system": "counter"
+  },
+  "scenarios": {
+    "counter.model.Authorize/outcome/authorized": {
+      "purpose": "`counter.model.Authorize` answers `authorized` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "counter.model.Counter"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Authorize"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Create"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Authorize",
+            "outcome": "authorized"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Authorized"
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Created"
+        },
+        {
+          "kind": "view",
+          "name": "counter.model.Counters"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Create",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "counter.model.Counter",
+          "event": "counter.model.Created",
+          "field": "id",
+          "instance": "counter",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "id": {
+              "instance": "counter",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "authorized"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "payload": {
+            "id": {
+              "instance": "counter",
+              "kind": "instance"
+            }
+          },
+          "shape": {
+            "id": {
+              "holds": "primitive",
+              "kind": "integer"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "entity": "counter.model.Counter",
+          "fields": {
+            "revision": 9223372036854775806
+          },
+          "identity": 9007199254740992.0,
+          "instance": "counter-2",
+          "state": "Active",
+          "step": "establish_entity"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter-2",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 9223372036854775806
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 9223372036854775806
+            },
+            "id": {
+              "instance": "counter-2",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "authorized"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter-2",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 9223372036854775807
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 1.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        }
+      ]
+    },
+    "counter.model.Authorize/outcome/invalid": {
+      "purpose": "`counter.model.Authorize` answers `invalid` for an input that satisfies that branch's guard",
+      "source": [
+        {
+          "kind": "command",
+          "name": "counter.model.Authorize"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Create"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Authorize",
+            "outcome": "invalid"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Authorized"
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Created"
+        },
+        {
+          "kind": "error",
+          "name": "counter.model.Invalid"
+        },
+        {
+          "kind": "view",
+          "name": "counter.model.Counters"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "id": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": 1048577.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "invalid"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "counter.model.Invalid",
+          "step": "expect_error"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "command": "counter.model.Create",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "counter.model.Counter",
+          "event": "counter.model.Created",
+          "field": "id",
+          "instance": "counter",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "instance": "counter",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "invalid"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "counter.model.Invalid",
+          "step": "expect_error"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        }
+      ]
+    },
+    "counter.model.Authorize/outcome/revision-exhausted": {
+      "purpose": "`counter.model.Authorize` answers `revision-exhausted` for an independently observed subject enum fact and an eligible input",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "counter.model.Counter"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Authorize"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Authorize",
+            "outcome": "revision-exhausted"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Authorized"
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Created"
+        },
+        {
+          "kind": "error",
+          "name": "counter.model.Exhausted"
+        },
+        {
+          "kind": "view",
+          "name": "counter.model.Counters"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "id": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "entity": "counter.model.Counter",
+          "fields": {
+            "revision": 9223372036854775807
+          },
+          "identity": 9007199254740993,
+          "instance": "counter",
+          "state": "Active",
+          "step": "establish_entity"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 9223372036854775807
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 9223372036854775807
+            },
+            "id": {
+              "instance": "counter",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "revision-exhausted"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "counter.model.Exhausted",
+          "step": "expect_error"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 9223372036854775807
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        }
+      ]
+    },
+    "counter.model.Authorize/outcome/stale": {
+      "purpose": "`counter.model.Authorize` answers `stale` for an independently observed subject enum fact and an eligible input",
+      "source": [
+        {
+          "kind": "command",
+          "name": "counter.model.Authorize"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Create"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Authorize",
+            "outcome": "stale"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Authorized"
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Created"
+        },
+        {
+          "kind": "error",
+          "name": "counter.model.Stale"
+        },
+        {
+          "kind": "view",
+          "name": "counter.model.Counters"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "id": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Create",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "counter.model.Counter",
+          "event": "counter.model.Created",
+          "field": "id",
+          "instance": "counter",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "instance": "counter",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "stale"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "counter.model.Stale",
+          "step": "expect_error"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        }
+      ]
+    },
+    "counter.model.Authorize/outcome/unknown": {
+      "purpose": "`counter.model.Authorize` for an identity no record carries takes `unknown` and reports `counter.model.Unknown`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "counter.model.Counter"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Authorize"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Authorize",
+            "outcome": "unknown"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Authorized"
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Created"
+        },
+        {
+          "kind": "error",
+          "name": "counter.model.Unknown"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": 1048577.0
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "unknown"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "counter.model.Unknown",
+          "step": "expect_error"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "event": "counter.model.Created",
+          "step": "expect_no_event"
+        }
+      ]
+    },
+    "counter.model.Counter/invariant/after/counter.model.Authorize/authorized": {
+      "purpose": "a `counter.model.Counter` still satisfies what it declares after `counter.model.Authorize` on `authorized`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "counter.model.Counter"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Authorize"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Create"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Authorize",
+            "outcome": "authorized"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Created"
+        },
+        {
+          "kind": "view",
+          "name": "counter.model.Counters"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Create",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "counter.model.Counter",
+          "event": "counter.model.Created",
+          "field": "id",
+          "instance": "counter",
+          "step": "capture_instance"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "instance": "counter",
+                "kind": "instance"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "command": "counter.model.Authorize",
+          "input": {
+            "expected_revision": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "id": {
+              "instance": "counter",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Authorize",
+            "outcome": "authorized"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": "revision >= 0"
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": "revision <= 9223372036854775807"
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        }
+      ]
+    },
+    "counter.model.Counter/invariant/after/counter.model.Create/created": {
+      "purpose": "a `counter.model.Counter` still satisfies what it declares after `counter.model.Create` on `created`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "counter.model.Counter"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Create"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "counter.model.Counters"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Create",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": "revision >= 0"
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": "revision <= 9223372036854775807"
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        }
+      ]
+    },
+    "counter.model.Create/outcome/created": {
+      "purpose": "`counter.model.Create` answers `created` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "counter.model.Counter"
+        },
+        {
+          "kind": "command",
+          "name": "counter.model.Create"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Authorized"
+        },
+        {
+          "kind": "event",
+          "name": "counter.model.Created"
+        },
+        {
+          "kind": "view",
+          "name": "counter.model.Counters"
+        }
+      ],
+      "steps": [
+        {
+          "command": "counter.model.Create",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "counter.model.Create",
+            "outcome": "created"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "counter.model.Created",
+          "shape": {
+            "id": {
+              "holds": "primitive",
+              "kind": "integer"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "counter.model.Authorized",
+          "step": "expect_no_event"
+        },
+        {
+          "step": "query_view",
+          "view": "counter.model.Counters"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "id": {
+                "event": "counter.model.Created",
+                "field": "id",
+                "kind": "observed"
+              },
+              "revision": {
+                "kind": "literal",
+                "value": 0.0
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "counter.model.Counters"
+        }
+      ]
+    }
+  }
+}

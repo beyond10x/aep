@@ -1046,11 +1046,11 @@ fn refuse_changed_and_unknown_current_suites(
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("SuiteDigestMismatch"), "{stderr}");
     // A version newer than this build knows is refused by name.
-    let newer = directory.join("suite-35.json");
+    let newer = directory.join("suite-47.json");
     let original = std::fs::read_to_string(fixture("suite-31.json")).unwrap();
     let relabelled = original.replace(
         "\"suite_version\": \"ess-conformance/31\"",
-        "\"suite_version\": \"ess-conformance/35\"",
+        "\"suite_version\": \"ess-conformance/47\"",
     );
     assert_ne!(relabelled, original);
     std::fs::write(&newer, relabelled).unwrap();
@@ -1058,7 +1058,7 @@ fn refuse_changed_and_unknown_current_suites(
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("UnsupportedSuiteVersion") && stderr.contains("ess-conformance/35"),
+        stderr.contains("UnsupportedSuiteVersion") && stderr.contains("ess-conformance/47"),
         "{stderr}"
     );
 }

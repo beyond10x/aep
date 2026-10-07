@@ -1,0 +1,64 @@
+domain: counter.model
+entities:
+  - name: counter.model.Counter
+    identity: {name: id, type: Integer}
+    fields:
+      - {name: revision, type: Integer}
+    invariants: [revision >= 0, revision <= 9223372036854775807]
+    lifecycle:
+      initial: Active
+      states: [Active]
+      terminal: [Active]
+commands:
+  - name: counter.model.Create
+    input: []
+    outcomes:
+      - name: created
+        creates: counter.model.Counter
+        instance: id
+        sets: {revision: 0}
+        emits: [counter.model.Created]
+        payload:
+          counter.model.Created: {id: {generated: true}}
+  - name: counter.model.Authorize
+    input:
+      - {name: id, type: Integer}
+      - {name: expected_revision, type: Integer}
+    outcomes:
+      - name: invalid
+        when: expected_revision < 0
+        error: counter.model.Invalid
+      - name: stale
+        when_subject: {predicate: revision != input.expected_revision}
+        error: counter.model.Stale
+      - name: revision-exhausted
+        when_subject: {predicate: revision >= 9223372036854775807}
+        error: counter.model.Exhausted
+      - name: authorized
+        updates: counter.model.Counter
+        instance: id
+        sets: {revision: {increment: 1}}
+        emits: [counter.model.Authorized]
+        payload:
+          counter.model.Authorized: {id: input.id}
+      - name: unknown
+        unknown_instance: true
+        error: counter.model.Unknown
+errors:
+  - {name: counter.model.Invalid, fields: []}
+  - {name: counter.model.Stale, fields: []}
+  - {name: counter.model.Exhausted, fields: []}
+  - {name: counter.model.Unknown, fields: []}
+events:
+  - name: counter.model.Authorized
+    fields: [{name: id, type: Integer}]
+  - name: counter.model.Created
+    fields: [{name: id, type: Integer}]
+views:
+  - name: counter.model.Counters
+    source: counter.model.Counter
+    consistency: read_your_writes
+    fields:
+      - {name: id, type: Integer}
+      - {name: revision, type: Integer}
+      - {name: state, type: counter.model.Counter.State}

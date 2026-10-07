@@ -1,0 +1,60 @@
+{
+  "completed_at": 1790000000000,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 9,
+    "skipped": 0,
+    "total": 9,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 9,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "example-service",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "demo.cases.Case/state/Completed/accepts/demo.cases.Complete",
+      "demo.cases.Case/transition/complete/by/demo.cases.Complete/completed",
+      "demo.cases.Complete/outcome/completed",
+      "demo.cases.Complete/outcome/unavailable",
+      "demo.cases.Escalations/aggregate",
+      "demo.cases.Open/outcome/opened",
+      "demo.cases.Scorecard/aggregate",
+      "demo.cases.Tagged/aggregate",
+      "demo.cases.Urgent/aggregate"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "external-scenario-status/1;runner=example-runner@1.0.0",
+  "spec_digest": "08020d0eb62548bf626fc0f6883e4fcd4ea03c099b54cc8c7548e5d209279c39",
+  "specification": "demo/v1",
+  "suite": {
+    "digest": "sha256:060b5c79a2f8f3b734baff4ae3ef0baf9a1fe48c4f9b51513c2b138306ce8928",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/39"
+  }
+}

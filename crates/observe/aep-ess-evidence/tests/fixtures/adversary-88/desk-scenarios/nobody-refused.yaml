@@ -1,0 +1,9 @@
+type: ess-scenario/4
+domain: desk.tickets
+scenario: nobody-is-refused
+summary: A refusal with no actor to refuse.
+timeline:
+  - at: 2026-01-05T09:00:00Z
+    command: desk.tickets.OpenTicket
+    input: {id: t-3, title: third}
+    refused: not_granted

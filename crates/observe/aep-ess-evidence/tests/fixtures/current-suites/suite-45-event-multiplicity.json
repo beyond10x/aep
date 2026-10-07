@@ -1,0 +1,124 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 1,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "demo.batch.Rewrap/outcome/rewrapped"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "provenance": {
+    "contract_digest": "ed43eac44dac335ba53228401b2c87ea0da5259a3ec64fe44e971cdafe2f37cc",
+    "scenario_initial_state": "empty",
+    "spec_digest": "6155c7c19cfeed20032778873654957658f54d8d6b00bb57a1bba6c4e371a274",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/45",
+    "system": "demo"
+  },
+  "scenarios": {
+    "demo.batch.Rewrap/outcome/rewrapped": {
+      "purpose": "`demo.batch.Rewrap` answers `rewrapped` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.batch.Batch"
+        },
+        {
+          "kind": "command",
+          "name": "demo.batch.Rewrap"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.batch.Rewrap",
+            "outcome": "rewrapped"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.batch.Rewrapped"
+        },
+        {
+          "kind": "actor",
+          "name": "demo.batch.Operator"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "demo.batch.Operator",
+          "command": "demo.batch.Rewrap",
+          "input": {
+            "batch_id": {
+              "kind": "literal",
+              "value": "batch_id"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "demo.batch.Rewrap",
+            "outcome": "rewrapped"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "demo.batch.Rewrapped",
+          "payload": {
+            "batch_id": "batch_id"
+          },
+          "shape": {
+            "batch_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.batch.Rewrapped",
+          "payload": {
+            "batch_id": "batch_id"
+          },
+          "shape": {
+            "batch_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "event": "demo.batch.Rewrapped",
+          "payload": {
+            "batch_id": "batch_id"
+          },
+          "shape": {
+            "batch_id": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          },
+          "step": "expect_event"
+        }
+      ]
+    }
+  }
+}

@@ -253,7 +253,7 @@ $ aep govern evaluate --task examples/development-passkeys/task.yaml \
     --artifacts examples/development-passkeys/artifacts.yaml \
     --evidence examples/development-passkeys/evidence/01-red-test.yaml \
     --advance
-inputs      . and examples/development-passkeys/task.yaml
+inputs      project …/aep and examples/development-passkeys/task.yaml
 state       implement (Implement)
 transitions
   implement -> verify [blocked]
@@ -289,7 +289,7 @@ $ aep govern evaluate --task examples/development-passkeys/task.yaml \
     --evidence examples/development-passkeys/evidence/04-review.yaml \
     --evidence examples/development-passkeys/evidence/05-provenance.yaml \
     --advance
-inputs      . and examples/development-passkeys/task.yaml
+inputs      project …/aep and examples/development-passkeys/task.yaml
 state       complete (Complete)
 transitions
   (none: this state is terminal)

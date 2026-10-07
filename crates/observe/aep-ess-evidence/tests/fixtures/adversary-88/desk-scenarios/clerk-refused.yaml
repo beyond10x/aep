@@ -1,0 +1,10 @@
+type: ess-scenario/4
+domain: desk.tickets
+scenario: clerk-is-refused
+summary: A clerk expected to be refused a command it holds.
+timeline:
+  - at: 2026-01-05T09:00:00Z
+    command: desk.tickets.OpenTicket
+    actor: desk.tickets.Clerk
+    input: {id: t-2, title: second}
+    refused: not_granted

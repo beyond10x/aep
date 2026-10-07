@@ -9,6 +9,33 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact evidence --suite` admits every coverage suite ESS 0.55.0 writes
+  (`ess-conformance/35` through `/45`; ESS 0.55.0 writes every fresh suite at /34 or above, so all
+  of them were refused). Scenario keys in the forms ESS 0.55.0 reads are admitted: command and view
+  grants (`<command>/grant/denied`, `<command>/grant/admitted/<actor>`,
+  `<view>/grant/read/denied`, `<view>/grant/read/admitted/<actor>`), one-time disclosure cells,
+  `<binding>/binding/refusal/<outcome>` and the `condition-false` and `condition-absent` binding
+  aspects; they were refused as `MalformedScenarioId`. The `scenario_initial_state` and
+  `synthesis_seeds` provenance members and authored refusals `ESS-AUTHOR-038`–`041` are admitted
+  too. Each later form or member is refused as `UnsupportedVocabulary`, naming the form and the
+  major, in a suite older than the major that introduced it, the transcribed suite/5 included; a
+  `synthesis_seeds` record ESS refuses on its own terms (an unknown source or selection, unsorted
+  selections, an application naming an authored scenario, a malformed name) is refused.
+- `aep govern resolve`, `evaluate` and `explain` given `--task` inside a project load the project's
+  configured `protocols` source and its artifact manifest, instead of reading the working directory
+  as the document tree. A project with an external or pinned protocol source no longer refuses
+  `unknown_protocol`. `--root` still names the tree, `--artifacts` still replaces the manifest, and
+  outside any project `--task` still resolves against `.`.
+- `aep plan store migrate git --verify` compares every migrated evidence record with the one the
+  old store answered, field by field, in the order the Git-native store answers them, duplicates
+  included. Before, it compared only how many records of each kind there were, so a changed
+  reference, source, actor, time or review outcome passed. A difference names the artifact, the
+  record's position, its evidence file and the differing fields, and a lost record is named at its
+  own position. Title, body and transition differences are named the same way; no difference
+  prints a reference, source, actor, title or body. Per-kind counts are still reported.
+
 ## [0.68.0] — 2026-09-30
 
 ### Added

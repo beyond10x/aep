@@ -80,19 +80,70 @@ pub fn lower_kebab(value: &str) -> bool {
         && !value.contains("--")
 }
 
+/// Whether a name follows ESS's field-name grammar, `^_*[A-Za-z][A-Za-z0-9_]*$`.
+pub fn field_name(value: &str) -> bool {
+    value
+        .trim_start_matches('_')
+        .as_bytes()
+        .first()
+        .is_some_and(u8::is_ascii_alphabetic)
+        && value
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || c == b'_')
+}
+
+/// Whether `parts` spell a one-time disclosure cell:
+/// `<command>/disclosure/<outcome>/<field>/<aspect>/as/anonymous` or `…/as/actor/<actor>`.
+///
+/// Mirrors ESS 0.55.0 `one_time_response::Cell::parse` (`one_time_response/cells.rs`), arm for arm
+/// and in its order, so a caller suffix is read the way ESS reads it.
+fn disclosure_cell(parts: &[&str]) -> bool {
+    let [command, "disclosure", outcome, field, rest @ ..] = parts else {
+        return false;
+    };
+    let aspect = match rest {
+        [aspect @ .., "as", "anonymous"] => aspect,
+        [aspect @ .., "as", "actor", actor] if qualified_name(actor) => aspect,
+        _ => return false,
+    };
+    let aspect = match aspect {
+        ["origin" | "retry" | "rotation"] => true,
+        ["read", view] => qualified_name(view),
+        ["command", command, outcome] => qualified_name(command) && lower_kebab(outcome),
+        ["denied", command] => qualified_name(command),
+        _ => false,
+    };
+    aspect && qualified_name(command) && lower_kebab(outcome) && field_name(field)
+}
+
 impl ScenarioId {
     /// Parses a scenario identity in the grammar current ESS reads, without inventing coverage.
     ///
-    /// Mirrors ESS `ScenarioId::parse` (`crates/verify/ess-conformance/src/scenario.rs` at ESS
-    /// `origin/main` `1bd946d6b3`): the [`frozen`](Self::frozen) forms plus `<view>/aggregate`
-    /// and the `final-failure` binding aspect. Like ESS, the grammar is independent of the suite
-    /// major; which major may carry a form is the suite reader's check.
+    /// Mirrors ESS 0.55.0 `ScenarioId::parse` (`crates/verify/ess-conformance/src/scenario.rs`):
+    /// the [`frozen`](Self::frozen) forms plus the disclosure cells, `<view>/aggregate`, the four
+    /// grant forms, `<binding>/binding/refusal/<outcome>` and the `final-failure`,
+    /// `condition-false` and `condition-absent` binding aspects. Like ESS, the grammar is
+    /// independent of the suite major; which major may carry a form is the suite reader's check.
     pub fn new(value: impl Into<String>) -> Result<Self, EssAdmissionError> {
         let value = value.into();
         let parts: Vec<_> = value.split('/').collect();
         let valid = match parts.as_slice() {
-            [view, "aggregate"] => qualified_name(view),
-            [binding, "binding", "final-failure"] => lower_kebab(binding),
+            [_, "disclosure", ..] => disclosure_cell(&parts),
+            // `<view>/aggregate`, `<command>/grant/denied`, `<view>/grant/read/denied`.
+            [subject, "aggregate"]
+            | [subject, "grant", "denied"]
+            | [subject, "grant", "read", "denied"] => qualified_name(subject),
+            // `<command>/grant/admitted/<actor>`, `<view>/grant/read/admitted/<actor>`.
+            [subject, "grant", "admitted", actor]
+            | [subject, "grant", "read", "admitted", actor] => {
+                qualified_name(subject) && qualified_name(actor)
+            }
+            [binding, "binding", "refusal", outcome] => {
+                lower_kebab(binding) && lower_kebab(outcome)
+            }
+            [binding, "binding", "final-failure" | "condition-false" | "condition-absent"] => {
+                lower_kebab(binding)
+            }
             _ => return Self::frozen(value),
         };
         if valid {
