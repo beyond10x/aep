@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:task-flag-keeps-project-protocols
 kind: story
-status: active
+status: implemented
 title: An explicit --task keeps the project's protocol source
 refs:
 - provider: github
@@ -18,10 +18,11 @@ scope:
   path: docs/guide/README.md
 - confidence: cited
   path: website/docs/guides/govern-a-task.md
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 5}
+- {from: "active", to: "implemented", at: "2026-10-07T22:44:03Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1}}}
 ---
 ## Outcome
 

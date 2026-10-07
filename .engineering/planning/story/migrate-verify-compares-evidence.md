@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:migrate-verify-compares-evidence
 kind: story
-status: active
+status: implemented
 title: migrate git --verify compares evidence records, not counts
 refs:
 - provider: github
@@ -17,10 +17,11 @@ scope:
   path: crates/edge/aep-cli/tests/store_migrate_git.rs
 - confidence: cited
   path: crates/plan/aep-backend-markdown/src/journal.rs
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 4}
 - {from: "proposed", to: "active", at: "2026-10-07T08:06:12Z", actor: "human:timo", revision: 5}
+- {from: "active", to: "implemented", at: "2026-10-07T22:44:04Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1,"review_outcome":2}}}
 ---
 ## Outcome
 

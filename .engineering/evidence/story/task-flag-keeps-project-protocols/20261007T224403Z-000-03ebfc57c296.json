@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-07T22:44:03Z",
+  "actor": "human:timo",
+  "artifact": "story:task-flag-keeps-project-protocols",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "release 0.69.0: PR #93 CI task check exit 0, release PR #94 CI 13 of 13",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/37692115407"
+  }
+}
