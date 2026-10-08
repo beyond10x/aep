@@ -77,6 +77,29 @@ impl Assembly {
         assembly
     }
 
+    /// This assembly with `member`'s store answered by `report` rather than by what was read.
+    ///
+    /// For a writer asking what the workspace **would** be after an edit it has not made yet: the
+    /// member it writes to is replaced by its in-memory plan, and every other member stays as read.
+    /// A `member` the assembly does not hold leaves it unchanged.
+    #[must_use]
+    pub fn with_report(mut self, member: &MemberName, report: StoreReport) -> Self {
+        let Some(store) = self.members.iter_mut().find(|store| &store.name == member) else {
+            return self;
+        };
+        store.report = report;
+        self.index.clear();
+        for store in &self.members {
+            for id in store.report.documents.keys() {
+                self.index
+                    .entry(id.clone())
+                    .or_default()
+                    .insert(store.name.clone());
+            }
+        }
+        self
+    }
+
     /// Every member, in the order the workspace named them.
     #[must_use]
     pub fn members(&self) -> &[MemberStore] {
@@ -206,7 +229,63 @@ impl Assembly {
     /// out on this machine.
     #[must_use]
     pub fn cycles(&self) -> Vec<AssemblyCycle> {
-        // Every artifact, addressed the one way that is unique across members.
+        let (nodes, edges) = self.edges();
+        let mut found = Vec::new();
+        for (kind, by_source) in &edges {
+            if let Some(path) = first_cycle(&nodes, by_source) {
+                found.push(AssemblyCycle {
+                    kind: kind.clone(),
+                    path,
+                });
+            }
+        }
+        found
+    }
+
+    /// A path of `kind` edges from `from` to `to` in the combined graph, each node `member/id`,
+    /// both ends included; `None` when there is none.
+    ///
+    /// The question a writer asks before adding `to -> from`: the edge closes a cycle exactly when
+    /// this answers. [`Self::cycles`] cannot be asked instead — it keeps one cycle per kind, so a
+    /// loop that already stands hides every new one of the same kind. Unresolved crossings
+    /// contribute no edge, as in [`Self::cycles`].
+    #[must_use]
+    pub fn path(&self, kind: &str, from: &str, to: &str) -> Option<Vec<String>> {
+        let (_, edges) = self.edges();
+        let by_source = edges.get(kind)?;
+        let mut came_from: BTreeMap<&str, &str> = BTreeMap::new();
+        let mut queue = std::collections::VecDeque::from([from]);
+        let mut seen: BTreeSet<&str> = BTreeSet::from([from]);
+        while let Some(node) = queue.pop_front() {
+            if node == to {
+                let mut path = vec![to.to_owned()];
+                let mut at = to;
+                while let Some(previous) = came_from.get(at) {
+                    path.push((*previous).to_owned());
+                    at = previous;
+                }
+                path.reverse();
+                return Some(path);
+            }
+            for next in by_source.get(node).into_iter().flatten() {
+                if seen.insert(next.as_str()) {
+                    came_from.insert(next.as_str(), node);
+                    queue.push_back(next.as_str());
+                }
+            }
+        }
+        None
+    }
+
+    /// Every artifact, addressed `member/id` — the one way that is unique across members — and
+    /// every resolved edge between them, by relation kind.
+    #[allow(clippy::type_complexity)] // Two plain indexes; a named type would be read once.
+    fn edges(
+        &self,
+    ) -> (
+        BTreeSet<String>,
+        BTreeMap<String, BTreeMap<String, BTreeSet<String>>>,
+    ) {
         let mut edges: BTreeMap<String, BTreeMap<String, BTreeSet<String>>> = BTreeMap::new();
         let mut nodes: BTreeSet<String> = BTreeSet::new();
 
@@ -238,17 +317,7 @@ impl Assembly {
                     .insert(to);
             }
         }
-
-        let mut found = Vec::new();
-        for (kind, by_source) in &edges {
-            if let Some(path) = first_cycle(&nodes, by_source) {
-                found.push(AssemblyCycle {
-                    kind: kind.clone(),
-                    path,
-                });
-            }
-        }
-        found
+        (nodes, edges)
     }
 
     /// How many artifacts the workspace holds in total.

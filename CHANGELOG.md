@@ -9,6 +9,18 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact relate`, `new --relate` and `unrelate` write and take back an edge to another
+  declared workspace member's artifact (`<member>/<kind>:<name>`), the edge `validate` and
+  `aep plan workspace crossings` already read. `relate` refused one as "an edge to nothing" and
+  `new --relate` as an invalid locator. A target naming a member the workspace does not declare is
+  refused naming `workspace.yaml`; a target naming this store's own member is this store's artifact
+  and is refused when the store does not hold it. When the other member is checked out, a target it
+  does not hold, or an edge closing a cycle through it, is refused; a member nobody checked out is
+  admitted, as `crossings` reads it. In a SQLite or Postgres plan the crossing is kept once across
+  reopening.
+
 ## [0.69.0] — 2026-10-07
 
 ### Added
