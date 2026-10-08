@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EngineeringDirty payload",
+  "description": "`.engineering/` has uncommitted changes: migrate_git.rs:257-264.",
+  "x-ess-name": "aep.plan.EngineeringDirty",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:2e944fc462d04b0d32e96825b71257760052349a1974d529f637743c91d87f46",
+    "regenerate": "ess generate"
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan store migrate git input",
+  "description": "Rewrite an `aep.project/1` Markdown store as an `aep.project/5` Git-native one.",
+  "x-ess-name": "aep.plan.MigrateGit",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+    },
+    "dry_run": {
+      "type": "boolean"
+    },
+    "verify": {
+      "type": "boolean"
+    },
+    "protocols": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "protocol": {
+      "type": "string"
+    },
+    "planning_scope": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "engineering",
+    "dry_run",
+    "verify"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:4fd73cf4e26544e013d50f299380777e37e671e854f3cd1955a42adea084ae1e",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

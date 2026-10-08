@@ -31,6 +31,7 @@ tasks:
       - task: postgres-check
       - task: doc-check
       - task: schema-check
+      - task: ess-gate
       - task: msrv
 
   msrv:
@@ -223,6 +224,19 @@ tasks:
     desc: Fail if the committed schemas differ from the Rust types.
     cmds:
       - cargo xtask schema --check
+
+  ess:
+    desc: Validate the ESS specification under ess/ and rewrite its projections under generated/ess/.
+    cmds:
+      - cargo xtask ess
+
+  ess-gate:
+    desc: >-
+      Fail when ess/ does not validate under its pinned ess release or compile, when a projection
+      under generated/ess/ differs from a fresh one, when the pin differs from the release CI
+      installs, or when its open questions or synthesis counts differ from the recorded ones.
+    cmds:
+      - cargo test -q -p xtask --test ess_gate
 
   postgres-check:
     desc: >-
