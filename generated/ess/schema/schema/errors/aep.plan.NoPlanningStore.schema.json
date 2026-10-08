@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NoPlanningStore payload",
+  "description": "There is no `.engineering/planning/` directory: migrate_git.rs:278-280.",
+  "x-ess-name": "aep.plan.NoPlanningStore",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:bf3852c85abb07a80a75150d0a750cd84bc049fca6899664a73ccf854809c29e",
+    "regenerate": "ess generate"
+  }
+}

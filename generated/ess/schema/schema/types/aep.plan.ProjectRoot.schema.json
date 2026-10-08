@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.ProjectRoot",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:0eaa4f88491e4e46226af0d3d32f84aecc059cc09802865f043ae8f600c502c3",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.ProjectRoot": {
+      "title": "ProjectRoot",
+      "x-ess-name": "aep.plan.ProjectRoot",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

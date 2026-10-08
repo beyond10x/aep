@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan reverse init input",
+  "description": "Write the `aep.project/5` project file that makes a repository an adopting project.",
+  "x-ess-name": "aep.plan.ReverseInit",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "root": {
+      "$ref": "#/$defs/aep.plan.ProjectRoot"
+    },
+    "protocols": {
+      "type": "string"
+    },
+    "profile": {
+      "type": "string"
+    },
+    "protocol": {
+      "type": "string"
+    },
+    "summary": {
+      "type": "string"
+    },
+    "no_verify": {
+      "type": "boolean"
+    },
+    "planning_scope": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "root",
+    "protocols",
+    "profile",
+    "no_verify"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:c39e48670e0cf55c6d0239e004311230670124c0f1983e812846a3fffba9ebfb",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.ProjectRoot": {
+      "title": "ProjectRoot",
+      "x-ess-name": "aep.plan.ProjectRoot",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

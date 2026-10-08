@@ -5,9 +5,16 @@ to use it is in [`README.md`](README.md) and the [documentation](https://beyond1
 Organization-wide rules live in `atlas/AGENTS.md`; a change to bytes another repository verifies is
 a coordinated migration with an Atlas ADR.
 
-This repository serves `atlas/ROADMAP.md` objectives **O2** (decisions as data, with evidence) and
-**O3** (any harness, observed and compared). A change that advances neither is a question for the
-operator, not an inferred task.
+## Serves
+
+The objectives are those of `atlas/ROADMAP.md`.
+
+- **O2 — decisions as data, with evidence.** Planning status, capability and completion are decided
+  by the engine from validated documents and recorded evidence.
+- **O3 — any harness, observed and compared.** The driver and transcript checking hold any harness
+  to the same step map and trace contract.
+
+A change that advances neither is a question for the operator, not an inferred task.
 
 ## Normative documents
 
@@ -20,6 +27,7 @@ operator, not an inferred task.
 | driver and harness boundary | `docs/design/harness-planning-and-driver-design-v0.1.md` |
 | open work and acceptance | `.engineering/planning/`, plus the live pages listed in `docs/plan/README.md` |
 | delivered releases | `docs/status.md`, generated from annotated tags by `cargo xtask status` |
+| the `aep plan reverse init` and `aep plan store migrate git` surface | the ESS specification `ess/`, projected into `generated/ess/` by `cargo xtask ess` |
 
 Every design's status is in `docs/design/README.md`. A design is proposed until a plan or planning
 artifact accepts it; a later accepted decision overrides earlier prose. Pages under
@@ -130,14 +138,17 @@ it and fails in CI; it happened twice in 0.64.x (a crate-path scan over untracke
 history checks over a fixture store under `target/`).
 
 <!-- generated:gate-steps:begin — do not edit; run `cargo xtask status` -->
-`task check` runs **16 steps**, in this order: `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `postgres-check`, `doc-check`, `schema-check`, `msrv`, `website`.
+`task check` runs **17 steps**, in this order: `fmt-check`, `status-check`, `plan-check`, `audit-check`, `version-check`, `dep-check`, `guard-check`, `claim-check`, `clippy`, `test`, `docs-check`, `postgres-check`, `doc-check`, `schema-check`, `ess-gate`, `msrv`, `website`.
 <!-- generated:gate-steps:end -->
 
 What the other steps refuse: `status-check` a stale generated region (this list, `docs/status.md`,
 the website's currency line); `version-check` a workspace version that differs from the newest
 tag; `guard-check` a test body duplicated across crates, or a comment or document citing an
 invariant by number; `claim-check` a released `### Fixed` entry naming something absent at the
-previous release; `docs-check` a CLI verb missing from `website/docs/reference/cli.md`. Prose
+previous release; `docs-check` a CLI verb missing from `website/docs/reference/cli.md`;
+`ess-gate` an `ess/` specification that does not validate under its pinned `ess`, a projection
+under `generated/ess/` that differs from a fresh one (`cargo xtask ess` rewrites them), and open
+questions or synthesis counts other than the ones `xtask/tests/ess_gate.rs` records. Prose
 states no count of tests; the gate output is the only place that count belongs.
 
 `audit-check` and `plan-check` run the `.engineering/checks` suite and the planning validator

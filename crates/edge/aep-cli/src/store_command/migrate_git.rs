@@ -92,6 +92,11 @@ pub(crate) struct GitArgs {
     /// For a plan with no `project.yaml`: the protocol it runs under.
     #[arg(long, default_value = "adp/1")]
     protocol: String,
+    /// The `planning_scope` to write. When omitted it is derived, in order, from the `origin`
+    /// remote's repository name, the primary checkout's directory name, or, outside Git, the
+    /// directory holding `.engineering/`.
+    #[arg(long, value_name = "NAME")]
+    planning_scope: Option<String>,
 }
 
 /// The project file a plan with none is migrated from: `aep.project/1`, from the flags.
@@ -247,10 +252,15 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
         unconfigured_selector(args, &selector_path)?
     };
     require_a_v1_markdown_selector(&selector_text, &selector_path)?;
-    let project_root = engineering
+    // A relative `--engineering .engineering` has the empty path as its parent, which names no
+    // directory; made absolute first, its parent is the checkout it was run in.
+    let engineering_absolute = std::path::absolute(&engineering)
+        .with_context(|| format!("making {} absolute", engineering.display()))?;
+    let project_root = engineering_absolute
         .parent()
         .context("the `.engineering` directory has no parent")?;
-    let scope = crate::store_command::default_planning_scope(project_root)?;
+    let scope =
+        crate::store_command::planning_scope(project_root, args.planning_scope.as_deref())?;
 
     let _fence = crate::planning_writer_fence::PlanningWriterFence::acquire(&engineering)
         .context("holding the planning writer fence")?;
@@ -277,7 +287,7 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
 
     // The new selector is built, and read back as the store it plans, before anything is written;
     // its protocol source supplies each kind's initial state.
-    let (selector, config) = selector_v5(&selector_text, &scope)?;
+    let (selector, config) = selector_v5(&selector_text, &scope.value)?;
     let lifecycles = lifecycles_of(&config, &engineering)?;
     let carrier = Carrier {
         at: crate::planning::clock_at_the_edge().iso_8601(),
@@ -312,8 +322,8 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
         .map(|name| planning.join(name)),
     )?;
     outln!(
-        "{} now selects `{PROJECT_VERSION_V5}` with `planning_scope: {scope}`: {} document(s), \
-         {} transition(s), {} evidence file(s) written",
+        "{} now selects `{PROJECT_VERSION_V5}` with {scope}: {} document(s), {} transition(s), \
+         {} evidence file(s) written",
         selector_path.display(),
         plan.documents.len(),
         plan.transitions,
@@ -533,11 +543,11 @@ fn compute(planning: &Path, lifecycles: &LifecycleRegistry, carrier: &Carrier) -
     plan
 }
 
-fn print_plan(plan: &Plan, scope: &str, dry_run: bool) {
+fn print_plan(plan: &Plan, scope: &crate::store_command::PlanningScope, dry_run: bool) {
     let verb = if dry_run { "would write" } else { "writes" };
     outln!(
         "{verb} {} document(s) as `{}` carrying {} transition(s), and {} evidence file(s); \
-         `planning_scope: {scope}` (the repository directory's name)",
+         {scope}",
         plan.documents.len(),
         PlanningFormat::V3.as_str(),
         plan.transitions,

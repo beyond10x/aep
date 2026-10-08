@@ -1,0 +1,204 @@
+{
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.plan.EngineeringDirectory"
+    },
+    "aep.plan.PlanningScope": {
+      "title": "PlanningScope",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 1",
+        "value.utf8_bytes <= 255"
+      ],
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.plan.PlanningScope"
+    },
+    "aep.plan.PostgresStore": {
+      "additionalProperties": false,
+      "properties": {
+        "url": {
+          "description": "A libpq connection string or URL (project.rs:450-451).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "title": "PostgresStore",
+      "type": "object",
+      "x-ess-kind": "struct",
+      "x-ess-name": "aep.plan.PostgresStore"
+    },
+    "aep.plan.Project.State": {
+      "enum": [
+        "GitNative",
+        "JournalLayout"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.plan.Project.State"
+    },
+    "aep.plan.ProjectAdopted": {
+      "additionalProperties": false,
+      "properties": {
+        "engineering": {
+          "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+        },
+        "planning_scope": {
+          "$ref": "#/$defs/aep.plan.PlanningScope"
+        },
+        "root": {
+          "$ref": "#/$defs/aep.plan.ProjectRoot"
+        },
+        "scope_source": {
+          "$ref": "#/$defs/aep.plan.ScopeSource"
+        }
+      },
+      "required": [
+        "engineering",
+        "root",
+        "planning_scope",
+        "scope_source"
+      ],
+      "title": "ProjectAdopted",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.plan.ProjectAdopted"
+    },
+    "aep.plan.ProjectRoot": {
+      "title": "ProjectRoot",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.plan.ProjectRoot"
+    },
+    "aep.plan.Repository.State": {
+      "enum": [
+        "Present"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.plan.Repository.State"
+    },
+    "aep.plan.ScopeSource": {
+      "enum": [
+        "flag",
+        "origin_remote",
+        "git_common_directory",
+        "engineering_directory"
+      ],
+      "title": "ScopeSource",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.plan.ScopeSource"
+    },
+    "aep.plan.SqliteStore": {
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "description": "The database file, relative to `.engineering/` (project.rs:442-443).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "SqliteStore",
+      "type": "object",
+      "x-ess-kind": "struct",
+      "x-ess-name": "aep.plan.SqliteStore"
+    },
+    "aep.plan.Store": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "git",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "title": "git",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "postgres",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/aep.plan.PostgresStore"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "title": "postgres",
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "sqlite",
+              "type": "string"
+            },
+            "value": {
+              "$ref": "#/$defs/aep.plan.SqliteStore"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "title": "sqlite",
+          "type": "object"
+        }
+      ],
+      "title": "Store",
+      "x-ess-kind": "union",
+      "x-ess-name": "aep.plan.Store",
+      "x-ess-union-tag": "kind"
+    },
+    "aep.plan.StoreMigrated": {
+      "additionalProperties": false,
+      "properties": {
+        "engineering": {
+          "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+        },
+        "planning_scope": {
+          "$ref": "#/$defs/aep.plan.PlanningScope"
+        },
+        "scope_source": {
+          "$ref": "#/$defs/aep.plan.ScopeSource"
+        }
+      },
+      "required": [
+        "engineering",
+        "planning_scope",
+        "scope_source"
+      ],
+      "title": "StoreMigrated",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.plan.StoreMigrated"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "x-ess-provenance": {
+    "contract_digest": "slice-sha256/2:42f47d88134f0da0999292ca8a403774b4439716cf819a97954b08834e33f265",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "specification_version": "v1",
+    "system": "aep"
+  }
+}

@@ -125,7 +125,7 @@ $ $B plan reverse init \
 …/your-repo/.engineering/project.yaml written
   protocol source resolves to …/.cache/aep/protocol-sources/…/snapshots/0123456789abcdef0123456789abcdef01234567
   profile acme.service
-  store: git (aep.project/5), planning_scope your-repo
+  store: git (aep.project/5), planning_scope: your-repo (from the origin remote)
 ```
 
 `version: aep.project/5` and `store: { git: {} }` select the Git-native planning store: one Markdown

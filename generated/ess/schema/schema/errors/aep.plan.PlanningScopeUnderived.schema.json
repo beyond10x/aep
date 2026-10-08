@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PlanningScopeUnderived payload",
+  "description": "No `--planning-scope`, and the Git repository has neither an `origin` remote nor a common directory named `.git`; the refusal names `--planning-scope`.",
+  "x-ess-name": "aep.plan.PlanningScopeUnderived",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:5c8d1269b7f806febf6bc6b08ae0f5b65527719ce81448765ec064084d9750c1",
+    "regenerate": "ess generate"
+  }
+}

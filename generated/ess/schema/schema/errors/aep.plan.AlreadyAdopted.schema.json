@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AlreadyAdopted payload",
+  "description": "A project file exists: reverse.rs:1357-1362.",
+  "x-ess-name": "aep.plan.AlreadyAdopted",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:6b69fcdac9a4fbe87806542c08ed9302565b9b56deba5dd8020be76b2eecbb61",
+    "regenerate": "ess generate"
+  }
+}

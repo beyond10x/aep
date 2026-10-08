@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PlanWithoutProjectFile payload",
+  "description": "The planning directory holds a plan and no project file names it: reverse.rs:1370-1378.",
+  "x-ess-name": "aep.plan.PlanWithoutProjectFile",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:390c70d68f632865185a051b7a61293c05a6e8f4204a189b69bb2d0fa1c89844",
+    "regenerate": "ess generate"
+  }
+}

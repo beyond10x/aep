@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NothingToMigrate payload",
+  "description": "The project file already selects `aep.project/5`: migrate_git.rs:138-142, 254.",
+  "x-ess-name": "aep.plan.NothingToMigrate",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:865f43258e5f35f4d3d7de2a7c359e220cf5009331b4ea7835aee4cf3afce37d",
+    "regenerate": "ess generate"
+  }
+}

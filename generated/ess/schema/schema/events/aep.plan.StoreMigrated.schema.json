@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StoreMigrated payload",
+  "x-ess-name": "aep.plan.StoreMigrated",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+    },
+    "planning_scope": {
+      "$ref": "#/$defs/aep.plan.PlanningScope"
+    },
+    "scope_source": {
+      "$ref": "#/$defs/aep.plan.ScopeSource"
+    }
+  },
+  "required": [
+    "engineering",
+    "planning_scope",
+    "scope_source"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:0f72160a11e1bf0fc0c301a6d9810072e8ba62b810dbcefcabfea6e82cb0330f",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.plan.PlanningScope": {
+      "title": "PlanningScope",
+      "x-ess-name": "aep.plan.PlanningScope",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 1",
+        "value.utf8_bytes <= 255"
+      ]
+    },
+    "aep.plan.ScopeSource": {
+      "title": "ScopeSource",
+      "x-ess-name": "aep.plan.ScopeSource",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "flag",
+        "origin_remote",
+        "git_common_directory",
+        "engineering_directory"
+      ]
+    }
+  }
+}

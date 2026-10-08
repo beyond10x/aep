@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.Repository.State",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:6f8b4dabd46ef7902d6028c439ef916c46330eb520c10995d37434d1b68476a1",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.Repository.State": {
+      "title": "State",
+      "x-ess-name": "aep.plan.Repository.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Present"
+      ]
+    }
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan store migrate git response",
+  "description": "Rewrite an `aep.project/1` Markdown store as an `aep.project/5` Git-native one.",
+  "x-ess-name": "aep.plan.MigrateGit",
+  "x-ess-kind": "command-response",
+  "type": "object",
+  "properties": {
+    "planning_scope": {
+      "$ref": "#/$defs/aep.plan.PlanningScope"
+    },
+    "scope_source": {
+      "$ref": "#/$defs/aep.plan.ScopeSource"
+    }
+  },
+  "required": [
+    "planning_scope",
+    "scope_source"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:373dfcd4cf61ccf9b7b70fefeb2cbe0ab04475fc11a3fee1d5c51ce690bb73f8",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.PlanningScope": {
+      "title": "PlanningScope",
+      "x-ess-name": "aep.plan.PlanningScope",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 1",
+        "value.utf8_bytes <= 255"
+      ]
+    },
+    "aep.plan.ScopeSource": {
+      "title": "ScopeSource",
+      "x-ess-name": "aep.plan.ScopeSource",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "flag",
+        "origin_remote",
+        "git_common_directory",
+        "engineering_directory"
+      ]
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProjectFileMissing payload",
+  "description": "No project file and no `--protocols`/`--profile`: migrate_git.rs:103-113, 252.",
+  "x-ess-name": "aep.plan.ProjectFileMissing",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:476a8dc3c08647826e2f9c40158e49bf84b3eac33ac5f170bdc12366ab0a2a98",
+    "regenerate": "ess generate"
+  }
+}

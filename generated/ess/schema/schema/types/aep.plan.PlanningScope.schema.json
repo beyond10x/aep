@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.PlanningScope",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:73960069a4a63d56adc366665c689fc6c7f22a7dd3ecf5dfaf834ba776360359",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.PlanningScope": {
+      "title": "PlanningScope",
+      "x-ess-name": "aep.plan.PlanningScope",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 1",
+        "value.utf8_bytes <= 255"
+      ]
+    }
+  }
+}

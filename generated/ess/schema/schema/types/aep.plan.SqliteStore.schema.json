@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.SqliteStore",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:4ca09485f73ea7b2fdcd6dbfef6be897f75744921d5f4f8e770151f73b92154b",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.SqliteStore": {
+      "title": "SqliteStore",
+      "x-ess-name": "aep.plan.SqliteStore",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The database file, relative to `.engineering/` (project.rs:442-443).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Repository",
+  "description": "The directory that holds `.engineering/`, observed on disk.",
+  "x-ess-name": "aep.plan.Repository",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "root": {
+      "$ref": "#/$defs/aep.plan.ProjectRoot"
+    },
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory",
+      "description": "`<root>/<project directory>`: reverse.rs:1354 (`root.join(project_directory())`); migrate_git.rs:255-261 reads the root back as that directory's parent, made absolute first.",
+      "x-ess-relation": {
+        "name": "project",
+        "kind": "references",
+        "source": "aep.plan.Repository",
+        "target": "aep.plan.Project",
+        "cardinality": "one",
+        "via": "engineering"
+      }
+    },
+    "directory_name": {
+      "description": "The root's last path component, made absolute and canonicalized where it can be, lossily decoded: store_command.rs:139-146 (`planning_scope`).",
+      "type": "string"
+    },
+    "planning_has_entries": {
+      "description": "`.engineering/planning/` reads as a directory holding an entry: reverse.rs:1370-1371.",
+      "type": "boolean"
+    },
+    "planning_is_directory": {
+      "description": "`.engineering/planning/` is a directory: migrate_git.rs:276-280.",
+      "type": "boolean"
+    },
+    "evidence_has_entries": {
+      "description": "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:277, 281.",
+      "type": "boolean"
+    },
+    "engineering_clean": {
+      "description": "`git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:267-274 and 371-386 (`git_clean`).",
+      "type": "boolean"
+    },
+    "in_git_repository": {
+      "description": "The root is inside a Git work tree: a `.git` entry above it leads to a common directory (crates/edge/aep-cli/src/planning_writer_fence.rs:66, `git_common_directory`).",
+      "type": "boolean"
+    },
+    "origin_repository_name": {
+      "description": "The last path segment of the `origin` remote's first URL, as `git remote get-url origin` answers it (`insteadOf` applied), with a `?query` or `#fragment` and a trailing `.git` removed. Empty, and so refused as unfit, when the URL has no path segment (a host or host:port only) or its last segment is `.` or `..`. Absent when there is no Git repository, it has no `origin` remote, or `git` cannot be run: no origin is then observed, and the next source decides. store_command.rs:148-149, 168-252 (`origin_url`, `repository_name_of_url`).",
+      "type": "string"
+    },
+    "git_common_directory_holder": {
+      "description": "The name of the directory holding the Git common directory, present only when that directory is named `.git`. In a linked worktree this is the primary checkout, not the worktree's own directory: store_command.rs:151-157.",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.plan.Repository.State"
+    }
+  },
+  "required": [
+    "root",
+    "engineering",
+    "directory_name",
+    "planning_has_entries",
+    "planning_is_directory",
+    "evidence_has_entries",
+    "engineering_clean",
+    "in_git_repository",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:1883a368e5b769d521a392216bceb3075cf94f1c1c75332cc3684844e0eff79b",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.plan.ProjectRoot": {
+      "title": "ProjectRoot",
+      "x-ess-name": "aep.plan.ProjectRoot",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.plan.Repository.State": {
+      "title": "State",
+      "x-ess-name": "aep.plan.Repository.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Present"
+      ]
+    }
+  }
+}

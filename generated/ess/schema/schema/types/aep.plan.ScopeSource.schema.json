@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.ScopeSource",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:67436911070773c236a49334c4889e2fb2139ae22217c62556cdab4f43fb37fc",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.ScopeSource": {
+      "title": "ScopeSource",
+      "x-ess-name": "aep.plan.ScopeSource",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "flag",
+        "origin_remote",
+        "git_common_directory",
+        "engineering_directory"
+      ]
+    }
+  }
+}

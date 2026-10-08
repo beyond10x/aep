@@ -1,0 +1,12 @@
+format: ess/23
+system: aep
+version: v1
+
+summary: >-
+  The planning-store surface of the `aep` command: `aep plan reverse init`, which writes the
+  `aep.project/5` project file of a repository that has none, and `aep plan store migrate git`,
+  which rewrites an `aep.project/1` Markdown store as an `aep.project/5` Git-native one, both
+  deriving the store's `planning_scope`. Retrofitted from the code; every declaration cites it.
+
+domains:
+  - aep.plan
