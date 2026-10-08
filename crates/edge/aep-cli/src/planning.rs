@@ -2080,17 +2080,47 @@ fn create_through_a_command(
     Ok((opened.path_of(&front.id), created.revision.get()))
 }
 
-fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Result<String> {
+fn write_through_a_command(
+    opened: &Opened,
+    document: &PlanningDocument,
+    membership: &aep_domain::workspace::Membership,
+    root: &Path,
+) -> Result<String> {
     use aep_contract::query::QueryService;
     use aep_contract::testing::block_on;
     use aep_domain::entity::EntityLocator;
 
     let backend = opened.backend()?;
     let front = &document.frontmatter;
+    // A crossing points into another member's store, so this one cannot resolve it; the workspace,
+    // as checked out here, is asked instead — with the plan as it would stand once this is written.
+    let crossing = |relation: &aep_domain::artifact::ArtifactRelation| {
+        relation.crosses_to_a_declared_member(membership)
+    };
+    if front.relations.iter().any(crossing) {
+        let mut after = opened.report.clone();
+        after.documents.insert(
+            front.id.clone(),
+            aep_backend_markdown::StoredDocument {
+                relative_path: relative_path_for(&front.id),
+                document: document.clone(),
+            },
+        );
+        for relation in front.relations.iter().filter(|relation| crossing(relation)) {
+            refuse_a_crossing_the_workspace_contradicts(
+                root,
+                membership,
+                &opened.report,
+                &after,
+                &format!("{} {relation}", front.id),
+                &relation.target,
+            )?;
+        }
+    }
     // **Every target resolved before anything is written.** They used to be resolved inside the
     // loop, after the create had been committed and journalled — so a typo in `--relate` left the
     // caller told the command failed and holding an artifact without the edge they asked for.
-    for relation in &front.relations {
+    for relation in front.relations.iter().filter(|relation| !crossing(relation)) {
         let target = relation.target.id();
         block_on(QueryService::resolve(
             backend,
@@ -2112,13 +2142,23 @@ fn write_through_a_command(opened: &Opened, document: &PlanningDocument) -> Resu
 
     let (path, _) = create_through_a_command(opened, document)?;
     // The edges, each its own command — the same one `aep plan artifact relate` issues, because
-    // an edge created at birth and an edge added later are the same act.
+    // an edge created at birth and an edge added later are the same act. A crossing is the list of
+    // crossings so far, so each one is recorded as the edge it adds, as `relate` records it.
+    let mut so_far = PlanningDocument::new(front.clone(), document.body.clone());
+    so_far.frontmatter.relations.clear();
     for relation in &front.relations {
-        relate_through_a_command(
-            backend,
-            &front.id,
-            relation.kind,
-            relation.target.id())?;
+        if crossing(relation) {
+            so_far.frontmatter.relations.push(relation.clone());
+            crossings_through_a_command(
+                backend,
+                &front.id,
+                &so_far,
+                membership,
+                "protocol-artifact-new",
+            )?;
+        } else {
+            relate_through_a_command(backend, &front.id, relation.kind, relation.target.id())?;
+        }
     }
     Ok(path)
 }
@@ -2155,8 +2195,11 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
         );
     }
+    let root = args.store.repository_root();
+    let membership = declared_membership(&root)?;
     for value in &args.relate {
         let (relation, target) = parse_relation(value)?;
+        let (target, _) = edge_target(&target, &membership, &root)?;
         frontmatter
             .relations
             .push(aep_domain::artifact::ArtifactRelation::new(
@@ -2190,7 +2233,7 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     // document above is what the command has to produce, not what gets written — `MarkdownBackend`
     // writes it, from the entity.
     let opened = open(&args.store.location, true)?;
-    let path = write_through_a_command(&opened, &document)?;
+    let path = write_through_a_command(&opened, &document, &membership, &root)?;
     let relative = relative_path_for(&id);
 
     match args.store.format {
@@ -2869,6 +2912,167 @@ fn relate_through_a_command(
     Ok(())
 }
 
+/// Where an edge's target lives, seen from the store `membership` was read in: `(target, false)`
+/// for this store's own artifact, `(target, true)` for a **crossing** into another declared member.
+///
+/// A target naming this store's own member is this store's artifact written the long way, and comes
+/// back unqualified ([`ArtifactId::local_to`]), so the spelling an author chose decides nothing. A
+/// target naming a member the workspace does not declare is refused here, naming the declaration:
+/// it is not a crossing anybody can resolve, and it is not an artifact this store holds.
+fn edge_target(
+    target: &ArtifactRef,
+    membership: &aep_domain::workspace::Membership,
+    root: &Path,
+) -> Result<(ArtifactRef, bool)> {
+    let local = ArtifactRef::new(
+        target.id().local_to(membership.own()).into_owned(),
+        target.version().cloned(),
+    );
+    let Some(member) = local.id().member() else {
+        return Ok((local, false));
+    };
+    if membership.declares(member) {
+        return Ok((local, true));
+    }
+    let declared = membership
+        .declared()
+        .iter()
+        .map(|name| format!("`{name}`"))
+        .collect::<Vec<_>>();
+    bail!(
+        "`{member}` is not a member {} declares ({}), so `{target}` names no store an edge can \
+         reach",
+        root.join(project_directory())
+            .join(aep_domain::workspace::WORKSPACE_FILE)
+            .display(),
+        if declared.is_empty() {
+            "it declares none".to_owned()
+        } else {
+            format!("it declares {}", declared.join(", "))
+        }
+    )
+}
+
+/// Refuses a crossing the rest of the workspace, as checked out here, says is wrong.
+///
+/// Two things only the assembled workspace can see, both asked of the member stores on this disk:
+///
+/// * the target's member is checked out and does not hold the target — the cross-member form of
+///   *an edge to nothing*, named with that member's store so the reader knows where to look;
+/// * the edge closes a cycle that runs through another member — each store alone is acyclic,
+///   because the loop is made of crossings on both sides, so this store's graph check cannot see
+///   it. Only a cycle `after` has and `before` did not is this edge's.
+///
+/// A member nobody checked out holds nothing and is not a refusal, as `aep plan workspace
+/// crossings` reads it: a workspace is read on machines that checked out different subsets of it.
+fn refuse_a_crossing_the_workspace_contradicts(
+    root: &Path,
+    membership: &aep_domain::workspace::Membership,
+    before: &StoreReport,
+    after: &StoreReport,
+    edge: &str,
+    target: &ArtifactRef,
+) -> Result<()> {
+    use aep_domain::workspace::{Resolution, WorkspaceRef};
+
+    let Some(own) = membership.own() else {
+        return Ok(());
+    };
+    let (assembly, _) = crate::workspace::assemble(root)?;
+    let reference = WorkspaceRef::parse(target.id().to_string())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    if let Some(store) = assembly
+        .members()
+        .iter()
+        .find(|store| reference.member.as_ref() == Some(&store.name))
+    {
+        if store.root.is_dir() && !matches!(assembly.resolve(&reference), Resolution::Unique(_)) {
+            bail!(
+                "member `{}`'s store at {} does not hold `{}`, so `{edge}` would be an edge to \
+                 nothing",
+                store.name,
+                store.root.display(),
+                reference.artifact
+            );
+        }
+    }
+    let was = assembly.clone().with_report(own, before.clone()).cycles();
+    let closed: Vec<String> = assembly
+        .with_report(own, after.clone())
+        .cycles()
+        .into_iter()
+        .filter(|cycle| !was.contains(cycle))
+        .map(|cycle| format!("  - {cycle}"))
+        .collect();
+    if !closed.is_empty() {
+        bail!(
+            "`{edge}` would close a cycle across members:\n{}",
+            closed.join("\n")
+        );
+    }
+    Ok(())
+}
+
+/// Issues the `UpdateEntity` command that sets the crossings `document` declares.
+///
+/// A crossing has no local entity at its far end, so a `CreateRelation` cannot carry it. It travels
+/// in the entity body's `relations` field — the field `document_from_entity` already merges into a
+/// document for a store that keeps none, and the one `MarkdownProjection` writes into frontmatter —
+/// as the **whole** list of the source's crossings, so adding and taking back are one command each
+/// and one record each, journalled as the edge they are.
+fn crossings_through_a_command(
+    backend: &PlanBackend,
+    id: &ArtifactId,
+    document: &PlanningDocument,
+    membership: &aep_domain::workspace::Membership,
+    correlation: &str,
+) -> Result<()> {
+    use aep_contract::command::CommandService;
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::{Command, UpdateEntity};
+    use aep_domain::entity::{EntityLocator, EntityRef};
+    use aep_domain::node::Node;
+
+    let listed: Vec<Node> = document
+        .frontmatter
+        .relations
+        .iter()
+        .filter(|relation| relation.crosses_to_a_declared_member(membership))
+        .map(aep_domain::artifact::ArtifactRelation::to_node)
+        .collect();
+    let locator = EntityLocator::new(
+        aep_backend_markdown::backend::ORGANISATION,
+        aep_backend_markdown::backend::SPACE,
+        id.namespace(),
+        id.name(),
+    )
+    .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
+    let target = block_on(QueryService::resolve(backend, &locator))
+        .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
+
+    let at = clock_at_the_edge();
+    // The list's length is in the name: `new` issues one of these per crossing, possibly within one
+    // millisecond, and two commands sharing an idempotency key are one command to the contract.
+    let name = format!(
+        "crossings-{id}-{}-{}",
+        listed.len(),
+        at.epoch_millis()
+    );
+    let envelope = envelope_for(
+        &name,
+        correlation,
+        "aep.entity.update/v1",
+        Command::UpdateEntity(UpdateEntity {
+            target: EntityRef::new(target),
+            changes: [("relations".to_owned(), Node::Seq(listed))].into(),
+        }),
+        at,
+    )?;
+    block_on(backend.execute(envelope)).map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(())
+}
+
 /// `aep plan artifact relate`
 ///
 /// `target` is absent when the caller wrote the edge as one word — `<relation>:<target>` — which is
@@ -2885,8 +3089,11 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
     };
 
     let mut opened = open(&args.location, true)?;
+    let root = args.repository_root();
+    let membership = declared_membership(&root)?;
+    let (target, crossing) = edge_target(&target, &membership, &root)?;
 
-    if !opened.report.documents.contains_key(target.id()) {
+    if !crossing && !opened.report.documents.contains_key(target.id()) {
         bail!(
             "{} does not hold `{}`, so `{id} {relation} {target}` would be an edge to nothing",
             opened.plan.describe(),
@@ -2894,6 +3101,7 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
         );
     }
 
+    let before = crossing.then(|| opened.report.clone());
     let not_here = opened.missing(&id);
     let stored = opened
         .report
@@ -2909,10 +3117,7 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
 
     // Checked before it is written, not after: a cycle is only visible from the whole graph, and a
     // store that has to be repaired by hand after an edge went in is a store people stop using.
-    if let Err(errors) = opened
-        .report
-        .graph_in_workspace(declared_membership(&args.repository_root())?)
-    {
+    if let Err(errors) = opened.report.graph_in_workspace(membership.clone()) {
         outln!("`{id} {relation} {target}` would not build a graph:");
         for error in errors.as_slice() {
             outln!("  - {error}");
@@ -2924,7 +3129,25 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
     // frontmatter, so the document above is what this verb had to check a graph against — not what
     // gets written.
     let _ = relative;
-    relate_through_a_command(opened.backend()?, &id, relation, target.id())?;
+    if let Some(before) = before {
+        refuse_a_crossing_the_workspace_contradicts(
+            &root,
+            &membership,
+            &before,
+            &opened.report,
+            &format!("{id} {relation} {target}"),
+            &target,
+        )?;
+        crossings_through_a_command(
+            opened.backend()?,
+            &id,
+            &document,
+            &membership,
+            "protocol-artifact-relate",
+        )?;
+    } else {
+        relate_through_a_command(opened.backend()?, &id, relation, target.id())?;
+    }
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} (revision {})",
@@ -3048,6 +3271,9 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
     };
 
     let mut opened = open(&args.location, true)?;
+    let root = args.repository_root();
+    let membership = declared_membership(&root)?;
+    let (target, crossing) = edge_target(&target, &membership, &root)?;
 
     let not_here = opened.missing(&id);
     refuse_an_edge_a_record_rests_on(&opened, &id, relation, &target)?;
@@ -3079,10 +3305,7 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
     // Checked before it is written, for the reason `relate` checks it: what a plan must still be
     // after a write is a property of the whole graph, and a store repaired by hand afterwards is a
     // store people stop using.
-    if let Err(errors) = opened
-        .report
-        .graph_in_workspace(declared_membership(&args.repository_root())?)
-    {
+    if let Err(errors) = opened.report.graph_in_workspace(membership.clone()) {
         outln!("taking back `{id} {relation} {target}` would not build a graph:");
         for error in errors.as_slice() {
             outln!("  - {error}");
@@ -3092,8 +3315,19 @@ fn unrelate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) ->
 
     // Through a command. The edge the contract removes is what `MarkdownBackend` takes out of the
     // frontmatter, so the document above is what this verb had to check a graph against — not what
-    // gets written.
-    unrelate_through_a_command(opened.backend()?, &id, relation, target.id())?;
+    // gets written. A crossing was never a contract edge; it goes the way it came, as the source's
+    // list of crossings without it.
+    if crossing {
+        crossings_through_a_command(
+            opened.backend()?,
+            &id,
+            &document,
+            &membership,
+            "protocol-artifact-unrelate",
+        )?;
+    } else {
+        unrelate_through_a_command(opened.backend()?, &id, relation, target.id())?;
+    }
     match args.format {
         Format::Text => outln!(
             "{id} {relation} {target} removed (revision {})",

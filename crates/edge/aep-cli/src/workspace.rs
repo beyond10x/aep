@@ -120,7 +120,7 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<ExitCode> {
 }
 
 /// Reads every member's store into one graph.
-fn assemble(root: &Path) -> Result<(Assembly, Vec<String>)> {
+pub(crate) fn assemble(root: &Path) -> Result<(Assembly, Vec<String>)> {
     let workspace = load_workspace(root)
         .map_err(|errors| anyhow::anyhow!("{errors}"))
         .with_context(|| format!("reading the workspace in {}", root.display()))?;

@@ -88,6 +88,13 @@ struct Current {
     removed: Option<Removed>,
     /// An observation about an artifact, as the command stated it.
     observation: Option<Observation>,
+    /// The command is an `UpdateEntity` changing the crossings and nothing else.
+    ///
+    /// An edge is a record of its own and neither endpoint's document revision moves for one
+    /// (`story:relation-bumps-a-document-revision-but-not-an-entity`). A crossing is an edge that
+    /// has to travel as an update, because its far end is no entity here; it lands at the document's
+    /// current revision as a local edge does, so the spelling of the target decides nothing.
+    crossings_only: bool,
 }
 
 /// One `RemoveRelation` in flight, resolved to the words the frontmatter spells it in.
@@ -280,6 +287,7 @@ impl MarkdownProjection {
         };
         let mut updated = existing.clone();
         apply_body(&mut updated.frontmatter, &body.data);
+        apply_crossings(&self.membership, &mut updated.frontmatter, &body.data);
         self.check_the_ladder(creating, &existing, &updated, &artifact)?;
         if let Node::Map(fields) = &body.data {
             if let Some(Node::Text(prose)) = fields.get(BODY_KEY) {
@@ -293,7 +301,7 @@ impl MarkdownProjection {
         if !creating && updated == existing {
             return Ok(None);
         }
-        if !creating && !observing {
+        if !creating && !observing && !self.current.crossings_only {
             updated.frontmatter.revision = existing.frontmatter.revision.saturating_add(1);
         }
         let change = change_for(
@@ -645,12 +653,18 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
             }),
             _ => None,
         };
+        let crossings_only = matches!(
+            &envelope.payload,
+            Command::UpdateEntity(update)
+                if update.changes.len() == 1 && update.changes.contains_key("relations")
+        );
         self.current = Current {
             decided: matches!(&envelope.payload, Command::MoveStatus(_)),
             decided_on,
             touched,
             removed,
             observation,
+            crossings_only,
         };
         Ok(())
     }
@@ -806,6 +820,46 @@ fn change_for(
             target: taken.target.to_string(),
         },
         None => journal::Change::BodyReplaced,
+    }
+}
+
+/// Writes the crossings an entity body lists into the frontmatter.
+///
+/// A crossing — an edge to an artifact **another declared member** holds — has no local entity to
+/// point at, so the contract's relation surface cannot carry it. It travels in the entity body's
+/// `relations` field instead, which is where [`document_from_entity`] already reads it for a store
+/// that keeps no documents; this is the same field read on the way into a document.
+///
+/// Present replaces **the crossings and nothing else**: every crossing the frontmatter declares that
+/// the list does not is taken out, every one it lists is added, and a local edge, an edge naming
+/// this store's own member or one naming a member nobody declared is left exactly as it was — those
+/// are the relation surface's, or a defect `validate` reports, and a body saying nothing about them
+/// is not a body that removed them. Absent leaves the frontmatter alone, as [`apply_body`] does.
+fn apply_crossings(membership: &Membership, frontmatter: &mut PlanningFrontmatter, body: &Node) {
+    let Node::Map(fields) = body else {
+        return;
+    };
+    let Some(listed) = fields.get("relations") else {
+        return;
+    };
+    // Unreadable is left alone rather than read as *no crossings*: that reading would delete every
+    // crossing the document declares on the strength of a field nothing could parse.
+    let Some(listed) = serde_json::to_value(listed).ok().and_then(|value| {
+        serde_json::from_value::<Vec<aep_domain::artifact::ArtifactRelation>>(value).ok()
+    }) else {
+        return;
+    };
+    let crossings: Vec<_> = listed
+        .into_iter()
+        .filter(|relation| relation.crosses_to_a_declared_member(membership))
+        .collect();
+    frontmatter.relations.retain(|relation| {
+        !relation.crosses_to_a_declared_member(membership) || crossings.contains(relation)
+    });
+    for crossing in crossings {
+        if !frontmatter.relations.contains(&crossing) {
+            frontmatter.relations.push(crossing);
+        }
     }
 }
 

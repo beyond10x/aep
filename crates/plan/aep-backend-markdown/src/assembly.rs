@@ -77,6 +77,29 @@ impl Assembly {
         assembly
     }
 
+    /// This assembly with `member`'s store answered by `report` rather than by what was read.
+    ///
+    /// For a writer asking what the workspace **would** be after an edit it has not made yet: the
+    /// member it writes to is replaced by its in-memory plan, and every other member stays as read.
+    /// A `member` the assembly does not hold leaves it unchanged.
+    #[must_use]
+    pub fn with_report(mut self, member: &MemberName, report: StoreReport) -> Self {
+        let Some(store) = self.members.iter_mut().find(|store| &store.name == member) else {
+            return self;
+        };
+        store.report = report;
+        self.index.clear();
+        for store in &self.members {
+            for id in store.report.documents.keys() {
+                self.index
+                    .entry(id.clone())
+                    .or_default()
+                    .insert(store.name.clone());
+            }
+        }
+        self
+    }
+
     /// Every member, in the order the workspace named them.
     #[must_use]
     pub fn members(&self) -> &[MemberStore] {
