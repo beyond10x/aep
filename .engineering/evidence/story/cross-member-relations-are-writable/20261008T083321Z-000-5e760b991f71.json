@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T08:33:21Z",
+  "actor": "human:timo",
+  "artifact": "story:cross-member-relations-are-writable",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "PR 96 CI Gate (task check) pass; cross_member_relations 10/10, cross_member_relations_adversary 10/10",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/37747112935"
+  }
+}

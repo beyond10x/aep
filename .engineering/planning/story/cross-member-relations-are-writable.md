@@ -2,15 +2,16 @@
 format: aep.planning-md/3
 id: story:cross-member-relations-are-writable
 kind: story
-status: active
+status: implemented
 title: A store can write the cross-member edge the workspace reads
 relations:
 - decomposes: epic:one-cli-many-repositories
 - serves: vision:O2
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T07:35:36Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-10-08T07:35:36Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-10-08T08:33:22Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 # Story: A store can write the cross-member edge the workspace reads
 
