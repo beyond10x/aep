@@ -2094,10 +2094,12 @@ fn write_through_a_command(
     let front = &document.frontmatter;
     // A crossing points into another member's store, so this one cannot resolve it; the workspace,
     // as checked out here, is asked instead — with the plan as it would stand once this is written.
+    // Every edge is asked about loops: another member may already point at the artifact this
+    // creates, so even a local edge can close one through it.
     let crossing = |relation: &aep_domain::artifact::ArtifactRelation| {
         relation.crosses_to_a_declared_member(membership)
     };
-    if front.relations.iter().any(crossing) {
+    if !front.relations.is_empty() {
         let mut after = opened.report.clone();
         after.documents.insert(
             front.id.clone(),
@@ -2106,13 +2108,13 @@ fn write_through_a_command(
                 document: document.clone(),
             },
         );
-        for relation in front.relations.iter().filter(|relation| crossing(relation)) {
-            refuse_a_crossing_the_workspace_contradicts(
+        for relation in &front.relations {
+            refuse_an_edge_the_workspace_contradicts(
                 root,
                 membership,
-                &opened.report,
                 &after,
-                &format!("{} {relation}", front.id),
+                &front.id,
+                relation.kind,
                 &relation.target,
             )?;
         }
@@ -2953,24 +2955,29 @@ fn edge_target(
     )
 }
 
-/// Refuses a crossing the rest of the workspace, as checked out here, says is wrong.
+/// Refuses an edge the rest of the workspace, as checked out here, says is wrong.
 ///
 /// Two things only the assembled workspace can see, both asked of the member stores on this disk:
 ///
-/// * the target's member is checked out and does not hold the target — the cross-member form of
+/// * a crossing's member is checked out and does not hold the target — the cross-member form of
 ///   *an edge to nothing*, named with that member's store so the reader knows where to look;
-/// * the edge closes a cycle that runs through another member — each store alone is acyclic,
-///   because the loop is made of crossings on both sides, so this store's graph check cannot see
-///   it. Only a cycle `after` has and `before` did not is this edge's.
+/// * the edge, local or crossing, closes a cycle that runs through another member. Each store
+///   alone is acyclic, because the loop leaves it, so this store's graph check cannot see it. It
+///   is asked as *can the target already reach the source by edges of this kind*, which is exactly
+///   when adding `source -> target` closes a loop. A comparison of the workspace's cycles before
+///   and after cannot be asked instead: those keep one cycle per kind, so a loop that already
+///   stands hides every new one of its kind.
 ///
-/// A member nobody checked out holds nothing and is not a refusal, as `aep plan workspace
-/// crossings` reads it: a workspace is read on machines that checked out different subsets of it.
-fn refuse_a_crossing_the_workspace_contradicts(
+/// `after` is this store's plan with the edge in it. A member nobody checked out holds nothing and
+/// is not a refusal, as `aep plan workspace crossings` reads it: a workspace is read on machines
+/// that checked out different subsets of it. A store that is no member, or a workspace naming no
+/// member but this one, has nothing here its own graph check did not already ask.
+fn refuse_an_edge_the_workspace_contradicts(
     root: &Path,
     membership: &aep_domain::workspace::Membership,
-    before: &StoreReport,
     after: &StoreReport,
-    edge: &str,
+    source: &ArtifactId,
+    relation: RelationKind,
     target: &ArtifactRef,
 ) -> Result<()> {
     use aep_domain::workspace::{Resolution, WorkspaceRef};
@@ -2978,36 +2985,46 @@ fn refuse_a_crossing_the_workspace_contradicts(
     let Some(own) = membership.own() else {
         return Ok(());
     };
-    let (assembly, _) = crate::workspace::assemble(root)?;
-    let reference = WorkspaceRef::parse(target.id().to_string())
-        .map_err(|error| anyhow::anyhow!("{error}"))?;
-    if let Some(store) = assembly
-        .members()
-        .iter()
-        .find(|store| reference.member.as_ref() == Some(&store.name))
-    {
-        if store.root.is_dir() && !matches!(assembly.resolve(&reference), Resolution::Unique(_)) {
-            bail!(
-                "member `{}`'s store at {} does not hold `{}`, so `{edge}` would be an edge to \
-                 nothing",
-                store.name,
-                store.root.display(),
-                reference.artifact
-            );
-        }
+    if membership.declared().iter().all(|member| member == own) {
+        return Ok(());
     }
-    let was = assembly.clone().with_report(own, before.clone()).cycles();
-    let closed: Vec<String> = assembly
+    let edge = format!("{source} {relation} {target}");
+    let (assembly, _) = crate::workspace::assemble(root)?;
+    let to = if target.id().member().is_some() {
+        let reference = WorkspaceRef::parse(target.id().to_string())
+            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        if let Resolution::Unique(holder) = assembly.resolve(&reference) {
+            format!("{holder}/{}", reference.artifact)
+        } else {
+            if let Some(store) = assembly
+                .members()
+                .iter()
+                .find(|store| reference.member.as_ref() == Some(&store.name))
+                .filter(|store| store.root.is_dir())
+            {
+                bail!(
+                    "member `{}`'s store at {} does not hold `{}`, so `{edge}` would be an edge \
+                     to nothing",
+                    store.name,
+                    store.root.display(),
+                    reference.artifact
+                );
+            }
+            // Not checked out: nothing on this machine can close a loop through it.
+            return Ok(());
+        }
+    } else {
+        format!("{own}/{}", target.id())
+    };
+    let from = format!("{own}/{source}");
+    if let Some(path) = assembly
         .with_report(own, after.clone())
-        .cycles()
-        .into_iter()
-        .filter(|cycle| !was.contains(cycle))
-        .map(|cycle| format!("  - {cycle}"))
-        .collect();
-    if !closed.is_empty() {
+        .path(&relation.to_string(), &to, &from)
+    {
         bail!(
-            "`{edge}` would close a cycle across members:\n{}",
-            closed.join("\n")
+            "`{edge}` would close a cycle across members: `{relation}` edges form a cycle: \
+             {from} -> {}",
+            path.join(" -> ")
         );
     }
     Ok(())
@@ -3101,7 +3118,6 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
         );
     }
 
-    let before = crossing.then(|| opened.report.clone());
     let not_here = opened.missing(&id);
     let stored = opened
         .report
@@ -3129,15 +3145,15 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
     // frontmatter, so the document above is what this verb had to check a graph against — not what
     // gets written.
     let _ = relative;
-    if let Some(before) = before {
-        refuse_a_crossing_the_workspace_contradicts(
-            &root,
-            &membership,
-            &before,
-            &opened.report,
-            &format!("{id} {relation} {target}"),
-            &target,
-        )?;
+    refuse_an_edge_the_workspace_contradicts(
+        &root,
+        &membership,
+        &opened.report,
+        &id,
+        relation,
+        &target,
+    )?;
+    if crossing {
         crossings_through_a_command(
             opened.backend()?,
             &id,
