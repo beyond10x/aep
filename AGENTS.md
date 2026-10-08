@@ -5,9 +5,16 @@ to use it is in [`README.md`](README.md) and the [documentation](https://beyond1
 Organization-wide rules live in `atlas/AGENTS.md`; a change to bytes another repository verifies is
 a coordinated migration with an Atlas ADR.
 
-This repository serves `atlas/ROADMAP.md` objectives **O2** (decisions as data, with evidence) and
-**O3** (any harness, observed and compared). A change that advances neither is a question for the
-operator, not an inferred task.
+## Serves
+
+The objectives are those of `atlas/ROADMAP.md`.
+
+- **O2 — decisions as data, with evidence.** Planning status, capability and completion are decided
+  by the engine from validated documents and recorded evidence.
+- **O3 — any harness, observed and compared.** The driver and transcript checking hold any harness
+  to the same step map and trace contract.
+
+A change that advances neither is a question for the operator, not an inferred task.
 
 ## Normative documents
 
