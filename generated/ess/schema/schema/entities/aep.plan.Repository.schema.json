@@ -11,7 +11,7 @@
     },
     "engineering": {
       "$ref": "#/$defs/aep.plan.EngineeringDirectory",
-      "description": "`<root>/<project directory>`: reverse.rs:1354 (`root.join(project_directory())`); migrate_git.rs:255-257 reads the root back as that directory's parent.",
+      "description": "`<root>/<project directory>`: reverse.rs:1354 (`root.join(project_directory())`); migrate_git.rs:255-261 reads the root back as that directory's parent, made absolute first.",
       "x-ess-relation": {
         "name": "project",
         "kind": "references",
@@ -22,7 +22,7 @@
       }
     },
     "directory_name": {
-      "description": "The root's last path component, made absolute and canonicalized where it can be, lossily decoded: store_command.rs:138-145 (`planning_scope`).",
+      "description": "The root's last path component, made absolute and canonicalized where it can be, lossily decoded: store_command.rs:139-146 (`planning_scope`).",
       "type": "string"
     },
     "planning_has_entries": {
@@ -30,15 +30,15 @@
       "type": "boolean"
     },
     "planning_is_directory": {
-      "description": "`.engineering/planning/` is a directory: migrate_git.rs:272-276.",
+      "description": "`.engineering/planning/` is a directory: migrate_git.rs:276-280.",
       "type": "boolean"
     },
     "evidence_has_entries": {
-      "description": "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:273, 277.",
+      "description": "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:277, 281.",
       "type": "boolean"
     },
     "engineering_clean": {
-      "description": "`git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:263-270 and 367-382 (`git_clean`).",
+      "description": "`git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:267-274 and 371-386 (`git_clean`).",
       "type": "boolean"
     },
     "in_git_repository": {
@@ -46,11 +46,11 @@
       "type": "boolean"
     },
     "origin_repository_name": {
-      "description": "The last path segment of the `origin` remote's URL with a trailing `.git` removed; absent when there is no Git repository or it has no `origin` remote: store_command.rs:147-148, 170-198 (`origin_url`, `repository_name_of_url`).",
+      "description": "The last path segment of the `origin` remote's first URL, as `git remote get-url origin` answers it (`insteadOf` applied), with a `?query` or `#fragment` and a trailing `.git` removed. Empty, and so refused as unfit, when the URL has no path segment (a host or host:port only) or its last segment is `.` or `..`. Absent when there is no Git repository, it has no `origin` remote, or `git` cannot be run: no origin is then observed, and the next source decides. store_command.rs:148-149, 168-252 (`origin_url`, `repository_name_of_url`).",
       "type": "string"
     },
     "git_common_directory_holder": {
-      "description": "The name of the directory holding the Git common directory, present only when that directory is named `.git`. In a linked worktree this is the primary checkout, not the worktree's own directory: store_command.rs:150-156.",
+      "description": "The name of the directory holding the Git common directory, present only when that directory is named `.git`. In a linked worktree this is the primary checkout, not the worktree's own directory: store_command.rs:151-157.",
       "type": "string"
     },
     "state": {
@@ -72,8 +72,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "43767090eccb242fcb1d6a6bbfab363f10714bef8a5f8daa63de448d35d25c14",
-    "contract_digest": "slice-sha256/2:b9ac2c264a640f4799294457d1d9b732a55436a91c4ac5d9bbdd967af71f634f",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:1883a368e5b769d521a392216bceb3075cf94f1c1c75332cc3684844e0eff79b",
     "regenerate": "ess generate"
   },
   "$defs": {

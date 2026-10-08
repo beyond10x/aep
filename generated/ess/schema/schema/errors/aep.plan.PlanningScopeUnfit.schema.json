@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "PlanningScopeUnfit payload",
-  "description": "`--planning-scope` or the derived `planning_scope` is not 1..=255 bytes with a non-whitespace character: store_command.rs:121-134 (`fitted`).",
+  "description": "`--planning-scope` or the derived `planning_scope` is not 1..=255 bytes with a non-whitespace character: store_command.rs:122-135 (`fitted`).",
   "x-ess-name": "aep.plan.PlanningScopeUnfit",
   "x-ess-kind": "error-payload",
   "type": "object",
@@ -9,8 +9,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "43767090eccb242fcb1d6a6bbfab363f10714bef8a5f8daa63de448d35d25c14",
-    "contract_digest": "slice-sha256/2:6ef426e836aacae875fac9f75dd20aa73765d4b259a8428139acf9f62f0ef6c1",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:c3dca4c9b33e61c2055e146517772d1763653fe7852efd9394e3f6ccfe5fee0e",
     "regenerate": "ess generate"
   }
 }

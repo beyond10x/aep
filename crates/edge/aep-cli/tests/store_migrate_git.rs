@@ -1210,3 +1210,256 @@ fn a_planning_scope_flag_of_only_unicode_whitespace_is_refused_and_writes_nothin
     );
     let _ = std::fs::remove_dir_all(root);
 }
+
+// ---------------------------------------------------------------------------------------------
+// Adversarial cases against the `planning_scope` derivation (uncommitted, adversary pass).
+// ---------------------------------------------------------------------------------------------
+
+/// `git remote set-url --add origin <url>` gives `origin` a second `url`; Git fetches from the
+/// first and `git remote get-url origin` answers the first. `git config --get` answers the last.
+#[test]
+fn adversary_an_origin_with_a_second_url_names_the_scope_by_its_first_url() {
+    let root = outside("adv-two-urls");
+    let primary = primary_without_project(&root, "repo-a");
+    git_in(
+        &primary,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/org/first-name.git",
+        ],
+    );
+    git_in(
+        &primary,
+        &[
+            "remote",
+            "set-url",
+            "--add",
+            "origin",
+            "https://example.invalid/mirror/second-name.git",
+        ],
+    );
+    let init = reverse_init_in(&primary, &[]);
+    assert!(init.status.success(), "{}", stderr(&init));
+    let written = written_scope(&primary);
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(
+        written, "first-name",
+        "the scope is the repository `origin` fetches from (`git remote get-url origin`)"
+    );
+}
+
+/// `--engineering .engineering`, run from the checkout, is a relative path whose parent is the
+/// empty path; the scope must still be derived from the checkout it names.
+#[test]
+fn adversary_migrate_git_with_a_relative_engineering_flag_derives_the_scope() {
+    let root = outside("adv-relative-engineering");
+    let primary = primary_with_v1_store(&root, "repo-a");
+    let migrated = migrate_in(&primary, &["--engineering", ".engineering"]);
+    let out = format!("{}{}", stdout(&migrated), stderr(&migrated));
+    let written = migrated.status.success().then(|| written_scope(&primary));
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(
+        written.as_deref(),
+        Some("repo-a"),
+        "`--engineering .engineering` migrates and writes the checkout's name: {out}"
+    );
+}
+
+/// The story's source is the URL's last *path* segment. A URL with no path has none, and a query
+/// string is not part of the path; neither may become the scope.
+#[test]
+fn adversary_an_origin_url_names_its_last_path_segment_not_a_host_port_or_query() {
+    let root = outside("adv-url-forms");
+    let mut wrong = Vec::new();
+    for (index, (url, expected)) in [
+        (
+            "https://example.invalid/org/name.git?ref=main",
+            Some("name"),
+        ),
+        ("https://example.invalid", None),
+        ("ssh://git@example.invalid:2222", None),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let primary = primary_without_project(&root, &format!("repo-{index}"));
+        git_in(&primary, &["remote", "add", "origin", url]);
+        let init = reverse_init_in(&primary, &[]);
+        let got = init.status.success().then(|| written_scope(&primary));
+        if got.as_deref() != expected {
+            wrong.push(format!("{url:?}: expected {expected:?}, wrote {got:?}"));
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `url.<base>.insteadOf` rewrites the origin Git actually fetches from; the scope is the
+/// repository that URL names, not the alias.
+#[test]
+fn adversary_an_origin_alias_rewritten_by_insteadof_names_the_effective_repository() {
+    let root = outside("adv-insteadof");
+    let primary = primary_without_project(&root, "repo-a");
+    git_in(
+        &primary,
+        &[
+            "config",
+            "url.https://example.invalid/org/real-name.git.insteadOf",
+            "upstream-alias",
+        ],
+    );
+    git_in(&primary, &["remote", "add", "origin", "upstream-alias"]);
+    let init = reverse_init_in(&primary, &[]);
+    assert!(init.status.success(), "{}", stderr(&init));
+    let written = written_scope(&primary);
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(
+        written, "real-name",
+        "the effective origin URL names the scope"
+    );
+}
+
+/// When `git` cannot be run, no `origin` is observed and the next source decides: the primary
+/// checkout's directory name (the specification's `origin_repository_name`, absent when `git`
+/// cannot be run).
+#[test]
+fn without_git_no_origin_is_observed_and_the_primary_checkout_names_the_scope() {
+    let root = outside("adv-no-git");
+    let primary = primary_without_project(&root, "repo-a");
+    git_in(
+        &primary,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/org/service-name.git",
+        ],
+    );
+    let worktree = linked(&primary, "repo-a-wt-nogit");
+    let empty_path = root.join("empty-path");
+    std::fs::create_dir_all(&empty_path).expect("the directory is writable");
+    let tree = relative(&worktree.join(".engineering"), &repository());
+    let init = run_with(
+        env!("CARGO_BIN_EXE_aep"),
+        &worktree,
+        &[
+            "plan",
+            "reverse",
+            "init",
+            "--protocols",
+            &tree,
+            "--profile",
+            "development.standard",
+        ],
+        &[("PATH", empty_path.to_str().expect("a printable path"))],
+    );
+    let written = init.status.success().then(|| written_scope(&worktree));
+    let out = format!("{}{}", stdout(&init), stderr(&init));
+    let _ = std::fs::remove_dir_all(root);
+    assert_eq!(
+        written.as_deref(),
+        Some("repo-a"),
+        "without `git` the primary checkout's name is written, never the worktree's: {out}"
+    );
+}
+
+/// `reverse init` in `directory` with extra environment, as a caller (a hook, a wrapper) runs it.
+fn adversary_reverse_init_with_env(directory: &Path, env: &[(&str, &str)]) -> Output {
+    let tree = relative(&directory.join(".engineering"), &repository());
+    run_with(
+        env!("CARGO_BIN_EXE_aep"),
+        directory,
+        &[
+            "plan",
+            "reverse",
+            "init",
+            "--protocols",
+            &tree,
+            "--profile",
+            "development.standard",
+        ],
+        env,
+    )
+}
+
+/// `origin_url` documents that `--git-dir` makes the answer the repository the common directory
+/// was found for. `git config` also honours `GIT_CONFIG` (read that file instead of the
+/// repository's) and `GIT_COMMON_DIR` (read another repository's config); an inherited value of
+/// either changes which `origin` is read, or hides it, so the scope written is not this
+/// repository's.
+#[test]
+fn adversary_an_inherited_git_config_or_common_dir_does_not_change_the_origin_read() {
+    let root = outside("adv-env-leak");
+    let other = primary_without_project(&root, "other");
+    git_in(
+        &other,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/org/wrong.git",
+        ],
+    );
+    let empty_config = root.join("empty.cfg");
+    std::fs::write(&empty_config, "").expect("the file is writable");
+    let other_common = other.join(".git");
+    let mut wrong = Vec::new();
+    for (index, (key, value)) in [
+        (
+            "GIT_CONFIG",
+            empty_config.to_str().expect("a printable path"),
+        ),
+        (
+            "GIT_COMMON_DIR",
+            other_common.to_str().expect("a printable path"),
+        ),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let primary = primary_without_project(&root, &format!("repo-{index}"));
+        git_in(
+            &primary,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://example.invalid/org/right.git",
+            ],
+        );
+        let init = adversary_reverse_init_with_env(&primary, &[(key, value)]);
+        let got = init.status.success().then(|| written_scope(&primary));
+        if got.as_deref() != Some("right") {
+            wrong.push(format!(
+                "{key} inherited: wrote {got:?}: {}{}",
+                stdout(&init),
+                stderr(&init)
+            ));
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A remote URL that is a relative path of only dot segments (`git remote add origin ..`) names
+/// no repository: its last segment is a path step, not a name. Writing `..` as the scope is the
+/// checkout-directory defect in another form; the story's rule is "the last path segment ...
+/// without `.git`", which the specification calls the repository's name.
+#[test]
+fn adversary_an_origin_of_only_dot_segments_is_not_written_as_the_scope() {
+    let root = outside("adv-dot-origin");
+    let mut wrong = Vec::new();
+    for (index, url) in ["..", ".", "../.."].into_iter().enumerate() {
+        let primary = primary_without_project(&root, &format!("repo-{index}"));
+        git_in(&primary, &["remote", "add", "origin", url]);
+        let init = reverse_init_in(&primary, &[]);
+        let got = init.status.success().then(|| written_scope(&primary));
+        if matches!(got.as_deref(), Some("." | "..")) {
+            wrong.push(format!("origin {url:?} wrote {got:?}"));
+        }
+    }
+    let _ = std::fs::remove_dir_all(root);
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

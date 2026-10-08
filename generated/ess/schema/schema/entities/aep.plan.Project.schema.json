@@ -67,7 +67,7 @@
     },
     "planning_scope": {
       "$ref": "#/$defs/aep.plan.PlanningScope",
-      "description": "Required by `aep.project/5` (project.rs:612-626); `aep.project/1` has none (store_command.rs:116). Validated and then not kept: `ProjectConfig` (project.rs:348-377) has no such field."
+      "description": "Required by `aep.project/5` (project.rs:612-626); `aep.project/1` has none (store_command.rs:117). Validated and then not kept: `ProjectConfig` (project.rs:348-377) has no such field."
     },
     "providers": {
       "description": "A URL pattern per external system, each carrying `{key}` (project.rs:699-701).",
@@ -93,8 +93,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "43767090eccb242fcb1d6a6bbfab363f10714bef8a5f8daa63de448d35d25c14",
-    "contract_digest": "slice-sha256/2:b9ac2c264a640f4799294457d1d9b732a55436a91c4ac5d9bbdd967af71f634f",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:1883a368e5b769d521a392216bceb3075cf94f1c1c75332cc3684844e0eff79b",
     "regenerate": "ess generate"
   },
   "$defs": {

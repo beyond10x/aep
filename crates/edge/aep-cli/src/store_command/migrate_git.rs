@@ -252,7 +252,11 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
         unconfigured_selector(args, &selector_path)?
     };
     require_a_v1_markdown_selector(&selector_text, &selector_path)?;
-    let project_root = engineering
+    // A relative `--engineering .engineering` has the empty path as its parent, which names no
+    // directory; made absolute first, its parent is the checkout it was run in.
+    let engineering_absolute = std::path::absolute(&engineering)
+        .with_context(|| format!("making {} absolute", engineering.display()))?;
+    let project_root = engineering_absolute
         .parent()
         .context("the `.engineering` directory has no parent")?;
     let scope =

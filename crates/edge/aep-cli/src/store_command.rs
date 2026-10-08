@@ -111,7 +111,8 @@ impl std::fmt::Display for PlanningScope {
 /// fit is refused, never passed over for the next. A Git repository with none of the Git sources
 /// (no `origin`, a common directory not named `.git`, as in a bare repository's worktree) is
 /// refused naming `--planning-scope`, rather than falling back to the checkout's own directory
-/// name, which in a linked worktree is whatever the worktree tool chose.
+/// name, which in a linked worktree is whatever the worktree tool chose. When `git` cannot be run,
+/// no `origin` is observed and the next source decides.
 ///
 /// `/1` refuses the key, so a migrated `/1` project never has one to keep.
 pub(crate) fn planning_scope(
@@ -164,14 +165,51 @@ pub(crate) fn planning_scope(
     )
 }
 
+/// Variables that make a `git` process read a repository, a configuration or an object store other
+/// than the one `--git-dir` names. An inherited one (a hook, a wrapper, a parent `git -c`) would
+/// change which `origin` is read, or hide it.
+const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
+    "GIT_DIR",
+    "GIT_COMMON_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_CONFIG_COUNT",
+];
+
 /// The `origin` remote's URL in the repository whose common directory is `common`, or `None` when
-/// it has none or `git` cannot answer. Read through `--git-dir`, so the answer is the repository
-/// the common directory was found for and not one an inherited `GIT_DIR` names.
+/// it has none or `git` cannot be run. The answer is `git remote get-url origin`: the first of
+/// several URLs, with `url.<base>.insteadOf` applied, which is the repository `origin` fetches
+/// from.
+///
+/// The process is isolated from the caller's repository selection: it is given `--git-dir
+/// <common>`, and every variable in [`REDIRECTING_GIT_VARIABLES`] plus each `GIT_CONFIG_KEY_<n>`
+/// and `GIT_CONFIG_VALUE_<n>` is removed from its environment, so neither another repository, a
+/// configuration file standing in for this one's, nor an injected `-c` value decides the answer.
+/// The global and system configuration (and the variables selecting them) are kept, because
+/// `insteadOf` rules usually live there. `GIT_TERMINAL_PROMPT=0` keeps it from waiting on a
+/// prompt.
 fn origin_url(common: &std::path::Path) -> Option<String> {
-    let output = std::process::Command::new("git")
+    let mut command = std::process::Command::new("git");
+    for name in REDIRECTING_GIT_VARIABLES {
+        command.env_remove(name);
+    }
+    for (name, _) in std::env::vars_os() {
+        let text = name.to_string_lossy();
+        if text.starts_with("GIT_CONFIG_KEY_") || text.starts_with("GIT_CONFIG_VALUE_") {
+            command.env_remove(&name);
+        }
+    }
+    let output = command
+        .env("GIT_TERMINAL_PROMPT", "0")
         .arg("--git-dir")
         .arg(common)
-        .args(["config", "--get", "remote.origin.url"])
+        .args(["remote", "get-url", "origin"])
         .output()
         .ok()?;
     if !output.status.success() {
@@ -184,17 +222,34 @@ fn origin_url(common: &std::path::Path) -> Option<String> {
     )
 }
 
-/// The repository name a remote URL ends in: its last path segment with a trailing `.git`
-/// removed. Handles `git@host:org/name.git`, `https://host/org/name(.git)(/)`, `file://` URLs and
-/// local paths, including one that names a checkout's `.git` directory.
+/// The repository name a remote URL ends in: its last path segment with a `?query` or
+/// `#fragment` and a trailing `.git` removed. Handles `git@host:org/name.git`,
+/// `https://host/org/name(.git)(/)`, `file://` URLs and local paths, including one that names a
+/// checkout's `.git` directory.
+///
+/// A URL with no path segment (`https://host`, `ssh://host:2222`, `git@host:`) and one whose last
+/// segment is `.` or `..` name no repository: the answer is empty, which `planning_scope_fits`
+/// refuses, as it refuses any other origin name that does not fit.
 fn repository_name_of_url(url: &str) -> String {
-    let trimmed = url.trim().trim_end_matches(['/', '\\']);
+    let url = url.trim();
+    let url = url.split(['?', '#']).next().unwrap_or_default();
+    // After `scheme://`, the authority (user, host, port) runs to the first `/`; with none, the
+    // URL has no path.
+    let path = match url.split_once("://") {
+        Some((_, rest)) => rest.find('/').map_or("", |at| &rest[at..]),
+        None => url,
+    };
+    let trimmed = path.trim_end_matches(['/', '\\']);
     let mut segments = trimmed.rsplit(['/', '\\', ':']);
     let mut last = segments.next().unwrap_or_default();
     if last == ".git" {
         last = segments.next().unwrap_or_default();
     }
-    last.strip_suffix(".git").unwrap_or(last).to_owned()
+    let name = last.strip_suffix(".git").unwrap_or(last);
+    if matches!(name, "." | "..") {
+        return String::new();
+    }
+    name.to_owned()
 }
 
 /// Runs one `aep plan store` verb.
@@ -226,6 +281,11 @@ mod tests {
             ("/srv/checkouts/name/.git", "name"),
             ("C:\\repos\\name.git", "name"),
             ("https://example.invalid/org/name.github.io.git\n", "name.github.io"),
+            ("https://example.invalid/org/name.git?ref=main", "name"),
+            ("https://example.invalid/org/name.git#readme", "name"),
+            ("https://example.invalid/org/name/?a=b#c", "name"),
+            ("https://example.invalid:8443/org/name", "name"),
+            ("ssh://git@example.invalid:2222/name.git", "name"),
         ] {
             assert_eq!(repository_name_of_url(url), name, "{url:?}");
         }
@@ -233,7 +293,25 @@ mod tests {
 
     #[test]
     fn a_remote_url_with_no_segment_names_no_repository_and_is_refused_as_unfit() {
-        for url in ["", "/", ".git", "https://", "git@host:"] {
+        for url in [
+            "",
+            "/",
+            ".git",
+            "https://",
+            "git@host:",
+            "https://example.invalid",
+            "https://example.invalid/",
+            "https://example.invalid?x=y",
+            "ssh://git@example.invalid:2222",
+            "ssh://git@example.invalid:2222/",
+            ".",
+            "..",
+            "../..",
+            "./.git",
+            "https://example.invalid/org/..",
+            "git@host:org/.",
+            "C:\\repos\\..",
+        ] {
             let name = repository_name_of_url(url);
             assert!(
                 !aep_domain::project::planning_scope_fits(&name),

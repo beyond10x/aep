@@ -25,7 +25,7 @@ types:
 
   # read from: project.rs:61-73 (`PLANNING_SCOPE_RULE`, `planning_scope_fits`): 1..=255 UTF-8
   # bytes including a non-whitespace character, whitespace being Unicode whitespace (`str::trim`).
-  # project.rs:613 (`validate_store`) and store_command.rs:117-165 (`planning_scope`) both call
+  # project.rs:613 (`validate_store`) and store_command.rs:118-166 (`planning_scope`) both call
   # `planning_scope_fits`, so a read and a derived scope are held to one rule.
   - name: aep.plan.PlanningScope
     kind: newtype
@@ -78,13 +78,13 @@ types:
       - git_common_directory   # the directory holding the Git common directory named `.git`
       - engineering_directory  # the directory holding `.engineering/`, outside any Git repository
 
-# The scope is held to the PlanningScope rule before it is written: store_command.rs:121-134
+# The scope is held to the PlanningScope rule before it is written: store_command.rs:122-135
 # (`fitted`) refuses a value that does not fit (the `flag-unfit` and `derived-unfit` outcomes).
 conversions:
   - from: String
     to: aep.plan.PlanningScope
     because: >-
-      A derived name becomes the planning scope only after store_command.rs:121-134 holds it to
+      A derived name becomes the planning scope only after store_command.rs:122-135 holds it to
       1..=255 bytes with a non-whitespace character; the derived-unfit outcomes refuse the rest.
   - from: String
     to: Optional<aep.plan.PlanningScope>
@@ -122,39 +122,47 @@ entities:
         type: aep.plan.EngineeringDirectory
         summary: >-
           `<root>/<project directory>`: reverse.rs:1354 (`root.join(project_directory())`);
-          migrate_git.rs:255-257 reads the root back as that directory's parent.
+          migrate_git.rs:255-261 reads the root back as that directory's parent, made absolute
+          first.
       - name: directory_name
         type: String
         summary: >-
           The root's last path component, made absolute and canonicalized where it can be, lossily
-          decoded: store_command.rs:138-145 (`planning_scope`).
+          decoded: store_command.rs:139-146 (`planning_scope`).
       - name: planning_has_entries
         type: Boolean
         summary: "`.engineering/planning/` reads as a directory holding an entry: reverse.rs:1370-1371."
       - name: planning_is_directory
         type: Boolean
-        summary: "`.engineering/planning/` is a directory: migrate_git.rs:272-276."
+        summary: "`.engineering/planning/` is a directory: migrate_git.rs:276-280."
       - name: evidence_has_entries
         type: Boolean
-        summary: "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:273, 277."
+        summary: "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:277, 281."
       - name: engineering_clean
         type: Boolean
         summary: >-
-          `git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:263-270
-          and 367-382 (`git_clean`).
+          `git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:267-274
+          and 371-386 (`git_clean`).
       # change (story:planning-scope-comes-from-the-repository): three more facts the scope is
-      # derived from, read by store_command.rs:138-157 (`planning_scope`).
+      # derived from, read by store_command.rs:139-158 (`planning_scope`).
       # ESS-LIMIT: these three fields and `directory_name` are values derived from a path or a URL
       # (a path's file name, a URL's last segment without `.git`, the Git common directory found
       # by walking up from the root). ESS 0.56.0 has no operator for that: an expression such as
       # `file_name(input.engineering)` in `sets:` compiles as the literal text, and a `where:`
       # clause holds it unchecked. ESS story:value-derived-from-a-path-or-url. The fields are
       # declared as observed facts; the derivation is the host's and is pinned by
-      # `a_remote_url_names_its_repository_by_its_last_segment_without_dot_git` (store_command.rs)
-      # and, in crates/edge/aep-cli/tests/store_migrate_git.rs,
+      # `a_remote_url_names_its_repository_by_its_last_segment_without_dot_git` and
+      # `a_remote_url_with_no_segment_names_no_repository_and_is_refused_as_unfit`
+      # (store_command.rs) and, in crates/edge/aep-cli/tests/store_migrate_git.rs,
       # `migrate_git_in_a_linked_worktree_writes_the_primary_checkouts_name_not_the_worktrees`,
-      # `the_origin_remote_names_the_scope_ahead_of_the_primary_checkout` and
-      # `outside_any_git_repository_the_scope_is_the_project_directorys_name`.
+      # `the_origin_remote_names_the_scope_ahead_of_the_primary_checkout`,
+      # `outside_any_git_repository_the_scope_is_the_project_directorys_name`,
+      # `without_git_no_origin_is_observed_and_the_primary_checkout_names_the_scope`,
+      # `adversary_an_origin_with_a_second_url_names_the_scope_by_its_first_url`,
+      # `adversary_an_origin_alias_rewritten_by_insteadof_names_the_effective_repository`,
+      # `adversary_an_inherited_git_config_or_common_dir_does_not_change_the_origin_read`,
+      # `adversary_an_origin_url_names_its_last_path_segment_not_a_host_port_or_query` and
+      # `adversary_an_origin_of_only_dot_segments_is_not_written_as_the_scope`.
       - name: in_git_repository
         type: Boolean
         summary: >-
@@ -163,15 +171,19 @@ entities:
       - name: origin_repository_name
         type: Optional<String>
         summary: >-
-          The last path segment of the `origin` remote's URL with a trailing `.git` removed; absent
-          when there is no Git repository or it has no `origin` remote: store_command.rs:147-148,
-          170-198 (`origin_url`, `repository_name_of_url`).
+          The last path segment of the `origin` remote's first URL, as `git remote get-url origin`
+          answers it (`insteadOf` applied), with a `?query` or `#fragment` and a trailing `.git`
+          removed. Empty, and so refused as unfit, when the URL has no path segment (a host or
+          host:port only) or its last segment is `.` or `..`. Absent when there is no Git
+          repository, it has no `origin` remote, or `git` cannot be run: no origin is then
+          observed, and the next source decides. store_command.rs:148-149, 168-252 (`origin_url`,
+          `repository_name_of_url`).
       - name: git_common_directory_holder
         type: Optional<String>
         summary: >-
           The name of the directory holding the Git common directory, present only when that
           directory is named `.git`. In a linked worktree this is the primary checkout, not the
-          worktree's own directory: store_command.rs:150-156.
+          worktree's own directory: store_command.rs:151-157.
     relations:
       # The project file under `.engineering/`, when there is one: a repository stands without it
       # (`reverse init` writes it, reverse.rs:1408), and no command here deletes either.
@@ -240,7 +252,7 @@ entities:
         type: Optional<aep.plan.PlanningScope>
         summary: >-
           Required by `aep.project/5` (project.rs:612-626); `aep.project/1` has none
-          (store_command.rs:116). Validated and then not kept: `ProjectConfig`
+          (store_command.rs:117). Validated and then not kept: `ProjectConfig`
           (project.rs:348-377) has no such field.
       - name: providers
         type: Map<String, String>
@@ -292,7 +304,7 @@ errors:
   - name: aep.plan.PlanningScopeUnfit
     summary: >-
       `--planning-scope` or the derived `planning_scope` is not 1..=255 bytes with a non-whitespace
-      character: store_command.rs:121-134 (`fitted`).
+      character: store_command.rs:122-135 (`fitted`).
     fields: []
   - name: aep.plan.UsageRefused
     summary: >-
@@ -310,13 +322,13 @@ errors:
     summary: "The project file already selects `aep.project/5`: migrate_git.rs:138-142, 254."
     fields: []
   - name: aep.plan.EngineeringDirty
-    summary: "`.engineering/` has uncommitted changes: migrate_git.rs:263-270."
+    summary: "`.engineering/` has uncommitted changes: migrate_git.rs:267-274."
     fields: []
   - name: aep.plan.NoPlanningStore
-    summary: "There is no `.engineering/planning/` directory: migrate_git.rs:274-276."
+    summary: "There is no `.engineering/planning/` directory: migrate_git.rs:278-280."
     fields: []
   - name: aep.plan.EvidenceNotEmpty
-    summary: "`.engineering/evidence/` already holds an entry: migrate_git.rs:277-282."
+    summary: "`.engineering/evidence/` already holds an entry: migrate_git.rs:281-286."
     fields: []
   # change (story:planning-scope-comes-from-the-repository).
   - name: aep.plan.PlanningScopeUnderived
@@ -609,19 +621,19 @@ commands:
       - name: scope-underived
         error: aep.plan.PlanningScopeUnderived
 
-  # `aep plan store migrate git` (store_command.rs:26-36, migrate_git.rs:72-100, 239-335).
+  # `aep plan store migrate git` (store_command.rs:26-36, migrate_git.rs:72-100, 239-339).
   # `--engineering` is discovered from the working directory when omitted (migrate_git.rs:210-225);
   # the specification's `engineering` is the directory it resolved to.
   #
   # Not modelled here, outside the planning_scope surface: an `aep.project/2`–`/4` file
   # (migrate_git.rs:135-137), an `aep.project/1` file whose `store:` is not markdown
-  # (migrate_git.rs:151-164), the per-document rewrite and its refusal (migrate_git.rs:286-302,
-  # 308, 311-319), and `--verify`'s read-back (migrate_git.rs:331-333, 338-364), which exits
+  # (migrate_git.rs:151-164), the per-document rewrite and its refusal (migrate_git.rs:290-306,
+  # 308, 311-319), and `--verify`'s read-back (migrate_git.rs:335-337, 342-368), which exits
   # non-zero after the write.
   #
   # change (story:planning-scope-comes-from-the-repository): as at `aep.plan.ReverseInit`. Shipped
   # behaviour (0.69.1) always writes `directory_name` (0.69.1: migrate_git.rs:253) and prints it as
-  # "the repository directory's name" (0.69.1: migrate_git.rs:538-545).
+  # "the repository directory's name" (0.69.1: migrate_git.rs:542-549).
   - name: aep.plan.MigrateGit
     naming:
       wire: store-migrate-git
@@ -650,7 +662,7 @@ commands:
       - name: planning_scope
         type: Optional<String>
     # change: what the command's text output names, beside the counts it prints:
-    # `planning_scope: <value> (<source>)` (migrate_git.rs:321, 546; store_command.rs:96-104).
+    # `planning_scope: <value> (<source>)` (migrate_git.rs:325, 550; store_command.rs:96-104).
     # ESS-LIMIT: a response field cannot declare which source its value came from: ESS 0.56.0
     # binds `scope_source` per outcome only in an event payload, so this response says that both
     # fields are answered and the `migrated-*` outcomes' payloads say which source each one
@@ -664,7 +676,7 @@ commands:
       - name: scope_source
         type: aep.plan.ScopeSource
     outcomes:
-      # In code order (migrate_git.rs:239-306); every refusal writes nothing.
+      # In code order (migrate_git.rs:239-310); every refusal writes nothing.
       - name: usage-refused
         when:
           any:
@@ -695,7 +707,7 @@ commands:
               - state == GitNative
           exists: true
         error: aep.plan.NothingToMigrate
-      # change: the scope's refusals, where the command derives it (migrate_git.rs:258-259).
+      # change: the scope's refusals, where the command derives it (migrate_git.rs:262-263).
       - name: flag-unfit
         when:
           all:
@@ -769,7 +781,7 @@ commands:
               - evidence_has_entries == true
           exists: true
         error: aep.plan.EvidenceNotEmpty
-      # `--dry-run` prints the plan and writes nothing (migrate_git.rs:294, 303-306); with the
+      # `--dry-run` prints the plan and writes nothing (migrate_git.rs:298, 307-310); with the
       # change, the plan names the scope and its source.
       - name: dry-run
         when: dry_run == true
@@ -907,8 +919,8 @@ commands:
                 field: directory_name
             scope_source: engineering_directory
       # The file is rewritten with every key kept, `version` and `store` replaced and
-      # `planning_scope` added (migrate_git.rs:609-633), and the journal removed
-      # (migrate_git.rs:311-319). One outcome per scope source (change).
+      # `planning_scope` added (migrate_git.rs:613-637), and the journal removed
+      # (migrate_git.rs:315-323). One outcome per scope source (change).
       - name: migrated-from-flag
         when: defined(planning_scope)
         moves: aep.plan.Project.migrate
