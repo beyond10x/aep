@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.69.1] — 2026-10-08
+
 ### Fixed
 
 - `aep plan artifact relate`, `new --relate` and `unrelate` write and take back an edge to another
