@@ -239,6 +239,11 @@ pub(crate) struct InitArgs {
     /// and the first command that needs the tree is where the failure surfaces instead.
     #[arg(long)]
     no_verify: bool,
+    /// The `planning_scope` to write. When omitted it is derived, in order, from the `origin`
+    /// remote's repository name, the primary checkout's directory name, or, outside Git, the
+    /// directory holding `.engineering/`.
+    #[arg(long, value_name = "NAME")]
+    planning_scope: Option<String>,
 }
 
 /// Inputs for reading a repository's history.
@@ -1371,7 +1376,7 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
             planning.display()
         );
     }
-    let scope = crate::store_command::default_planning_scope(&root)?;
+    let scope = crate::store_command::planning_scope(&root, args.planning_scope.as_deref())?;
 
     // The directory is created before the source is checked, and not after, because a relative
     // source is resolved *through* it: `../../tree` from a `.engineering` that does not exist yet
@@ -1400,14 +1405,14 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
         }
     }
 
-    if let Err(error) = fs::write(&file, project_file(args, &source, &scope)) {
+    if let Err(error) = fs::write(&file, project_file(args, &source, &scope.value)) {
         undo();
         return Err(anyhow::Error::from(error).context(format!("cannot write {}", file.display())));
     }
 
     if args.no_verify {
         outln!("{} written, unverified", file.display());
-        outln!("  store: git ({PROJECT_VERSION_V5}), planning_scope {scope}");
+        outln!("  store: git ({PROJECT_VERSION_V5}), {scope}");
         outln!("  the protocol source was not resolved; --no-verify was given");
         return Ok(ExitCode::SUCCESS);
     }
@@ -1424,7 +1429,7 @@ fn init(args: &InitArgs) -> Result<ExitCode> {
                 paths.protocols.display()
             );
             outln!("  profile {}", args.profile);
-            outln!("  store: git ({PROJECT_VERSION_V5}), planning_scope {scope}");
+            outln!("  store: git ({PROJECT_VERSION_V5}), {scope}");
             Ok(ExitCode::SUCCESS)
         }
         Err(errors) => {

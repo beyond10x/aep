@@ -4,8 +4,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
-    "contract_digest": "slice-sha256/2:6a4cbe1cec988c02a3ec8780abad6450ea4ef8b738845d339a6bda24720de8ad",
+    "source_digest": "43767090eccb242fcb1d6a6bbfab363f10714bef8a5f8daa63de448d35d25c14",
+    "contract_digest": "slice-sha256/2:f5e28c2231798a8176aca028c4c3969d5661303c223712c2ffd4c124a835c81b",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -16,7 +16,7 @@
       "type": "object",
       "properties": {
         "url": {
-          "description": "A libpq connection string or URL (project.rs:436-437).",
+          "description": "A libpq connection string or URL (project.rs:450-451).",
           "type": "string"
         }
       },

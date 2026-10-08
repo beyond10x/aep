@@ -33,7 +33,7 @@ providers:                             # optional: link patterns for external re
 | `protocol` | yes | | the protocol reference, such as `adp/1` |
 | `profile` | yes | | the profile, such as `development.standard` |
 | `protocols` | no | `..` | where the governing documents come from: a path relative to `.engineering/`, or a `git+ssh://`, `git+https://` or `git+file://` URL pinned to a 40-hex commit after `#` |
-| `planning_scope` | with `/5` | | the store's name, 1–255 bytes; `reverse init` and `migrate git` set it to the repository directory's name |
+| `planning_scope` | with `/5` | | the store's name, 1–255 UTF-8 bytes including a non-whitespace character; `reverse init` and `migrate git` set it to `--planning-scope`, else the `origin` remote's repository name, else the primary checkout's directory name, else (outside Git) the directory holding `.engineering/` |
 | `store` | no | `git: {}` | where the plan is kept; see below |
 | `summary` | no | | one line for people; nothing reads it |
 | `providers` | no | | a URL pattern per external system, each containing `{key}`; a pattern without `{key}` is refused |

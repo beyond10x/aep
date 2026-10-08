@@ -63,7 +63,7 @@ const COMMON_FENCE_DIRECTORY: &str = "aep";
 /// holds `objects` and `refs`, the shape Git itself requires before it accepts a repository. A
 /// stray `.git` directory without them is walked past, as Git walks past it; otherwise one left
 /// in a home or cache directory would capture every store beneath it.
-fn git_common_directory(path: &Path) -> Result<Option<PathBuf>> {
+pub(crate) fn git_common_directory(path: &Path) -> Result<Option<PathBuf>> {
     for directory in path.ancestors() {
         let dot_git = directory.join(".git");
         let metadata = match std::fs::symlink_metadata(&dot_git) {

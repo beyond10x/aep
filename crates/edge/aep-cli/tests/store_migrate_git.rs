@@ -828,3 +828,385 @@ fn doctor_names_the_migration_for_a_v1_store() {
         "{line}"
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Where `planning_scope` comes from (story:planning-scope-comes-from-the-repository).
+//
+// These fixtures live under the system temporary directory, not Cargo's target directory: the
+// target directory sits inside this repository's own checkout, whose `origin` and Git common
+// directory would otherwise be the ones every derivation finds.
+// ---------------------------------------------------------------------------------------------
+
+/// A fresh, canonical directory under the system temporary directory, outside every repository.
+/// The pid keeps concurrent runs from different worktrees apart, because they share `TMPDIR`.
+fn outside(name: &str) -> PathBuf {
+    let directory = std::env::temp_dir()
+        .canonicalize()
+        .expect("the temporary directory exists")
+        .join(format!("aep-planning-scope-{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&directory);
+    std::fs::create_dir_all(&directory).expect("the temporary tree is writable");
+    directory
+}
+
+/// Runs `git` in `directory` isolated from the caller's repository and identity.
+fn git_in(directory: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args([
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "user.name=test",
+            "-c",
+            "user.email=test@example.invalid",
+            "-c",
+            "init.defaultBranch=main",
+        ])
+        .args(args)
+        .current_dir(directory)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_COMMON_DIR")
+        .env_remove("GIT_INDEX_FILE")
+        .output()
+        .expect("git runs");
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+/// A primary checkout `<root>/<name>` holding a committed `aep.project/1` store.
+fn primary_with_v1_store(root: &Path, name: &str) -> PathBuf {
+    let primary = root.join(name);
+    std::fs::create_dir_all(primary.join(".engineering")).expect("the checkout is writable");
+    git_in(&primary, &["init", "--quiet"]);
+    let engineering = primary.join(".engineering");
+    std::fs::write(
+        engineering.join("project.yaml"),
+        format!(
+            "version: aep.project/1\nprotocol: adp/1\nprofile: development.standard\n\
+             protocols: {}\n",
+            relative(&engineering, &repository())
+        ),
+    )
+    .expect("the project file is writable");
+    write_v1_store(&primary);
+    git_in(&primary, &["add", "-A"]);
+    git_in(&primary, &["commit", "--quiet", "-m", "fixture"]);
+    primary
+}
+
+/// A primary checkout `<root>/<name>` with one committed file and no `.engineering/`.
+fn primary_without_project(root: &Path, name: &str) -> PathBuf {
+    let primary = root.join(name);
+    std::fs::create_dir_all(&primary).expect("the checkout is writable");
+    git_in(&primary, &["init", "--quiet"]);
+    std::fs::write(primary.join("README.md"), "fixture\n").expect("the file is writable");
+    git_in(&primary, &["add", "-A"]);
+    git_in(&primary, &["commit", "--quiet", "-m", "fixture"]);
+    primary
+}
+
+/// A linked worktree of `primary` at `<primary's parent>/<name>`.
+fn linked(primary: &Path, name: &str) -> PathBuf {
+    let path = primary.parent().expect("a scratch root").join(name);
+    git_in(
+        primary,
+        &[
+            "worktree",
+            "add",
+            "--quiet",
+            "-b",
+            name,
+            path.to_str().expect("a printable path"),
+        ],
+    );
+    path
+}
+
+/// A bare repository `<root>/<name>.git` with no `origin`, cloned from a checkout holding a
+/// committed `/1` store, and a linked worktree of it at `<root>/checkout`.
+fn bare_worktree_without_origin(root: &Path, name: &str) -> PathBuf {
+    let seed = primary_with_v1_store(root, "seed");
+    let bare = root.join(format!("{name}.git"));
+    git_in(
+        root,
+        &[
+            "clone",
+            "--quiet",
+            "--bare",
+            seed.to_str().expect("a printable path"),
+            bare.to_str().expect("a printable path"),
+        ],
+    );
+    git_in(&bare, &["remote", "remove", "origin"]);
+    let checkout = root.join("checkout");
+    git_in(
+        &bare,
+        &[
+            "worktree",
+            "add",
+            "--quiet",
+            checkout.to_str().expect("a printable path"),
+        ],
+    );
+    checkout
+}
+
+fn migrate_in(directory: &Path, extra: &[&str]) -> Output {
+    let mut args = vec!["plan", "store", "migrate", "git"];
+    args.extend_from_slice(extra);
+    aep(directory, &args)
+}
+
+fn reverse_init_in(directory: &Path, extra: &[&str]) -> Output {
+    let tree = relative(&directory.join(".engineering"), &repository());
+    let mut args = vec![
+        "plan",
+        "reverse",
+        "init",
+        "--protocols",
+        &tree,
+        "--profile",
+        "development.standard",
+    ];
+    args.extend_from_slice(extra);
+    aep(directory, &args)
+}
+
+/// The `planning_scope` line of `<directory>/.engineering/project.yaml`, unquoted.
+fn written_scope(directory: &Path) -> String {
+    let selector = std::fs::read_to_string(directory.join(".engineering/project.yaml"))
+        .expect("the project file was written");
+    selector
+        .lines()
+        .find_map(|line| line.strip_prefix("planning_scope: "))
+        .unwrap_or_else(|| panic!("no planning_scope line in:\n{selector}"))
+        .trim_matches('"')
+        .to_owned()
+}
+
+#[test]
+fn migrate_git_in_a_linked_worktree_writes_the_primary_checkouts_name_not_the_worktrees() {
+    let root = outside("migrate-linked");
+    let primary = primary_with_v1_store(&root, "repo-a");
+    let worktree = linked(&primary, "repo-a-wt-xyz");
+
+    let migrated = migrate_in(&worktree, &[]);
+    assert!(
+        migrated.status.success(),
+        "{}{}",
+        stdout(&migrated),
+        stderr(&migrated)
+    );
+    assert_eq!(
+        written_scope(&worktree),
+        "repo-a",
+        "the scope is the repository's name, not the linked worktree's directory name"
+    );
+    assert!(
+        stdout(&migrated)
+            .contains("planning_scope: repo-a (from the primary checkout's directory)"),
+        "the output names the scope's source: {}",
+        stdout(&migrated)
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn reverse_init_in_a_linked_worktree_writes_the_primary_checkouts_name_not_the_worktrees() {
+    let root = outside("init-linked");
+    let primary = primary_without_project(&root, "repo-a");
+    let worktree = linked(&primary, "repo-a-wt-xyz");
+
+    let init = reverse_init_in(&worktree, &[]);
+    assert!(init.status.success(), "{}{}", stdout(&init), stderr(&init));
+    assert_eq!(
+        written_scope(&worktree),
+        "repo-a",
+        "the scope is the repository's name, not the linked worktree's directory name"
+    );
+    assert!(
+        stdout(&init).contains("planning_scope: repo-a (from the primary checkout's directory)"),
+        "the output names the scope's source: {}",
+        stdout(&init)
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_origin_remote_names_the_scope_ahead_of_the_primary_checkout() {
+    let root = outside("origin");
+    let primary = primary_with_v1_store(&root, "repo-a");
+    git_in(
+        &primary,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "git@example.invalid:org/service-name.git",
+        ],
+    );
+    let worktree = linked(&primary, "repo-a-wt-origin");
+
+    let migrated = migrate_in(&worktree, &[]);
+    assert!(migrated.status.success(), "{}", stderr(&migrated));
+    assert_eq!(
+        written_scope(&worktree),
+        "service-name",
+        "the origin URL's last segment, without `.git`, wins over the checkout's name"
+    );
+    assert!(
+        stdout(&migrated).contains("planning_scope: service-name (from the origin remote)"),
+        "{}",
+        stdout(&migrated)
+    );
+
+    let other = primary_without_project(&root, "repo-b");
+    git_in(
+        &other,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/org/other-service/",
+        ],
+    );
+    let init = reverse_init_in(&other, &[]);
+    assert!(init.status.success(), "{}", stderr(&init));
+    assert_eq!(written_scope(&other), "other-service");
+    assert!(
+        stdout(&init).contains("planning_scope: other-service (from the origin remote)"),
+        "{}",
+        stdout(&init)
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn the_planning_scope_flag_names_the_scope_ahead_of_every_derived_source() {
+    let root = outside("flag");
+    let primary = primary_with_v1_store(&root, "repo-a");
+    git_in(
+        &primary,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://example.invalid/org/remote-name.git",
+        ],
+    );
+    let migrated = migrate_in(&primary, &["--planning-scope", "chosen"]);
+    assert!(migrated.status.success(), "{}", stderr(&migrated));
+    assert_eq!(
+        written_scope(&primary),
+        "chosen",
+        "the flag wins over origin"
+    );
+    assert!(
+        stdout(&migrated).contains("planning_scope: chosen (from --planning-scope)"),
+        "{}",
+        stdout(&migrated)
+    );
+
+    let other = primary_without_project(&root, "repo-b");
+    let init = reverse_init_in(&other, &["--planning-scope", "chosen too"]);
+    assert!(init.status.success(), "{}", stderr(&init));
+    assert_eq!(written_scope(&other), "chosen too");
+    assert!(
+        stdout(&init).contains("planning_scope: chosen too (from --planning-scope)"),
+        "{}",
+        stdout(&init)
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn outside_any_git_repository_the_scope_is_the_project_directorys_name() {
+    let root = outside("no-git");
+    let project = root.join("plain-project");
+    std::fs::create_dir_all(&project).expect("the directory is writable");
+
+    let init = reverse_init_in(&project, &[]);
+    assert!(init.status.success(), "{}", stderr(&init));
+    assert_eq!(written_scope(&project), "plain-project");
+    assert!(
+        stdout(&init).contains("planning_scope: plain-project (from the project directory's name)"),
+        "{}",
+        stdout(&init)
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_bare_repositorys_worktree_without_origin_is_refused_naming_the_flag_and_writes_nothing() {
+    let root = outside("bare");
+    let checkout = bare_worktree_without_origin(&root, "repo-a");
+
+    let before = contents(&checkout);
+    let migrated = migrate_in(&checkout, &[]);
+    assert_eq!(migrated.status.code(), Some(1), "{}", stdout(&migrated));
+    assert!(
+        stderr(&migrated).contains("--planning-scope")
+            && stderr(&migrated).contains("no `origin` remote"),
+        "the refusal says why and names the flag: {}",
+        stderr(&migrated)
+    );
+    assert_eq!(
+        before,
+        contents(&checkout),
+        "a refused migration writes nothing"
+    );
+
+    let explicit = migrate_in(&checkout, &["--planning-scope", "repo-a"]);
+    assert!(explicit.status.success(), "{}", stderr(&explicit));
+    assert_eq!(written_scope(&checkout), "repo-a");
+
+    let fresh = root.join("fresh");
+    git_in(
+        &root.join("repo-a.git"),
+        &[
+            "worktree",
+            "add",
+            "--quiet",
+            "--detach",
+            fresh.to_str().expect("a printable path"),
+        ],
+    );
+    std::fs::remove_dir_all(fresh.join(".engineering")).expect("the store is removable");
+    let init = reverse_init_in(&fresh, &[]);
+    assert_eq!(init.status.code(), Some(1), "{}", stdout(&init));
+    assert!(
+        stderr(&init).contains("--planning-scope") && stderr(&init).contains("no `origin` remote"),
+        "{}",
+        stderr(&init)
+    );
+    assert!(
+        !fresh.join(".engineering/project.yaml").exists(),
+        "a refused init writes no project file"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn a_planning_scope_flag_of_only_unicode_whitespace_is_refused_and_writes_nothing() {
+    let root = outside("flag-unfit");
+    let primary = primary_without_project(&root, "repo-a");
+    let init = reverse_init_in(&primary, &["--planning-scope", "\u{3000}"]);
+    assert_eq!(init.status.code(), Some(1), "{}", stdout(&init));
+    assert!(
+        stderr(&init).contains("--planning-scope")
+            && stderr(&init).contains("a non-whitespace character"),
+        "the refusal names the flag and the rule: {}",
+        stderr(&init)
+    );
+    assert!(
+        !primary.join(".engineering").exists(),
+        "a refused init leaves the repository as it was"
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
