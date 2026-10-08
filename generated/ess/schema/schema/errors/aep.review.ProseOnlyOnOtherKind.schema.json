@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "EvidenceNotEmpty payload",
-  "description": "`.engineering/evidence/` already holds an entry: migrate_git.rs:281-286.",
-  "x-ess-name": "aep.plan.EvidenceNotEmpty",
+  "title": "ProseOnlyOnOtherKind payload",
+  "description": "`--prose-only` on a kind other than `review-result` (story acceptance 2).",
+  "x-ess-name": "aep.review.ProseOnlyOnOtherKind",
   "x-ess-kind": "error-payload",
   "type": "object",
   "additionalProperties": false,
@@ -10,7 +10,7 @@
     "system": "aep",
     "specification_version": "v1",
     "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
-    "contract_digest": "slice-sha256/2:e70ac48d2768ca5ac96374f7f78ce958eb88b9ce435037796d030f554ab4ca91",
+    "contract_digest": "slice-sha256/2:e15c1aae2e53024e33a0593021d0a9f4b6dc00c53f24c681ed93c71229662d62",
     "regenerate": "ess generate"
   }
 }

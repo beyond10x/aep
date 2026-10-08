@@ -1,22 +1,22 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$ref": "#/$defs/aep.plan.PlanningScope",
+  "$ref": "#/$defs/aep.plan.UtcDate",
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
     "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
-    "contract_digest": "slice-sha256/2:a346031dc9c19120751ad30fd760b057a80960b5f8e132c34c68f1f382df891f",
+    "contract_digest": "slice-sha256/2:c37faeed0f1246a2931f975bb30b9ac6687a428c0b4f33dd41aff8d9397f82a0",
     "regenerate": "ess generate"
   },
   "$defs": {
-    "aep.plan.PlanningScope": {
-      "title": "PlanningScope",
-      "x-ess-name": "aep.plan.PlanningScope",
+    "aep.plan.UtcDate": {
+      "title": "UtcDate",
+      "x-ess-name": "aep.plan.UtcDate",
       "x-ess-kind": "newtype",
       "type": "string",
       "x-ess-invariants": [
-        "value.utf8_bytes >= 1",
-        "value.utf8_bytes <= 255"
+        "value.utf8_bytes >= 10",
+        "value.utf8_bytes <= 10"
       ]
     }
   }

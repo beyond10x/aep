@@ -1,7 +1,8 @@
 //! `cargo xtask ess`: the ESS specification under `ess/` and the projections committed beside it.
 //!
 //! The specification describes the `aep plan reverse init` and `aep plan store migrate git`
-//! surface. Its projections under `generated/ess/` are written only here, by the pinned `ess`, and
+//! surface, and the review-result findings rule of `aep plan artifact new` and `validate`. Its
+//! projections under `generated/ess/` are written only here, by the pinned `ess`, and
 //! `--check` regenerates them in memory and fails, naming the file, when a committed byte differs.
 //! The `ess-gate` task runs `--check` through `xtask/tests/ess_gate.rs`.
 

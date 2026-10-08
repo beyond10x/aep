@@ -1,50 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "aep plan store migrate git input",
-  "description": "Rewrite an `aep.project/1` Markdown store as an `aep.project/5` Git-native one.",
-  "x-ess-name": "aep.plan.MigrateGit",
+  "title": "aep plan artifact validate input",
+  "description": "Place one review-result by its findings block, as `validate` does for each.",
+  "x-ess-name": "aep.review.ValidateFindings",
   "x-ess-kind": "command-input",
   "type": "object",
   "properties": {
     "engineering": {
       "$ref": "#/$defs/aep.plan.EngineeringDirectory"
     },
-    "dry_run": {
+    "id": {
+      "$ref": "#/$defs/aep.review.ReviewId"
+    },
+    "strict": {
       "type": "boolean"
-    },
-    "verify": {
-      "type": "boolean"
-    },
-    "protocols": {
-      "type": "string"
-    },
-    "profile": {
-      "type": "string"
-    },
-    "protocol": {
-      "type": "string"
-    },
-    "planning_scope": {
-      "type": "string"
     }
   },
   "required": [
     "engineering",
-    "dry_run",
-    "verify"
+    "id",
+    "strict"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
     "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
-    "contract_digest": "slice-sha256/2:aae744f7626c58bf3ae6e2973f3c640c300e459678c70e7d1e8dc59e5ecf271e",
+    "contract_digest": "slice-sha256/2:b099c3c199b29aeec0d7881c2ab37ee41827c45c7683aee358b9c12c0ea55b20",
     "regenerate": "ess generate"
   },
   "$defs": {
     "aep.plan.EngineeringDirectory": {
       "title": "EngineeringDirectory",
       "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.review.ReviewId": {
+      "title": "ReviewId",
+      "x-ess-name": "aep.review.ReviewId",
       "x-ess-kind": "newtype",
       "type": "string"
     }

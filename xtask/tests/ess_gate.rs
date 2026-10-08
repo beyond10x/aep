@@ -1,5 +1,7 @@
 //! The gate on `ess/`, the ESS specification of the `aep plan reverse init` and
-//! `aep plan store migrate git` surface, and on the projections committed under `generated/ess/`.
+//! `aep plan store migrate git` surface and of the review-result findings rule
+//! (`aep plan artifact new` and `validate`), and on the projections committed under
+//! `generated/ess/`.
 //!
 //! * `cargo xtask ess --check` holds: the specification validates under its pinned release
 //!   (`--strict-requires`), compiles, and every committed projection equals a fresh one. Two
@@ -29,13 +31,22 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: one scenario
-/// (`aep.plan.ReverseInit/outcome/flag-unfit`) and 47 refusals. Nearly all are `ESS-SYNTH-001`
-/// ("a scenario arranges the rows of one selector per command in this cut"): both commands read
-/// two row sets. Neither entity has a creating command in aep (a repository is a directory, an
-/// `aep.project/1` file was written by an earlier build), so a conformance run needs seeded rows
-/// and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (1, 47);
+/// What `ess verify conform synthesize` makes of `ess/` today: 11 scenarios and 61 refusals.
+///
+/// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
+/// `aep.review.RecordReview` other than `findings-required`, and the `aep.review.ReviewResult`
+/// invariant after each of its three recording outcomes.
+///
+/// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (47) both commands read two row sets
+/// ("a scenario arranges the rows of one selector per command in this cut"), and neither entity
+/// has a creating command in aep (a repository is a directory, an `aep.project/1` file was written
+/// by an earlier build). In `aep.review` (14): `findings-required` needs a project file that sets
+/// `findings_required_since`, which no declared command writes; every `ValidateFindings` outcome
+/// and the invariant after each one need a review whose `created_before_opt_in` and
+/// `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
+/// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
+/// rows and a target that drives the `aep` binary; neither exists yet.
+const SYNTHESIZED: (u64, u64) = (11, 61);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {
