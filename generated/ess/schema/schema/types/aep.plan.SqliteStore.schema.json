@@ -4,8 +4,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
-    "contract_digest": "slice-sha256/2:a16895f27de6a658c1a9beb730faf536fb962ef1d7690cfadced03c541a56cbd",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:4ca09485f73ea7b2fdcd6dbfef6be897f75744921d5f4f8e770151f73b92154b",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -16,7 +16,7 @@
       "type": "object",
       "properties": {
         "path": {
-          "description": "The database file, relative to `.engineering/` (project.rs:428-429).",
+          "description": "The database file, relative to `.engineering/` (project.rs:442-443).",
           "type": "string"
         }
       },

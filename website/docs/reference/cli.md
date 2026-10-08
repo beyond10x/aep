@@ -89,7 +89,7 @@ is missing here fails the build.
 
 | Command | Does |
 |---|---|
-| `aep plan store migrate git [--engineering <dir>] [--dry-run \| --verify] [--protocols <source> --profile <profile> [--protocol adp/1]]` | rewrites an `aep.project/1` store, or a planning directory with no `project.yaml`, as `aep.project/5`: the one verb that still reads a `/1` journal, which every other verb refuses. Refuses a dirty `.engineering` and any document that disagrees with its journal. See [Migrate an older store](../guides/migrate-an-older-store.md) |
+| `aep plan store migrate git [--engineering <dir>] [--dry-run \| --verify] [--protocols <source> --profile <profile> [--protocol adp/1]] [--planning-scope <name>]` | rewrites an `aep.project/1` store, or a planning directory with no `project.yaml`, as `aep.project/5`: the one verb that still reads a `/1` journal, which every other verb refuses. Refuses a dirty `.engineering` and any document that disagrees with its journal. `planning_scope` is `--planning-scope`, else derived from the `origin` remote, the primary checkout or the project directory, and the output names which. See [Migrate an older store](../guides/migrate-an-older-store.md) |
 | `aep plan serve [--port 8899] [--read-only]` | the plan in a browser: board, artifact, next rungs with their price, and moves through the same decision `move` makes. Binds `127.0.0.1` only; the printed URL carries a per-run token. `--port 0` takes any free port |
 | `aep plan workspace members [--fetch]` | the repositories `.engineering/workspace.yaml` names and whether each store is present; `--fetch` materializes pinned Git members |
 | `aep plan workspace list [--kind …] [--status …] [--member …]` | the plan across every member |
@@ -102,7 +102,7 @@ is missing here fails the build.
 
 | Command | Does |
 |---|---|
-| `aep plan reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify]` | writes an `aep.project/5` `project.yaml`. Resolves the protocol source first unless `--no-verify`. Refuses a `.engineering/planning` that already holds a plan and names `aep plan store migrate git` |
+| `aep plan reverse init --protocols <path-or-git-locator> --profile <profile> [--root .] [--protocol adp/1] [--summary …] [--no-verify] [--planning-scope <name>]` | writes an `aep.project/5` `project.yaml`, with `planning_scope` derived as `migrate git` derives it. Resolves the protocol source first unless `--no-verify`. Refuses a `.engineering/planning` that already holds a plan and names `aep plan store migrate git` |
 | `aep plan reverse scan [root]` | what the repository says about itself: headings, toolchains, gates, test layout, as an `aep.reverse-scan/1` bundle |
 | `aep plan reverse history [root] [--recent 500] [--top 15]` | what its Git history says: who touches what, dormant areas, where change concentrates |
 | `aep plan reverse tickets --provider <name> [--repository .] [--top 100]` | tracker keys in history and in the plan's prose, joined to the references the store holds |

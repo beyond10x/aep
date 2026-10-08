@@ -25,8 +25,8 @@ const OPEN_QUESTION: &str = concat!("UNMAPPED", ":");
 /// Every open question `ess/` records, as the text after the marker on its first line. Each names
 /// what ess 0.56.0 refused and what would settle it; remove an entry with its marker.
 const OPEN_QUESTIONS: &[&str] = &[
-    "the rule's third clause, \"including a non-whitespace byte\" (project.rs:599,",
-    "the file also gets `store: { git: {} }` (reverse.rs:1464-1465); ess 0.56.0",
+    "the rule's third clause, \"including a non-whitespace character\" (project.rs:71-73",
+    "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
 /// What `ess verify conform synthesize` makes of `ess/` today: one scenario

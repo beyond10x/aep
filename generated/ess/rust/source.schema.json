@@ -20,7 +20,7 @@
       "additionalProperties": false,
       "properties": {
         "url": {
-          "description": "A libpq connection string or URL (project.rs:436-437).",
+          "description": "A libpq connection string or URL (project.rs:450-451).",
           "type": "string"
         }
       },
@@ -100,7 +100,7 @@
       "additionalProperties": false,
       "properties": {
         "path": {
-          "description": "The database file, relative to `.engineering/` (project.rs:428-429).",
+          "description": "The database file, relative to `.engineering/` (project.rs:442-443).",
           "type": "string"
         }
       },
@@ -196,8 +196,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:4f566c6f080a45c1ab26a9f80a608cb8030bf61b8dd256c6f06934c05be4206a",
-    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:42f47d88134f0da0999292ca8a403774b4439716cf819a97954b08834e33f265",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
     "specification_version": "v1",
     "system": "aep"
   }

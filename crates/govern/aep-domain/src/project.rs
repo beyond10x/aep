@@ -58,6 +58,20 @@ pub const GIT_PLANNING_DIRECTORY: &str = "planning";
 /// The directory, relative to `.engineering`, an `aep.project/5` store keeps its evidence in.
 pub const GIT_EVIDENCE_DIRECTORY: &str = "evidence";
 
+/// The rule an `aep.project/5` `planning_scope` is held to, as refusals state it.
+///
+/// "Whitespace" is Unicode whitespace (`char::is_whitespace`), so a value of only U+3000 is
+/// refused although its bytes are not ASCII whitespace; the design names a non-whitespace
+/// *character* (`docs/design/planning-store-selection-and-commands-v0.1.md`, `AuthorityValueV1`).
+pub const PLANNING_SCOPE_RULE: &str = "1..=255 UTF-8 bytes including a non-whitespace character";
+
+/// Whether `value` fits [`PLANNING_SCOPE_RULE`]. The value is never trimmed: it is written and
+/// compared exactly as given.
+#[must_use]
+pub fn planning_scope_fits(value: &str) -> bool {
+    !value.trim().is_empty() && value.len() <= 255
+}
+
 /// The refusal for an event-log store (`aep.project/2`–`/4`), naming how to migrate it.
 #[must_use]
 pub fn event_log_store_refusal(version: &str) -> String {
@@ -596,11 +610,11 @@ fn validate_store(
     errors: &mut ValidationErrors,
 ) -> StoreConfig {
     match planning_scope {
-        Some(value) if !value.trim().is_empty() && value.len() <= 255 => {}
+        Some(value) if planning_scope_fits(value) => {}
         Some(_) => errors.push(ValidationError::new(
             ValidationCode::TypeMismatch,
             "project.planning_scope",
-            "`planning_scope` must contain 1..=255 UTF-8 bytes including a non-whitespace byte",
+            format!("`planning_scope` must contain {PLANNING_SCOPE_RULE}"),
         )),
         None => errors.push(ValidationError::new(
             ValidationCode::TypeMismatch,
@@ -1019,6 +1033,32 @@ mod tests {
             .iter()
             .any(|error| error.location == "project.planning_scope"
                 && error.message.contains(PROJECT_VERSION_V5)));
+    }
+
+    /// U+3000 (ideographic space) is whitespace by Unicode although none of its bytes are ASCII
+    /// whitespace: the rule counts characters, and the refusal says so.
+    #[test]
+    fn a_planning_scope_of_only_unicode_whitespace_is_refused_naming_a_non_whitespace_character() {
+        for scope in ["\"\u{3000}\"", "\" \t\"", "\"\""] {
+            let errors = config(&format!(
+                "version: aep.project/5\nplanning_scope: {scope}\n{BASE}"
+            ))
+            .expect_err("a blank scope is refused");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.planning_scope")
+                .unwrap_or_else(|| panic!("no planning_scope refusal for {scope}: {errors:?}"));
+            assert_eq!(error.code, ValidationCode::TypeMismatch);
+            assert!(
+                error.message.contains("a non-whitespace character"),
+                "{}",
+                error.message
+            );
+        }
+        assert!(planning_scope_fits("\u{3000}a"));
+        assert!(planning_scope_fits(&"x".repeat(255)));
+        assert!(!planning_scope_fits(&"x".repeat(256)));
     }
 
     #[test]

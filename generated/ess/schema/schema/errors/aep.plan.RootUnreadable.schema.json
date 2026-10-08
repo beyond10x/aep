@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "RootUnreadable payload",
-  "description": "`--root` does not canonicalize: reverse.rs:1345-1348 (`cannot read <root>`).",
+  "description": "`--root` does not canonicalize: reverse.rs:1350-1353 (`cannot read <root>`).",
   "x-ess-name": "aep.plan.RootUnreadable",
   "x-ess-kind": "error-payload",
   "type": "object",
@@ -9,8 +9,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
-    "contract_digest": "slice-sha256/2:f192347e9baa103671ec9838a3fe0a7e3067e1c24943052aa62944a50aa7f9dd",
+    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:f934fd6c55c52a3b840b41b52a736ad9f9b6f7ddf6706de6376833fd9875cf41",
     "regenerate": "ess generate"
   }
 }

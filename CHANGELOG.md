@@ -9,6 +9,28 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan store migrate git` and `aep plan reverse init` take `--planning-scope <name>`, the
+  `planning_scope` to write. It is held to the same rule as the project file's key, and both
+  commands print which source the written scope came from.
+
+### Fixed
+
+- `aep plan store migrate git` and `aep plan reverse init` run in a linked worktree wrote the
+  worktree's directory name as `planning_scope`. The scope is now, in order, `--planning-scope`,
+  the `origin` remote's last path segment without `.git`, the primary checkout's directory name,
+  and, outside Git, the directory holding `.engineering/`. A Git repository with none of these (no
+  `origin` and a common directory not named `.git`, as in a bare repository's worktree) is refused,
+  naming `--planning-scope`. The `origin` URL is the one `git remote get-url origin` answers (the
+  first URL, `insteadOf` applied), read without inherited variables that redirect the repository
+  or its configuration; a URL with no path segment, or one ending in `.` or `..`, is refused.
+- `aep plan store migrate git --engineering .engineering` (a relative directory with no parent
+  component) failed with "cannot make an empty path absolute"; the directory is made absolute
+  before its parent is taken.
+- A `planning_scope` refusal names the rule as "a non-whitespace character", as it is checked
+  (Unicode whitespace), instead of "a non-whitespace byte".
+
 ## [0.69.1] — 2026-10-08
 
 ### Fixed

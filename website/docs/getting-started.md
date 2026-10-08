@@ -57,7 +57,7 @@ $ aep plan reverse init --profile development.standard \
 …/shop/.engineering/project.yaml written
   protocol source resolves to …/protocol-sources/cd43e0b7…/snapshots/eb003e4061893831c79024111de3a085b47022d0
   profile development.standard
-  store: git (aep.project/5), planning_scope shop
+  store: git (aep.project/5), planning_scope: shop (from the origin remote)
 ```
 
 The commit above is the `0.69.1` release. `reverse init` fetches that revision once into a local

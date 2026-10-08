@@ -31,7 +31,7 @@ An `aep.project/1` store keeps Markdown documents plus a `journal.jsonl` of move
 
    ```shell-session
    $ aep plan store migrate git --dry-run
-   would write 1 document(s) as `aep.planning-md/3` carrying 2 transition(s), and 1 evidence file(s); `planning_scope: old` (the repository directory's name)
+   would write 1 document(s) as `aep.planning-md/3` carrying 2 transition(s), and 1 evidence file(s); planning_scope: old (from the origin remote)
    not carried (Git history holds them): 1 created
    dry run: nothing was written
    ```
@@ -40,9 +40,9 @@ An `aep.project/1` store keeps Markdown documents plus a `journal.jsonl` of move
 
    ```shell-session
    $ aep plan store migrate git --verify
-   writes 1 document(s) as `aep.planning-md/3` carrying 2 transition(s), and 1 evidence file(s); `planning_scope: old` (the repository directory's name)
+   writes 1 document(s) as `aep.planning-md/3` carrying 2 transition(s), and 1 evidence file(s); planning_scope: old (from the origin remote)
    not carried (Git history holds them): 1 created
-   …/.engineering/project.yaml now selects `aep.project/5` with `planning_scope: old`: 1 document(s), 2 transition(s), 1 evidence file(s) written
+   …/.engineering/project.yaml now selects `aep.project/5` with planning_scope: old (from the origin remote): 1 document(s), 2 transition(s), 1 evidence file(s) written
    removed …/.engineering/planning/journal.jsonl; Git history holds it
    verified 1 artifact(s) and 1 evidence record(s): status, revision, title, relations, body, transitions and every evidence record, field by field and in order, equal what the old store answered
    ```
@@ -59,7 +59,11 @@ What changes:
 - Each journalled evidence record becomes one file under `.engineering/evidence/`. Identical records
   stay separate files, because each counts.
 - `project.yaml` gets `version: aep.project/5`, `store: {git: {}}` and `planning_scope` set to the
-  repository directory's name. Every other key is kept.
+  repository's name: `--planning-scope` when given, else the `origin` remote's last path segment
+  without `.git`, else the primary checkout's directory name (also from a linked worktree), else,
+  outside Git, the directory holding `.engineering/`. A Git repository with neither an `origin` nor
+  a common directory named `.git` (a bare repository's worktree) is refused, naming
+  `--planning-scope`. Every other key is kept.
 - `journal.jsonl` and any `.aep-batch.pending.json` are removed. Git history keeps them.
 
 The migration refuses **before writing anything** when a document disagrees with its journal: a
