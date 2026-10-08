@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:agentplugins-grouped-spellings
 kind: story
-status: active
+status: archived
 title: agentplugins teaches the grouped spellings
 summary: 275 flat call sites across the plugin skills, agents and website; recorded eval bytes stay flat.
 relations:
@@ -13,10 +13,11 @@ scope:
   path: agentplugins:plugins
 - confidence: cited
   path: agentplugins:website/docs
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-04T02:18:21Z", actor: "human:timo", revision: 2, imported: true}
 - {from: "proposed", to: "active", at: "2026-09-04T02:18:21Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:59Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"verification":1}}}
 ---
 # Story: agentplugins teaches the grouped spellings
 

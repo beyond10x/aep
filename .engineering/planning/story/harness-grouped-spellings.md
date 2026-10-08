@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:harness-grouped-spellings
 kind: story
-status: active
+status: archived
 title: harness teaches the grouped spellings
 summary: 15 flat call sites around the drive-transition seam and docs; drive did not move.
 relations:
@@ -17,10 +17,11 @@ scope:
   path: harness:docs
 - confidence: cited
   path: harness:website/docs
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-04T02:18:27Z", actor: "human:timo", revision: 2, imported: true}
 - {from: "proposed", to: "active", at: "2026-09-04T02:18:29Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:58Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"verification":1}}}
 ---
 # Story: harness teaches the grouped spellings
 

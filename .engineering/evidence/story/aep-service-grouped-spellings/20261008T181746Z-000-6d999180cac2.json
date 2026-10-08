@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T18:17:46Z",
+  "actor": "human:timo",
+  "artifact": "story:aep-service-grouped-spellings",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "store reconcile 2026-10-08: aep-service origin/main 237a7fd has 0 flat spellings and 41 grouped (git grep)",
+    "reference": "https://github.com/beyond10x/aep-service/tree/237a7fd"
+  }
+}

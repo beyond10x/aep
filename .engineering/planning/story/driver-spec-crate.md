@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:driver-spec-crate
 kind: story
-status: active
+status: implemented
 title: 'aep-driver-spec: the step map, validated before anything runs'
 summary: A leaf crate over aep-domain holding RawStepMap, StepMap, PinnedWorkflowRef, the cursor types, ToolConfig and both cross-validation phases.
 owner: driver
@@ -23,7 +23,9 @@ scope:
   path: crates/edge/aep-cli/tests/drive_cli.rs
 - confidence: cited
   path: crates/govern/aep-engine/src/registry.rs
-revision: 14
+revision: 15
+transitions:
+- {from: "active", to: "implemented", at: "2026-10-08T18:17:47Z", actor: "human:timo", revision: 15, decided_on: {"recorded":{"test_result":2,"review":1}}}
 ---
 # Story: `aep-driver-spec` — the step map, validated before anything runs
 

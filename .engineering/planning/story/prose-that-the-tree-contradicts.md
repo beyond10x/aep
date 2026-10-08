@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:prose-that-the-tree-contradicts
 kind: story
-status: active
+status: archived
 title: Three statements the tree makes about itself that are false
 relations:
 - decomposes: epic:reference-driver
@@ -20,10 +20,11 @@ scope:
   path: docs/plan/archive/harness-wave-4-governed-dogfood.md
 - confidence: cited
   path: drivers/development/default.yaml
-revision: 17
+revision: 18
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 3, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:57Z", actor: "human:timo", revision: 18, decided_on: {"recorded":{"verification":1}}}
 ---
 # Story: Three statements the tree makes about itself that are false
 

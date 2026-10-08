@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:unreadable-lock-refuses-its-own-escape-hatch
 kind: story
-status: active
+status: archived
 title: A lock file nobody can read refuses the command that exists to remove it
 relations:
 - decomposes: epic:reference-driver
@@ -17,10 +17,11 @@ scope:
   path: crates/edge/aep-cli
 - confidence: inferred
   path: website/docs/reference/cli.md
-revision: 15
+revision: 16
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 3, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-30T13:07:49Z", actor: "human:operator", revision: 4, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:57Z", actor: "human:timo", revision: 16, decided_on: {"recorded":{"verification":1}}}
 ---
 # Story: A lock file nobody can read refuses the command that exists to remove it
 
