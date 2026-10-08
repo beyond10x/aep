@@ -2,12 +2,16 @@
 format: aep.planning-md/3
 id: story:planning-scope-comes-from-the-repository
 kind: story
-status: draft
+status: implemented
 title: planning_scope comes from the repository, not the checkout directory
 summary: migrate git and reverse init derive planning_scope from the origin remote or the primary checkout, never a linked worktree's directory name
 relations:
 - serves: vision:O2
-revision: 1
+revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-08T21:32:59Z", actor: "human:timo", revision: 2, decided_on: {"recorded":{"test_result":1}}}
+- {from: "proposed", to: "active", at: "2026-10-08T21:32:59Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"test_result":1}}}
+- {from: "active", to: "implemented", at: "2026-10-08T21:32:59Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 # Story: `planning_scope` comes from the repository, not the checkout directory
 

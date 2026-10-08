@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T21:32:57Z",
+  "actor": "human:timo",
+  "artifact": "story:planning-scope-comes-from-the-repository",
+  "kind": "story",
+  "revision": 1,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "PR 101 Gate run 37839227816 (task check incl. ess-gate) on f8e08148f: store_migrate_git 26 passed, including migrate_git_in_a_linked_worktree_writes_the_primary_checkouts_name_not_the_worktrees; release 0.70.0 task check exit 0, 2210 passed",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/37839227816"
+  }
+}
