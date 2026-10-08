@@ -1,0 +1,103 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.Store",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:da017030e664b18f5b9ef7f7064b8d6297921ffdd6ccee7b89f93d5966a67c32",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.PostgresStore": {
+      "title": "PostgresStore",
+      "x-ess-name": "aep.plan.PostgresStore",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "A libpq connection string or URL (project.rs:436-437).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "aep.plan.SqliteStore": {
+      "title": "SqliteStore",
+      "x-ess-name": "aep.plan.SqliteStore",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The database file, relative to `.engineering/` (project.rs:428-429).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "aep.plan.Store": {
+      "title": "Store",
+      "x-ess-name": "aep.plan.Store",
+      "x-ess-kind": "union",
+      "oneOf": [
+        {
+          "title": "git",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "git"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "postgres",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "postgres"
+            },
+            "value": {
+              "$ref": "#/$defs/aep.plan.PostgresStore"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "sqlite",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "sqlite"
+            },
+            "value": {
+              "$ref": "#/$defs/aep.plan.SqliteStore"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "x-ess-union-tag": "kind"
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.Project.State",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:2ec3d80a0ab3e9381963820b665afe27fbf3434542bac92d101f478b84be4c1f",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.Project.State": {
+      "title": "State",
+      "x-ess-name": "aep.plan.Project.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "GitNative",
+        "JournalLayout"
+      ]
+    }
+  }
+}

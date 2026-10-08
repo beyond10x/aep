@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.PostgresStore",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:6a4cbe1cec988c02a3ec8780abad6450ea4ef8b738845d339a6bda24720de8ad",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.PostgresStore": {
+      "title": "PostgresStore",
+      "x-ess-name": "aep.plan.PostgresStore",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "A libpq connection string or URL (project.rs:436-437).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

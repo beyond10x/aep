@@ -1,0 +1,988 @@
+domain: aep.plan
+
+summary: >-
+  A repository's planning store as `aep plan reverse init` and `aep plan store migrate git` see
+  it: the directory that holds `.engineering/`, and the project file under it.
+
+# Paths are relative to the repository root. `reverse.rs` is crates/edge/aep-cli/src/reverse.rs,
+# `store_command.rs` is crates/edge/aep-cli/src/store_command.rs, `migrate_git.rs` is
+# crates/edge/aep-cli/src/store_command/migrate_git.rs and `project.rs` is
+# crates/govern/aep-domain/src/project.rs, unless a path says otherwise.
+
+types:
+  # read from: reverse.rs:219-223 (`InitArgs.root`), canonicalized at reverse.rs:1345-1348;
+  # crates/edge/aep-project/src/project.rs:94-95 ("the directory holding `.engineering`").
+  - name: aep.plan.ProjectRoot
+    kind: newtype
+    of: String
+
+  # read from: migrate_git.rs:74-77 (`GitArgs.engineering`); the directory's name comes from
+  # crates/edge/aep-project/src/project.rs:79-89 (`AEP_PROJECT_DIR`, default `.engineering`,
+  # project.rs:40).
+  - name: aep.plan.EngineeringDirectory
+    kind: newtype
+    of: String
+
+  # read from: project.rs:591-612 (`validate_store`): 1..=255 UTF-8 bytes including a
+  # non-whitespace byte; store_command.rs:49 holds a derived scope to the same rule.
+  - name: aep.plan.PlanningScope
+    kind: newtype
+    of: String
+    invariants:
+      - value.utf8_bytes >= 1
+      - value.utf8_bytes <= 255
+    # UNMAPPED: the rule's third clause, "including a non-whitespace byte" (project.rs:599,
+    # store_command.rs:49 `name.trim().is_empty()`), has no predicate: ess 0.56.0 refuses a pattern
+    # (`unknown operator "matches"; expected one of eq, ne, lt, lte, gt, gte, any_of, none_of,
+    # exists, truthy, starts_with, ends_with, contains, equals_ignore_case, in_ignore_case`) and
+    # selects no trimmed form of a String. Settled when ESS has a whitespace predicate.
+
+  # read from: project.rs:393-417 (`RawStore`), 427-438 (`RawSqlite`, `RawPostgres`) and 480-498
+  # (`StoreConfig`): `git: {}`, `sqlite: { path }` or `postgres: { url }`. The project file spells
+  # the variant as the mapping's only key (project.rs:452-470); ESS writes a union with a `kind`
+  # tag, so this type holds the variants, not that spelling. `schemas/generated/` (from the Rust
+  # types, `cargo xtask schema`) stays the authority on the file's bytes.
+  - name: aep.plan.SqliteStore
+    kind: struct
+    fields:
+      - name: path
+        type: String
+        summary: The database file, relative to `.engineering/` (project.rs:428-429).
+  - name: aep.plan.PostgresStore
+    kind: struct
+    fields:
+      - name: url
+        type: String
+        summary: A libpq connection string or URL (project.rs:436-437).
+  - name: aep.plan.Store
+    kind: union
+    tag: kind
+    variants:
+      git:
+      sqlite: aep.plan.SqliteStore
+      postgres: aep.plan.PostgresStore
+
+  # change (story:planning-scope-comes-from-the-repository): where a written `planning_scope` came
+  # from, in the order the commands try them. The text output names it.
+  - name: aep.plan.ScopeSource
+    kind: enum
+    variants:
+      - flag                   # `--planning-scope <name>`
+      - origin_remote          # the `origin` remote URL's last path segment, without `.git`
+      - git_common_directory   # the directory holding the Git common directory named `.git`
+      - engineering_directory  # the directory holding `.engineering/`, outside any Git repository
+
+# The derived scope is held to the PlanningScope rule before it is written: store_command.rs:49-55
+# refuses a name that does not fit (the `scope-unfit` outcomes).
+conversions:
+  - from: String
+    to: aep.plan.PlanningScope
+    because: >-
+      A directory name becomes the planning scope only after store_command.rs:49-55 holds it to
+      1..=255 bytes with a non-whitespace byte; the scope-unfit outcomes refuse the rest.
+  - from: String
+    to: Optional<aep.plan.PlanningScope>
+    because: >-
+      The same crossing into the project file's optional `planning_scope` field.
+  # change (story:planning-scope-comes-from-the-repository): `--planning-scope` is text the
+  # command holds to the same rule before writing it.
+  - from: Optional<String>
+    to: aep.plan.PlanningScope
+    because: >-
+      `--planning-scope` becomes the planning scope only when present and 1..=255 bytes with a
+      non-whitespace byte; the scope-unfit outcomes refuse the rest.
+  - from: Optional<String>
+    to: Optional<aep.plan.PlanningScope>
+    because: >-
+      The same crossing into the project file's optional `planning_scope` field.
+  - from: Optional<String>
+    to: String
+    because: >-
+      `--profile` is present whenever `--protocols` is: clap refuses one without the other
+      (migrate_git.rs:87, 90), the usage-refused outcome of `aep.plan.MigrateGit`.
+
+entities:
+  # The directory that holds `.engineering/`, as the two commands observe it on disk. aep keeps no
+  # record of it: each field is a fact a command reads from the filesystem at the cited line.
+  # The single state is structural, not read from the code.
+  - name: aep.plan.Repository
+    naming:
+      summary: The directory that holds `.engineering/`, observed on disk.
+    identity:
+      name: root
+      type: aep.plan.ProjectRoot
+    fields:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+        summary: >-
+          `<root>/<project directory>`: reverse.rs:1349 (`root.join(project_directory())`);
+          migrate_git.rs:250-252 reads the root back as that directory's parent.
+      - name: directory_name
+        type: String
+        summary: >-
+          The root's last path component, made absolute and canonicalized where it can be, lossily
+          decoded: store_command.rs:41-49 (`default_planning_scope`).
+      - name: planning_has_entries
+        type: Boolean
+        summary: "`.engineering/planning/` reads as a directory holding an entry: reverse.rs:1365-1366."
+      - name: planning_is_directory
+        type: Boolean
+        summary: "`.engineering/planning/` is a directory: migrate_git.rs:266-270."
+      - name: evidence_has_entries
+        type: Boolean
+        summary: "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:267, 271."
+      - name: engineering_clean
+        type: Boolean
+        summary: >-
+          `git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:257-264
+          and 361-376 (`git_clean`).
+      # change (story:planning-scope-comes-from-the-repository): three more facts the scope is
+      # derived from. The code reads none of them yet.
+      - name: in_git_repository
+        type: Boolean
+        summary: The root is inside a Git work tree.
+      - name: origin_repository_name
+        type: Optional<String>
+        summary: >-
+          The last path segment of the `origin` remote's URL with a trailing `.git` removed; absent
+          when there is no Git repository or it has no `origin` remote.
+      - name: git_common_directory_holder
+        type: Optional<String>
+        summary: >-
+          The name of the directory holding the Git common directory, present only when that
+          directory is named `.git`. In a linked worktree this is the primary checkout, not the
+          worktree's own directory.
+    relations:
+      # The project file under `.engineering/`, when there is one: a repository stands without it
+      # (`reverse init` writes it, reverse.rs:1403), and no command here deletes either.
+      - name: project
+        kind: references
+        target: aep.plan.Project
+        cardinality: one
+        via: engineering
+    lifecycle:
+      initial: Present
+      states: [Present]
+      terminal: [Present]
+
+  # `.engineering/project.yaml`: read by project.rs:636-688 (`RawProjectConfig`) and validated by
+  # project.rs:700-872; an `aep.project/1` file is read only by migrate_git.rs:118-160.
+  - name: aep.plan.Project
+    naming:
+      summary: A repository's project file, `.engineering/project.yaml`.
+    identity:
+      name: engineering
+      type: aep.plan.EngineeringDirectory
+    fields:
+      - name: root
+        type: aep.plan.ProjectRoot
+        summary: The directory holding `.engineering/` (crates/edge/aep-project/src/project.rs:94-95).
+      - name: protocol
+        type: String
+        summary: The protocol it runs under (project.rs:640-641).
+      - name: profile
+        type: String
+        summary: The profile whose rules apply (project.rs:642-643).
+      - name: summary
+        type: Optional<String>
+        summary: A one-line description (project.rs:644-646).
+      - name: protocols
+        type: Optional<String>
+        summary: A local tree path or a pinned `git+…#<40-hex>` locator (project.rs:647-649).
+      - name: artifacts
+        type: Optional<String>
+        summary: Where the artifact manifest is (project.rs:650-652).
+      - name: task
+        type: Optional<String>
+        summary: Where the task document is (project.rs:653-655).
+      - name: state_path
+        type: Optional<String>
+        summary: >-
+          Where execution state is kept (project.rs:656-658). The file's key is `state`, which ESS
+          refuses as a field's wire name beside a lifecycle ("wire field \"state\" is already used
+          at entity aep.plan.Project.lifecycle").
+
+      - name: principles
+        type: Optional<String>
+        summary: Where project-local principles are (project.rs:659-661).
+      - name: profiles
+        type: Optional<String>
+        summary: Where project-local profiles are (project.rs:662-664).
+      - name: schemas
+        type: Optional<String>
+        summary: Where project-owned JSON Schema contracts are (project.rs:665-667).
+      - name: store
+        type: Optional<aep.plan.Store>
+        summary: >-
+          Where the plan is kept; absent means `git` (project.rs:668-675, 628-630). An
+          `aep.project/1` file's `store: markdown` (migrate_git.rs:146-147) is held as absent.
+      - name: planning_scope
+        type: Optional<aep.plan.PlanningScope>
+        summary: >-
+          Required by `aep.project/5` (project.rs:598-612); `aep.project/1` has none
+          (store_command.rs:38-40). Validated and then not kept: `ProjectConfig`
+          (project.rs:334-363) has no such field.
+      - name: providers
+        type: Map<String, String>
+        summary: A URL pattern per external system, each carrying `{key}` (project.rs:685-687).
+    relations:
+      - name: repository
+        kind: references
+        target: aep.plan.Repository
+        cardinality: one
+        via: root
+    # `planning_tenant` and `planning_identity` (project.rs:679-684) are keys the reader refuses
+    # (project.rs:611-627); they are not fields.
+    invariants:
+      # `aep.project/5` requires `planning_scope` (project.rs:605-609).
+      - any:
+          - state != GitNative
+          - defined(planning_scope)
+    lifecycle:
+      # The state is the file's `version`. `JournalLayout` is `aep.project/1` (project.rs:46), also
+      # when `version` is absent (project.rs:694-696); `GitNative` is `aep.project/5`
+      # (project.rs:55). This build writes no `aep.project/1` file: such a file was written by an
+      # earlier build. `aep.project/2`–`/4` (project.rs:50-51) are refused by every reader here
+      # (project.rs:707-718, migrate_git.rs:130-132) and are outside this specification.
+      initial: JournalLayout
+      states: [JournalLayout, GitNative]
+      terminal: [GitNative]
+      transitions:
+        - name: migrate
+          from: [JournalLayout]
+          to: GitNative
+
+actors:
+  # Whoever runs `aep` in the repository; the CLI knows no caller beyond the process.
+  - name: aep.plan.Operator
+    may:
+      - aep.plan.ReverseInit
+      - aep.plan.MigrateGit
+
+errors:
+  - name: aep.plan.RootUnreadable
+    summary: "`--root` does not canonicalize: reverse.rs:1345-1348 (`cannot read <root>`)."
+    fields: []
+  - name: aep.plan.AlreadyAdopted
+    summary: "A project file exists: reverse.rs:1352-1357."
+    fields: []
+  - name: aep.plan.PlanWithoutProjectFile
+    summary: "The planning directory holds a plan and no project file names it: reverse.rs:1365-1373."
+    fields: []
+  - name: aep.plan.PlanningScopeUnfit
+    summary: >-
+      The derived `planning_scope` is not 1..=255 bytes with a non-whitespace byte:
+      store_command.rs:49-55.
+    fields: []
+  - name: aep.plan.UsageRefused
+    summary: >-
+      clap refuses the arguments before the command runs: `--protocols` and `--profile` each
+      require the other (migrate_git.rs:87, 90), and `--dry-run` conflicts with `--verify`
+      (migrate_git.rs:79).
+    fields: []
+  - name: aep.plan.FlagsWithProjectFile
+    summary: "`--protocols` given while a project file exists: migrate_git.rs:237-243."
+    fields: []
+  - name: aep.plan.ProjectFileMissing
+    summary: "No project file and no `--protocols`/`--profile`: migrate_git.rs:98-108, 247."
+    fields: []
+  - name: aep.plan.NothingToMigrate
+    summary: "The project file already selects `aep.project/5`: migrate_git.rs:133-137, 249."
+    fields: []
+  - name: aep.plan.EngineeringDirty
+    summary: "`.engineering/` has uncommitted changes: migrate_git.rs:257-264."
+    fields: []
+  - name: aep.plan.NoPlanningStore
+    summary: "There is no `.engineering/planning/` directory: migrate_git.rs:268-270."
+    fields: []
+  - name: aep.plan.EvidenceNotEmpty
+    summary: "`.engineering/evidence/` already holds an entry: migrate_git.rs:271-276."
+    fields: []
+  # change (story:planning-scope-comes-from-the-repository).
+  - name: aep.plan.PlanningScopeUnderived
+    summary: >-
+      No `--planning-scope`, and the Git repository has neither an `origin` remote nor a common
+      directory named `.git`; the refusal names `--planning-scope`.
+    fields: []
+
+events:
+  # aep publishes no events. Each is the fact a success outcome produces, declared because ESS
+  # requires one per outcome that changes a record; no component publishes them.
+  - name: aep.plan.ProjectAdopted
+    fields:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: root
+        type: aep.plan.ProjectRoot
+      - name: planning_scope
+        type: aep.plan.PlanningScope
+      # change (story:planning-scope-comes-from-the-repository).
+      - name: scope_source
+        type: aep.plan.ScopeSource
+  - name: aep.plan.StoreMigrated
+    fields:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: planning_scope
+        type: aep.plan.PlanningScope
+      # change (story:planning-scope-comes-from-the-repository).
+      - name: scope_source
+        type: aep.plan.ScopeSource
+
+commands:
+  # `aep plan reverse init` (reverse.rs:197-198, 219-243, 1344-1439). `--root` defaults to the
+  # working directory (reverse.rs:222); the specification's `root` is that path.
+  #
+  # Not modelled here, outside the planning_scope surface: the protocol-source parse refusal
+  # (reverse.rs:1359-1360, `ProtocolSource::parse`), a relative source that is not a directory
+  # (reverse.rs:1389-1401), a failed write (reverse.rs:1403-1406), and the resolution check that
+  # removes the written file again (reverse.rs:1419-1438), which `--no-verify` skips
+  # (reverse.rs:1408-1413).
+  #
+  # change (story:planning-scope-comes-from-the-repository): `--planning-scope`, the four sources
+  # tried in order, and the source answered. Shipped behaviour (0.69.1) has neither the flag nor
+  # the order: the scope is always `directory_name` (reverse.rs:1374, store_command.rs:41-49).
+  - name: aep.plan.ReverseInit
+    naming:
+      wire: reverse-init
+      display: aep plan reverse init
+      summary: Write the `aep.project/5` project file that makes a repository an adopting project.
+    input:
+      - name: root
+        type: aep.plan.ProjectRoot
+      - name: protocols
+        type: String
+      - name: profile
+        type: String
+      - name: protocol
+        type: Optional<String>
+      - name: summary
+        type: Optional<String>
+      - name: no_verify
+        type: Boolean
+      # change: the new flag.
+      - name: planning_scope
+        type: Optional<String>
+    # change: what the command's text output names, beside the project file it wrote.
+    response:
+      - name: planning_scope
+        type: aep.plan.PlanningScope
+      - name: scope_source
+        type: aep.plan.ScopeSource
+    outcomes:
+      # In code order (reverse.rs:1344-1374); every refusal writes nothing.
+      - name: root-unreadable
+        when_related:
+          entity: aep.plan.Repository
+          where: root == input.root
+          exists: false
+        error: aep.plan.RootUnreadable
+      - name: already-adopted
+        when_related:
+          entity: aep.plan.Project
+          where: root == input.root
+          exists: true
+        error: aep.plan.AlreadyAdopted
+      - name: plan-without-project-file
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - root == input.root
+              - planning_has_entries == true
+          exists: true
+        error: aep.plan.PlanWithoutProjectFile
+      # change: the scope, in order. Each source that is present decides; one that does not fit
+      # the PlanningScope rule is refused, never passed over for the next.
+      - name: flag-unfit
+        when:
+          all:
+            - defined(planning_scope)
+            - any:
+                - planning_scope.utf8_bytes < 1
+                - planning_scope.utf8_bytes > 255
+        error: aep.plan.PlanningScopeUnfit
+      - name: adopted-from-flag
+        when: defined(planning_scope)
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root: input.root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          summary: input.summary
+          planning_scope: input.planning_scope
+          # UNMAPPED: the file also gets `store: { git: {} }` (reverse.rs:1464-1465); ess 0.56.0
+          # refuses a union value in `sets:` ("`aep.plan.Project.store` has structure, and a
+          # literal in a `sets:` entry is one piece of text"). Settled when `sets:` can name a
+          # union variant; it holds for every success outcome of both commands.
+        emits: [aep.plan.ProjectAdopted]
+        payload:
+          aep.plan.ProjectAdopted:
+            engineering:
+              related:
+                entity: aep.plan.Repository
+                where: root == input.root
+                field: engineering
+            root: input.root
+            planning_scope: input.planning_scope
+            scope_source: flag
+      - name: derived-unfit
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - root == input.root
+              - any:
+                  - all:
+                      - defined(origin_repository_name)
+                      - any:
+                          - origin_repository_name.utf8_bytes < 1
+                          - origin_repository_name.utf8_bytes > 255
+                  - all:
+                      - not defined(origin_repository_name)
+                      - defined(git_common_directory_holder)
+                      - any:
+                          - git_common_directory_holder.utf8_bytes < 1
+                          - git_common_directory_holder.utf8_bytes > 255
+                  - all:
+                      - in_git_repository == false
+                      - any:
+                          - directory_name.utf8_bytes < 1
+                          - directory_name.utf8_bytes > 255
+          exists: true
+        error: aep.plan.PlanningScopeUnfit
+      - name: adopted-from-origin-remote
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - root == input.root
+              - defined(origin_repository_name)
+          exists: true
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root: input.root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          summary: input.summary
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: root == input.root
+              field: origin_repository_name
+        emits: [aep.plan.ProjectAdopted]
+        payload:
+          aep.plan.ProjectAdopted:
+            engineering:
+              related:
+                entity: aep.plan.Repository
+                where: root == input.root
+                field: engineering
+            root: input.root
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: root == input.root
+                field: origin_repository_name
+            scope_source: origin_remote
+      - name: adopted-from-git-common-directory
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - root == input.root
+              - defined(git_common_directory_holder)
+          exists: true
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root: input.root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          summary: input.summary
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: root == input.root
+              field: git_common_directory_holder
+        emits: [aep.plan.ProjectAdopted]
+        payload:
+          aep.plan.ProjectAdopted:
+            engineering:
+              related:
+                entity: aep.plan.Repository
+                where: root == input.root
+                field: engineering
+            root: input.root
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: root == input.root
+                field: git_common_directory_holder
+            scope_source: git_common_directory
+      - name: adopted-from-engineering-directory
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - root == input.root
+              - in_git_repository == false
+          exists: true
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root: input.root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          summary: input.summary
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: root == input.root
+              field: directory_name
+        emits: [aep.plan.ProjectAdopted]
+        payload:
+          aep.plan.ProjectAdopted:
+            engineering:
+              related:
+                entity: aep.plan.Repository
+                where: root == input.root
+                field: engineering
+            root: input.root
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: root == input.root
+                field: directory_name
+            scope_source: engineering_directory
+      # change: a Git repository with no `origin` and a common directory not named `.git` (a bare
+      # repository's worktree) has no source in the story's order. Refused, naming the flag,
+      # rather than falling back to the checkout directory the story exists to keep out.
+      - name: scope-underived
+        error: aep.plan.PlanningScopeUnderived
+
+  # `aep plan store migrate git` (store_command.rs:26-36, migrate_git.rs:72-95, 234-329).
+  # `--engineering` is discovered from the working directory when omitted (migrate_git.rs:205-220);
+  # the specification's `engineering` is the directory it resolved to.
+  #
+  # Not modelled here, outside the planning_scope surface: an `aep.project/2`–`/4` file
+  # (migrate_git.rs:130-132), an `aep.project/1` file whose `store:` is not markdown
+  # (migrate_git.rs:146-159), the per-document rewrite and its refusal (migrate_git.rs:280-296,
+  # 302, 305-313), and `--verify`'s read-back (migrate_git.rs:325-327, 332-358), which exits
+  # non-zero after the write.
+  #
+  # change (story:planning-scope-comes-from-the-repository): as at `aep.plan.ReverseInit`. Shipped
+  # behaviour (0.69.1) always writes `directory_name` (migrate_git.rs:253) and prints it as "the
+  # repository directory's name" (migrate_git.rs:538-545).
+  - name: aep.plan.MigrateGit
+    naming:
+      wire: store-migrate-git
+      display: aep plan store migrate git
+      summary: Rewrite an `aep.project/1` Markdown store as an `aep.project/5` Git-native one.
+    input:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: dry_run
+        type: Boolean
+      - name: verify
+        type: Boolean
+      - name: protocols
+        type: Optional<String>
+      - name: profile
+        type: Optional<String>
+      - name: protocol
+        type: Optional<String>
+      # change: the new flag.
+      - name: planning_scope
+        type: Optional<String>
+    # change: what the command's text output names, beside the counts it prints.
+    response:
+      - name: planning_scope
+        type: aep.plan.PlanningScope
+      - name: scope_source
+        type: aep.plan.ScopeSource
+    outcomes:
+      # In code order (migrate_git.rs:234-300); every refusal writes nothing.
+      - name: usage-refused
+        when:
+          any:
+            - all: [dry_run == true, verify == true]
+            - all: [defined(protocols), not defined(profile)]
+            - all: [not defined(protocols), defined(profile)]
+        error: aep.plan.UsageRefused
+      - name: flags-with-project-file
+        when: defined(protocols)
+        when_related:
+          entity: aep.plan.Project
+          where: engineering == input.engineering
+          exists: true
+        error: aep.plan.FlagsWithProjectFile
+      - name: project-file-missing
+        when: not defined(protocols)
+        when_related:
+          entity: aep.plan.Project
+          where: engineering == input.engineering
+          exists: false
+        error: aep.plan.ProjectFileMissing
+      - name: nothing-to-migrate
+        when_related:
+          entity: aep.plan.Project
+          where:
+            all:
+              - engineering == input.engineering
+              - state == GitNative
+          exists: true
+        error: aep.plan.NothingToMigrate
+      # change: the scope's refusals, where the shipped command derives it (migrate_git.rs:253).
+      - name: flag-unfit
+        when:
+          all:
+            - defined(planning_scope)
+            - any:
+                - planning_scope.utf8_bytes < 1
+                - planning_scope.utf8_bytes > 255
+        error: aep.plan.PlanningScopeUnfit
+      - name: derived-unfit
+        when: not defined(planning_scope)
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - any:
+                  - all:
+                      - defined(origin_repository_name)
+                      - any:
+                          - origin_repository_name.utf8_bytes < 1
+                          - origin_repository_name.utf8_bytes > 255
+                  - all:
+                      - not defined(origin_repository_name)
+                      - defined(git_common_directory_holder)
+                      - any:
+                          - git_common_directory_holder.utf8_bytes < 1
+                          - git_common_directory_holder.utf8_bytes > 255
+                  - all:
+                      - in_git_repository == false
+                      - any:
+                          - directory_name.utf8_bytes < 1
+                          - directory_name.utf8_bytes > 255
+          exists: true
+        error: aep.plan.PlanningScopeUnfit
+      - name: scope-underived
+        when: not defined(planning_scope)
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - in_git_repository == true
+              - not defined(origin_repository_name)
+              - not defined(git_common_directory_holder)
+          exists: true
+        error: aep.plan.PlanningScopeUnderived
+      - name: engineering-dirty
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - engineering_clean == false
+          exists: true
+        error: aep.plan.EngineeringDirty
+      - name: no-planning-store
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - planning_is_directory == false
+          exists: true
+        error: aep.plan.NoPlanningStore
+      - name: evidence-not-empty
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - evidence_has_entries == true
+          exists: true
+        error: aep.plan.EvidenceNotEmpty
+      # `--dry-run` prints the plan and writes nothing (migrate_git.rs:288, 297-300); with the
+      # change, the plan names the scope and its source.
+      - name: dry-run
+        when: dry_run == true
+        accepts: nothing
+      # No project file: `--protocols`/`--profile`/`--protocol` stand for the `aep.project/1` file
+      # it would have had (migrate_git.rs:98-111, 247), and the `aep.project/5` file is written.
+      # One outcome per scope source (change).
+      - name: migrated-unconfigured-from-flag
+        when:
+          all:
+            - defined(protocols)
+            - defined(planning_scope)
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          planning_scope: input.planning_scope
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope: input.planning_scope
+            scope_source: flag
+      - name: migrated-unconfigured-from-origin-remote
+        when: defined(protocols)
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - defined(origin_repository_name)
+          exists: true
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: origin_repository_name
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: engineering == input.engineering
+                field: origin_repository_name
+            scope_source: origin_remote
+      - name: migrated-unconfigured-from-git-common-directory
+        when: defined(protocols)
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - defined(git_common_directory_holder)
+          exists: true
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: git_common_directory_holder
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: engineering == input.engineering
+                field: git_common_directory_holder
+            scope_source: git_common_directory
+      - name: migrated-unconfigured-from-engineering-directory
+        when: defined(protocols)
+        creates: aep.plan.Project
+        into: GitNative
+        instance: engineering
+        returns: true
+        sets:
+          root:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: root
+          protocol: {input: protocol, else: "adp/1"}
+          profile: input.profile
+          protocols: input.protocols
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: directory_name
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: engineering == input.engineering
+                field: directory_name
+            scope_source: engineering_directory
+      # The file is rewritten with every key kept, `version` and `store` replaced and
+      # `planning_scope` added (migrate_git.rs:603-627), and the journal removed
+      # (migrate_git.rs:305-313). One outcome per scope source (change).
+      - name: migrated-from-flag
+        when: defined(planning_scope)
+        moves: aep.plan.Project.migrate
+        instance: engineering
+        returns: true
+        sets:
+          planning_scope: input.planning_scope
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope: input.planning_scope
+            scope_source: flag
+      - name: migrated-from-origin-remote
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - defined(origin_repository_name)
+          exists: true
+        moves: aep.plan.Project.migrate
+        instance: engineering
+        returns: true
+        sets:
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: origin_repository_name
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: engineering == input.engineering
+                field: origin_repository_name
+            scope_source: origin_remote
+      - name: migrated-from-git-common-directory
+        when_related:
+          entity: aep.plan.Repository
+          where:
+            all:
+              - engineering == input.engineering
+              - defined(git_common_directory_holder)
+          exists: true
+        moves: aep.plan.Project.migrate
+        instance: engineering
+        returns: true
+        sets:
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: git_common_directory_holder
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: engineering == input.engineering
+                field: git_common_directory_holder
+            scope_source: git_common_directory
+      - name: migrated-from-engineering-directory
+        moves: aep.plan.Project.migrate
+        instance: engineering
+        returns: true
+        sets:
+          planning_scope:
+            related:
+              entity: aep.plan.Repository
+              where: engineering == input.engineering
+              field: directory_name
+        emits: [aep.plan.StoreMigrated]
+        payload:
+          aep.plan.StoreMigrated:
+            engineering: input.engineering
+            planning_scope:
+              related:
+                entity: aep.plan.Repository
+                where: engineering == input.engineering
+                field: directory_name
+            scope_source: engineering_directory
+
+views:
+  # Structural, not reads aep has: every invariant needs a view holding every state, and
+  # synthesis observes records only through a view.
+  - name: aep.plan.Projects
+    source: aep.plan.Project
+    consistency: read_your_writes
+    fields:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: root
+        type: aep.plan.ProjectRoot
+      - name: planning_scope
+        type: Optional<aep.plan.PlanningScope>
+  - name: aep.plan.Repositories
+    source: aep.plan.Repository
+    consistency: read_your_writes
+    fields:
+      - name: root
+        type: aep.plan.ProjectRoot
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: directory_name
+        type: String
+      - name: planning_has_entries
+        type: Boolean
+      - name: planning_is_directory
+        type: Boolean
+      - name: evidence_has_entries
+        type: Boolean
+      - name: engineering_clean
+        type: Boolean
+      - name: in_git_repository
+        type: Boolean
+      - name: origin_repository_name
+        type: Optional<String>
+      - name: git_common_directory_holder
+        type: Optional<String>

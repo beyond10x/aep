@@ -1,8 +1,9 @@
 //! AEP repository automation.
 //!
 //! The task binary owns deterministic AEP schema and status generation plus the repository's
-//! governance, formatting, dependency, and release checks. ESS generation, synthesis,
-//! infrastructure, and agent-plugin automation live in their respective repositories.
+//! governance, formatting, dependency, and release checks, and the projections of this
+//! repository's own ESS specification (`ess/`). ESS itself, infrastructure and agent-plugin
+//! automation live in their respective repositories.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -12,6 +13,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 
+mod ess;
 mod planning_stores;
 mod release_pins;
 
@@ -69,6 +71,16 @@ enum Command {
     /// tag, GitHub Release, and a gate record in the planning store. Reaches the network, so it
     /// is not a gate step.
     Release,
+    /// Validate the ESS specification under `ess/` and write its projections under
+    /// `generated/ess/`.
+    Ess {
+        /// Compare the committed projections instead of writing them; any difference fails.
+        #[arg(long)]
+        check: bool,
+        /// The repository to act on; this checkout when omitted.
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
 }
 
 /// A release's notes: the tag's own `CHANGELOG.md` section, reflowed so GitHub does not break it
@@ -298,6 +310,7 @@ fn main() -> Result<()> {
             duplicates.and(citations)
         }
         Command::Claims => claims(&workspace_root()),
+        Command::Ess { check, root } => ess::run(&root.unwrap_or_else(workspace_root), check),
     }
 }
 

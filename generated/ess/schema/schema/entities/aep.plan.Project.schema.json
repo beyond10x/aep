@@ -1,0 +1,224 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Project",
+  "description": "A repository's project file, `.engineering/project.yaml`.",
+  "x-ess-name": "aep.plan.Project",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+    },
+    "root": {
+      "$ref": "#/$defs/aep.plan.ProjectRoot",
+      "description": "The directory holding `.engineering/` (crates/edge/aep-project/src/project.rs:94-95).",
+      "x-ess-relation": {
+        "name": "repository",
+        "kind": "references",
+        "source": "aep.plan.Project",
+        "target": "aep.plan.Repository",
+        "cardinality": "one",
+        "via": "root"
+      }
+    },
+    "protocol": {
+      "description": "The protocol it runs under (project.rs:640-641).",
+      "type": "string"
+    },
+    "profile": {
+      "description": "The profile whose rules apply (project.rs:642-643).",
+      "type": "string"
+    },
+    "summary": {
+      "description": "A one-line description (project.rs:644-646).",
+      "type": "string"
+    },
+    "protocols": {
+      "description": "A local tree path or a pinned `git+…#<40-hex>` locator (project.rs:647-649).",
+      "type": "string"
+    },
+    "artifacts": {
+      "description": "Where the artifact manifest is (project.rs:650-652).",
+      "type": "string"
+    },
+    "task": {
+      "description": "Where the task document is (project.rs:653-655).",
+      "type": "string"
+    },
+    "state_path": {
+      "description": "Where execution state is kept (project.rs:656-658). The file's key is `state`, which ESS refuses as a field's wire name beside a lifecycle (\"wire field \\\"state\\\" is already used at entity aep.plan.Project.lifecycle\").",
+      "type": "string"
+    },
+    "principles": {
+      "description": "Where project-local principles are (project.rs:659-661).",
+      "type": "string"
+    },
+    "profiles": {
+      "description": "Where project-local profiles are (project.rs:662-664).",
+      "type": "string"
+    },
+    "schemas": {
+      "description": "Where project-owned JSON Schema contracts are (project.rs:665-667).",
+      "type": "string"
+    },
+    "store": {
+      "$ref": "#/$defs/aep.plan.Store",
+      "description": "Where the plan is kept; absent means `git` (project.rs:668-675, 628-630). An `aep.project/1` file's `store: markdown` (migrate_git.rs:146-147) is held as absent."
+    },
+    "planning_scope": {
+      "$ref": "#/$defs/aep.plan.PlanningScope",
+      "description": "Required by `aep.project/5` (project.rs:598-612); `aep.project/1` has none (store_command.rs:38-40). Validated and then not kept: `ProjectConfig` (project.rs:334-363) has no such field."
+    },
+    "providers": {
+      "description": "A URL pattern per external system, each carrying `{key}` (project.rs:685-687).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "x-ess-map-key": "String"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.plan.Project.State"
+    }
+  },
+  "required": [
+    "engineering",
+    "root",
+    "protocol",
+    "profile",
+    "providers",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:67b32b9381b050c2699e4c1d3ba49831ad75b2183002af741a404ccf1ba24f77",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.plan.PlanningScope": {
+      "title": "PlanningScope",
+      "x-ess-name": "aep.plan.PlanningScope",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 1",
+        "value.utf8_bytes <= 255"
+      ]
+    },
+    "aep.plan.PostgresStore": {
+      "title": "PostgresStore",
+      "x-ess-name": "aep.plan.PostgresStore",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "url": {
+          "description": "A libpq connection string or URL (project.rs:436-437).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "aep.plan.Project.State": {
+      "title": "State",
+      "x-ess-name": "aep.plan.Project.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "GitNative",
+        "JournalLayout"
+      ]
+    },
+    "aep.plan.ProjectRoot": {
+      "title": "ProjectRoot",
+      "x-ess-name": "aep.plan.ProjectRoot",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.plan.SqliteStore": {
+      "title": "SqliteStore",
+      "x-ess-name": "aep.plan.SqliteStore",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "path": {
+          "description": "The database file, relative to `.engineering/` (project.rs:428-429).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    },
+    "aep.plan.Store": {
+      "title": "Store",
+      "x-ess-name": "aep.plan.Store",
+      "x-ess-kind": "union",
+      "oneOf": [
+        {
+          "title": "git",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "git"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "postgres",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "postgres"
+            },
+            "value": {
+              "$ref": "#/$defs/aep.plan.PostgresStore"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "title": "sqlite",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "sqlite"
+            },
+            "value": {
+              "$ref": "#/$defs/aep.plan.SqliteStore"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "x-ess-union-tag": "kind"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EvidenceNotEmpty payload",
+  "description": "`.engineering/evidence/` already holds an entry: migrate_git.rs:271-276.",
+  "x-ess-name": "aep.plan.EvidenceNotEmpty",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "5daa28de6ca552b3eb93c60bdb519bf5acf305dbb7ac6a5f88a52b681ea78958",
+    "contract_digest": "slice-sha256/2:b39793aa74f099dffe93213beecfba92ceb1cd5f488f9b6efe39b6f653ff20a0",
+    "regenerate": "ess generate"
+  }
+}
