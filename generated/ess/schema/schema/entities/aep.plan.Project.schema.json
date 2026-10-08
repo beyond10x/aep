@@ -77,6 +77,10 @@
       },
       "x-ess-map-key": "String"
     },
+    "findings_required_since": {
+      "$ref": "#/$defs/aep.plan.UtcDate",
+      "description": "A UTC date. With it set, `aep plan artifact new review-result` refuses a body with no `findings` block unless `--prose-only <reason>` says why, and `aep plan artifact validate` counts as a problem a block-less review-result created on or after the start of that date in UTC (see the aep.review domain)."
+    },
     "state": {
       "$ref": "#/$defs/aep.plan.Project.State"
     }
@@ -93,8 +97,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
-    "contract_digest": "slice-sha256/2:1883a368e5b769d521a392216bceb3075cf94f1c1c75332cc3684844e0eff79b",
+    "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
+    "contract_digest": "slice-sha256/2:ed76115daaedb46cdb9435e0bf24957da22021c56ae4b8cbb98b080a34e45d2d",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -219,6 +223,16 @@
         }
       ],
       "x-ess-union-tag": "kind"
+    },
+    "aep.plan.UtcDate": {
+      "title": "UtcDate",
+      "x-ess-name": "aep.plan.UtcDate",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 10",
+        "value.utf8_bytes <= 10"
+      ]
     }
   }
 }

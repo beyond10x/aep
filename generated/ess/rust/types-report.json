@@ -1,12 +1,12 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+  "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:42f47d88134f0da0999292ca8a403774b4439716cf819a97954b08834e33f265",
-    "projection_digest": "5bb8d448743004bdc285d84524f163455eb36b7846b7f0c99bca81c5abb963c6"
+    "contract_digest": "slice-sha256/2:5811fe1ca895ddeee3abcc6364f5058acd8c665d31e8a4969cbcf70214ea9cfa",
+    "projection_digest": "9f906a7e123cad93983a89221812c2dd7e4f475ee495388c076f8b64643ac60d"
   },
   "generator_version": "0.56.0",
   "target": "rust",
@@ -25,7 +25,12 @@
     "aep.plan.ScopeSource",
     "aep.plan.SqliteStore",
     "aep.plan.Store",
-    "aep.plan.StoreMigrated"
+    "aep.plan.StoreMigrated",
+    "aep.plan.UtcDate",
+    "aep.review.FindingsStanding",
+    "aep.review.ReviewId",
+    "aep.review.ReviewRecorded",
+    "aep.review.ReviewResult.State"
   ],
   "declarations": {
     "aep.plan.EngineeringDirectory": "AepPlanEngineeringDirectory",
@@ -38,7 +43,12 @@
     "aep.plan.ScopeSource": "AepPlanScopeSource",
     "aep.plan.SqliteStore": "AepPlanSqliteStore",
     "aep.plan.Store": "AepPlanStore",
-    "aep.plan.StoreMigrated": "AepPlanStoreMigrated"
+    "aep.plan.StoreMigrated": "AepPlanStoreMigrated",
+    "aep.plan.UtcDate": "AepPlanUtcDate",
+    "aep.review.FindingsStanding": "AepReviewFindingsStanding",
+    "aep.review.ReviewId": "AepReviewReviewId",
+    "aep.review.ReviewRecorded": "AepReviewReviewRecorded",
+    "aep.review.ReviewResult.State": "AepReviewReviewResultState"
   },
   "annotations": [
     {
@@ -235,6 +245,81 @@
       "pointer": "/$defs/aep.plan.StoreMigrated/x-ess-name",
       "rule": "x-ess-name",
       "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.UtcDate/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.plan.UtcDate/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.UtcDate/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.FindingsStanding/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.review.FindingsStanding/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.FindingsStanding/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewId/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewId/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewId/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewRecorded/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewRecorded/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewRecorded/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewResult.State/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewResult.State/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.review.ReviewResult.State/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
     }
   ],
   "obligations": [
@@ -252,6 +337,11 @@
       "pointer": "/$defs/aep.plan.Store",
       "rule": "untagged_selection",
       "detail": "native union decoding chooses the first structurally decodable alternative; it does not certify source branch constraints or external dispatch"
+    },
+    {
+      "pointer": "/$defs/aep.plan.UtcDate/x-ess-invariants",
+      "rule": "model_invariants",
+      "detail": "enforce the retained model invariant statements; structural codecs do not evaluate predicates"
     }
   ]
 }

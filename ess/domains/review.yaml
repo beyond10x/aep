@@ -1,0 +1,436 @@
+domain: aep.review
+
+summary: >-
+  A `review-result` artifact as the findings rule sees it: whether its body carries a `findings`
+  block, the reason it was recorded without one, when it was created, and whether a later review
+  carrying a block supersedes it; how `aep plan artifact new` records one and how
+  `aep plan artifact validate` places it. Declared for story:review-result-requires-findings.
+
+# Paths are relative to the repository root. `planning.rs` is crates/edge/aep-cli/src/planning.rs,
+# `findings.rs` is crates/plan/aep-backend-markdown/src/findings.rs, `frontmatter.rs` is
+# crates/plan/aep-backend-markdown/src/frontmatter.rs and `journal.rs` is
+# crates/plan/aep-backend-markdown/src/journal.rs, unless a path says otherwise. Line numbers are
+# read against `main` at efd82bb78 (CLI 0.69.1).
+#
+# Not modelled here: the rest of `aep plan artifact new` (`--relate`, `--withholds`, the template
+# body), a block that does not parse (refused by `new` at planning.rs:2229 and counted as a
+# problem by `validate` at planning.rs:5724, both unchanged), `--findings` beside a body that
+# states findings of its own (refused as ambiguous, planning.rs:1458-1466, unchanged), and every
+# other class `validate` reports.
+
+types:
+  # read from: the artifact id `review-result:<slug>` the front matter carries (frontmatter.rs).
+  - name: aep.review.ReviewId
+    kind: newtype
+    of: String
+
+  # change (story:review-result-requires-findings): where `validate` places one review-result as
+  # far as its findings go; exactly one per review. Each variant is one outcome of
+  # aep.review.ValidateFindings, which decides it, in that command's outcome order.
+  - name: aep.review.FindingsStanding
+    kind: enum
+    variants:
+      - carries_block          # the body carries a `findings` block (`[]` included): findings.rs:618-633 answers `Some`
+      - not_required           # no block, in a store without `findings_required_since`: listed, not counted (as on 0.69.1)
+      - exempt_prose_only      # no block, recorded with `--prose-only <reason>`: listed with the reason
+      - exempt_superseded      # no block, and a review-result carrying a block `supersedes` it: listed
+      - exempt_before_opt_in   # no block, created before the start of `findings_required_since` in UTC: listed
+      - missing                # no block, the store set `findings_required_since`, no exemption: a problem, exit 1
+
+entities:
+  # A `review-result` document in the planning store: `.engineering/planning/` holds one Markdown
+  # file per artifact, front matter read by frontmatter.rs, body read by findings.rs. Each field is
+  # a fact `new` writes or `validate` reads at the cited line.
+  - name: aep.review.ReviewResult
+    naming:
+      summary: A review-result artifact, read for its findings.
+    identity:
+      name: id
+      type: aep.review.ReviewId
+    fields:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+        summary: The store the review is recorded in (the `--engineering` the command resolved).
+      - name: findings_block
+        type: Boolean
+        summary: >-
+          The body carries a `findings` block, an empty `[]` one included: findings.rs:618-633
+          (`recorded`) answers `Some`; a body with no block (`None`) is `false`.
+      # change (story:review-result-requires-findings): a new front-matter key, kind-gated the
+      # way `model_digest` is (frontmatter.rs:161, 612-650, `validated_model_digest`): kept on a
+      # review-result, refused by name on every other kind.
+      - name: prose_only
+        type: Optional<String>
+        summary: >-
+          Why this review records its findings as prose only, as `--prose-only <reason>` gave it.
+          Present only on a review with no block.
+      - name: created_at
+        type: Timestamp
+        summary: >-
+          The `at` of the document's first transition (journal.rs:199-201, `Transition.at`;
+          frontmatter.rs:164-171, `transitions`, oldest first).
+      # change: the two facts below are about more than this row, and `validate` reads them where
+      # it walks the store.
+      # ESS-LIMIT: ESS 0.56.0 derives no field: an entity field, an invariant and a view hold
+      # stored values only, related rows are read only in a command guard (`when_related:`), and
+      # there is no operator from a calendar date to the instant it starts at, so a `Timestamp`
+      # cannot be compared with aep.plan.UtcDate. Both are declared as observed facts, and the
+      # derivation is pinned by the tests named on each.
+      - name: superseded_by_block
+        type: Boolean
+        summary: >-
+          Another review-result whose body carries a `findings` block names this one with a
+          `supersedes` edge (planning.rs:7865; story acceptance 5). Pinned by
+          `a_review_without_a_block_superseded_by_a_review_with_a_block_is_exempt_and_listed` and
+          `a_supersedes_edge_from_a_review_without_a_block_does_not_exempt` (aep-cli validate
+          tests).
+      - name: created_before_opt_in
+        type: Boolean
+        summary: >-
+          The store sets `findings_required_since` and `created_at` is before the start of that
+          date in UTC; `false` when the key is absent. Pinned by
+          `a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed` and
+          `a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt` (aep-cli validate
+          tests).
+      # ESS-LIMIT: this is the store's own fact (aep.plan.Project `findings_required_since` is
+      # set), repeated here because aep.review.ValidateFindings places a review by its row, and
+      # ESS 0.56.0 refuses a command that reads both its subject and a related row
+      # (ESS-COMMAND-004: "selects on a related row (`when_related`) and on a `when_subject`
+      # guard; which of the two answers first is not stated"; ESS-COMMAND-009 for a row-set
+      # selector). The `store` relation names the project file it is read from. Pinned by
+      # `without_findings_required_since_a_review_without_a_block_is_reported_not_counted` and
+      # `with_findings_required_since_a_review_without_a_block_is_a_problem` (aep-cli validate
+      # tests).
+      - name: store_requires_findings
+        type: Boolean
+        summary: >-
+          The project file of the store this review is recorded in sets `findings_required_since`
+          (project.rs:650-702, `RawProjectConfig`, with the change).
+    relations:
+      - name: store
+        kind: references
+        target: aep.plan.Project
+        cardinality: one
+        via: engineering
+    invariants:
+      # `--prose-only` is refused beside a block (the `prose-only-beside-block` outcome), so no
+      # review holds both.
+      - any:
+          - findings_block == false
+          - not defined(prose_only)
+    lifecycle:
+      # artifacts/lifecycles/review-result.yaml: recorded `active`; `archived` (`active ->
+      # archived`) only retires a review whose subject is gone. The move is `aep plan artifact
+      # move`, outside this specification, and `validate` reads a review whatever its status
+      # (planning.rs:5718-5720 tests the kind only), so the single state stands for both.
+      initial: Active
+      states: [Active]
+      terminal: [Active]
+
+actors:
+  # Whoever runs `aep` in the repository; the CLI knows no caller beyond the process.
+  - name: aep.review.Operator
+    may:
+      - aep.review.RecordReview
+      - aep.review.ValidateFindings
+
+errors:
+  # change (story:review-result-requires-findings): every one is new, and every refusal of
+  # aep.review.RecordReview writes nothing.
+  - name: aep.review.FindingsRequired
+    summary: >-
+      The store sets `findings_required_since`, the body carries no `findings` block and no
+      `--prose-only` was given. The refusal names the two ways forward: a block (`[]` for a review
+      that found nothing, or `--findings <file>`) or `--prose-only <reason>` (story acceptance 1).
+    fields: []
+  - name: aep.review.ProseOnlyBlank
+    summary: "`--prose-only` with an empty or whitespace-only reason (story acceptance 2)."
+    fields: []
+  - name: aep.review.ProseOnlyBesideBlock
+    summary: >-
+      `--prose-only` beside a body that carries a `findings` block, its own or the one
+      `--findings` writes into it (story acceptance 2).
+    fields: []
+  - name: aep.review.ProseOnlyOnOtherKind
+    summary: "`--prose-only` on a kind other than `review-result` (story acceptance 2)."
+    fields: []
+  - name: aep.review.FindingsMissing
+    summary: >-
+      `validate` counts a review-result as a problem: no block, in a store that sets
+      `findings_required_since`, and no exemption applies (story acceptance 3).
+    fields: []
+  - name: aep.review.StrictlyRefused
+    summary: >-
+      `validate --strict` refuses a review listed as recording no findings block
+      (planning.rs:6222-6248, `strictly_refused`, unchanged).
+    fields: []
+
+events:
+  # aep publishes no events. This is the fact a success outcome produces, declared because ESS
+  # requires one per outcome that changes a record; no component publishes it.
+  - name: aep.review.ReviewRecorded
+    fields:
+      - name: id
+        type: aep.review.ReviewId
+      - name: findings_block
+        type: Boolean
+      - name: prose_only
+        type: Optional<String>
+
+commands:
+  # `aep plan artifact new <kind> <slug>` (planning.rs:831, 1412-1475 `NewArgs`, 2170-2245
+  # `create`), restricted to what decides whether a review-result is recorded without a block.
+  # `--from` and `--findings` make the body (planning.rs:2212-2221); `findings_block` is whether
+  # that body carries a block.
+  #
+  # change (story:review-result-requires-findings): `--prose-only <reason>`, and the
+  # `findings-required` refusal in a store that opted in. On 0.69.1 `new` checks a block only when
+  # one is present (planning.rs:2229, `findings::parse`) and admits a body with none.
+  - name: aep.review.RecordReview
+    naming:
+      wire: artifact-new
+      display: aep plan artifact new
+      summary: Record an artifact; for a review-result, with a findings block or a prose-only reason.
+    input:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: id
+        type: aep.review.ReviewId
+      - name: kind
+        type: String
+        summary: The kind as `ArtifactKind::as_str` spells it (crates/govern/aep-domain/src/artifact.rs:496).
+      # ESS-LIMIT: the body is Markdown text, and whether it carries a block is
+      # `findings::recorded(body)` answering `Some` (findings.rs:618-633). ESS 0.56.0 has no
+      # operator that finds a fenced block in text (`contains` would also match a fence inside
+      # another fence, and an opened, unclosed fence is a refusal of its own), so the command takes
+      # the answer as a Boolean. Pinned by `findings::tests` (aep-backend-markdown) and by
+      # `new_review_result_without_a_block_is_refused_once_the_store_opts_in`.
+      - name: findings_block
+        type: Boolean
+      # change: the new flag, `--prose-only <REASON>`.
+      # ESS-LIMIT: the flag's CLI binding is not declared. ESS 0.56.0 `specify cli` (ess-cli/1)
+      # refuses the command path `plan artifact new` ("invalid or conflicting command path"; it
+      # takes 1-2 tokens). ESS story:cli-command-path-deeper-than-two-tokens. clap derives the
+      # flag, and `new_review_result_with_prose_only_records_the_reason_in_front_matter` and
+      # `prose_only_on_a_kind_other_than_review_result_is_refused_and_writes_nothing`
+      # (aep-cli tests) pin it.
+      - name: prose_only
+        type: Optional<String>
+    outcomes:
+      # The flag's own refusals come first: each is a refusal in every store, opted in or not
+      # (story ambiguity "`--prose-only` works in every store").
+      - name: prose-only-on-other-kind
+        when:
+          all:
+            - defined(prose_only)
+            - kind != "review-result"
+        error: aep.review.ProseOnlyOnOtherKind
+      # Every other kind is recorded as on 0.69.1, outside this specification.
+      - name: not-a-review
+        when: kind != "review-result"
+        accepts: nothing
+      # ESS-LIMIT: a reason of only whitespace is refused too, and ESS 0.56.0 has no predicate for
+      # it (no pattern operator and no trimmed form of a String, as at aep.plan.PlanningScope;
+      # ESS story:string-not-blank-predicate). Pinned by
+      # `prose_only_with_a_whitespace_only_reason_is_refused_and_writes_nothing` (aep-cli tests).
+      - name: prose-only-blank
+        when:
+          all:
+            - defined(prose_only)
+            - prose_only.utf8_bytes < 1
+        error: aep.review.ProseOnlyBlank
+      - name: prose-only-beside-block
+        when:
+          all:
+            - defined(prose_only)
+            - findings_block == true
+        error: aep.review.ProseOnlyBesideBlock
+      - name: findings-required
+        when:
+          all:
+            - findings_block == false
+            - not defined(prose_only)
+        when_related:
+          entity: aep.plan.Project
+          where:
+            all:
+              - engineering == input.engineering
+              - defined(findings_required_since)
+          exists: true
+        error: aep.review.FindingsRequired
+      # The record writes the front matter and body. `created_at` is the first transition's `at`,
+      # carried by the command (`{generated: true}`: the host supplies the instant). A new review
+      # is superseded by nothing yet. `created_before_opt_in` and `store_requires_findings` are
+      # left unset: they are facts `validate` reads from the store each time it runs, not values
+      # `new` writes, and a store whose `findings_required_since` lies in the future makes the
+      # first one true for a review created today.
+      - name: recorded-with-block
+        when: findings_block == true
+        creates: aep.review.ReviewResult
+        instance: id
+        sets:
+          engineering: input.engineering
+          findings_block: true
+          created_at: {generated: true}
+          superseded_by_block: false
+        emits: [aep.review.ReviewRecorded]
+        payload:
+          aep.review.ReviewRecorded:
+            id: input.id
+            prose_only: input.prose_only
+            findings_block: true
+      - name: recorded-prose-only
+        when: defined(prose_only)
+        creates: aep.review.ReviewResult
+        instance: id
+        sets:
+          engineering: input.engineering
+          findings_block: false
+          prose_only: input.prose_only
+          created_at: {generated: true}
+          superseded_by_block: false
+        emits: [aep.review.ReviewRecorded]
+        payload:
+          aep.review.ReviewRecorded:
+            id: input.id
+            prose_only: input.prose_only
+            findings_block: false
+      # A store without `findings_required_since`: a body with no block is admitted, as on 0.69.1.
+      - name: recorded-without-block
+        creates: aep.review.ReviewResult
+        instance: id
+        sets:
+          engineering: input.engineering
+          findings_block: false
+          created_at: {generated: true}
+          superseded_by_block: false
+        emits: [aep.review.ReviewRecorded]
+        payload:
+          aep.review.ReviewRecorded:
+            id: input.id
+            prose_only: input.prose_only
+            findings_block: false
+
+  # `aep plan artifact validate [--strict]` (planning.rs:1652-1656, 5620-5640, 5713-5731,
+  # 6185-6248), restricted to one review-result's findings: each review is placed by the first of
+  # these outcomes that holds, and the run exits 1 when any review's outcome is a refusal.
+  #
+  # change (story:review-result-requires-findings): the store's `findings_required_since` and the
+  # three exemptions. On 0.69.1 every review with no block is listed under `without_findings`,
+  # never counted (planning.rs:8232-8239), and only `--strict` refuses it.
+  - name: aep.review.ValidateFindings
+    naming:
+      wire: artifact-validate-findings
+      display: aep plan artifact validate
+      summary: Place one review-result by its findings block, as `validate` does for each.
+    input:
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: id
+        type: aep.review.ReviewId
+      - name: strict
+        type: Boolean
+    # change (story:review-result-requires-findings): under `--strict`, a store without
+    # `findings_required_since` refuses every review with no block, as 0.69.1's `strictly_refused`
+    # (planning.rs:6222-6248) does; a store that sets it refuses `missing` without `--strict`
+    # and refuses no exempt review with it, because an exempt review is immutable and its
+    # exemption is the recorded way it was settled.
+    # change (story:review-result-requires-findings): a review that more than one exemption fits
+    # is listed under the most explicit: prose-only, then superseded, then before the opt-in,
+    # the outcome order below.
+    #
+    # What `validate` lists beside each review with no block: its standing.
+    # ESS-LIMIT: a response field cannot declare which value each outcome answers: ESS 0.56.0
+    # binds a value per outcome only in an event payload, and `validate` emits none. The outcome
+    # names are the variants of aep.review.FindingsStanding, one for one (`carries-block` is
+    # `carries_block`, and so on; `not-required-strict` is `not_required` under `--strict`).
+    # ESS story:response-field-declares-its-value-source
+    # (https://github.com/beyond10x/ess/issues/506). Pinned by
+    # `validate_lists_each_review_without_a_block_with_its_standing` (aep-cli validate tests).
+    response:
+      - name: standing
+        type: aep.review.FindingsStanding
+    outcomes:
+      # Each outcome names the review it places (`instance: id`) and changes nothing on it.
+      - name: carries-block
+        when_subject: {predicate: findings_block == true}
+        preserves: aep.review.ReviewResult
+        returns: true
+        instance: id
+      - name: not-required-strict
+        when: strict == true
+        when_subject: {predicate: store_requires_findings == false}
+        error: aep.review.StrictlyRefused
+      - name: not-required
+        when_subject: {predicate: store_requires_findings == false}
+        preserves: aep.review.ReviewResult
+        returns: true
+        instance: id
+      - name: exempt-prose-only
+        when_subject: {predicate: defined(prose_only)}
+        preserves: aep.review.ReviewResult
+        returns: true
+        instance: id
+      - name: exempt-superseded
+        when_subject: {predicate: superseded_by_block == true}
+        preserves: aep.review.ReviewResult
+        returns: true
+        instance: id
+      - name: exempt-before-opt-in
+        when_subject: {predicate: created_before_opt_in == true}
+        preserves: aep.review.ReviewResult
+        returns: true
+        instance: id
+      - name: missing
+        error: aep.review.FindingsMissing
+
+views:
+  # Structural: every invariant needs a view holding every state, and synthesis observes records
+  # only through a view.
+  - name: aep.review.ReviewResults
+    source: aep.review.ReviewResult
+    consistency: read_your_writes
+    fields:
+      - name: id
+        type: aep.review.ReviewId
+      - name: state
+        type: aep.review.ReviewResult.State
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: findings_block
+        type: Boolean
+      - name: prose_only
+        type: Optional<String>
+      - name: created_at
+        type: Timestamp
+      - name: superseded_by_block
+        type: Boolean
+      - name: created_before_opt_in
+        type: Boolean
+
+  # change (story:review-result-requires-findings): the reviews `aep plan artifact validate` lists
+  # under "review(s) recorded no findings block" (planning.rs:5713-5731, 6196-6205), each with the
+  # facts its aep.review.FindingsStanding is decided from. A `missing` one is also counted as a
+  # problem (exit 1, planning.rs:5637, 6207); the exempt and `not_required` ones are listed with
+  # their standing and not counted.
+  # ESS-LIMIT: the listing's `standing` column is not published here: it is the outcome of
+  # aep.review.ValidateFindings, which reads the store's project file, and a view publishes the
+  # fields of its source only. Pinned by
+  # `validate_lists_each_review_without_a_block_with_its_standing` (aep-cli validate tests).
+  - name: aep.review.ReviewsWithoutFindings
+    source: aep.review.ReviewResult
+    consistency: read_your_writes
+    filter: findings_block == false
+    fields:
+      - name: id
+        type: aep.review.ReviewId
+      - name: engineering
+        type: aep.plan.EngineeringDirectory
+      - name: prose_only
+        type: Optional<String>
+      - name: created_at
+        type: Timestamp
+      - name: superseded_by_block
+        type: Boolean
+      - name: created_before_opt_in
+        type: Boolean

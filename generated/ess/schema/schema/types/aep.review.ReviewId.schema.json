@@ -1,17 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$ref": "#/$defs/aep.plan.ProjectRoot",
+  "$ref": "#/$defs/aep.review.ReviewId",
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
     "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
-    "contract_digest": "slice-sha256/2:131789bfcfdf13509b4b7f46be4fefe3eb222bdb2da65d0c3ec1e02bcab854b8",
+    "contract_digest": "slice-sha256/2:3c23a0ad07029c099978c296b697c1e7f2985b2ed82d640fd2a929e24edfcafd",
     "regenerate": "ess generate"
   },
   "$defs": {
-    "aep.plan.ProjectRoot": {
-      "title": "ProjectRoot",
-      "x-ess-name": "aep.plan.ProjectRoot",
+    "aep.review.ReviewId": {
+      "title": "ReviewId",
+      "x-ess-name": "aep.review.ReviewId",
       "x-ess-kind": "newtype",
       "type": "string"
     }

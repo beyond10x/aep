@@ -192,12 +192,73 @@
       "type": "object",
       "x-ess-kind": "event-payload",
       "x-ess-name": "aep.plan.StoreMigrated"
+    },
+    "aep.plan.UtcDate": {
+      "title": "UtcDate",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 10",
+        "value.utf8_bytes <= 10"
+      ],
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.plan.UtcDate"
+    },
+    "aep.review.FindingsStanding": {
+      "enum": [
+        "carries_block",
+        "not_required",
+        "exempt_prose_only",
+        "exempt_superseded",
+        "exempt_before_opt_in",
+        "missing"
+      ],
+      "title": "FindingsStanding",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.review.FindingsStanding"
+    },
+    "aep.review.ReviewId": {
+      "title": "ReviewId",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.review.ReviewId"
+    },
+    "aep.review.ReviewRecorded": {
+      "additionalProperties": false,
+      "properties": {
+        "findings_block": {
+          "type": "boolean"
+        },
+        "id": {
+          "$ref": "#/$defs/aep.review.ReviewId"
+        },
+        "prose_only": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "findings_block"
+      ],
+      "title": "ReviewRecorded",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.review.ReviewRecorded"
+    },
+    "aep.review.ReviewResult.State": {
+      "enum": [
+        "Active"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.review.ReviewResult.State"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:42f47d88134f0da0999292ca8a403774b4439716cf819a97954b08834e33f265",
-    "source_digest": "12fcb9e11fe64150e8f31df5dc8a126300fd58db6cc324fbc529c1613d8f43d2",
+    "contract_digest": "slice-sha256/2:5811fe1ca895ddeee3abcc6364f5058acd8c665d31e8a4969cbcf70214ea9cfa",
+    "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
     "specification_version": "v1",
     "system": "aep"
   }

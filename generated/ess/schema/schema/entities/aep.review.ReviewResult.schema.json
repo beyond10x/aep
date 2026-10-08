@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewResult",
+  "description": "A review-result artifact, read for its findings.",
+  "x-ess-name": "aep.review.ReviewResult",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/aep.review.ReviewId"
+    },
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory",
+      "description": "The store the review is recorded in (the `--engineering` the command resolved).",
+      "x-ess-relation": {
+        "name": "store",
+        "kind": "references",
+        "source": "aep.review.ReviewResult",
+        "target": "aep.plan.Project",
+        "cardinality": "one",
+        "via": "engineering"
+      }
+    },
+    "findings_block": {
+      "description": "The body carries a `findings` block, an empty `[]` one included: findings.rs:618-633 (`recorded`) answers `Some`; a body with no block (`None`) is `false`.",
+      "type": "boolean"
+    },
+    "prose_only": {
+      "description": "Why this review records its findings as prose only, as `--prose-only <reason>` gave it. Present only on a review with no block.",
+      "type": "string"
+    },
+    "created_at": {
+      "description": "The `at` of the document's first transition (journal.rs:199-201, `Transition.at`; frontmatter.rs:164-171, `transitions`, oldest first).",
+      "type": "string",
+      "format": "date-time"
+    },
+    "superseded_by_block": {
+      "description": "Another review-result whose body carries a `findings` block names this one with a `supersedes` edge (planning.rs:7865; story acceptance 5). Pinned by `a_review_without_a_block_superseded_by_a_review_with_a_block_is_exempt_and_listed` and `a_supersedes_edge_from_a_review_without_a_block_does_not_exempt` (aep-cli validate tests).",
+      "type": "boolean"
+    },
+    "created_before_opt_in": {
+      "description": "The store sets `findings_required_since` and `created_at` is before the start of that date in UTC; `false` when the key is absent. Pinned by `a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed` and `a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt` (aep-cli validate tests).",
+      "type": "boolean"
+    },
+    "store_requires_findings": {
+      "description": "The project file of the store this review is recorded in sets `findings_required_since` (project.rs:650-702, `RawProjectConfig`, with the change).",
+      "type": "boolean"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.review.ReviewResult.State"
+    }
+  },
+  "required": [
+    "id",
+    "engineering",
+    "findings_block",
+    "created_at",
+    "superseded_by_block",
+    "created_before_opt_in",
+    "store_requires_findings",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
+    "contract_digest": "slice-sha256/2:979d5135a57d7ce2de6c4ac3d6f48e30f37068e44a4c31daa65b49dc839710c4",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.review.ReviewId": {
+      "title": "ReviewId",
+      "x-ess-name": "aep.review.ReviewId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.review.ReviewResult.State": {
+      "title": "State",
+      "x-ess-name": "aep.review.ReviewResult.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Active"
+      ]
+    }
+  }
+}
