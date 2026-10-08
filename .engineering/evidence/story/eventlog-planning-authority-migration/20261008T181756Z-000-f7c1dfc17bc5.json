@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T18:17:56Z",
+  "actor": "human:timo",
+  "artifact": "story:eventlog-planning-authority-migration",
+  "kind": "story",
+  "revision": 63,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "store reconcile 2026-10-08, no wave since 2026-08-30: superseded: 0.62.0 removed event-log stores (CHANGELOG.md:254-269); this store is aep.project/5 with store: git"
+  }
+}

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:eventlog-planning-authority-migration
 kind: story
-status: active
+status: archived
 title: Migrate all participating planning stores to recorded Eventlog file authority
 owner: aep
 relations:
@@ -68,10 +68,11 @@ scope:
   path: website/docs/
 - confidence: cited
   path: xtask/
-revision: 63
+revision: 64
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-18T23:14:36Z", actor: "human:timo", revision: 51, decided_on: {"recorded":{"review_outcome":6}}, imported: true}
 - {from: "proposed", to: "active", at: "2026-09-18T23:14:37Z", actor: "human:timo", revision: 52, decided_on: {"recorded":{"review_outcome":6}}, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:57Z", actor: "human:timo", revision: 64, decided_on: {"recorded":{"test_result":3,"review_outcome":6,"verification":1}}}
 ---
 ## Outcome
 

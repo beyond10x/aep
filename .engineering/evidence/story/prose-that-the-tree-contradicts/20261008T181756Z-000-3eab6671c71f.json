@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T18:17:56Z",
+  "actor": "human:timo",
+  "artifact": "story:prose-that-the-tree-contradicts",
+  "kind": "story",
+  "revision": 17,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "store reconcile 2026-10-08, no wave since 2026-08-30: partly: 708f1bef1 fixed two statements; still false crates/edge/aep-project/src/load.rs:33-37, crates/drive/aep-driver/tests/shell_echo.rs:197, crates/govern/aep-engine/tests/adopting_guide.rs:20"
+  }
+}

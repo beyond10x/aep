@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T18:17:56Z",
+  "actor": "human:timo",
+  "artifact": "story:harness-grouped-spellings",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "store reconcile 2026-10-08, no wave since 2026-08-30: work in the harness repository; 4 flat spellings left in 2 files at 3169042f"
+  }
+}

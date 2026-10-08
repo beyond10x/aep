@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T18:17:56Z",
+  "actor": "human:timo",
+  "artifact": "story:cli-ergonomics-round-2",
+  "kind": "story",
+  "revision": 13,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "store reconcile 2026-10-08, no wave since 2026-08-30: partly: items 1 and 5 done; describe still requires --artifacts or --planning, graph --format json omits relations on 22 of 359 artifacts, reverse init has no --serves"
+  }
+}

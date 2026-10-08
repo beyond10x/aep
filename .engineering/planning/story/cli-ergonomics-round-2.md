@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:cli-ergonomics-round-2
 kind: story
-status: active
+status: archived
 title: Six small refusals that each cost a session one retry
 summary: 'Six one-retry refusals: --summary starting with a dash, describe with no store default, relations null, walk-up-only discovery, two-hop moves, reverse init without serves.'
 tags:
@@ -21,10 +21,11 @@ scope:
   path: crates/govern/aep-domain/src/artifact.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 13
+revision: 14
 transitions:
 - {from: "draft", to: "proposed", at: "2026-08-30T15:48:03Z", actor: "agent:claude-audit", revision: 3, imported: true}
 - {from: "proposed", to: "active", at: "2026-08-30T15:48:03Z", actor: "agent:claude-audit", revision: 4, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:57Z", actor: "human:timo", revision: 14, decided_on: {"recorded":{"verification":1}}}
 ---
 # Story: Six small refusals that each cost a session one retry
 

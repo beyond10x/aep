@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:metaharness-grouped-spellings
 kind: story
-status: active
+status: archived
 title: metaharness teaches the grouped spellings without moving a recorded byte
 summary: 138 flat call sites; only authored prose and executable steps move, fixtures and predicates stay.
 relations:
@@ -19,10 +19,11 @@ scope:
   path: metaharness:docs
 - confidence: cited
   path: metaharness:evals
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-04T02:18:23Z", actor: "human:timo", revision: 2, imported: true}
 - {from: "proposed", to: "active", at: "2026-09-04T02:18:24Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:59Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"verification":1}}}
 ---
 # Story: metaharness teaches the grouped spellings without moving a recorded byte
 

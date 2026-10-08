@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T18:17:43Z",
+  "actor": "human:timo",
+  "artifact": "story:driver-spec-crate",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "CI task check on main 84459f664: 168 test results, 0 failed; load refusal tested at crates/edge/aep-project/src/load.rs:733-747, UndeclaredEvidenceKind at crates/drive/aep-driver-spec/tests/phase_two_run_start.rs:63,104",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/37754341953"
+  }
+}

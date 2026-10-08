@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:aep-service-grouped-spellings
 kind: story
-status: active
+status: archived
 title: aep-service teaches the grouped spellings
 summary: 5 flat call sites; the six aep-* library pins do not move for a CLI-only release.
 relations:
@@ -15,10 +15,11 @@ scope:
   path: aep-service:README.md
 - confidence: cited
   path: aep-service:docs
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-09-04T02:18:30Z", actor: "human:timo", revision: 2, imported: true}
 - {from: "proposed", to: "active", at: "2026-09-04T02:18:31Z", actor: "human:timo", revision: 3, imported: true}
+- {from: "active", to: "archived", at: "2026-10-08T18:17:57Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"verification":1}}}
 ---
 # Story: aep-service teaches the grouped spellings
 

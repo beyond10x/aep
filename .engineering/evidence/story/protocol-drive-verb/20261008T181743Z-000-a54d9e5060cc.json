@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-08T18:17:43Z",
+  "actor": "human:timo",
+  "artifact": "story:protocol-drive-verb",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "CI task check on main 84459f664: 168 test results, 0 failed; lock host refusal crates/edge/aep-cli/tests/drive_cli.rs:400, state :1639, pause :2023, run ids never reused :2423, rebuild between steps crates/drive/aep-driver/tests/driving.rs:1128",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/37754341953"
+  }
+}

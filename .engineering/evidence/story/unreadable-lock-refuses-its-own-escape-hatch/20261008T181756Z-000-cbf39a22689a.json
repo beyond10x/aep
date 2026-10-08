@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T18:17:56Z",
+  "actor": "human:timo",
+  "artifact": "story:unreadable-lock-refuses-its-own-escape-hatch",
+  "kind": "story",
+  "revision": 15,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "store reconcile 2026-10-08, no wave since 2026-08-30: not started on main: read_lock still passes the serde error up (crates/edge/aep-cli/src/drive.rs:1420-1421); branch commits ce2d1da, 97d7bcf no longer exist"
+  }
+}

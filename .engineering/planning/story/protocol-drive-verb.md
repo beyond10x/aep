@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:protocol-drive-verb
 kind: story
-status: active
+status: implemented
 title: 'protocol drive: the run that touches the world'
 summary: The command, llm and operator executors, the run directory, the store lock, and the flags that resume, restart or take it.
 owner: driver
@@ -20,9 +20,10 @@ scope:
   path: crates/drive/aep-driver
 - confidence: cited
   path: crates/edge/aep-cli
-revision: 14
+revision: 15
 transitions:
 - {from: "proposed", to: "active", at: "2026-08-30T09:42:02Z", actor: "human:operator", revision: 5, imported: true}
+- {from: "active", to: "implemented", at: "2026-10-08T18:17:47Z", actor: "human:timo", revision: 15, decided_on: {"recorded":{"test_result":2}}}
 ---
 # Story: `protocol drive` — the run that touches the world
 
