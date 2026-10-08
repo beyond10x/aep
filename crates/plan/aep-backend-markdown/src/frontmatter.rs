@@ -18,9 +18,10 @@
 //! ```
 //!
 //! `id`, `kind` and `status` are required; `title`, `summary`, `owner`, `tags`, `refs`,
-//! `relations`, `scope` and `withholds` are optional; `format` and `revision` default. Everything else a document carries
-//! is **kept** — see [`PlanningFrontmatter::extra`] — because a store that silently drops the
-//! field somebody's own tooling writes is a store they will stop trusting after the first round
+//! `relations`, `scope`, `withholds`, `model_digest` and `prose_only` are optional (the last two
+//! only on the kinds that carry them); `format` and `revision` default. Everything else a document
+//! carries is **kept** — see [`PlanningFrontmatter::extra`] — because a store that silently drops
+//! the field somebody's own tooling writes is a store they will stop trusting after the first round
 //! trip.
 //!
 //! What is deliberately absent is a timestamp. See the crate documentation: git carries
@@ -55,6 +56,9 @@ pub const PLANNING_FORMAT_V2: &str = "aep.planning-md/2";
 /// The keys of [`PLANNING_FORMAT`] plus `transitions`: the document is the authority for its own
 /// status history, because there is no journal beside it.
 pub const PLANNING_FORMAT_V3: &str = "aep.planning-md/3";
+
+/// The front-matter key a `review-result` records why it has no `findings` block under.
+pub const PROSE_ONLY: &str = "prose_only";
 
 /// Which planning format a document is written in.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -159,6 +163,10 @@ pub struct RawPlanningFrontmatter {
     /// The content identity of the compiled model, as text until the kind says it may carry one.
     #[serde(default)]
     pub model_digest: Option<String>,
+    /// Why a `review-result` records its findings as prose only, as text until the kind says it
+    /// may carry one.
+    #[serde(default)]
+    pub prose_only: Option<String>,
     /// Which revision of this document this is. Bumped by every mutating operation.
     #[serde(default = "default_revision")]
     pub revision: u64,
@@ -233,6 +241,13 @@ pub struct PlanningFrontmatter {
     /// conformance run to this revision of the specification: `ess-conformance` counts a run only
     /// when its `spec_digest` is this value, and fails closed when there is none.
     pub model_digest: Option<SpecDigest>,
+    /// Why this `review-result` records its findings as prose only, with no `findings` block.
+    ///
+    /// Written once, by `aep plan artifact new --prose-only <reason>`, and only on a
+    /// `review-result`: it is the recorded way a review was settled in a store that requires a
+    /// block (`findings_required_since`), so `validate` lists it as exempt rather than counting it.
+    /// Never blank — a reason of nothing is no reason.
+    pub prose_only: Option<String>,
     /// Which revision of this document this is.
     pub revision: u64,
     /// Every status move the document has been through, oldest first.
@@ -271,6 +286,7 @@ impl PlanningFrontmatter {
             scope: Vec::new(),
             withholds: None,
             model_digest: None,
+            prose_only: None,
             revision: default_revision(),
             transitions: Vec::new(),
             extra: BTreeMap::new(),
@@ -403,6 +419,7 @@ impl serde::Serialize for PlanningFrontmatter {
             + usize::from(!self.scope.is_empty())
             + usize::from(self.withholds.is_some())
             + usize::from(self.model_digest.is_some())
+            + usize::from(self.prose_only.is_some())
             + usize::from(!self.transitions.is_empty())
             + self.extra.len();
 
@@ -437,6 +454,9 @@ impl serde::Serialize for PlanningFrontmatter {
         }
         if let Some(digest) = &self.model_digest {
             map.serialize_entry("model_digest", digest.as_str())?;
+        }
+        if let Some(reason) = &self.prose_only {
+            map.serialize_entry(PROSE_ONLY, reason)?;
         }
         map.serialize_entry("revision", &self.revision)?;
         if !self.transitions.is_empty() {
@@ -537,6 +557,7 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
         let scope = validated_scope(&raw.scope, &mut errors);
 
         let model_digest = validated_model_digest(&raw, &mut errors);
+        let prose_only = validated_prose_only(&raw, &mut errors);
 
         validate_transitions(&raw, &mut errors);
 
@@ -554,6 +575,7 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
             scope,
             withholds,
             model_digest,
+            prose_only,
             revision: raw.revision,
             transitions: raw.transitions,
             extra: raw.extra,
@@ -650,6 +672,48 @@ fn validated_model_digest(
             }
         },
     }
+}
+
+/// The prose-only reason a document declares, validated, with every defect accumulated into
+/// `errors`.
+///
+/// Gated by kind the way [`validated_model_digest`] is: only a `review-result` has findings to
+/// record, so on any other kind the key excuses nothing and is refused rather than kept as text a
+/// reader would take for an exemption. A reason of only whitespace is refused too: it is the
+/// exemption `validate` grants, and an exemption on the strength of nothing is the defect it
+/// exists against.
+fn validated_prose_only(
+    raw: &RawPlanningFrontmatter,
+    errors: &mut ValidationErrors,
+) -> Option<String> {
+    let value = raw.prose_only.as_deref()?;
+    if raw.kind != ArtifactKind::ReviewResult {
+        errors.push(
+            ValidationError::new(
+                ValidationCode::UnsupportedConstruct,
+                format!("planning.{PROSE_ONLY}"),
+                format!(
+                    "`{}` records no findings, so `{PROSE_ONLY}` excuses nothing; only a \
+                     `review-result` carries one",
+                    raw.kind.as_str()
+                ),
+            )
+            .with_hint("drop the key, or file the artifact as a review-result"),
+        );
+        return None;
+    }
+    if value.trim().is_empty() {
+        errors.push(
+            ValidationError::new(
+                ValidationCode::TypeMismatch,
+                format!("planning.{PROSE_ONLY}"),
+                format!("`{PROSE_ONLY}` is blank, and a reason of nothing is no reason"),
+            )
+            .with_hint("say why this review records its findings as prose only"),
+        );
+        return None;
+    }
+    Some(value.to_owned())
 }
 
 /// The scope entries a document declares, validated, with every defect accumulated into `errors`.
@@ -812,6 +876,64 @@ mod tests {
             errors.to_string().contains("binds nothing"),
             "the refusal says why, not just that: {errors}"
         );
+    }
+
+    #[test]
+    fn a_prose_only_reason_is_kept_on_a_review_result_and_refused_by_name_on_every_other_kind() {
+        // `prose_only` is why a review records its findings as prose: what `validate` exempts it
+        // on in a store that requires a block. It is a reason only where there are findings to
+        // record — a review-result — and only when it says something.
+        const REVIEW: &str = "id: review-result:attack\nkind: review-result\nstatus: active\n";
+        let front = PlanningFrontmatter::try_from(raw(&format!(
+            "{REVIEW}prose_only: the reviewer's tool writes no block yet\n"
+        )))
+        .expect("a review-result carries a prose-only reason");
+        assert_eq!(
+            front.prose_only.as_deref(),
+            Some("the reviewer's tool writes no block yet")
+        );
+
+        // Round-trip, because the key is written once, by `new`, and read by every `validate`.
+        let written = serde_yaml::to_string(&front).expect("the frontmatter renders");
+        assert!(
+            written.contains("prose_only: the reviewer's tool writes no block yet"),
+            "{written}"
+        );
+        let again = PlanningFrontmatter::try_from(raw(&written)).expect("the rendering re-reads");
+        assert_eq!(again.prose_only, front.prose_only);
+        assert!(
+            !again.extra.contains_key("prose_only"),
+            "a named key must not also land in `extra`: {:?}",
+            again.extra
+        );
+
+        // On a story it excuses nothing, so it is refused rather than kept as text.
+        let errors =
+            PlanningFrontmatter::try_from(raw(&format!("{MINIMAL}prose_only: no block\n")))
+                .expect_err("a kind that carries no findings is refused");
+        let refusal = errors
+            .as_slice()
+            .iter()
+            .find(|error| error.location == "planning.prose_only")
+            .unwrap_or_else(|| panic!("no prose_only refusal: {errors}"));
+        assert_eq!(refusal.code, ValidationCode::UnsupportedConstruct);
+        assert!(
+            refusal.message.contains("review-result") && refusal.message.contains("story"),
+            "the refusal names the kind that carries one and the kind that does not: {errors}"
+        );
+
+        // A reason of nothing but whitespace is no reason.
+        for blank in ["\"\"", "\"  \\t \""] {
+            let errors =
+                PlanningFrontmatter::try_from(raw(&format!("{REVIEW}prose_only: {blank}\n")))
+                    .expect_err("a blank reason is refused");
+            let refusal = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "planning.prose_only")
+                .unwrap_or_else(|| panic!("no prose_only refusal for {blank}: {errors}"));
+            assert_eq!(refusal.code, ValidationCode::TypeMismatch, "{blank}");
+        }
     }
 
     #[test]

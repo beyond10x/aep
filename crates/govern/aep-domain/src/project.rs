@@ -29,6 +29,7 @@ use std::path::{Path, PathBuf};
 
 use crate::error::{ValidationCode, ValidationError, ValidationErrors};
 use crate::ids::ProviderId;
+use crate::time::{CivilDate, Timestamp};
 use crate::version::{ProfileVersionedRef, ProtocolRef};
 
 /// The default name of the directory a project keeps its machine-readable metadata in.
@@ -375,9 +376,45 @@ pub struct ProjectConfig {
     /// an error: the reference still names the record, it just renders as text.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub providers: BTreeMap<ProviderId, String>,
+    /// The first day, in UTC, from which a `review-result` must carry a `findings` block.
+    ///
+    /// Absent, a review may state its findings as prose only, as it always could. Set, `aep plan
+    /// artifact new` refuses a review with no block unless `--prose-only <reason>` says why, and
+    /// `aep plan artifact validate` counts one as a problem unless it predates this day, a later
+    /// review carrying a block supersedes it, or it was recorded prose-only on purpose.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "date_as_written"
+    )]
+    pub findings_required_since: Option<CivilDate>,
+}
+
+/// The project key that opts a store in to requiring a `findings` block on every review.
+pub const FINDINGS_REQUIRED_SINCE: &str = "findings_required_since";
+
+/// A date as the project file spells it, `YYYY-MM-DD`, rather than as its three numbers.
+#[allow(clippy::ref_option)] // `serialize_with` hands the field over by reference, as it is.
+fn date_as_written<S: serde::Serializer>(
+    date: &Option<CivilDate>,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    match date {
+        Some(date) => serializer.serialize_some(&date.to_string()),
+        None => serializer.serialize_none(),
+    }
 }
 
 impl ProjectConfig {
+    /// The instant `findings_required_since` starts at: midnight UTC of its date.
+    ///
+    /// The comparison a reader makes is against an instant, and the date is a day; this is the one
+    /// place the two meet, so "before the opt-in" means the same thing to every reader. Pure
+    /// calendar arithmetic, no clock (invariant *Decisions are deterministic*).
+    #[must_use]
+    pub fn findings_required_from(&self) -> Option<Timestamp> {
+        self.findings_required_since.map(CivilDate::to_timestamp)
+    }
+
     /// The URL for `reference`, when this project declares how to build one.
     ///
     /// `None` for an undeclared provider, deliberately: an approximate link is worse than none,
@@ -699,6 +736,11 @@ pub struct RawProjectConfig {
     /// A URL pattern per external system, each carrying `{key}`.
     #[serde(default)]
     pub providers: BTreeMap<String, String>,
+    /// The first day, `YYYY-MM-DD` in UTC, from which a `review-result` must carry a `findings`
+    /// block. Text until validated, so a value that is not a calendar date is refused by the key's
+    /// name beside every other defect.
+    #[serde(default)]
+    pub findings_required_since: Option<String>,
 }
 
 /// The placeholder a provider's URL pattern must carry.
@@ -872,6 +914,32 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             &mut errors,
         );
 
+        // A day, and only a day: a value read as some other day, or as no opt-in, would move the
+        // line every review is measured against without anybody having written that line.
+        let findings_required_since = raw.findings_required_since.as_deref().and_then(|value| {
+            match CivilDate::parse(value) {
+                Ok(date) => Some(date),
+                Err(error) => {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            format!("project.{FINDINGS_REQUIRED_SINCE}"),
+                            format!(
+                                "`{FINDINGS_REQUIRED_SINCE}: {value}` is not a calendar date \
+                                     written YYYY-MM-DD: {error}"
+                            ),
+                        )
+                        .with_hint(
+                            "write the first day a review-result must carry a `findings` \
+                                 block, such as `2026-10-01`; it is read as starting at midnight \
+                                 UTC",
+                        ),
+                    );
+                    None
+                }
+            }
+        });
+
         let config = Self {
             version,
             protocol: raw.protocol,
@@ -881,6 +949,7 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             paths,
             store,
             providers,
+            findings_required_since,
         };
         errors.into_result(config)
     }
@@ -1389,5 +1458,66 @@ artefacts: graph.yaml
             raw.is_err(),
             "a misspelled key that is silently ignored is a project pointing at nothing"
         );
+    }
+
+    /// `findings_required_since` is a calendar day as a person writes one, and nothing else: a
+    /// month that does not exist, an unpadded field, a time of day or a word is refused, by the
+    /// key's name, rather than read as some other day or as no opt-in at all.
+    #[test]
+    fn a_findings_required_since_that_is_not_a_calendar_date_is_refused_naming_the_key() {
+        for written in [
+            "2026-02-30",
+            "2026-13-01",
+            "2026-1-05",
+            "2026-10-01T00:00:00Z",
+            "yesterday",
+            "\"\"",
+        ] {
+            let errors = config(&format!("{BASE}findings_required_since: {written}\n"))
+                .expect_err("a value that is not a calendar date is refused");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.findings_required_since")
+                .unwrap_or_else(|| {
+                    panic!("no findings_required_since refusal for {written}: {errors:?}")
+                });
+            assert_eq!(error.code, ValidationCode::TypeMismatch, "{written}");
+            assert!(
+                error.message.contains("`findings_required_since")
+                    && error.message.contains("calendar date"),
+                "the refusal names the key and what it must be: {}",
+                error.message
+            );
+        }
+    }
+
+    /// The opt-in is a day, read in UTC: the first instant it covers is that day's midnight UTC,
+    /// so a review recorded one millisecond earlier predates it and one recorded at midnight does
+    /// not. Absent, nothing is required.
+    #[test]
+    fn findings_required_since_starts_at_midnight_utc_of_its_date() {
+        let parsed = config(&format!("{BASE}findings_required_since: 2026-10-01\n"))
+            .expect("a calendar date is accepted");
+        assert_eq!(
+            parsed
+                .findings_required_since
+                .as_ref()
+                .map(ToString::to_string),
+            Some("2026-10-01".to_owned())
+        );
+        let from = parsed
+            .findings_required_from()
+            .expect("an opted-in project names the instant findings are required from");
+        assert_eq!(from.iso_8601(), "2026-10-01T00:00:00Z");
+        assert_eq!(from.epoch_millis(), 1_790_812_800_000);
+
+        let quoted = config(&format!("{BASE}findings_required_since: \"2026-10-01\"\n"))
+            .expect("the quoted spelling is the same date");
+        assert_eq!(quoted.findings_required_from(), Some(from));
+
+        let absent = config(BASE).expect("the key is optional");
+        assert_eq!(absent.findings_required_since, None);
+        assert_eq!(absent.findings_required_from(), None);
     }
 }

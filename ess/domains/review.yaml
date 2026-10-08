@@ -67,8 +67,12 @@ entities:
       - name: created_at
         type: Timestamp
         summary: >-
-          The `at` of the document's first transition (journal.rs:199-201, `Transition.at`;
-          frontmatter.rs:164-171, `transitions`, oldest first).
+          When the review was recorded, dated the way `validate` dates a review it asks for an
+          outcome (planning.rs:5429-5480, `reviews_without_an_outcome`): the creation entry of an
+          SQLite or Postgres store's history; in a Git-native store, the commit that added the
+          file (planning/git_record.rs:214, `first_committed`), or now when it is not committed
+          yet. A review `new` writes carries no transition, so its first transition cannot date
+          it.
       # change: the two facts below are about more than this row, and `validate` reads them where
       # it walks the store.
       # ESS-LIMIT: ESS 0.56.0 derives no field: an entity field, an invariant and a view hold
@@ -258,8 +262,8 @@ commands:
               - defined(findings_required_since)
           exists: true
         error: aep.review.FindingsRequired
-      # The record writes the front matter and body. `created_at` is the first transition's `at`,
-      # carried by the command (`{generated: true}`: the host supplies the instant). A new review
+      # The record writes the front matter and body. `created_at` is the instant the record
+      # is made (`{generated: true}`: the host supplies it; `validate` reads it back as above). A new review
       # is superseded by nothing yet. `created_before_opt_in` and `store_requires_findings` are
       # left unset: they are facts `validate` reads from the store each time it runs, not values
       # `new` writes, and a store whose `findings_required_since` lies in the future makes the

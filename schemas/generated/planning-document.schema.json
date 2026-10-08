@@ -46,6 +46,14 @@
         "null"
       ]
     },
+    "prose_only": {
+      "description": "Why a `review-result` records its findings as prose only, as text until the kind says it may carry one.",
+      "default": null,
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "refs": {
       "description": "Records of the same work elsewhere, as written.\n\n[`Node`] and not [`ExternalRef`] so a malformed entry is reported beside every other defect in the document rather than aborting the parse of the whole file — the reason `withholds` is text here too.",
       "default": [],

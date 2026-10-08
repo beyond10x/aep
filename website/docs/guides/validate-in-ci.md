@@ -66,6 +66,9 @@ reads files and writes nothing.
 | a review older than `--outcome-within` days (default 14) with no `review_outcome` | outstanding work, not a broken store |
 
 `aep plan artifact validate --strict` exits `1` on any of these, and names which class decided.
+A project whose `project.yaml` sets `findings_required_since` counts a review with no findings block
+as a problem instead, unless it is exempt; see
+[Requiring a findings block](../concepts/reviews.md#requiring-a-findings-block).
 Use it where the plan must hold only recorded evidence, for example on `main`. The review age is the
 one line that depends on when the job runs.
 

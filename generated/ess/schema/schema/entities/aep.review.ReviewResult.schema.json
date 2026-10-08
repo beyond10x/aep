@@ -30,7 +30,7 @@
       "type": "string"
     },
     "created_at": {
-      "description": "The `at` of the document's first transition (journal.rs:199-201, `Transition.at`; frontmatter.rs:164-171, `transitions`, oldest first).",
+      "description": "When the review was recorded, dated the way `validate` dates a review it asks for an outcome (planning.rs:5429-5480, `reviews_without_an_outcome`): the creation entry of an SQLite or Postgres store's history; in a Git-native store, the commit that added the file (planning/git_record.rs:214, `first_committed`), or now when it is not committed yet. A review `new` writes carries no transition, so its first transition cannot date it.",
       "type": "string",
       "format": "date-time"
     },
@@ -64,8 +64,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "b3cb32ebe3b3fc097223dcbd2decc3a1263610843b7f470a7c3f6379438a5a72",
-    "contract_digest": "slice-sha256/2:979d5135a57d7ce2de6c4ac3d6f48e30f37068e44a4c31daa65b49dc839710c4",
+    "source_digest": "c8e452b3e7371aca69b39643bbeb3359ec49155d49addf63381150a1b0d9c8c5",
+    "contract_digest": "slice-sha256/2:917d108252159dc0eb6c552ca35a04d54a34eaf4c0a17ef7e6c8fbdde20b6535",
     "regenerate": "ess generate"
   },
   "$defs": {

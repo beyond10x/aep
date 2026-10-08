@@ -8,7 +8,7 @@
 //!
 //! | part | what it holds |
 //! |---|---|
-//! | `title`, `summary`, `owner`, `withholds`, `model_digest` | optional strings |
+//! | `title`, `summary`, `owner`, `withholds`, `model_digest`, `prose_only` | optional strings |
 //! | `tags` | an array of strings |
 //! | `relations`, `refs`, `scope` | JSON arrays in the frontmatter's own shape |
 //! | `extra` | every other frontmatter key, as a JSON object |
@@ -42,6 +42,7 @@ fn content_fields() -> serde_json::Map<String, Value> {
         "owner",
         "withholds",
         "model_digest",
+        "prose_only",
         "body",
     ] {
         fields.insert(name.to_owned(), text.clone());

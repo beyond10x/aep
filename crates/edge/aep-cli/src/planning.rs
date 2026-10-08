@@ -49,6 +49,8 @@ mod waves;
 mod git_record;
 // Which recorded ESS conformance records pay for a specification's move.
 mod conformance_count;
+// Where `validate` places a review-result by its findings block, decided from facts it is handed.
+mod findings_standing;
 
 /// Where a new document's body is seeded from, relative to the document tree.
 const TEMPLATE_DIRECTORY: &str = "artifacts/templates";
@@ -170,6 +172,33 @@ impl StoreLocation {
         Plan::discovered()
     }
 
+    /// The day from which the plan this location opens requires a `findings` block on every
+    /// review: the `findings_required_since` of the project whose plan it is, or `None`.
+    ///
+    /// The project is the one [`Self::plan`] opens the plan as: the discovered project, or the
+    /// project whose own planning directory `--store` names. A `--store` anywhere else is a plan no
+    /// project file governs, and requires nothing.
+    pub(crate) fn findings_required_since(&self) -> Result<Option<aep_domain::time::CivilDate>> {
+        let engineering = if let Some(path) = &self.store {
+            if project_plan_at(path)?.is_none() {
+                return Ok(None);
+            }
+            std::path::absolute(path)
+                .context("resolving the explicit planning path")?
+                .parent()
+                .map(Path::to_path_buf)
+        } else {
+            let here = std::env::current_dir().context("reading the working directory")?;
+            aep_project::project::discover(&here).map(|project| project.join(project_directory()))
+        };
+        Ok(match engineering {
+            Some(engineering) => {
+                project_config(&engineering)?.and_then(|config| config.findings_required_since)
+            }
+            None => None,
+        })
+    }
+
     /// The document tree, from `--root`, the discovered project, or the historical `.` fallback.
     fn document_root(&self) -> Result<PathBuf> {
         if let Some(path) = &self.root {
@@ -234,6 +263,21 @@ fn project_plan_at(path: &Path) -> Result<Option<Plan>> {
     })
 }
 
+/// The project file in `engineering`, validated, or `None` when there is none.
+///
+/// A file that does not read is refused, with the reader's own refusal, which names the key.
+fn project_config(engineering: &Path) -> Result<Option<aep_domain::project::ProjectConfig>> {
+    let config_path = engineering.join(aep_domain::project::PROJECT_FILE);
+    if !config_path.exists() {
+        return Ok(None);
+    }
+    let text = std::fs::read_to_string(&config_path)
+        .with_context(|| format!("reading {}", config_path.display()))?;
+    aep_schema::parse::project(&text, Some(&config_path.display().to_string()))
+        .map(Some)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+}
+
 /// Where a plan is kept, resolved: what a verb opens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Plan {
@@ -269,17 +313,12 @@ impl Plan {
     /// A project directory with no `project.yaml` — a fixture, or a repository that has adopted
     /// nothing yet — is the Git-native layout at its fixed paths, `planning/` and `evidence/`.
     pub(crate) fn for_project(engineering: &Path) -> Result<Self> {
-        let config_path = engineering.join(aep_domain::project::PROJECT_FILE);
-        if !config_path.exists() {
+        let Some(config) = project_config(engineering)? else {
             return Self::git_at(
                 engineering.join(aep_domain::project::GIT_PLANNING_DIRECTORY),
                 engineering.join(aep_domain::project::GIT_EVIDENCE_DIRECTORY),
             );
-        }
-        let text = std::fs::read_to_string(&config_path)
-            .with_context(|| format!("reading {}", config_path.display()))?;
-        let config = aep_schema::parse::project(&text, Some(&config_path.display().to_string()))
-            .map_err(|error| anyhow::anyhow!("{error}"))?;
+        };
         Self::from_config(&config.store.resolved(engineering))
     }
 
@@ -1464,6 +1503,15 @@ pub(crate) struct NewArgs {
     /// that states findings of its own as well is refused as ambiguous.
     #[arg(long, value_name = "PATH")]
     findings: Option<PathBuf>,
+    /// Record a `review-result` with no `findings` block on purpose, saying why.
+    ///
+    /// A store whose `project.yaml` sets `findings_required_since` refuses a review with no block;
+    /// this is the other way past that refusal, and `validate` lists the review as exempt with the
+    /// reason. Works in every store. Refused on any other kind, beside a body that carries a block
+    /// (its own or the one `--findings` writes), and with a blank reason. Takes a value that begins
+    /// with `-`, for the reason `--title` does.
+    #[arg(long, value_name = "REASON", allow_hyphen_values = true)]
+    prose_only: Option<String>,
     /// The evidence kind this artifact is stopping anybody from producing, such as `test_result`.
     ///
     /// The join between a blocker and an evidence gate: a rung wants a `test_result`, the job that
@@ -2010,6 +2058,14 @@ fn entity_body(
     if let Some(withholds) = front.withholds {
         data.insert("withholds".to_owned(), Node::from(withholds.as_str()));
     }
+    // Only `new --prose-only` sets it, and only on a review-result, which cannot be edited after:
+    // dropped here, the reason would be accepted, echoed and lost, as `--ref` once was.
+    if let Some(reason) = &front.prose_only {
+        data.insert(
+            aep_backend_markdown::frontmatter::PROSE_ONLY.to_owned(),
+            Node::from(reason.as_str()),
+        );
+    }
     if !front.scope.is_empty() {
         data.insert("scope".to_owned(), scope_node(&front.scope));
     }
@@ -2173,6 +2229,12 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     // `architecture-decision-record` produce one id rather than two for one thing.
     let id = ArtifactId::new(format!("{}:{}", kind.as_str(), args.name))
         .map_err(|error| anyhow::anyhow!("{error}"))?;
+    // The flag's own refusals come first, in every store (`aep.review.RecordReview`): what it
+    // excuses is a review's missing block, so it means nothing elsewhere, and a reason of nothing
+    // is no reason.
+    if let Some(reason) = &args.prose_only {
+        refuse_prose_only_reason(&kind, reason)?;
+    }
 
     let document_root = args.store.location.document_root()?;
     let registry = crate::load(&document_root)?;
@@ -2226,7 +2288,29 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     // result` exists to prevent. The refusal carries the line, because sending somebody back to a
     // document to find a defect this code has already located is a refusal that does half its job;
     // it quotes that line and says what to write instead, which is `FindingsError`'s own wording.
-    aep_backend_markdown::findings::parse(&body).map_err(|error| anyhow::anyhow!("{error}"))?;
+    let block = aep_backend_markdown::findings::recorded(&body)
+        .map_err(|error| anyhow::anyhow!("{error}"))?
+        .is_some();
+    if kind == ArtifactKind::ReviewResult {
+        match &args.prose_only {
+            Some(_) if block => bail!(
+                "`--prose-only` records why a review has no `findings` block, and this body \
+                 carries one{}; give the findings, or the reason, not both",
+                if args.findings.is_some() {
+                    " (the one `--findings` writes)"
+                } else {
+                    ""
+                }
+            ),
+            Some(reason) => frontmatter.prose_only = Some(reason.clone()),
+            None if !block => {
+                if let Some(since) = args.store.location.findings_required_since()? {
+                    bail!("{}", findings_required(&id, since));
+                }
+            }
+            None => {}
+        }
+    }
     let document = PlanningDocument::new(frontmatter, body);
 
     // **Through a command, not through the store.** This is what D-P1 was: a second write path is a
@@ -3436,6 +3520,36 @@ fn read_body(from: &Path) -> Result<String> {
         std::fs::read_to_string(from)
             .with_context(|| format!("reading the body from {}", from.display()))
     }
+}
+
+/// Refuses a `--prose-only` reason that cannot stand, before anything is read or written: one on a
+/// kind other than `review-result`, or one of nothing but whitespace.
+fn refuse_prose_only_reason(kind: &ArtifactKind, reason: &str) -> Result<()> {
+    if *kind != ArtifactKind::ReviewResult {
+        bail!(
+            "`--prose-only` says why a review records no `findings` block, and only a \
+             `review-result` carries findings; `{}` does not",
+            kind.as_str()
+        );
+    }
+    if reason.trim().is_empty() {
+        bail!(
+            "`--prose-only` was given a blank reason, and a reason of nothing is no reason; say \
+             why this review records its findings as prose only"
+        );
+    }
+    Ok(())
+}
+
+/// Why `new` refuses a `review-result` with no `findings` block in a store that requires one, and
+/// the two ways forward.
+fn findings_required(id: &ArtifactId, since: aep_domain::time::CivilDate) -> String {
+    format!(
+        "`{id}` records no `findings` block, and this store requires one on every review since \
+         {since} (`findings_required_since` in project.yaml). Either give the findings — a fenced \
+         ```findings block in the body, `[]` for a review that found nothing, or `--findings \
+         <file>` with a JSON array — or record why there are none with `--prose-only <reason>`"
+    )
 }
 
 /// `body` with the findings `new --findings` names appended to it as a fenced JSON block.
@@ -5300,39 +5414,29 @@ fn print_ledger(ledger: &FindingsLedger) {
     }
 }
 
-/// Reviews at least `days` old that no `review_outcome` record names.
+/// When the store recorded each `review-result` it holds, read from the plan's own record.
 ///
-/// The age is the instant the store recorded the review's **creation**, against the clock read
-/// here. A review the store's history says nothing about has no age this can compute, and is left
-/// out rather than guessed at: a document predating the event log is already its own reported
-/// class, and reporting it twice under a second heading would say two things about one gap.
+/// An SQLite or Postgres plan answers with the `Created` entry of `entries` (its history, from
+/// [`review_history`]). A Git-native plan records no creation: a review is as old as the commit
+/// that added its file, and one not committed yet was recorded now, by the clock read here. A
+/// review none of these dates is absent from the map: its creation is unknown, which is not the
+/// same as long ago.
 ///
-/// Read through [`review_history`], which is the plan's own record whatever form it takes.
-fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
+/// A review `new` writes carries no transition, so the document's own front matter cannot date
+/// it; both readers of a review's age (`validate`'s outcome reminder and its findings rule) read
+/// it here so they never disagree.
+fn reviews_recorded_at(
+    opened: &Opened,
+    entries: &[aep_backend_markdown::journal::Entry],
+) -> BTreeMap<ArtifactId, aep_domain::time::Timestamp> {
     use aep_backend_markdown::journal::Change;
 
-    let entries = review_history(opened);
-    let mut created: BTreeMap<ArtifactId, String> = BTreeMap::new();
-    let mut answered: BTreeSet<ArtifactId> = BTreeSet::new();
+    let mut created: BTreeMap<&ArtifactId, &str> = BTreeMap::new();
     for entry in entries {
-        match entry.change {
-            Change::Created { .. } => {
-                created.entry(entry.artifact).or_insert(entry.at);
-            }
-            Change::Evidence {
-                review: Some(review),
-                outcome: Some(_),
-                ..
-            } => {
-                answered.insert(review);
-            }
-            _ => {}
+        if let Change::Created { .. } = entry.change {
+            created.entry(&entry.artifact).or_insert(entry.at.as_str());
         }
     }
-
-    let now = instant(&now_at_the_edge()).ok();
-    // A Git-native plan records no creation: a review is as old as the commit that added it, and
-    // one not committed yet was recorded now.
     let committed = match &opened.plan {
         Plan::Git { root, .. } => {
             let paths: Vec<&str> = opened
@@ -5346,13 +5450,15 @@ fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
         }
         Plan::Sqlite { .. } | Plan::Postgres { .. } => None,
     };
-    let mut overdue = Vec::new();
+    let now = instant(&now_at_the_edge()).ok();
+
+    let mut recorded = BTreeMap::new();
     for stored in opened.report.documents.values() {
         let id = &stored.document.frontmatter.id;
-        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult || answered.contains(id) {
+        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
             continue;
         }
-        let recorded = created.get(id).and_then(|at| instant(at).ok()).or_else(|| {
+        let at = created.get(id).and_then(|at| instant(at).ok()).or_else(|| {
             committed.as_ref().and_then(|committed| {
                 committed
                     .get(&stored.relative_path)
@@ -5360,7 +5466,46 @@ fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
                     .or(now)
             })
         });
-        let (Some(now), Some(at)) = (now, recorded) else {
+        if let Some(at) = at {
+            recorded.insert(id.clone(), at);
+        }
+    }
+    recorded
+}
+
+/// Reviews at least `days` old that no `review_outcome` record names.
+///
+/// The age is the instant the store recorded the review's **creation**, against the clock read
+/// here. A review the store's history says nothing about has no age this can compute, and is left
+/// out rather than guessed at: a document predating the event log is already its own reported
+/// class, and reporting it twice under a second heading would say two things about one gap.
+///
+/// Read through [`review_history`], which is the plan's own record whatever form it takes.
+fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
+    use aep_backend_markdown::journal::Change;
+
+    let entries = review_history(opened);
+    let recorded_at = reviews_recorded_at(opened, &entries);
+    let mut answered: BTreeSet<ArtifactId> = BTreeSet::new();
+    for entry in entries {
+        if let Change::Evidence {
+            review: Some(review),
+            outcome: Some(_),
+            ..
+        } = entry.change
+        {
+            answered.insert(review);
+        }
+    }
+
+    let now = instant(&now_at_the_edge()).ok();
+    let mut overdue = Vec::new();
+    for stored in opened.report.documents.values() {
+        let id = &stored.document.frontmatter.id;
+        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult || answered.contains(id) {
+            continue;
+        }
+        let (Some(now), Some(at)) = (now, recorded_at.get(id).copied()) else {
             continue;
         };
         let age = now.epoch_millis().saturating_sub(at.epoch_millis()) / 86_400_000;
@@ -5626,7 +5771,8 @@ fn validate(
 ) -> Result<ExitCode> {
     let opened = open(&args.location, false)?;
     let registry = args.lifecycles()?;
-    let mut summary = findings(&opened, &registry, &args.repository_root());
+    let required_since = args.location.findings_required_since()?;
+    let mut summary = findings(&opened, &registry, &args.repository_root(), required_since);
     summary.without_an_outcome = reviews_without_an_outcome(&opened, outcome_within);
 
     match args.format {
@@ -5674,11 +5820,16 @@ fn graph_problems(
 /// `repository_root` is the repository the plan sits in, and it is a parameter rather than
 /// something derived here because it decides which workspace manifest names the members a
 /// cross-repository relation may point at.
+///
+/// `findings_required_since` is the project's opt-in, read by the caller from the project file
+/// that governs this plan: with it, a review with no `findings` block that no exemption covers is a
+/// problem.
 #[allow(clippy::too_many_lines)] // Every rule over one opened plan, in the order they are reported.
 pub(crate) fn findings(
     opened: &Opened,
     registry: &aep_engine::Registry,
     repository_root: &Path,
+    findings_required_since: Option<aep_domain::time::CivilDate>,
 ) -> Summary {
     let report = &opened.report;
 
@@ -5710,25 +5861,9 @@ pub(crate) fn findings(
         }
     }
 
-    // The findings block, on the kind that is supposed to carry one. A block that does not parse is
-    // a **problem**: `new` refuses one, so a broken block in the store was hand-written past the
-    // command, which is the same class as drift. A block that is simply absent is reported; a block
-    // of `[]` is a review that found nothing, which is what an `approve` writes, and is not.
-    let mut without_findings = Vec::new();
-    for stored in report.documents.values() {
-        if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
-            continue;
-        }
-        let id = &stored.document.frontmatter.id;
-        match aep_backend_markdown::findings::recorded(&stored.document.body) {
-            Err(error) => problems.push(format!("{id}: {error}")),
-            Ok(None) => without_findings.push(format!(
-                "{id} states its findings as prose only — nothing can enumerate what it found, so \
-                 the next review starts from nowhere"
-            )),
-            Ok(Some(_)) => {}
-        }
-    }
+    let recorded_at = reviews_recorded_at(opened, &entries);
+    let reviews = review_findings(report, &recorded_at, findings_required_since);
+    problems.extend(reviews.problems);
 
     Summary {
         store: opened.plan.describe(),
@@ -5736,10 +5871,169 @@ pub(crate) fn findings(
         artifacts: report.documents.len(),
         problems,
         closed_on_an_assertion: asserted,
-        without_findings,
+        without_findings: reviews.without_findings,
+        findings_standing: reviews.standings,
         without_an_outcome: Vec::new(),
         unscoped: unscoped_stories(report, registry.lifecycles()),
     }
+}
+
+/// What `validate` says about each `review-result`'s findings block.
+struct ReviewFindings {
+    /// A block that does not parse, a block beside a `prose_only` reason, and a `missing` review.
+    problems: Vec<String>,
+    /// One sentence per review with no block, for a person.
+    without_findings: Vec<String>,
+    /// One entry per review with no block, with its standing.
+    standings: Vec<ReviewStanding>,
+}
+
+/// The findings block, on the kind that is supposed to carry one (`aep.review.ValidateFindings`).
+///
+/// A block that does not parse is a **problem**: `new` refuses one, so a broken block in the store
+/// was hand-written past the command, which is the same class as drift. So is a block beside a
+/// `prose_only` reason, which `new` refuses too: the review says two things about one question. A
+/// block of `[]` is a review that found nothing, which is what an `approve` writes, and is fine.
+///
+/// A review with no block is listed with its standing ([`findings_standing::standing`]). In a
+/// store without `findings_required_since` that is all, as on 0.70.0; in one with it, a review no
+/// exemption covers is a problem as well, and the problem names the repair.
+fn review_findings(
+    report: &StoreReport,
+    recorded_at: &BTreeMap<ArtifactId, aep_domain::time::Timestamp>,
+    findings_required_since: Option<aep_domain::time::CivilDate>,
+) -> ReviewFindings {
+    use findings_standing::{standing, FindingsStanding, ReviewFacts};
+
+    let required_from = findings_required_since.map(aep_domain::time::CivilDate::to_timestamp);
+    let since = findings_required_since
+        .as_ref()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    let superseded_by = superseded_by_a_block(report);
+
+    let mut found = ReviewFindings {
+        problems: Vec::new(),
+        without_findings: Vec::new(),
+        standings: Vec::new(),
+    };
+    for stored in report.documents.values() {
+        let front = &stored.document.frontmatter;
+        if front.kind != ArtifactKind::ReviewResult {
+            continue;
+        }
+        let id = &front.id;
+        match aep_backend_markdown::findings::recorded(&stored.document.body) {
+            Err(error) => {
+                found.problems.push(format!("{id}: {error}"));
+                continue;
+            }
+            Ok(Some(_)) => {
+                if front.prose_only.is_some() {
+                    found.problems.push(format!(
+                        "{id} carries a `findings` block and a `prose_only` reason for having \
+                         none; a review records one or the other, and `new` refuses both"
+                    ));
+                }
+                continue;
+            }
+            Ok(None) => {}
+        }
+        let superseding = superseded_by.get(id).cloned().unwrap_or_default();
+        // When the store recorded it ([`reviews_recorded_at`]); a review it cannot date is
+        // undated, and undated is not "before" anything.
+        let created_at = recorded_at.get(id).copied();
+        let created = created_at.map(aep_domain::time::Timestamp::iso_8601);
+        let placed = standing(
+            &ReviewFacts {
+                findings_block: false,
+                prose_only: front.prose_only.is_some(),
+                superseded_by_block: !superseding.is_empty(),
+                created_at,
+            },
+            required_from,
+        );
+        let why = match placed {
+            FindingsStanding::CarriesBlock => continue,
+            FindingsStanding::NotRequired => {
+                "nothing can enumerate what it found, so the next review starts from nowhere"
+                    .to_owned()
+            }
+            FindingsStanding::ExemptProseOnly => format!(
+                "recorded prose-only on purpose: {}",
+                front.prose_only.as_deref().unwrap_or_default()
+            ),
+            FindingsStanding::ExemptSuperseded => format!(
+                "{} carries a block and supersedes it",
+                render_list(&superseding.iter().map(String::as_str).collect::<Vec<&str>>())
+            ),
+            FindingsStanding::ExemptBeforeOptIn => format!(
+                "recorded {}, before `findings_required_since` ({since})",
+                created.as_deref().unwrap_or_default()
+            ),
+            FindingsStanding::Missing => {
+                found.problems.push(findings_missing(id, &since));
+                format!(
+                    "not recorded before `findings_required_since` ({since}), superseded by no \
+                     review carrying a block, and recorded with no `prose_only` reason"
+                )
+            }
+        };
+        // Without an opt-in the sentence is 0.70.0's, word for word; with one it leads with the
+        // standing, so the line says which rule placed the review.
+        found.without_findings.push(if placed == FindingsStanding::NotRequired {
+            format!("{id} states its findings as prose only — {why}")
+        } else {
+            format!(
+                "{id} states its findings as prose only — {}: {why}",
+                placed.wire()
+            )
+        });
+        found.standings.push(ReviewStanding {
+            review: id.to_string(),
+            standing: placed,
+            prose_only: front.prose_only.clone(),
+            superseded_by: superseding,
+            created_at: created,
+        });
+    }
+    found
+}
+
+/// The problem a `missing` review is counted as, naming the repair that needs no edit to it.
+fn findings_missing(id: &ArtifactId, since: &str) -> String {
+    format!(
+        "{id} records no findings block, and this store requires one on every review since \
+         {since} (`findings_required_since`); record a review carrying the block with `--relate \
+         supersedes:{id}`, which settles this one without editing it"
+    )
+}
+
+/// Each review-result a review carrying a `findings` block `supersedes`, with the reviews that do.
+///
+/// Counted only from a review that carries a block: a prose review replacing a prose review
+/// settles nothing. A crossing names another member's artifact, whose id carries the member, so it
+/// never matches a review here.
+fn superseded_by_a_block(report: &StoreReport) -> BTreeMap<&ArtifactId, Vec<String>> {
+    let mut superseded: BTreeMap<&ArtifactId, Vec<String>> = BTreeMap::new();
+    for stored in report.documents.values() {
+        let front = &stored.document.frontmatter;
+        if front.kind != ArtifactKind::ReviewResult
+            || !matches!(
+                aep_backend_markdown::findings::recorded(&stored.document.body),
+                Ok(Some(_))
+            )
+        {
+            continue;
+        }
+        for relation in front.targets(RelationKind::Supersedes) {
+            superseded
+                .entry(relation.target.id())
+                .or_default()
+                .push(front.id.to_string());
+        }
+    }
+    superseded
 }
 
 /// What a Git-native plan (`aep.project/5`) must hold beyond its documents parsing
@@ -6155,11 +6449,16 @@ fn at_the_end_of(ladder: &ArtifactLifecycle, status: &ArtifactStatus) -> bool {
 /// `doctor` has already resolved the project's `protocols:` source **offline** by the time it asks
 /// this, and resolving it a second time through the loader would fetch a pinned Git source, which
 /// is exactly what a preflight must not do.
-pub(crate) fn store_findings(plan: Plan, root: &Path, document_root: &Path) -> Result<Summary> {
+pub(crate) fn store_findings(
+    plan: Plan,
+    root: &Path,
+    document_root: &Path,
+    findings_required_since: Option<aep_domain::time::CivilDate>,
+) -> Result<Summary> {
     let location = StoreLocation::at(None, Some(document_root.to_path_buf()));
     let opened = open_plan(plan, &location, false)?;
     let registry = location.lifecycles()?;
-    Ok(findings(&opened, &registry, root))
+    Ok(findings(&opened, &registry, root, findings_required_since))
 }
 
 /// What `validate` prints for a person: the counts, the classes it reports, then the verdict.
@@ -6226,7 +6525,13 @@ fn print_validation(summary: &Summary, strict: bool) {
 /// The classes `--strict` fails on, named, in the order the report prints them.
 ///
 /// Each is reported and not counted as a problem; `--strict` is how a gate refuses them.
+///
+/// A review with no findings block is refused only where it is `not_required`: in a store that
+/// sets `findings_required_since` a `missing` one is already a problem, and an exempt one is the
+/// recorded way it was settled, which `--strict` does not overrule.
 fn strictly_refused(summary: &Summary) -> Vec<String> {
+    use findings_standing::FindingsStanding;
+
     let mut refusing = Vec::new();
     for (label, count) in [
         (
@@ -6235,7 +6540,11 @@ fn strictly_refused(summary: &Summary) -> Vec<String> {
         ),
         (
             "recording no findings block",
-            summary.without_findings.len(),
+            summary
+                .findings_standing
+                .iter()
+                .filter(|review| review.standing == FindingsStanding::NotRequired)
+                .count(),
         ),
         (
             "without a recorded outcome",
@@ -8235,8 +8544,15 @@ pub(crate) struct Summary {
     /// review written before the block existed is still a review, and refusing the store it sits in
     /// would make the feature retroactive on a kind that cannot be edited. What it must not be is
     /// invisible — a critic whose findings nothing can enumerate is a critic the next round repeats.
+    ///
+    /// In a store whose `project.yaml` sets `findings_required_since` the sentence names the
+    /// review's standing, and a `missing` one is counted as a problem as well
+    /// (`story:review-result-requires-findings`).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     without_findings: Vec<String>,
+    /// The same reviews as `without_findings`, each with where `validate` placed it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    findings_standing: Vec<ReviewStanding>,
     /// Reviews old enough to have been acted on, with no `review_outcome` record naming them.
     ///
     /// Reported and not counted as a problem, and the age is read from the clock **here**, at the
@@ -8244,6 +8560,24 @@ pub(crate) struct Summary {
     /// so rather than pretending the store decided it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     without_an_outcome: Vec<String>,
+}
+
+/// One `review-result` with no `findings` block, and where `validate` placed it.
+#[derive(Debug, serde::Serialize)]
+pub(crate) struct ReviewStanding {
+    /// The review's id.
+    review: String,
+    /// The specification's `aep.review.FindingsStanding`.
+    standing: findings_standing::FindingsStanding,
+    /// The reason it was recorded with, when it was recorded `--prose-only`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    prose_only: Option<String>,
+    /// The reviews carrying a block that supersede it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    superseded_by: Vec<String>,
+    /// When the store recorded it, as ISO-8601 to the second, when the store can date it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    created_at: Option<String>,
 }
 
 /// What `findings` compared, and what it found.

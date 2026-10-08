@@ -502,7 +502,10 @@ fn planning_store(
         Plan::Git { evidence, .. } => Some(evidence_files(evidence)),
         _ => None,
     };
-    match crate::planning::store_findings(plan, root, document_root) {
+    // The project's own opt-in, so the preflight counts a review with no block exactly as
+    // `validate` does in this project.
+    let findings_required_since = config.and_then(|config| config.findings_required_since);
+    match crate::planning::store_findings(plan, root, document_root, findings_required_since) {
         Err(error) => Check::new(
             PLANNING_STORE,
             Status::Fail,
