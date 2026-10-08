@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.70.0] — 2026-10-08
+
 ### Added
 
 - `aep plan store migrate git` and `aep plan reverse init` take `--planning-scope <name>`, the
