@@ -2,17 +2,18 @@
 format: aep.planning-md/3
 id: story:review-result-requires-findings
 kind: story
-status: active
+status: implemented
 title: A review-result without a findings block is refused, unless it says why
 summary: new refuses a prose-only review without --prose-only; validate counts one as a problem once the store sets findings_required_since.
 relations:
 - decomposes: epic:review-facts
 - serves: vision:O2
 - informed_by: story:structured-findings-on-review-result
-revision: 5
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T22:40:13Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-08T22:40:13Z", actor: "human:timo", revision: 4}
+- {from: "active", to: "implemented", at: "2026-10-09T01:15:28Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 # Story: A review-result without a findings block is refused, unless it says why
 
