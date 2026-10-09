@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.71.0] — 2026-10-09
+
 ### Added
 
 - `project.yaml` takes an optional `findings_required_since: YYYY-MM-DD`. Once the key is set,
