@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReviewResult",
+  "description": "A review-result artifact, read for its findings.",
+  "x-ess-name": "aep.review.ReviewResult",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/aep.review.ReviewId"
+    },
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory",
+      "description": "The store the review is recorded in (the `--engineering` the command resolved).",
+      "x-ess-relation": {
+        "name": "store",
+        "kind": "references",
+        "source": "aep.review.ReviewResult",
+        "target": "aep.plan.Project",
+        "cardinality": "one",
+        "via": "engineering"
+      }
+    },
+    "findings_block": {
+      "description": "The body carries a `findings` block, an empty `[]` one included: findings.rs:618-633 (`recorded`) answers `Some`; a body with no block (`None`) is `false`.",
+      "type": "boolean"
+    },
+    "prose_only": {
+      "description": "Why this review records its findings as prose only, as `--prose-only <reason>` gave it. Present only on a review with no block.",
+      "type": "string"
+    },
+    "created_at": {
+      "description": "When the review was recorded, dated the way `validate` dates a review it asks for an outcome (planning.rs `reviews_recorded_at`, read by `reviews_without_an_outcome` and the findings rule alike): the creation entry of an SQLite or Postgres store's history; in a Git-native store inside a Git work tree, the commit that added the file (planning/git_record.rs `first_committed`), or now when the file is not committed yet. Undated (absent) when the store holds no creation entry for it; when the repository is a shallow clone and the commit that added the file is a shallow boundary commit (one `git rev-parse --git-path shallow` lists), whose history does not reach the real one; and when the store is not in a Git work tree that versions it (a `git archive` export, a copied or ignored directory). An undated review is never created before the opt-in, and is never reported overdue for an outcome. A review `new` writes carries no transition, so its first transition cannot date it.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "superseded_by_block": {
+      "description": "Another review-result whose body carries a `findings` block names this one with a `supersedes` edge (planning.rs:7865; story acceptance 5). Pinned by `a_review_without_a_block_superseded_by_a_review_with_a_block_is_exempt_and_listed` and `a_supersedes_edge_from_a_review_without_a_block_does_not_exempt` (aep-cli validate tests).",
+      "type": "boolean"
+    },
+    "created_before_opt_in": {
+      "description": "The store sets `findings_required_since` and `created_at` is defined and before the start of that date in UTC; `false` when the key is absent or the review is undated. Pinned by `a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed`, `a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt`, `a_store_outside_git_dates_no_review_and_names_the_repository_as_the_remedy` (aep-cli validate tests) and `a_shallow_clone_leaves_a_review_in_its_boundary_commit_undated_and_names_the_full_history` (aep-cli findings_required_adversary).",
+      "type": "boolean"
+    },
+    "store_requires_findings": {
+      "description": "The project file of the store this review is recorded in sets `findings_required_since` (project.rs:650-702, `RawProjectConfig`, with the change).",
+      "type": "boolean"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.review.ReviewResult.State"
+    }
+  },
+  "required": [
+    "id",
+    "engineering",
+    "findings_block",
+    "superseded_by_block",
+    "created_before_opt_in",
+    "store_requires_findings",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:993597c4a2bb3a707ff4e37fd4b63b74766f7ebe686201733b2acbfd64d1f1a7",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.review.ReviewId": {
+      "title": "ReviewId",
+      "x-ess-name": "aep.review.ReviewId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.review.ReviewResult.State": {
+      "title": "State",
+      "x-ess-name": "aep.review.ReviewResult.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Active"
+      ]
+    }
+  }
+}

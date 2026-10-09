@@ -68,6 +68,22 @@ types:
       sqlite: aep.plan.SqliteStore
       postgres: aep.plan.PostgresStore
 
+  # change (story:review-result-requires-findings): the project file's `findings_required_since`,
+  # a calendar date written `YYYY-MM-DD` and read in UTC (story acceptance 3; its "inferable"
+  # ambiguity: "created before" is before the start of that date in UTC).
+  # ESS-LIMIT: ESS 0.56.0 has no calendar-date scalar (`Date` is refused as `undeclared_reference`,
+  # "`Date` is not a declared type") and no pattern predicate (`matches` is refused, as at
+  # aep.plan.PlanningScope), so this is text held to the length of `YYYY-MM-DD`; that it parses as
+  # a real date, and the instant it starts at, are the host's. Pinned by
+  # `a_findings_required_since_that_is_not_a_calendar_date_is_refused_naming_the_key` (aep-domain)
+  # and `findings_required_since_starts_at_midnight_utc_of_its_date` (aep-domain).
+  - name: aep.plan.UtcDate
+    kind: newtype
+    of: String
+    invariants:
+      - value.utf8_bytes >= 10
+      - value.utf8_bytes <= 10
+
   # change (story:planning-scope-comes-from-the-repository): where a written `planning_scope` came
   # from, in the order the commands try them. The text output names it.
   - name: aep.plan.ScopeSource
@@ -257,6 +273,21 @@ entities:
       - name: providers
         type: Map<String, String>
         summary: A URL pattern per external system, each carrying `{key}` (project.rs:699-701).
+      # change (story:review-result-requires-findings): the store's opt-in to findings blocks, a
+      # new optional key beside `planning_scope` in `RawProjectConfig` (project.rs:650-702). Absent,
+      # the store behaves as on 0.69.1: `new` admits a review-result with no `findings` block and
+      # `validate` reports one without counting it (aep.review.FindingsStanding `not_required`).
+      - name: findings_required_since
+        type: Optional<aep.plan.UtcDate>
+        summary: >-
+          A UTC date. With it set, whatever the date, `aep plan artifact new review-result`
+          refuses a body with no `findings` block unless `--prose-only <reason>` says why; `aep
+          plan artifact validate` reads the date, and counts as a problem a block-less
+          review-result not created before the start of that date in UTC, an undated one
+          included (see the aep.review domain). Written with no value (empty, `~` or `null`) it
+          is refused naming the key, never read as absent: pinned by
+          `a_findings_required_since_written_empty_or_null_is_refused_naming_the_key`
+          (aep-domain).
     relations:
       - name: repository
         kind: references

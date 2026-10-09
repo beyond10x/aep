@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact validate input",
+  "description": "Place one review-result by its findings block, as `validate` does for each.",
+  "x-ess-name": "aep.review.ValidateFindings",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+    },
+    "id": {
+      "$ref": "#/$defs/aep.review.ReviewId"
+    },
+    "strict": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "engineering",
+    "id",
+    "strict"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:b9f3c72058a15930ef933351f23944c190eb4eb2a86429a5929e8c02157ce74a",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.review.ReviewId": {
+      "title": "ReviewId",
+      "x-ess-name": "aep.review.ReviewId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

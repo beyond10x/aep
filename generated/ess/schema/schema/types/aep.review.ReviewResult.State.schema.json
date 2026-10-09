@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.review.ReviewResult.State",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:91c283fec6be03e380d4c0cae7f84311e2274bd020545580dc335924c73600d0",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.review.ReviewResult.State": {
+      "title": "State",
+      "x-ess-name": "aep.review.ReviewResult.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Active"
+      ]
+    }
+  }
+}

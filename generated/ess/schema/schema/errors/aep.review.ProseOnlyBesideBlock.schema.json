@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProseOnlyBesideBlock payload",
+  "description": "`--prose-only` beside a body that carries a `findings` block, its own or the one `--findings` writes into it (story acceptance 2).",
+  "x-ess-name": "aep.review.ProseOnlyBesideBlock",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:153b57632babda7eb2726e7cca8732856eec35ed86bd389993a67cae7813dc0b",
+    "regenerate": "ess generate"
+  }
+}

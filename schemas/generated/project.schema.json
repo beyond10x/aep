@@ -16,6 +16,10 @@
         "null"
       ]
     },
+    "findings_required_since": {
+      "description": "The first day, `YYYY-MM-DD` in UTC, from which a `review-result` must carry a `findings` block. Text until validated, so a value that is not a calendar date is refused by the key's name beside every other defect. Written with no value (empty, `~` or `null`), it is refused rather than read as absent.",
+      "type": "string"
+    },
     "planning_identity": {
       "description": "An event-log stream identity. Refused: no store this build reads has one.",
       "default": null,

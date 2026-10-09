@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProseOnlyBlank payload",
+  "description": "`--prose-only` with an empty or whitespace-only reason (story acceptance 2).",
+  "x-ess-name": "aep.review.ProseOnlyBlank",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:6eab5d0739459cab553daff2d3272dc44871e9d9c5b8b0730a01be193f4282d0",
+    "regenerate": "ess generate"
+  }
+}

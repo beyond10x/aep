@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FindingsRequired payload",
+  "description": "The store sets `findings_required_since`, the body carries no `findings` block and no `--prose-only` was given. The refusal names the two ways forward: a block (`[]` for a review that found nothing, or `--findings <file>`) or `--prose-only <reason>` (story acceptance 1).",
+  "x-ess-name": "aep.review.FindingsRequired",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:d9f9555cb064d8f49d4a2bcaf704a653c2280861036e871aea2a485ee4cbcdc3",
+    "regenerate": "ess generate"
+  }
+}

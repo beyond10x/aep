@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact new input",
+  "description": "Record an artifact; for a review-result, with a findings block or a prose-only reason.",
+  "x-ess-name": "aep.review.RecordReview",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+    },
+    "id": {
+      "$ref": "#/$defs/aep.review.ReviewId"
+    },
+    "kind": {
+      "description": "The kind as `ArtifactKind::as_str` spells it (crates/govern/aep-domain/src/artifact.rs:496).",
+      "type": "string"
+    },
+    "findings_block": {
+      "type": "boolean"
+    },
+    "prose_only": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "engineering",
+    "id",
+    "kind",
+    "findings_block"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:b2e4d2e29d422a047357fd0c5fa2caa4de8871495be8ce504632afb2ebe091ba",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.review.ReviewId": {
+      "title": "ReviewId",
+      "x-ess-name": "aep.review.ReviewId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

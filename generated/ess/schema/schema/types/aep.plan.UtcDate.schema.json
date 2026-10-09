@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.UtcDate",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:c37faeed0f1246a2931f975bb30b9ac6687a428c0b4f33dd41aff8d9397f82a0",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.UtcDate": {
+      "title": "UtcDate",
+      "x-ess-name": "aep.plan.UtcDate",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-invariants": [
+        "value.utf8_bytes >= 10",
+        "value.utf8_bytes <= 10"
+      ]
+    }
+  }
+}

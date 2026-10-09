@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FindingsMissing payload",
+  "description": "`validate` counts a review-result as a problem: no block, in a store that sets `findings_required_since`, and no exemption applies (story acceptance 3).",
+  "x-ess-name": "aep.review.FindingsMissing",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:9524fb8037a9281631a62f3add3c248a9a038ff3c56205f48c54b8b9a7274c4d",
+    "regenerate": "ess generate"
+  }
+}

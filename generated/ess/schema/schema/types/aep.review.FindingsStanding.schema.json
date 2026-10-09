@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.review.FindingsStanding",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:e48b3ce9d6ded41547ba0dbef792cd5c46447fe5725721a453e1d3b757d23333",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.review.FindingsStanding": {
+      "title": "FindingsStanding",
+      "x-ess-name": "aep.review.FindingsStanding",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "carries_block",
+        "not_required",
+        "exempt_prose_only",
+        "exempt_superseded",
+        "exempt_before_opt_in",
+        "missing"
+      ]
+    }
+  }
+}

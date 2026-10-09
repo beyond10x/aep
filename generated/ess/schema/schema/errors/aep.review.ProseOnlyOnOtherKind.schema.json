@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProseOnlyOnOtherKind payload",
+  "description": "`--prose-only` on a kind other than `review-result` (story acceptance 2).",
+  "x-ess-name": "aep.review.ProseOnlyOnOtherKind",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:e15c1aae2e53024e33a0593021d0a9f4b6dc00c53f24c681ed93c71229662d62",
+    "regenerate": "ess generate"
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact validate response",
+  "description": "Place one review-result by its findings block, as `validate` does for each.",
+  "x-ess-name": "aep.review.ValidateFindings",
+  "x-ess-kind": "command-response",
+  "type": "object",
+  "properties": {
+    "standing": {
+      "$ref": "#/$defs/aep.review.FindingsStanding"
+    }
+  },
+  "required": [
+    "standing"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:b9f3c72058a15930ef933351f23944c190eb4eb2a86429a5929e8c02157ce74a",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.review.FindingsStanding": {
+      "title": "FindingsStanding",
+      "x-ess-name": "aep.review.FindingsStanding",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "carries_block",
+        "not_required",
+        "exempt_prose_only",
+        "exempt_superseded",
+        "exempt_before_opt_in",
+        "missing"
+      ]
+    }
+  }
+}

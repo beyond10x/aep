@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StrictlyRefused payload",
+  "description": "`validate --strict` refuses a review listed as recording no findings block (planning.rs:6222-6248, `strictly_refused`, unchanged).",
+  "x-ess-name": "aep.review.StrictlyRefused",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:fda677d6a108ba049107983f21d09d28dd8619d0ddb6faa2ecd7e86860e94e42",
+    "regenerate": "ess generate"
+  }
+}

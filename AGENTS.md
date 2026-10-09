@@ -27,7 +27,7 @@ A change that advances neither is a question for the operator, not an inferred t
 | driver and harness boundary | `docs/design/harness-planning-and-driver-design-v0.1.md` |
 | open work and acceptance | `.engineering/planning/`, plus the live pages listed in `docs/plan/README.md` |
 | delivered releases | `docs/status.md`, generated from annotated tags by `cargo xtask status` |
-| the `aep plan reverse init` and `aep plan store migrate git` surface | the ESS specification `ess/`, projected into `generated/ess/` by `cargo xtask ess` |
+| the `aep plan reverse init` and `aep plan store migrate git` surface, and the review-result findings rule of `aep plan artifact new` and `validate` | the ESS specification `ess/`, projected into `generated/ess/` by `cargo xtask ess` |
 
 Every design's status is in `docs/design/README.md`. A design is proposed until a plan or planning
 artifact accepts it; a later accepted decision overrides earlier prose. Pages under

@@ -68,6 +68,7 @@ A returning guest can pay with a card saved on their previous order.
 | `scope` | CLI | stories only; list of `{confidence: cited\|inferred, path}` |
 | `withholds` | CLI | on a blocker: the evidence kind it stops anybody from producing |
 | `model_digest` | CLI | on an `executable-system-specification`: the compiled model's digest |
+| `prose_only` | CLI | on a `review-result` with no `findings` block: why, as `new --prose-only <reason>` recorded it |
 | `revision` | CLI | an integer ≥ 1, incremented by every CLI write |
 | `transitions` | CLI | see below |
 | kind-specific keys | author | keys a lifecycle's `when:` reads, such as `due` on an `obligation` |
