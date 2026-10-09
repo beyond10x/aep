@@ -4313,6 +4313,7 @@ pub(crate) fn shown_from(
             })
             .collect(),
         withholds: frontmatter.withholds.map(|kind| kind.as_str().to_owned()),
+        prose_only: frontmatter.prose_only.clone(),
         scope: frontmatter
             .scope
             .iter()
@@ -4348,6 +4349,7 @@ fn severity_breakdown(findings: &[aep_backend_markdown::findings::Finding]) -> S
     format!("{} ({})", findings.len(), counted.join(", "))
 }
 
+#[allow(clippy::too_many_lines)] // One labelled row per field `Shown` carries, in its order.
 fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
     let id = artifact_id(id)?;
     if body_only && args.format != Format::Text {
@@ -4398,6 +4400,7 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
                 ("summary", shown.summary.as_deref()),
                 ("owner", shown.owner.as_deref()),
                 ("withholds", shown.withholds.as_deref()),
+                ("prose_only", shown.prose_only.as_deref()),
             ] {
                 if let Some(value) = value {
                     rows.push(vec![label.to_owned(), value.to_owned()]);
@@ -5414,13 +5417,22 @@ fn print_ledger(ledger: &FindingsLedger) {
     }
 }
 
+/// When the store recorded each review it can date, and why it cannot date the others
+/// ([`reviews_recorded_at`]).
+type RecordedAt =
+    BTreeMap<ArtifactId, Result<aep_domain::time::Timestamp, findings_standing::Undated>>;
+
 /// When the store recorded each `review-result` it holds, read from the plan's own record.
 ///
 /// An SQLite or Postgres plan answers with the `Created` entry of `entries` (its history, from
 /// [`review_history`]). A Git-native plan records no creation: a review is as old as the commit
-/// that added its file, and one not committed yet was recorded now, by the clock read here. A
-/// review none of these dates is absent from the map: its creation is unknown, which is not the
-/// same as long ago.
+/// that added its file, and one in a work tree but not committed yet is being recorded now, by the
+/// clock read here.
+///
+/// A review the store cannot date is never dated now by guesswork: one a shallow clone's boundary
+/// commit added, and every review of a store outside a Git work tree, is `Err` with the reason; a
+/// review an SQLite or Postgres history holds no creation for is absent from the map. Either way
+/// its creation is unknown, which is not the same as long ago.
 ///
 /// A review `new` writes carries no transition, so the document's own front matter cannot date
 /// it; both readers of a review's age (`validate`'s outcome reminder and its findings rule) read
@@ -5428,8 +5440,10 @@ fn print_ledger(ledger: &FindingsLedger) {
 fn reviews_recorded_at(
     opened: &Opened,
     entries: &[aep_backend_markdown::journal::Entry],
-) -> BTreeMap<ArtifactId, aep_domain::time::Timestamp> {
+) -> RecordedAt {
     use aep_backend_markdown::journal::Change;
+    use findings_standing::Undated;
+    use git_record::Added;
 
     let mut created: BTreeMap<&ArtifactId, &str> = BTreeMap::new();
     for entry in entries {
@@ -5458,14 +5472,18 @@ fn reviews_recorded_at(
         if stored.document.frontmatter.kind != ArtifactKind::ReviewResult {
             continue;
         }
-        let at = created.get(id).and_then(|at| instant(at).ok()).or_else(|| {
-            committed.as_ref().and_then(|committed| {
-                committed
-                    .get(&stored.relative_path)
-                    .map(|millis| aep_domain::time::Timestamp::from_epoch_millis(*millis))
-                    .or(now)
-            })
-        });
+        let at = match (created.get(id).and_then(|at| instant(at).ok()), &committed) {
+            (Some(at), _) => Some(Ok(at)),
+            (None, None) => None,
+            (None, Some(None)) => Some(Err(Undated::OutsideGit)),
+            (None, Some(Some(committed))) => match committed.get(&stored.relative_path) {
+                Some(Added::At(millis)) => Some(Ok(aep_domain::time::Timestamp::from_epoch_millis(
+                    *millis,
+                ))),
+                Some(Added::ShallowBoundary) => Some(Err(Undated::ShallowBoundary)),
+                None => now.map(Ok),
+            },
+        };
         if let Some(at) = at {
             recorded.insert(id.clone(), at);
         }
@@ -5476,9 +5494,10 @@ fn reviews_recorded_at(
 /// Reviews at least `days` old that no `review_outcome` record names.
 ///
 /// The age is the instant the store recorded the review's **creation**, against the clock read
-/// here. A review the store's history says nothing about has no age this can compute, and is left
-/// out rather than guessed at: a document predating the event log is already its own reported
-/// class, and reporting it twice under a second heading would say two things about one gap.
+/// here. A review the store cannot date — its history says nothing about it, or it is undated
+/// ([`reviews_recorded_at`]) — has no age this can compute, and is left out rather than guessed at:
+/// a document predating the event log is already its own reported class, and reporting it twice
+/// under a second heading would say two things about one gap.
 ///
 /// Read through [`review_history`], which is the plan's own record whatever form it takes.
 fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
@@ -5505,7 +5524,7 @@ fn reviews_without_an_outcome(opened: &Opened, days: u64) -> Vec<String> {
         if stored.document.frontmatter.kind != ArtifactKind::ReviewResult || answered.contains(id) {
             continue;
         }
-        let (Some(now), Some(at)) = (now, recorded_at.get(id).copied()) else {
+        let (Some(now), Some(Ok(at))) = (now, recorded_at.get(id).copied()) else {
             continue;
         };
         let age = now.epoch_millis().saturating_sub(at.epoch_millis()) / 86_400_000;
@@ -5900,7 +5919,7 @@ struct ReviewFindings {
 /// exemption covers is a problem as well, and the problem names the repair.
 fn review_findings(
     report: &StoreReport,
-    recorded_at: &BTreeMap<ArtifactId, aep_domain::time::Timestamp>,
+    recorded_at: &RecordedAt,
     findings_required_since: Option<aep_domain::time::CivilDate>,
 ) -> ReviewFindings {
     use findings_standing::{standing, FindingsStanding, ReviewFacts};
@@ -5942,7 +5961,11 @@ fn review_findings(
         let superseding = superseded_by.get(id).cloned().unwrap_or_default();
         // When the store recorded it ([`reviews_recorded_at`]); a review it cannot date is
         // undated, and undated is not "before" anything.
-        let created_at = recorded_at.get(id).copied();
+        let (created_at, undated) = match recorded_at.get(id).copied() {
+            Some(Ok(at)) => (Some(at), None),
+            Some(Err(why)) => (None, Some(why)),
+            None => (None, None),
+        };
         let created = created_at.map(aep_domain::time::Timestamp::iso_8601);
         let placed = standing(
             &ReviewFacts {
@@ -5972,11 +5995,8 @@ fn review_findings(
                 created.as_deref().unwrap_or_default()
             ),
             FindingsStanding::Missing => {
-                found.problems.push(findings_missing(id, &since));
-                format!(
-                    "not recorded before `findings_required_since` ({since}), superseded by no \
-                     review carrying a block, and recorded with no `prose_only` reason"
-                )
+                found.problems.push(findings_missing(id, &since, undated));
+                missing_because(&since, undated)
             }
         };
         // Without an opt-in the sentence is 0.70.0's, word for word; with one it leads with the
@@ -6000,13 +6020,47 @@ fn review_findings(
     found
 }
 
-/// The problem a `missing` review is counted as, naming the repair that needs no edit to it.
-fn findings_missing(id: &ArtifactId, since: &str) -> String {
+/// Why a review is `missing`, as its listing says it: no exemption holds, and for an undated
+/// review, why it is undated.
+fn missing_because(since: &str, undated: Option<findings_standing::Undated>) -> String {
+    let when = undated.map_or_else(
+        || format!("not recorded before `findings_required_since` ({since})"),
+        |why| {
+            format!(
+                "undated, so not recorded before `findings_required_since` ({since}): {}",
+                why.reason()
+            )
+        },
+    );
     format!(
-        "{id} records no findings block, and this store requires one on every review since \
-         {since} (`findings_required_since`); record a review carrying the block with `--relate \
-         supersedes:{id}`, which settles this one without editing it"
+        "{when}; superseded by no review carrying a block, and recorded with no `prose_only` \
+         reason"
     )
+}
+
+/// The problem a `missing` review is counted as, naming the repair that needs no edit to it, and
+/// for an undated review why it is undated and what would date it.
+fn findings_missing(
+    id: &ArtifactId,
+    since: &str,
+    undated: Option<findings_standing::Undated>,
+) -> String {
+    let head = format!(
+        "{id} records no findings block, and this store requires one on every review since \
+         {since} (`findings_required_since`)"
+    );
+    let repair = format!(
+        "record a review carrying the block with `--relate supersedes:{id}`, which settles this \
+         one without editing it"
+    );
+    match undated {
+        None => format!("{head}; {repair}"),
+        Some(why) => format!(
+            "{head}; it is undated, and undated is never before that day: {}; {}, or {repair}",
+            why.reason(),
+            why.remedy()
+        ),
+    }
 }
 
 /// Each review-result a review carrying a `findings` block `supersedes`, with the reviews that do.
@@ -8287,6 +8341,13 @@ pub(crate) struct Shown {
     refs: Vec<ShownRef>,
     /// The evidence kind this artifact is stopping anybody from producing.
     withholds: Option<String>,
+    /// Why a `review-result` records its findings as prose only, as `--prose-only <reason>` gave
+    /// it; `null` on a review that gave none and on every other kind.
+    ///
+    /// Always written, beside `findings`: `findings: []` is both a review that found nothing and
+    /// one with no block at all, and this is what tells a reader of a store with no files to open
+    /// that the second was recorded prose-only on purpose.
+    prose_only: Option<String>,
     /// The surfaces it declares, `[]` for an artifact that declares none.
     ///
     /// Always written, never omitted when empty: *this story touches nothing* and *nobody has said

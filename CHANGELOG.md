@@ -11,16 +11,26 @@ belongs in the commit message or in `docs/design/`.
 
 ### Added
 
-- `project.yaml` takes an optional `findings_required_since: YYYY-MM-DD`. From that date (midnight
-  UTC), `aep plan artifact new review-result` refuses a body with no `findings` block, naming the
-  two ways forward, and `aep plan artifact validate` counts such a review as a problem unless it
-  was recorded `--prose-only`, a review carrying a block `supersedes` it, or the store recorded
-  it before the date (in a Git-native store, the commit that added its file). Exempt reviews stay
-  listed with their standing; `--strict` does not refuse them. A value that is not a calendar date
-  is refused naming the key. Without the key, nothing changes.
+- `project.yaml` takes an optional `findings_required_since: YYYY-MM-DD`. Once the key is set,
+  whatever the date, `aep plan artifact new review-result` refuses a body with no `findings`
+  block, naming the two ways forward. `aep plan artifact validate` reads the date (midnight UTC)
+  and counts such a review as a problem unless it was recorded `--prose-only`, a review carrying a
+  block `supersedes` it, or the store recorded it before the date (in a Git-native store, the
+  commit that added its file). A review the store cannot date (one a shallow clone's boundary
+  commit holds, or any in a store outside a Git work tree) is undated, never before the date, and
+  its problem names the remedy. Exempt reviews stay listed with their standing; `--strict` does not
+  refuse them. A value that is not a calendar date, and a key written with no value, is refused
+  naming the key. Without the key, nothing changes.
 - `aep plan artifact new --prose-only <reason>` records a `review-result` with no `findings` block
-  on purpose, writing the reason as the front-matter key `prose_only`. It works in every store and
-  is refused on another kind, beside a block, or with a blank reason.
+  on purpose, writing the reason as the front-matter key `prose_only`, which `aep plan artifact
+  show` returns. It works in every store and is refused on another kind, beside a block, or with a
+  blank reason.
+
+### Changed
+
+- `aep plan artifact validate` no longer dates a review it cannot date by the clock: a review in a
+  shallow clone's boundary commit, or in a store outside a Git work tree, is undated and is not
+  reported as overdue for an outcome. The CI guide's example checks out the full history.
 - `aep plan artifact validate --format json|yaml` lists each review with no findings block under
   `findings_standing`, with its standing (`not_required`, `exempt_prose_only`, `exempt_superseded`,
   `exempt_before_opt_in` or `missing`).

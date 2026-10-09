@@ -738,9 +738,32 @@ pub struct RawProjectConfig {
     pub providers: BTreeMap<String, String>,
     /// The first day, `YYYY-MM-DD` in UTC, from which a `review-result` must carry a `findings`
     /// block. Text until validated, so a value that is not a calendar date is refused by the key's
-    /// name beside every other defect.
-    #[serde(default)]
-    pub findings_required_since: Option<String>,
+    /// name beside every other defect. Written with no value (empty, `~` or `null`), it is refused
+    /// rather than read as absent.
+    #[serde(default, deserialize_with = "written_even_when_null")]
+    #[schemars(with = "String")]
+    pub findings_required_since: Option<Written>,
+}
+
+/// A present key's value as written, keeping a key written with a null value apart from an absent
+/// one (which is `None` beside it).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Written {
+    /// The key with a value.
+    Text(String),
+    /// The key written with no value: empty, `~` or `null`, all YAML's null.
+    Null,
+}
+
+/// Reads a key that is present, whatever its value.
+///
+/// Serde reads a null as an absent `Option`; read here, a present key is always `Some`, and an
+/// absent one stays `None` by `#[serde(default)]`.
+fn written_even_when_null<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Written>, D::Error> {
+    <Option<String> as serde::Deserialize>::deserialize(deserializer)
+        .map(|value| Some(value.map_or(Written::Null, Written::Text)))
 }
 
 /// The placeholder a provider's URL pattern must carry.
@@ -916,8 +939,26 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
 
         // A day, and only a day: a value read as some other day, or as no opt-in, would move the
         // line every review is measured against without anybody having written that line.
-        let findings_required_since = raw.findings_required_since.as_deref().and_then(|value| {
-            match CivilDate::parse(value) {
+        let findings_required_since = raw.findings_required_since.and_then(|written| {
+            let Written::Text(value) = written else {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        format!("project.{FINDINGS_REQUIRED_SINCE}"),
+                        format!(
+                            "`{FINDINGS_REQUIRED_SINCE}` is written with no value (empty, `~` or \
+                             `null`); it is a calendar date written YYYY-MM-DD, and a key left \
+                             without one is not read as no opt-in"
+                        ),
+                    )
+                    .with_hint(
+                        "write the first day a review-result must carry a `findings` block, such \
+                         as `2026-10-01`, or remove the key to require none",
+                    ),
+                );
+                return None;
+            };
+            match CivilDate::parse(&value) {
                 Ok(date) => Some(date),
                 Err(error) => {
                     errors.push(
@@ -1487,6 +1528,31 @@ artefacts: graph.yaml
                 error.message.contains("`findings_required_since")
                     && error.message.contains("calendar date"),
                 "the refusal names the key and what it must be: {}",
+                error.message
+            );
+        }
+    }
+
+    /// A key written with no value — empty, `~` or `null`, all YAML's null — is a key somebody
+    /// wrote and left without its date, not an absent key: refused by the key's name, never read
+    /// as no opt-in.
+    #[test]
+    fn a_findings_required_since_written_empty_or_null_is_refused_naming_the_key() {
+        for written in ["", " ~", " null", " Null"] {
+            let errors = config(&format!("{BASE}findings_required_since:{written}\n"))
+                .expect_err("a key with no value is refused");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.findings_required_since")
+                .unwrap_or_else(|| {
+                    panic!("no findings_required_since refusal for {written:?}: {errors:?}")
+                });
+            assert_eq!(error.code, ValidationCode::TypeMismatch, "{written:?}");
+            assert!(
+                error.message.contains("`findings_required_since`")
+                    && error.message.contains("no value"),
+                "the refusal names the key and that it has no value: {}",
                 error.message
             );
         }

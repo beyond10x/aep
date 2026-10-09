@@ -280,10 +280,14 @@ entities:
       - name: findings_required_since
         type: Optional<aep.plan.UtcDate>
         summary: >-
-          A UTC date. With it set, `aep plan artifact new review-result` refuses a body with no
-          `findings` block unless `--prose-only <reason>` says why, and `aep plan artifact
-          validate` counts as a problem a block-less review-result created on or after the start
-          of that date in UTC (see the aep.review domain).
+          A UTC date. With it set, whatever the date, `aep plan artifact new review-result`
+          refuses a body with no `findings` block unless `--prose-only <reason>` says why; `aep
+          plan artifact validate` reads the date, and counts as a problem a block-less
+          review-result not created before the start of that date in UTC, an undated one
+          included (see the aep.review domain). Written with no value (empty, `~` or `null`) it
+          is refused naming the key, never read as absent: pinned by
+          `a_findings_required_since_written_empty_or_null_is_refused_naming_the_key`
+          (aep-domain).
     relations:
       - name: repository
         kind: references

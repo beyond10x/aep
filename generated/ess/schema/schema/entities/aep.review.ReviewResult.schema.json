@@ -30,7 +30,7 @@
       "type": "string"
     },
     "created_at": {
-      "description": "When the review was recorded, dated the way `validate` dates a review it asks for an outcome (planning.rs:5429-5480, `reviews_without_an_outcome`): the creation entry of an SQLite or Postgres store's history; in a Git-native store, the commit that added the file (planning/git_record.rs:214, `first_committed`), or now when it is not committed yet. A review `new` writes carries no transition, so its first transition cannot date it.",
+      "description": "When the review was recorded, dated the way `validate` dates a review it asks for an outcome (planning.rs `reviews_recorded_at`, read by `reviews_without_an_outcome` and the findings rule alike): the creation entry of an SQLite or Postgres store's history; in a Git-native store inside a Git work tree, the commit that added the file (planning/git_record.rs `first_committed`), or now when the file is not committed yet. Undated (absent) when the store holds no creation entry for it; when the repository is a shallow clone and the commit that added the file is a shallow boundary commit (one `git rev-parse --git-path shallow` lists), whose history does not reach the real one; and when the store is not in a Git work tree that versions it (a `git archive` export, a copied or ignored directory). An undated review is never created before the opt-in, and is never reported overdue for an outcome. A review `new` writes carries no transition, so its first transition cannot date it.",
       "type": "string",
       "format": "date-time"
     },
@@ -39,7 +39,7 @@
       "type": "boolean"
     },
     "created_before_opt_in": {
-      "description": "The store sets `findings_required_since` and `created_at` is before the start of that date in UTC; `false` when the key is absent. Pinned by `a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed` and `a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt` (aep-cli validate tests).",
+      "description": "The store sets `findings_required_since` and `created_at` is defined and before the start of that date in UTC; `false` when the key is absent or the review is undated. Pinned by `a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed`, `a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt`, `a_store_outside_git_dates_no_review_and_names_the_repository_as_the_remedy` (aep-cli validate tests) and `a_shallow_clone_leaves_a_review_in_its_boundary_commit_undated_and_names_the_full_history` (aep-cli findings_required_adversary).",
       "type": "boolean"
     },
     "store_requires_findings": {
@@ -54,7 +54,6 @@
     "id",
     "engineering",
     "findings_block",
-    "created_at",
     "superseded_by_block",
     "created_before_opt_in",
     "store_requires_findings",
@@ -64,8 +63,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "c8e452b3e7371aca69b39643bbeb3359ec49155d49addf63381150a1b0d9c8c5",
-    "contract_digest": "slice-sha256/2:917d108252159dc0eb6c552ca35a04d54a34eaf4c0a17ef7e6c8fbdde20b6535",
+    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:993597c4a2bb3a707ff4e37fd4b63b74766f7ebe686201733b2acbfd64d1f1a7",
     "regenerate": "ess generate"
   },
   "$defs": {

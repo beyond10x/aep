@@ -38,6 +38,8 @@ jobs:
       AEP_VERSION: "0.70.0"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the full history: validate dates a review by the commit that added it
       - name: Install aep
         run: |
           base=https://github.com/beyond10x/aep/releases/download/$AEP_VERSION
@@ -54,6 +56,13 @@ jobs:
 
 Pin the checkout action to a commit if your policy requires it. The job needs no credentials: it
 reads files and writes nothing.
+
+`fetch-depth: 0` matters to a project whose `project.yaml` sets `findings_required_since`. The
+checkout's default is a clone of depth 1, in which every file appears to be added by the one commit
+it holds, so no review in it can be dated. `validate` leaves such a review undated rather than
+date it by the clone, and an undated review with no findings block and no other exemption is a
+problem: the problem names the shallow clone and the full history as the remedy. The same holds
+for a store validated outside its Git repository, such as a `git archive` export.
 
 ## Strict mode
 

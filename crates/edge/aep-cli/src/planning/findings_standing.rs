@@ -67,6 +67,47 @@ impl FindingsStanding {
     }
 }
 
+/// Why a Git-native store cannot date a review's recording, and so leaves it undated rather than
+/// guessing (invariant *Unknown differs from false*).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Undated {
+    /// The repository is a shallow clone and the commit that added the file is its boundary: the
+    /// history that would date it was not fetched.
+    ShallowBoundary,
+    /// The store is not in a Git work tree that versions it — a `git archive` export, a copied or
+    /// ignored directory — so no commit records when anything in it was added.
+    OutsideGit,
+}
+
+impl Undated {
+    /// Why the review is undated, as the listing prints it.
+    pub(crate) fn reason(self) -> &'static str {
+        match self {
+            Self::ShallowBoundary => {
+                "the repository is a shallow clone and the commit that added it is the clone's \
+                 boundary, so the history that dates it is not here"
+            }
+            Self::OutsideGit => {
+                "the store is not in a Git work tree that versions it, so no commit records when \
+                 it was added"
+            }
+        }
+    }
+
+    /// What dates it, as the problem names it.
+    pub(crate) fn remedy(self) -> &'static str {
+        match self {
+            Self::ShallowBoundary => {
+                "fetch the full history (`git fetch --unshallow`, or `fetch-depth: 0` for \
+                 actions/checkout) and validate again"
+            }
+            Self::OutsideGit => {
+                "run `aep plan artifact validate` in the repository that versions the store"
+            }
+        }
+    }
+}
+
 /// What one review-result is placed on: the facts `validate` reads about it from the store.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct ReviewFacts {
@@ -78,8 +119,9 @@ pub(crate) struct ReviewFacts {
     pub(crate) superseded_by_block: bool,
     /// When the store recorded the review (`reviews_recorded_at` in `planning.rs`), when it can tell.
     ///
-    /// `None` is *not known*, never *long ago*: a review with no recorded creation is not dated
-    /// before anything (invariant *Unknown differs from false*).
+    /// `None` is *not known*, never *long ago*: a review with no recorded creation, in a shallow
+    /// clone's boundary commit, or in a store outside Git is not dated before anything (invariant
+    /// *Unknown differs from false*).
     pub(crate) created_at: Option<Timestamp>,
 }
 

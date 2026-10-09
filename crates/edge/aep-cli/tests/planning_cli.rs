@@ -5624,6 +5624,82 @@ fn a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt() {
     );
 }
 
+/// A store outside every Git work tree — a `git archive` export, a copied directory — holds no
+/// commit to date a review by, so it dates none: an undated review is never "before" the opt-in,
+/// and its problem says why it is undated and where to run `validate` instead. The same files in a
+/// work tree, not committed yet, are reviews being recorded now.
+#[test]
+fn a_store_outside_git_dates_no_review_and_names_the_repository_as_the_remedy() {
+    let store = findings_project("aep-findings-outside-git", None);
+    let drafts = scratch("aep-findings-outside-git-drafts");
+    subject_epic(&store);
+    let old = new_review(&store, &drafts, "old", "# Attack\n\nProse.\n", &[]);
+    assert_eq!(code(&old), 0, "{}", stderr(&old));
+    // An opt-in years ahead: a review dated now would predate it.
+    opt_in(&store, Some("2099-01-01"));
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 1, "an undated review is counted: {summary}");
+    assert_eq!(
+        standings(&summary)
+            .get("review-result:old")
+            .map(String::as_str),
+        Some("missing"),
+        "{summary}"
+    );
+    let counted = problems(&summary);
+    let problem = counted
+        .iter()
+        .find(|problem| problem.contains("review-result:old"))
+        .unwrap_or_else(|| panic!("the undated review is not counted: {summary}"));
+    assert!(
+        problem.contains("not in a Git work tree")
+            && problem.contains("run `aep plan artifact validate` in the repository"),
+        "the problem does not say why the review is undated and where to validate: {problem}"
+    );
+    let entry = summary["findings_standing"]
+        .as_array()
+        .and_then(|entries| {
+            entries
+                .iter()
+                .find(|entry| entry["review"] == "review-result:old")
+        })
+        .expect("the review is listed");
+    assert!(entry["created_at"].is_null(), "{entry}");
+
+    // Undated is not overdue either: the outcome reminder says nothing it cannot measure.
+    let reminded = aep(&[
+        "plan",
+        "artifact",
+        "validate",
+        "--outcome-within",
+        "0",
+        "--store",
+        printable(&store),
+    ]);
+    assert!(
+        !again_names(&stdout(&reminded), "review-result:old"),
+        "an undated review was reported overdue: {}",
+        stdout(&reminded)
+    );
+
+    // Control: the same files in a Git work tree, not committed yet, were recorded now.
+    let project = store
+        .parent()
+        .and_then(Path::parent)
+        .expect("a planning directory sits two levels inside its project");
+    fixture_git(project, "2026-10-01T00:00:00Z", &["init", "--quiet"]);
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 0, "{summary}");
+    assert_eq!(
+        standings(&summary)
+            .get("review-result:old")
+            .map(String::as_str),
+        Some("exempt_before_opt_in"),
+        "{summary}"
+    );
+}
+
 #[test]
 fn without_findings_required_since_a_review_without_a_block_is_reported_not_counted() {
     let store = findings_project("aep-findings-not-opted-in", None);
@@ -6033,8 +6109,15 @@ fn the_findings_verb_refuses_a_review_that_does_not_review_the_artifact() {
 }
 
 /// Two reviews of one epic, one of them about a different epic, for the outcome tests.
+///
+/// The store sits inside a Git work tree with nothing committed, which is a store whose reviews
+/// `new` just wrote: each is dated now. A store outside every work tree dates nothing, and an
+/// undated review is never overdue.
 fn a_store_with_two_reviews(name: &str) -> (PathBuf, PathBuf) {
-    let store = scratch(name);
+    let project = scratch(name);
+    fixture_git(&project, "2026-10-01T00:00:00Z", &["init", "--quiet"]);
+    let store = project.join("planning");
+    std::fs::create_dir_all(&store).expect("the planning directory is writable");
     let drafts = scratch(&format!("{name}-drafts"));
     subject_epic(&store);
     let other = aep(&[
