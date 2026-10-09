@@ -67,7 +67,7 @@ use entity_store::{
 use serde_json::{Map, Value};
 
 use crate::document::PlanningDocument;
-use crate::frontmatter::{PlanningFormat, PlanningFrontmatter};
+use crate::frontmatter::{PlanningFormat, PlanningFrontmatter, PROSE_ONLY};
 use crate::journal::{Change, Entry, Transition};
 use crate::store::MarkdownStore;
 
@@ -412,6 +412,11 @@ pub fn instance_of(entity: &str, id: &str, document: &PlanningDocument) -> Entit
     if let Some(digest) = &frontmatter.model_digest {
         fields.insert("model_digest".to_owned(), Value::from(digest.as_str()));
     }
+    // The prose-only reason, for the reason the digest above is here: a field this function does
+    // not name does not survive the round trip every write makes through an instance.
+    if let Some(reason) = &frontmatter.prose_only {
+        fields.insert(PROSE_ONLY.to_owned(), Value::from(reason.clone()));
+    }
     // Carried so a later move appends to the list rather than replacing it: the document is
     // re-read into an instance before every write, and what this does not name is lost.
     if !frontmatter.transitions.is_empty() {
@@ -478,6 +483,8 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
     let title = text("title")?;
     let summary = text("summary")?;
     let owner = text("owner")?;
+    let prose_only = text(PROSE_ONLY)?;
+    prose_only_holds(prose_only.as_deref(), &kind).map_err(refuse)?;
 
     let tags = tags_of(&mut fields).map_err(refuse)?;
     let refs = refs_of(&mut fields).map_err(refuse)?;
@@ -549,6 +556,7 @@ pub fn document_of(instance: &EntityInstance) -> Result<PlanningDocument, StoreE
             scope,
             withholds,
             model_digest,
+            prose_only,
             revision: instance.revision,
             transitions,
             extra,
@@ -608,6 +616,25 @@ fn identity_of(
         }
     }
     Ok((artifact, kind))
+}
+
+/// Holds an instance's `prose_only` reason to the rule the front-matter reader holds a file's to,
+/// so an instance cannot carry what a file could not: a reason only on a review-result, and never
+/// a blank one.
+fn prose_only_holds(reason: Option<&str>, kind: &ArtifactKind) -> Result<(), String> {
+    let Some(reason) = reason else {
+        return Ok(());
+    };
+    if *kind != ArtifactKind::ReviewResult {
+        return Err(format!(
+            "the `{PROSE_ONLY}` field is on a `{}`, and only a `review-result` carries one",
+            kind.as_str()
+        ));
+    }
+    if reason.trim().is_empty() {
+        return Err(format!("the `{PROSE_ONLY}` field is blank"));
+    }
+    Ok(())
 }
 
 /// The `tags` field as the frontmatter's set, or nothing.

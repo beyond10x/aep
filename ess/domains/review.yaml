@@ -64,11 +64,24 @@ entities:
         summary: >-
           Why this review records its findings as prose only, as `--prose-only <reason>` gave it.
           Present only on a review with no block.
+      # change (adversary pass 1, F1 and F3): optional. A recording the store cannot date is
+      # undated, never dated now by guesswork, and undated is never before the opt-in
+      # (invariant *Unknown differs from false*).
       - name: created_at
-        type: Timestamp
+        type: Optional<Timestamp>
         summary: >-
-          The `at` of the document's first transition (journal.rs:199-201, `Transition.at`;
-          frontmatter.rs:164-171, `transitions`, oldest first).
+          When the review was recorded, dated the way `validate` dates a review it asks for an
+          outcome (planning.rs `reviews_recorded_at`, read by `reviews_without_an_outcome` and the
+          findings rule alike): the creation entry of an SQLite or Postgres store's history; in a
+          Git-native store inside a Git work tree, the commit that added the file
+          (planning/git_record.rs `first_committed`), or now when the file is not committed yet.
+          Undated (absent) when the store holds no creation entry for it; when the repository is
+          a shallow clone and the commit that added the file is a shallow boundary commit (one
+          `git rev-parse --git-path shallow` lists), whose history does not reach the real one;
+          and when the store is not in a Git work tree that versions it (a `git archive` export,
+          a copied or ignored directory). An undated review is never created before the opt-in,
+          and is never reported overdue for an outcome. A review `new` writes carries no
+          transition, so its first transition cannot date it.
       # change: the two facts below are about more than this row, and `validate` reads them where
       # it walks the store.
       # ESS-LIMIT: ESS 0.56.0 derives no field: an entity field, an invariant and a view hold
@@ -87,11 +100,14 @@ entities:
       - name: created_before_opt_in
         type: Boolean
         summary: >-
-          The store sets `findings_required_since` and `created_at` is before the start of that
-          date in UTC; `false` when the key is absent. Pinned by
-          `a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed` and
-          `a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt` (aep-cli validate
-          tests).
+          The store sets `findings_required_since` and `created_at` is defined and before the
+          start of that date in UTC; `false` when the key is absent or the review is undated.
+          Pinned by `a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed`,
+          `a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt`,
+          `a_store_outside_git_dates_no_review_and_names_the_repository_as_the_remedy` (aep-cli
+          validate tests) and
+          `a_shallow_clone_leaves_a_review_in_its_boundary_commit_undated_and_names_the_full_history`
+          (aep-cli findings_required_adversary).
       # ESS-LIMIT: this is the store's own fact (aep.plan.Project `findings_required_since` is
       # set), repeated here because aep.review.ValidateFindings places a review by its row, and
       # ESS 0.56.0 refuses a command that reads both its subject and a related row
@@ -258,8 +274,8 @@ commands:
               - defined(findings_required_since)
           exists: true
         error: aep.review.FindingsRequired
-      # The record writes the front matter and body. `created_at` is the first transition's `at`,
-      # carried by the command (`{generated: true}`: the host supplies the instant). A new review
+      # The record writes the front matter and body. `created_at` is the instant the record
+      # is made (`{generated: true}`: the host supplies it; `validate` reads it back as above). A new review
       # is superseded by nothing yet. `created_before_opt_in` and `store_requires_findings` are
       # left unset: they are facts `validate` reads from the store each time it runs, not values
       # `new` writes, and a store whose `findings_required_since` lies in the future makes the
@@ -402,7 +418,7 @@ views:
       - name: prose_only
         type: Optional<String>
       - name: created_at
-        type: Timestamp
+        type: Optional<Timestamp>
       - name: superseded_by_block
         type: Boolean
       - name: created_before_opt_in
@@ -429,7 +445,7 @@ views:
       - name: prose_only
         type: Optional<String>
       - name: created_at
-        type: Timestamp
+        type: Optional<Timestamp>
       - name: superseded_by_block
         type: Boolean
       - name: created_before_opt_in

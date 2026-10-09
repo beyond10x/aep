@@ -6,7 +6,9 @@
 //! cost grows with the files asked about, not with a process per file.
 //!
 //! Outside a Git work tree there is no record to compare with: every answer here is `None` or
-//! empty, and the check is skipped, not failed. A work tree with no commit yet has an empty history.
+//! empty, and the check is skipped, not failed; a review there is undated, not dated now. A work
+//! tree with no commit yet has an empty history. In a shallow clone a file the boundary commit
+//! holds looks added by it, so [`first_committed`] says so rather than dating it by the clone.
 
 use std::collections::BTreeMap;
 use std::io::Write as _;
@@ -206,49 +208,97 @@ pub(super) fn changed_evidence(evidence: &Path) -> Vec<String> {
         .collect()
 }
 
-/// When each of `paths` (relative to `root`) was added in its current incarnation, as milliseconds
-/// since the Unix epoch from the adding commit's author date, keyed by the same relative path.
+/// What the history says about when one path was added in its current incarnation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Added {
+    /// Added by a commit whose author date is this many milliseconds since the Unix epoch.
+    At(u64),
+    /// Added, as far as this history goes, by a shallow clone's boundary commit: every file the
+    /// boundary holds looks added there, because the commits before it were not fetched. The
+    /// boundary's date is when the clone starts, not when the file was added, so it dates nothing.
+    ShallowBoundary,
+}
+
+/// When each of `paths` (relative to `root`) was added in its current incarnation, keyed by the
+/// same relative path.
 ///
-/// One `git log` for the whole set. A path with no committed version is absent from the map, and
-/// so is every path outside a work tree.
-pub(super) fn first_committed(root: &Path, paths: &[&str]) -> BTreeMap<String, u64> {
-    let mut found = BTreeMap::new();
-    if paths.is_empty() || unversioned(root) {
-        return found;
+/// One `git log` for the whole set, plus two `rev-parse` calls to learn whether the repository is
+/// shallow and which commits are its boundary. A path with no committed version is absent from the
+/// map: not committed yet. `None` means there is no history to date anything by: not a Git work
+/// tree, or one that ignores the store.
+pub(super) fn first_committed(root: &Path, paths: &[&str]) -> Option<BTreeMap<String, Added>> {
+    if unversioned(root) {
+        return None;
     }
-    let Some(prefix) = git(root, &["rev-parse", "--show-prefix"])
-        .and_then(|prefix| String::from_utf8(prefix).ok())
-    else {
-        return found;
-    };
+    let mut found = BTreeMap::new();
+    if paths.is_empty() {
+        return Some(found);
+    }
+    let prefix = String::from_utf8(git(root, &["rev-parse", "--show-prefix"])?).ok()?;
     let prefix = prefix.trim_end_matches('\n');
+    let boundary = shallow_boundary(root)?;
     let mut args = vec![
         "log",
         "--no-renames",
         "--diff-filter=A",
-        "--format=%x01%at",
+        "--format=%x01%H %at",
         "--name-only",
         "--",
     ];
     args.extend_from_slice(paths);
-    let Some(log) = git(root, &args).and_then(|log| String::from_utf8(log).ok()) else {
-        return found;
+    let Some(log) = git(root, &args) else {
+        // A work tree with no commit yet has an empty history, which is an answer; any other
+        // failure is not.
+        return git(root, &["rev-parse", "--verify", "--quiet", "HEAD"])
+            .is_none()
+            .then_some(found);
     };
+    let log = String::from_utf8(log).ok()?;
     // Newest first, and only the current incarnation counts: a file deleted and re-created is
     // dated from its re-creation, which is the first addition this walk meets.
-    let mut seconds = None;
+    let mut added = None;
     for line in log.lines() {
-        if let Some(at) = line.strip_prefix('\u{1}') {
-            seconds = at.trim().parse::<u64>().ok();
+        if let Some(header) = line.strip_prefix('\u{1}') {
+            added = header.split_once(' ').and_then(|(commit, at)| {
+                if boundary.contains(commit) {
+                    Some(Added::ShallowBoundary)
+                } else {
+                    at.trim()
+                        .parse::<u64>()
+                        .ok()
+                        .map(|seconds| Added::At(seconds.saturating_mul(1000)))
+                }
+            });
             continue;
         }
         if line.is_empty() {
             continue;
         }
-        if let Some(seconds) = seconds {
+        if let Some(added) = added {
             let relative = line.strip_prefix(prefix).unwrap_or(line).to_owned();
-            found.entry(relative).or_insert(seconds.saturating_mul(1000));
+            found.entry(relative).or_insert(added);
         }
     }
-    found
+    Some(found)
+}
+
+/// The boundary commits of a shallow repository — the ones its `shallow` file lists, whose parents
+/// were not fetched — or none when the repository is complete. `None` when Git cannot say.
+fn shallow_boundary(root: &Path) -> Option<std::collections::BTreeSet<String>> {
+    let shallow = git(root, &["rev-parse", "--is-shallow-repository"])?;
+    if shallow.trim_ascii() != b"true" {
+        return Some(std::collections::BTreeSet::new());
+    }
+    let path = String::from_utf8(git(root, &["rev-parse", "--git-path", "shallow"])?).ok()?;
+    let path = Path::new(path.trim_end_matches('\n'));
+    // `--git-path` answers relative to the directory Git ran in, which is `root`.
+    let listed = std::fs::read_to_string(root.join(path)).ok()?;
+    Some(
+        listed
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .map(ToOwned::to_owned)
+            .collect(),
+    )
 }

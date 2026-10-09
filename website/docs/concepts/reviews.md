@@ -43,6 +43,46 @@ A malformed block is refused. The refusal names the body line and quotes it. A b
 records `[]`, and that is different from a review with no block at all. `validate` reports the
 second as a review whose findings are prose only.
 
+## Requiring a findings block
+
+A project opts in by naming the day from which every review must carry a block:
+
+```yaml
+findings_required_since: 2026-10-01   # in .engineering/project.yaml, read as midnight UTC
+```
+
+Once the key is set, whatever the date, even one still to come, `new review-result` refuses a body
+with no `findings` block. It names the two ways forward: give the findings (a block, `[]` for a
+review that found nothing, or `--findings`), or record why there are none with `--prose-only
+<reason>`. The reason is written into the review's front matter as `prose_only`, and `show`
+returns it. The flag works in every store, and it is refused on any other kind, beside a body
+that carries a block, and with a blank reason. A key written with no value (empty, `~` or `null`)
+is refused naming the key; it is not read as no opt-in.
+
+The date is what `validate` reads. It counts a review with no block as a problem, unless one of
+three exemptions holds. It checks them in this order, and lists each exempt review with the
+exemption that applies:
+
+| Standing | When |
+|---|---|
+| `exempt_prose_only` | it was recorded with `--prose-only`; the reason is listed |
+| `exempt_superseded` | a review that carries a block names it with `supersedes` |
+| `exempt_before_opt_in` | the store recorded it before midnight UTC of the date: in a Git-native store, the commit that added its file; in an SQLite or Postgres store, its creation entry. One in a Git work tree but not yet committed is being recorded now |
+| `missing` | none of these: a problem, exit `1` |
+
+A review the store cannot date is undated, and undated is never before the date. In a shallow
+clone, a review the boundary commit holds looks added by that commit, so it is left undated rather
+than dated by the clone; a store outside a Git work tree, such as a `git archive` export, dates no
+review. Such a review is `missing` unless another exemption holds, and its problem says why it is
+undated and what dates it: the full history (`fetch-depth: 0` for `actions/checkout`), or running
+`validate` in the repository. An undated review is not reported as overdue for an outcome either.
+
+An existing review is never edited. To settle one, record a new review with its findings and
+`--relate supersedes:<old review>`; outcomes are still recorded with `evidence --kind
+review_outcome`. Without `findings_required_since`, nothing changes: a review with no block is
+listed as `not_required`, not counted, and `--strict` refuses it. With the key set, `--strict`
+refuses no exempt review.
+
 ## Comparing two rounds
 
 `findings` compares the two most recent reviews of an artifact, or the two you name with `--from`

@@ -37,6 +37,7 @@ providers:                             # optional: link patterns for external re
 | `store` | no | `git: {}` | where the plan is kept; see below |
 | `summary` | no | | one line for people; nothing reads it |
 | `providers` | no | | a URL pattern per external system, each containing `{key}`; a pattern without `{key}` is refused |
+| `findings_required_since` | no | | a calendar date, `YYYY-MM-DD`, read as starting at midnight UTC. Once it is set, whatever the date, `new` refuses a `review-result` without a `findings` block unless `--prose-only <reason>` says why; `validate` reads the date and counts such a review as a problem unless it predates the date, is superseded by a review carrying a block, or was recorded prose-only. A review the store cannot date (a shallow clone, a store outside Git) is undated, never before the date. See [Reviews](../concepts/reviews.md#requiring-a-findings-block). A value that is not a calendar date, or no value at all (empty, `~`, `null`), is refused naming the key |
 | `artifacts` | no | `artifacts.yaml` | the artifact manifest for [governed tasks](../concepts/governance.md) |
 | `task` | no | `task.yaml` | the task document `govern` and `drive` use when `--task` is absent |
 | `state` | no | `state.yaml` | where execution state is kept |

@@ -5132,6 +5132,768 @@ fn validate_still_reports_a_review_with_no_findings_block_in_one_unbroken_senten
     );
 }
 
+// ---------------------------------------------------------------------------------------------
+// `story:review-result-requires-findings` — a store that opts in with `findings_required_since`
+// gains no review whose findings only prose holds, unless the review says why.
+// ---------------------------------------------------------------------------------------------
+
+/// The day every opted-in store below requires a block from.
+const OPT_IN: &str = "2026-10-01";
+
+/// Writes the project file of the project whose planning directory is `planning`: opted in from
+/// `since` when given, not opted in otherwise. Rewritten in place, so a test can opt a store in
+/// after it already holds reviews, which is how a real store adopts the rule.
+fn opt_in(planning: &Path, since: Option<&str>) {
+    let key = since.map_or_else(String::new, |date| {
+        format!("findings_required_since: {date}\n")
+    });
+    write(
+        &planning
+            .parent()
+            .expect("a planning directory sits in a project directory")
+            .join("project.yaml"),
+        &format!(
+            "version: aep.project/5\nplanning_scope: findings-required\nprotocol: adp/1\n\
+             profile: development.standard\n{key}"
+        ),
+    );
+}
+
+/// A scratch project with a project file, opted in from `since` when given. Returns its planning
+/// directory, which is the `--store` every verb below is given: `--store` naming a project's own
+/// planning directory opens it as that project's `project.yaml` says.
+fn findings_project(name: &str, since: Option<&str>) -> PathBuf {
+    let planning = scratch(name).join(".engineering/planning");
+    std::fs::create_dir_all(&planning).expect("the planning directory is writable");
+    opt_in(&planning, since);
+    planning
+}
+
+/// `new review-result <name> --from <body>` reviewing `epic:objectives`, plus `extra`, unasserted.
+fn new_review(store: &Path, drafts: &Path, name: &str, body: &str, extra: &[&str]) -> Output {
+    let path = drafts.join(format!("{name}.md"));
+    write(&path, body);
+    let mut args = vec![
+        "plan",
+        "artifact",
+        "new",
+        "review-result",
+        name,
+        "--title",
+        name,
+        "--relate",
+        "reviews:epic:objectives",
+        "--from",
+        printable(&path),
+        "--store",
+        printable(store),
+    ];
+    args.extend_from_slice(extra);
+    aep(&args)
+}
+
+/// A review-result with no findings block, as `new` writes one (no transition), committed at `at`.
+///
+/// A Git-native store dates a review by the commit that added its file, so the project directory
+/// holding `store` is made a Git repository on first use, with an identity of its own, and the
+/// review is committed alone with `at` as both its author and committer date. Every other file in
+/// the project stays uncommitted, which is a review `new` wrote and nobody committed yet: dated
+/// now.
+fn dated_review(store: &Path, name: &str, at: &str) {
+    let relative = format!("review-result/{name}.md");
+    write(
+        &store.join(&relative),
+        &format!(
+            "---\nformat: aep.planning-md/3\nid: review-result:{name}\nkind: review-result\n\
+             status: active\ntitle: {name}\nrelations:\n- reviews: epic:objectives\n\
+             revision: 1\n---\n# {name}\n\nEvery epic names an objective.\n"
+        ),
+    );
+    let project = store
+        .parent()
+        .and_then(Path::parent)
+        .expect("a planning directory sits two levels inside its project");
+    if !project.join(".git").exists() {
+        fixture_git(project, at, &["init", "--quiet"]);
+        fixture_git(project, at, &["config", "user.name", "Findings Fixture"]);
+        fixture_git(
+            project,
+            at,
+            &["config", "user.email", "findings-fixture@example.invalid"],
+        );
+    }
+    let path = format!(".engineering/planning/{relative}");
+    fixture_git(project, at, &["add", "--", &path]);
+    fixture_git(
+        project,
+        at,
+        &["commit", "--quiet", "--no-verify", "-m", name, "--", &path],
+    );
+}
+
+/// Runs Git in a findings fixture with the clock fixed at `at`, and no configuration but the
+/// fixture repository's own: a developer's global hooks or signing key must not decide a test.
+fn fixture_git(directory: &Path, at: &str, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(directory)
+        .env("GIT_AUTHOR_DATE", at)
+        .env("GIT_COMMITTER_DATE", at)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .expect("git runs");
+    assert!(output.status.success(), "git {args:?}: {}", stderr(&output));
+}
+
+/// `validate --format json` over `store`, with its exit code.
+fn validated_json(store: &Path, strict: bool) -> (i32, serde_json::Value) {
+    let mut args = vec!["plan", "artifact", "validate", "--format", "json"];
+    if strict {
+        args.push("--strict");
+    }
+    args.extend(["--store", printable(store)]);
+    let validated = aep(&args);
+    let value = serde_json::from_str(&stdout(&validated)).unwrap_or_else(|error| {
+        panic!(
+            "validate --format json is JSON ({error}): {}{}",
+            stdout(&validated),
+            stderr(&validated)
+        )
+    });
+    (code(&validated), value)
+}
+
+/// Each listed review's standing, by id, from `validate --format json`.
+fn standings(summary: &serde_json::Value) -> std::collections::BTreeMap<String, String> {
+    summary
+        .get("findings_standing")
+        .and_then(serde_json::Value::as_array)
+        .map(|entries| {
+            entries
+                .iter()
+                .map(|entry| {
+                    (
+                        entry["review"].as_str().expect("a review id").to_owned(),
+                        entry["standing"].as_str().expect("a standing").to_owned(),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// The problems `validate --format json` counted.
+fn problems(summary: &serde_json::Value) -> Vec<String> {
+    summary["problems"]
+        .as_array()
+        .expect("problems is a list")
+        .iter()
+        .map(|problem| problem.as_str().expect("a problem is text").to_owned())
+        .collect()
+}
+
+/// A reason as an operator writes one.
+const REASON: &str = "the reviewing tool writes no block yet";
+
+#[test]
+fn new_review_result_without_a_block_is_refused_once_the_store_opts_in() {
+    let store = findings_project("aep-findings-required-new", Some(OPT_IN));
+    let drafts = scratch("aep-findings-required-new-drafts");
+    subject_epic(&store);
+
+    let refused = new_review(
+        &store,
+        &drafts,
+        "prose",
+        "# Attack\n\nThe loop never advances.\n",
+        &[],
+    );
+    assert_eq!(code(&refused), 1, "a review with no block was recorded");
+    let said = stderr(&refused);
+    assert!(
+        said.contains("findings_required_since") && said.contains(OPT_IN),
+        "the refusal does not say which rule refused it: {said}"
+    );
+    assert!(
+        said.contains("```findings") && said.contains("[]") && said.contains("--findings"),
+        "the refusal does not name a block, `[]` for nothing found, or `--findings`: {said}"
+    );
+    assert!(
+        said.contains("--prose-only <reason>"),
+        "the refusal does not name `--prose-only <reason>`: {said}"
+    );
+    assert!(
+        !store.join("review-result/prose.md").exists(),
+        "a refused `new` wrote the document anyway"
+    );
+
+    // Both ways forward are open: a block in the body, `[]` when nothing was found, and the same
+    // block given apart.
+    let approved = new_review(
+        &store,
+        &drafts,
+        "approve",
+        "approve\n\nNothing to report.\n\n```findings\n[]\n```\n",
+        &[],
+    );
+    assert_eq!(code(&approved), 0, "{}", stderr(&approved));
+    let findings = drafts.join("findings.json");
+    write(&findings, "[]\n");
+    let apart = new_review(
+        &store,
+        &drafts,
+        "apart",
+        "approve\n",
+        &["--findings", printable(&findings)],
+    );
+    assert_eq!(code(&apart), 0, "{}", stderr(&apart));
+}
+
+#[test]
+fn new_review_result_with_prose_only_records_the_reason_in_front_matter() {
+    for (name, since) in [
+        ("aep-findings-prose-only-opted-in", Some(OPT_IN)),
+        ("aep-findings-prose-only-not-opted-in", None),
+    ] {
+        let store = findings_project(name, since);
+        let drafts = scratch(&format!("{name}-drafts"));
+        subject_epic(&store);
+
+        let created = new_review(
+            &store,
+            &drafts,
+            "prose",
+            "# Attack\n\nThe loop never advances.\n",
+            &["--prose-only", REASON],
+        );
+        assert_eq!(code(&created), 0, "{name}: {}", stderr(&created));
+        let stored = std::fs::read_to_string(store.join("review-result/prose.md"))
+            .expect("the review is written");
+        let front = stored
+            .split("---\n")
+            .nth(1)
+            .expect("the document opens with front matter");
+        assert!(
+            front.contains(&format!("prose_only: {REASON}\n")),
+            "{name}: the reason is not in the front matter: {stored}"
+        );
+        assert!(
+            stored.contains("The loop never advances.") && !stored.contains("```findings"),
+            "{name}: the body is the prose as given, with no block added: {stored}"
+        );
+    }
+}
+
+#[test]
+fn prose_only_on_a_kind_other_than_review_result_is_refused_and_writes_nothing() {
+    let store = findings_project("aep-findings-prose-only-story", None);
+    let created = aep(&[
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "not-a-review",
+        "--title",
+        "Not a review",
+        "--prose-only",
+        REASON,
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&created), 1, "a story took a prose-only reason");
+    let said = stderr(&created);
+    assert!(
+        said.contains("--prose-only") && said.contains("review-result") && said.contains("story"),
+        "the refusal does not name the flag, the kind it belongs to and the kind given: {said}"
+    );
+    assert!(!store.join("story/not-a-review.md").exists());
+}
+
+#[test]
+fn prose_only_with_a_whitespace_only_reason_is_refused_and_writes_nothing() {
+    let store = findings_project("aep-findings-prose-only-blank", Some(OPT_IN));
+    let drafts = scratch("aep-findings-prose-only-blank-drafts");
+    subject_epic(&store);
+    for (index, reason) in ["", "   ", "\t \n", "\u{3000}"].into_iter().enumerate() {
+        let name = format!("blank-{index}");
+        let created = new_review(
+            &store,
+            &drafts,
+            &name,
+            "# Attack\n\nProse.\n",
+            &["--prose-only", reason],
+        );
+        assert_eq!(code(&created), 1, "the reason {reason:?} was accepted");
+        let said = stderr(&created);
+        assert!(
+            said.contains("--prose-only") && said.contains("blank"),
+            "the refusal of {reason:?} does not say the reason is blank: {said}"
+        );
+        assert!(
+            !store.join(format!("review-result/{name}.md")).exists(),
+            "a refused `new` wrote the document anyway"
+        );
+    }
+}
+
+#[test]
+fn prose_only_beside_a_findings_block_is_refused_and_writes_nothing() {
+    let store = findings_project("aep-findings-prose-only-beside", Some(OPT_IN));
+    let drafts = scratch("aep-findings-prose-only-beside-drafts");
+    subject_epic(&store);
+
+    let in_body = new_review(
+        &store,
+        &drafts,
+        "in-body",
+        &findings_body(&finding("src/a.rs", 4, "The loop never advances")),
+        &["--prose-only", REASON],
+    );
+    let findings = drafts.join("findings.json");
+    write(&findings, &prose_findings_json());
+    let apart = new_review(
+        &store,
+        &drafts,
+        "apart",
+        "# Attack\n",
+        &["--findings", printable(&findings), "--prose-only", REASON],
+    );
+    for (name, created) in [("in-body", in_body), ("apart", apart)] {
+        assert_eq!(
+            code(&created),
+            1,
+            "{name}: a block and a reason were both accepted"
+        );
+        let said = stderr(&created);
+        assert!(
+            said.contains("--prose-only") && said.contains("findings` block"),
+            "{name}: the refusal does not name the flag and the block: {said}"
+        );
+        assert!(
+            !store.join(format!("review-result/{name}.md")).exists(),
+            "{name}: a refused `new` wrote the document anyway"
+        );
+    }
+}
+
+#[test]
+fn a_review_without_a_block_superseded_by_a_review_with_a_block_is_exempt_and_listed() {
+    // Acceptance 5, the migration: the old review is not edited; a new review carrying a block
+    // supersedes it, and that alone takes it out of the problem list.
+    let store = findings_project("aep-findings-superseded", None);
+    let drafts = scratch("aep-findings-superseded-drafts");
+    subject_epic(&store);
+    let old = new_review(&store, &drafts, "old", "# Attack\n\nProse only.\n", &[]);
+    assert_eq!(code(&old), 0, "{}", stderr(&old));
+    opt_in(&store, Some(OPT_IN));
+
+    let (before, summary) = validated_json(&store, false);
+    assert_eq!(
+        before, 1,
+        "the old review is a problem until superseded: {summary}"
+    );
+
+    let replacement = new_review(
+        &store,
+        &drafts,
+        "replacement",
+        &findings_body(&finding("src/a.rs", 4, "The loop never advances")),
+        &["--relate", "supersedes:review-result:old"],
+    );
+    assert_eq!(code(&replacement), 0, "{}", stderr(&replacement));
+
+    let (after, summary) = validated_json(&store, false);
+    assert_eq!(after, 0, "{summary}");
+    let placed = standings(&summary);
+    assert_eq!(
+        placed.get("review-result:old").map(String::as_str),
+        Some("exempt_superseded"),
+        "{summary}"
+    );
+    assert!(
+        !placed.contains_key("review-result:replacement"),
+        "a review carrying a block is not listed: {summary}"
+    );
+    let text = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
+    let line = stdout(&text)
+        .lines()
+        .find(|line| line.contains("review-result:old"))
+        .map_or_else(
+            || panic!("the exempt review is not listed: {}", stdout(&text)),
+            str::to_owned,
+        );
+    assert!(
+        line.contains("exempt_superseded") && line.contains("review-result:replacement"),
+        "the listing does not say why it is exempt: {line}"
+    );
+}
+
+#[test]
+fn a_supersedes_edge_from_a_review_without_a_block_does_not_exempt() {
+    let store = findings_project("aep-findings-superseded-by-prose", None);
+    let drafts = scratch("aep-findings-superseded-by-prose-drafts");
+    subject_epic(&store);
+    let old = new_review(&store, &drafts, "old", "# Attack\n\nProse only.\n", &[]);
+    assert_eq!(code(&old), 0, "{}", stderr(&old));
+    opt_in(&store, Some(OPT_IN));
+
+    let replacement = new_review(
+        &store,
+        &drafts,
+        "replacement",
+        "# Attack, again\n\nStill prose.\n",
+        &[
+            "--prose-only",
+            REASON,
+            "--relate",
+            "supersedes:review-result:old",
+        ],
+    );
+    assert_eq!(code(&replacement), 0, "{}", stderr(&replacement));
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(
+        exit, 1,
+        "a prose review superseding a prose review settles nothing: {summary}"
+    );
+    let placed = standings(&summary);
+    assert_eq!(
+        placed.get("review-result:old").map(String::as_str),
+        Some("missing"),
+        "{summary}"
+    );
+    assert_eq!(
+        placed.get("review-result:replacement").map(String::as_str),
+        Some("exempt_prose_only"),
+        "{summary}"
+    );
+}
+
+#[test]
+fn a_review_without_a_block_created_before_the_opt_in_is_exempt_and_listed() {
+    let store = findings_project("aep-findings-before-opt-in", Some(OPT_IN));
+    subject_epic(&store);
+    dated_review(&store, "before", "2026-09-30T23:59:59Z");
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 0, "{summary}");
+    assert_eq!(
+        standings(&summary)
+            .get("review-result:before")
+            .map(String::as_str),
+        Some("exempt_before_opt_in"),
+        "{summary}"
+    );
+    let text = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
+    let line = stdout(&text)
+        .lines()
+        .find(|line| line.contains("review-result:before"))
+        .map_or_else(
+            || panic!("the exempt review is not listed: {}", stdout(&text)),
+            str::to_owned,
+        );
+    assert!(
+        line.contains("exempt_before_opt_in")
+            && line.contains("2026-09-30T23:59:59Z")
+            && line.contains(OPT_IN),
+        "the listing does not say when it was recorded against which date: {line}"
+    );
+}
+
+#[test]
+fn a_review_created_at_midnight_utc_of_the_opt_in_date_is_not_exempt() {
+    let store = findings_project("aep-findings-at-midnight", Some(OPT_IN));
+    subject_epic(&store);
+    // Both sides of the boundary in one store, a second apart: the date starts at midnight UTC.
+    dated_review(&store, "just-before", "2026-09-30T23:59:59Z");
+    dated_review(&store, "at-midnight", "2026-10-01T00:00:00Z");
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 1, "{summary}");
+    let placed = standings(&summary);
+    assert_eq!(
+        placed.get("review-result:at-midnight").map(String::as_str),
+        Some("missing"),
+        "{summary}"
+    );
+    assert_eq!(
+        placed.get("review-result:just-before").map(String::as_str),
+        Some("exempt_before_opt_in"),
+        "{summary}"
+    );
+}
+
+/// A store outside every Git work tree — a `git archive` export, a copied directory — holds no
+/// commit to date a review by, so it dates none: an undated review is never "before" the opt-in,
+/// and its problem says why it is undated and where to run `validate` instead. The same files in a
+/// work tree, not committed yet, are reviews being recorded now.
+#[test]
+fn a_store_outside_git_dates_no_review_and_names_the_repository_as_the_remedy() {
+    let store = findings_project("aep-findings-outside-git", None);
+    let drafts = scratch("aep-findings-outside-git-drafts");
+    subject_epic(&store);
+    let old = new_review(&store, &drafts, "old", "# Attack\n\nProse.\n", &[]);
+    assert_eq!(code(&old), 0, "{}", stderr(&old));
+    // An opt-in years ahead: a review dated now would predate it.
+    opt_in(&store, Some("2099-01-01"));
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 1, "an undated review is counted: {summary}");
+    assert_eq!(
+        standings(&summary)
+            .get("review-result:old")
+            .map(String::as_str),
+        Some("missing"),
+        "{summary}"
+    );
+    let counted = problems(&summary);
+    let problem = counted
+        .iter()
+        .find(|problem| problem.contains("review-result:old"))
+        .unwrap_or_else(|| panic!("the undated review is not counted: {summary}"));
+    assert!(
+        problem.contains("not in a Git work tree")
+            && problem.contains("run `aep plan artifact validate` in the repository"),
+        "the problem does not say why the review is undated and where to validate: {problem}"
+    );
+    let entry = summary["findings_standing"]
+        .as_array()
+        .and_then(|entries| {
+            entries
+                .iter()
+                .find(|entry| entry["review"] == "review-result:old")
+        })
+        .expect("the review is listed");
+    assert!(entry["created_at"].is_null(), "{entry}");
+
+    // Undated is not overdue either: the outcome reminder says nothing it cannot measure.
+    let reminded = aep(&[
+        "plan",
+        "artifact",
+        "validate",
+        "--outcome-within",
+        "0",
+        "--store",
+        printable(&store),
+    ]);
+    assert!(
+        !again_names(&stdout(&reminded), "review-result:old"),
+        "an undated review was reported overdue: {}",
+        stdout(&reminded)
+    );
+
+    // Control: the same files in a Git work tree, not committed yet, were recorded now.
+    let project = store
+        .parent()
+        .and_then(Path::parent)
+        .expect("a planning directory sits two levels inside its project");
+    fixture_git(project, "2026-10-01T00:00:00Z", &["init", "--quiet"]);
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 0, "{summary}");
+    assert_eq!(
+        standings(&summary)
+            .get("review-result:old")
+            .map(String::as_str),
+        Some("exempt_before_opt_in"),
+        "{summary}"
+    );
+}
+
+#[test]
+fn without_findings_required_since_a_review_without_a_block_is_reported_not_counted() {
+    let store = findings_project("aep-findings-not-opted-in", None);
+    let drafts = scratch("aep-findings-not-opted-in-drafts");
+    subject_epic(&store);
+    // As on 0.70.0, a body with no block is admitted.
+    let plain = new_review(&store, &drafts, "plain", "# Attack\n\nProse.\n", &[]);
+    assert_eq!(code(&plain), 0, "{}", stderr(&plain));
+    let reasoned = new_review(
+        &store,
+        &drafts,
+        "reasoned",
+        "# Attack\n\nProse.\n",
+        &["--prose-only", REASON],
+    );
+    assert_eq!(code(&reasoned), 0, "{}", stderr(&reasoned));
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 0, "reported, not counted: {summary}");
+    assert!(problems(&summary).is_empty(), "{summary}");
+    let placed = standings(&summary);
+    for id in ["review-result:plain", "review-result:reasoned"] {
+        assert_eq!(
+            placed.get(id).map(String::as_str),
+            Some("not_required"),
+            "{summary}"
+        );
+    }
+    let text = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
+    assert_eq!(code(&text), 0, "{}", stdout(&text));
+    for id in ["review-result:plain", "review-result:reasoned"] {
+        let line = stdout(&text)
+            .lines()
+            .find(|line| line.contains(id))
+            .map_or_else(
+                || panic!("{id} is not reported: {}", stdout(&text)),
+                str::to_owned,
+            );
+        assert!(
+            line.contains(PROSE_ONLY),
+            "the 0.70.0 sentence changed: {line}"
+        );
+    }
+
+    let strict = aep(&[
+        "plan",
+        "artifact",
+        "validate",
+        "--strict",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(
+        code(&strict),
+        1,
+        "--strict still refuses them: {}",
+        stdout(&strict)
+    );
+    assert!(
+        stdout(&strict).contains("--strict: refusing on 2 recording no findings block"),
+        "{}",
+        stdout(&strict)
+    );
+}
+
+#[test]
+fn with_findings_required_since_a_review_without_a_block_is_a_problem() {
+    let store = findings_project("aep-findings-problem", Some(OPT_IN));
+    subject_epic(&store);
+    dated_review(&store, "after", "2026-10-02T09:00:00Z");
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 1, "{summary}");
+    let counted = problems(&summary);
+    assert_eq!(counted.len(), 1, "{summary}");
+    assert!(
+        counted[0].contains("review-result:after")
+            && counted[0].contains("findings_required_since")
+            && counted[0].contains("supersedes:review-result:after"),
+        "the problem does not name the review, the rule and the repair: {}",
+        counted[0]
+    );
+}
+
+#[test]
+fn validate_lists_each_review_without_a_block_with_its_standing() {
+    let store = findings_project("aep-findings-standings", None);
+    let drafts = scratch("aep-findings-standings-drafts");
+    subject_epic(&store);
+    let old = new_review(&store, &drafts, "old", "# Attack\n\nProse.\n", &[]);
+    assert_eq!(code(&old), 0, "{}", stderr(&old));
+    opt_in(&store, Some(OPT_IN));
+    for (name, body, extra) in [
+        (
+            "with-block",
+            "approve\n\n```findings\n[]\n```\n".to_owned(),
+            vec![],
+        ),
+        (
+            "reasoned",
+            "# Attack\n\nProse.\n".to_owned(),
+            vec!["--prose-only", REASON],
+        ),
+        (
+            "replacement",
+            findings_body(&finding("src/a.rs", 4, "The loop never advances")),
+            vec!["--relate", "supersedes:review-result:old"],
+        ),
+    ] {
+        let created = new_review(&store, &drafts, name, &body, &extra);
+        assert_eq!(code(&created), 0, "{name}: {}", stderr(&created));
+    }
+    dated_review(&store, "before", "2026-09-01T12:00:00Z");
+    dated_review(&store, "after", "2026-10-05T12:00:00Z");
+
+    let (exit, summary) = validated_json(&store, false);
+    assert_eq!(exit, 1, "{summary}");
+    let expected: std::collections::BTreeMap<String, String> = [
+        ("review-result:after", "missing"),
+        ("review-result:before", "exempt_before_opt_in"),
+        ("review-result:old", "exempt_superseded"),
+        ("review-result:reasoned", "exempt_prose_only"),
+    ]
+    .into_iter()
+    .map(|(id, standing)| (id.to_owned(), standing.to_owned()))
+    .collect();
+    assert_eq!(standings(&summary), expected, "{summary}");
+    let reasoned = summary["findings_standing"]
+        .as_array()
+        .expect("listed")
+        .iter()
+        .find(|entry| entry["review"] == "review-result:reasoned")
+        .expect("the prose-only review is listed");
+    assert_eq!(reasoned["prose_only"], REASON, "{summary}");
+    let counted = problems(&summary);
+    assert_eq!(
+        counted.len(),
+        1,
+        "only the missing review is counted: {summary}"
+    );
+    assert!(counted[0].contains("review-result:after"), "{}", counted[0]);
+
+    let text = aep(&["plan", "artifact", "validate", "--store", printable(&store)]);
+    for (id, standing) in &expected {
+        assert!(
+            stdout(&text)
+                .lines()
+                .any(|line| line.contains(id.as_str()) && line.contains(standing.as_str())),
+            "{id} is not listed with {standing}: {}",
+            stdout(&text)
+        );
+    }
+}
+
+#[test]
+fn with_findings_required_since_strict_refuses_no_exempt_review() {
+    let store = findings_project("aep-findings-strict-exempt", Some(OPT_IN));
+    let drafts = scratch("aep-findings-strict-exempt-drafts");
+    subject_epic(&store);
+    let reasoned = new_review(
+        &store,
+        &drafts,
+        "reasoned",
+        "# Attack\n\nProse.\n",
+        &["--prose-only", REASON],
+    );
+    assert_eq!(code(&reasoned), 0, "{}", stderr(&reasoned));
+    dated_review(&store, "before", "2026-09-01T12:00:00Z");
+    // Committed weeks ago, the review is also old enough for `--strict`'s outcome rule, a class
+    // of its own: settle that the way it is settled, so the only thing left to refuse is findings.
+    let outcome = aep(&[
+        "plan",
+        "artifact",
+        "evidence",
+        "epic:objectives",
+        "--kind",
+        "review_outcome",
+        "--review",
+        "review-result:before",
+        "--outcome",
+        "no-op",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&outcome), 0, "{}", stderr(&outcome));
+
+    let (exit, summary) = validated_json(&store, true);
+    assert_eq!(
+        exit, 0,
+        "an exempt review is the recorded way it was settled: {summary}"
+    );
+    assert_eq!(standings(&summary).len(), 2, "both stay listed: {summary}");
+}
+
 #[test]
 fn the_findings_verb_classifies_a_finding_that_moved_two_lines_as_carried() {
     let store = scratch("aep-plan-findings-ledger");
@@ -5347,8 +6109,15 @@ fn the_findings_verb_refuses_a_review_that_does_not_review_the_artifact() {
 }
 
 /// Two reviews of one epic, one of them about a different epic, for the outcome tests.
+///
+/// The store sits inside a Git work tree with nothing committed, which is a store whose reviews
+/// `new` just wrote: each is dated now. A store outside every work tree dates nothing, and an
+/// undated review is never overdue.
 fn a_store_with_two_reviews(name: &str) -> (PathBuf, PathBuf) {
-    let store = scratch(name);
+    let project = scratch(name);
+    fixture_git(&project, "2026-10-01T00:00:00Z", &["init", "--quiet"]);
+    let store = project.join("planning");
+    std::fs::create_dir_all(&store).expect("the planning directory is writable");
     let drafts = scratch(&format!("{name}-drafts"));
     subject_epic(&store);
     let other = aep(&[

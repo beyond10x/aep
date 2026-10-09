@@ -900,6 +900,16 @@ fn apply_body(frontmatter: &mut PlanningFrontmatter, body: &Node) {
             frontmatter.model_digest = Some(parsed);
         }
     }
+    // The prose-only reason, same rule and same reason: one the frontmatter's validator would
+    // refuse — on a kind other than a review-result, or blank — is left off rather than written
+    // through. `new` refuses both before a command is issued, so this is the backstop.
+    if let Some(Node::Text(reason)) = fields.get(crate::frontmatter::PROSE_ONLY) {
+        if frontmatter.kind == aep_domain::artifact::ArtifactKind::ReviewResult
+            && !reason.trim().is_empty()
+        {
+            frontmatter.prose_only = Some(reason.clone());
+        }
+    }
     // Tags, same rule as everything else here: present replaces, absent leaves alone. A command
     // that says nothing about tags is not a command that removed them.
     if let Some(Node::Seq(tags)) = fields.get("tags") {
