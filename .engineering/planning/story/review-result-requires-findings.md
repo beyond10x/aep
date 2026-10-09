@@ -9,7 +9,7 @@ relations:
 - decomposes: epic:review-facts
 - serves: vision:O2
 - informed_by: story:structured-findings-on-review-result
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-08T22:40:13Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-10-08T22:40:13Z", actor: "human:timo", revision: 4}
@@ -52,7 +52,7 @@ The writers in `agentplugins` (critic rubric, adversary) change in the same rele
    body that carries a block, is refused.
 3. `project.yaml` takes an optional `findings_required_since` (a UTC date). With it set,
    `aep plan artifact validate` counts as a problem (exit 1) a `review-result` with no block, except
-   one created before that date (read from its first transition), one that an artifact carrying a
+   one recorded before that date, one that an artifact carrying a
    block `supersedes`, and one recorded with `--prose-only`; the exempt ones stay listed with the
    reason each is exempt.
 4. A store without `findings_required_since` validates exactly as on 0.69.1: a missing block is
@@ -74,7 +74,7 @@ The writers in `agentplugins` (critic rubric, adversary) change in the same rele
 
 - Decided: `new` refuses a body with no block only in a store that set `findings_required_since`;
   a store without the key behaves as today, since an unconditional refusal would break every existing caller. `--prose-only` works in every store.
-- `inferable`: "created before" compares the first transition's instant with the start of the
+- Decided: "recorded before" dates a review as `validate` dates one for its outcome (history entry, else the commit that added the file, else now; a review `new` writes has no transition) and compares that instant with the start of the
   `findings_required_since` date in UTC.
 
 ## Open Questions
