@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-10T04:08:14Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-admits-generated-runner-profile",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "PR 111 Gate run 38021574861 (task check), shipped in 0.71.2",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/38021574861"
+  }
+}

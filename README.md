@@ -52,10 +52,10 @@ $ cargo install --locked --git https://github.com/beyond10x/aep --tag 0.71.2 aep
 In a Git repository, point AEP at a pinned copy of its governing documents. Then plan a story and
 try to finish it:
 
-<!-- generated:release-pin:begin commit=4ce67c3e58873b81eda9c9a124bf817df949f250 — kept by `cargo xtask status` -->
+<!-- generated:release-pin:begin commit=2b840f7cdfc25525b6cbec9b83710c3ca53746c8 — kept by `cargo xtask status` -->
 ```console
 $ aep plan reverse init --profile development.standard \
-    --protocols git+https://github.com/beyond10x/aep#4ce67c3e58873b81eda9c9a124bf817df949f250
+    --protocols git+https://github.com/beyond10x/aep#2b840f7cdfc25525b6cbec9b83710c3ca53746c8
 $ aep plan artifact new story pay-by-card --title "Pay by card as a guest"
 created story:pay-by-card (draft) at …/.engineering/planning/story/pay-by-card.md
 $ aep plan artifact move story:pay-by-card --to active --via
