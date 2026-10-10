@@ -8,7 +8,7 @@ relations:
 - serves: vision:O2
 - informed_by: epic:evidence-gated-completion
 - informed_by: story:current-ess-coverage-suites
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-10T01:30:13Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-10-10T01:30:13Z", actor: "human:timo", revision: 3}
@@ -43,7 +43,7 @@ Reproduced on aep 0.71.0 (the release `main` carries) with ess 0.57.0, 2026-10-1
 
 1. A report/2 and the exact ordinary suite it ran, both written by ess 0.56.0 or newer (an even
    major, no `coverage` block, report `coverage.knowledge: unknown`), are recorded by
-   `aep plan artifact evidence --from <report> --suite <suite>`: exit 0, one `test_result` record
+   `aep plan artifact evidence --from <report> --suite <suite>`: exit 0, one `ess_conformance_v2` record (the kind a report/2 already records)
    with the report's counts, source and instant.
 2. The suite stays bound by digest: a suite whose bytes differ from the report's `suite.digest` is
    refused, and so is a report whose `suite.version` differs from the suite's.
