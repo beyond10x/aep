@@ -24,9 +24,9 @@ Download the archive for your platform from
 [GitHub Releases](https://github.com/beyond10x/aep/releases), check it, and put `aep` on your
 `PATH`:
 
-{/* generated:release-pin:begin version=0.71.1 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin version=0.71.2 — kept by `cargo xtask status` */}
 ```bash
-VERSION=0.71.1
+VERSION=0.71.2
 curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
 curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
@@ -39,7 +39,7 @@ Archives exist for `x86_64` and `aarch64`, on Linux (`unknown-linux-gnu`) and ma
 (`apple-darwin`). To build from source instead, with Rust 1.91 or newer:
 
 ```bash
-cargo install --locked --git https://github.com/beyond10x/aep --tag 0.71.1 aep-cli --bin aep
+cargo install --locked --git https://github.com/beyond10x/aep --tag 0.71.2 aep-cli --bin aep
 ```
 {/* generated:release-pin:end */}
 
