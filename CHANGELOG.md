@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.71.2] — 2026-10-10
+
 ### Fixed
 
 - `aep plan artifact evidence --from <report/2> --suite <suite>` records a report whose
