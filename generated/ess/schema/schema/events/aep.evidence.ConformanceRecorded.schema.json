@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ConformanceRecorded payload",
+  "x-ess-name": "aep.evidence.ConformanceRecorded",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "record": {
+      "$ref": "#/$defs/aep.evidence.RecordName"
+    },
+    "artifact": {
+      "$ref": "#/$defs/aep.evidence.ArtifactId"
+    },
+    "suite_version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "record",
+    "artifact",
+    "suite_version"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
+    "contract_digest": "slice-sha256/2:e5823cdf00931746aaabd16c2d6dacf0f3d0c59d5951f027c5301d109f4ebf02",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "x-ess-name": "aep.evidence.ArtifactId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "x-ess-name": "aep.evidence.RecordName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

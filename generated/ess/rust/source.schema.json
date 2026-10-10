@@ -1,5 +1,61 @@
 {
   "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.evidence.ArtifactId"
+    },
+    "aep.evidence.ConformanceRecord.State": {
+      "enum": [
+        "Recorded"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.ConformanceRecord.State"
+    },
+    "aep.evidence.ConformanceRecorded": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/aep.evidence.ArtifactId"
+        },
+        "record": {
+          "$ref": "#/$defs/aep.evidence.RecordName"
+        },
+        "suite_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "record",
+        "artifact",
+        "suite_version"
+      ],
+      "title": "ConformanceRecorded",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.evidence.ConformanceRecorded"
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.evidence.RecordName"
+    },
+    "aep.evidence.SuiteKind": {
+      "enum": [
+        "count_stage",
+        "ordinary",
+        "coverage",
+        "unknown"
+      ],
+      "title": "SuiteKind",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.SuiteKind"
+    },
     "aep.plan.EngineeringDirectory": {
       "title": "EngineeringDirectory",
       "type": "string",
@@ -257,8 +313,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:5811fe1ca895ddeee3abcc6364f5058acd8c665d31e8a4969cbcf70214ea9cfa",
-    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:ed1b98cd45b472665fb0f5f2df90248a282490128bbb7569549c2ab116d75c5d",
+    "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
     "specification_version": "v1",
     "system": "aep"
   }

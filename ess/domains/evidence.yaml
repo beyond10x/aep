@@ -1,0 +1,218 @@
+domain: aep.evidence
+
+summary: >-
+  How `aep plan artifact evidence <id> --from <report> --suite <suite>` admits an
+  `ess-conformance-report/2` and the exact original suite it ran: which reader a suite goes to by
+  what it is, the suite's binding to the report by version and by digest, and the record it
+  writes. Declared for story:evidence-admits-ordinary-ess-suites.
+
+# Paths are relative to the repository root. `planning.rs` is crates/edge/aep-cli/src/planning.rs,
+# `counts.rs`, `count_suite.rs`, `coverage.rs` and `ordinary_suite.rs` are under
+# crates/observe/aep-ess-evidence/src/, and `ess_conformance_v2.rs` and `values.rs` are under
+# crates/govern/aep-domain/src/ (`values.rs` in `ess_conformance_coverage/`), unless a path says
+# otherwise. Functions are named rather than lines, because the change moves them.
+#
+# Not modelled here: a report/1 (`--from` without `--suite`), `--suite-input` lineage, the
+# coverage reader's own admission (story:current-ess-coverage-suites), the closed vocabulary each
+# reader checks in the report and the suite (unknown fields, statuses, producer profiles, counts
+# against outcomes, scenario id forms gated by major), the spec-digest and selected-id pairing
+# (`ModelDigestMismatch`, `SelectedIdsMismatch` in counts.rs `admit_suite`, unchanged), and the
+# planning store's own refusals of the artifact id.
+
+types:
+  # read from: the artifact id `evidence <id>` names (planning.rs `record_evidence`, `artifact_id`).
+  - name: aep.evidence.ArtifactId
+    kind: newtype
+    of: String
+
+  # read from: the name the record is written under, `evidence-<id>-<kind>-<millis>`
+  # (planning.rs `evidence_through_a_command`), one file under `.engineering/evidence/`.
+  - name: aep.evidence.RecordName
+    kind: newtype
+    of: String
+
+  # change (story:evidence-admits-ordinary-ess-suites): what a suite major is, by the build's own
+  # lists, never by its number alone. The lists are deliberate edits: a major ESS adds later is
+  # `unknown` here until AEP lists it.
+  - name: aep.evidence.SuiteKind
+    kind: enum
+    variants:
+      - count_stage   # `ess-conformance/1`–`/4`, the frozen count reader's (ess_conformance_v2.rs `SuiteReference::new`)
+      - ordinary      # an even major in `ORDINARY_SUITE_MAJORS` (ess_conformance_v2.rs): no `coverage` block
+      - coverage      # an odd major in `COVERAGE_SUITE_MAJORS` (values.rs): carries a `coverage` block
+      - unknown       # any other spelling or major, e.g. `ess-conformance/46` from an ESS newer than this build
+
+entities:
+  # One evidence record in the planning store: an immutable file under `.engineering/evidence/`,
+  # written once by `evidence` (AGENTS.md *Planning store*). Only the facts this admission writes.
+  - name: aep.evidence.ConformanceRecord
+    naming:
+      summary: A recorded report/2 run against an exact count-stage or ordinary suite.
+    identity:
+      name: record
+      type: aep.evidence.RecordName
+    fields:
+      - name: artifact
+        type: aep.evidence.ArtifactId
+        summary: The artifact the record is evidence for.
+      - name: suite_version
+        type: String
+        summary: >-
+          The suite's `provenance.suite_version`, equal to the report's `suite.version`; written
+          into the record's source as `suite.version` (planning.rs `recorded_from_report`).
+      - name: suite_kind
+        type: aep.evidence.SuiteKind
+        summary: "`count_stage` or `ordinary`: the two kinds this admission records."
+      - name: completed_at
+        type: Timestamp
+        summary: The report's own `completed_at`, never this process's clock.
+    lifecycle:
+      # An evidence file is never edited or deleted (AGENTS.md *Planning store*, rule 2).
+      initial: Recorded
+      states: [Recorded]
+      terminal: [Recorded]
+
+actors:
+  # Whoever runs `aep` in the repository; the CLI knows no caller beyond the process.
+  - name: aep.evidence.Operator
+    may:
+      - aep.evidence.RecordFromReport
+
+errors:
+  # change (story:evidence-admits-ordinary-ess-suites): on 0.71.0 an ordinary major from /6 on was
+  # sent to the coverage reader and refused as `MissingField at $suite.coverage`. Every refusal of
+  # aep.evidence.RecordFromReport writes nothing.
+  - name: aep.evidence.UnsupportedSuiteVersion
+    summary: >-
+      The suite's `provenance.suite_version` or the report's `suite.version` is a major this build
+      does not know; the refusal is `UnsupportedSuiteVersion` and names the version (story
+      acceptance 3), never a missing field.
+    fields: []
+  - name: aep.evidence.SuiteVersionMismatch
+    summary: >-
+      The report's `suite.version` differs from the suite's `provenance.suite_version`
+      (`SuiteVersionMismatch`, counts.rs `admit_suite`; story acceptance 2).
+    fields: []
+  - name: aep.evidence.SuiteDigestMismatch
+    summary: >-
+      The SHA-256 of the suite's original bytes differs from the report's `suite.digest`
+      (`SuiteDigestMismatch`, counts.rs `admit_suite`; story acceptance 2).
+    fields: []
+
+events:
+  # aep publishes no events. This is the fact the success outcome produces, declared because ESS
+  # requires one per outcome that changes a record; no component publishes it.
+  - name: aep.evidence.ConformanceRecorded
+    fields:
+      - name: record
+        type: aep.evidence.RecordName
+      - name: artifact
+        type: aep.evidence.ArtifactId
+      - name: suite_version
+        type: String
+
+commands:
+  # `aep plan artifact evidence <id> --from <report> --suite <suite>` with an
+  # `ess-conformance-report/2` (planning.rs `record_evidence`, `recorded_from_report` and
+  # `coverage_input_from_raw_suite`, which asks `suite_route` in aep-ess-evidence `route.rs`).
+  #
+  # change (story:evidence-admits-ordinary-ess-suites): the suite is routed by what it is. On
+  # 0.71.0 every major from /5 on went to the coverage reader (`major >= 5`).
+  - name: aep.evidence.RecordFromReport
+    naming:
+      wire: artifact-evidence-from-report
+      display: aep plan artifact evidence --from --suite
+      summary: Record a report/2 against the exact suite it ran, bound by version and digest.
+    input:
+      - name: id
+        type: aep.evidence.ArtifactId
+      # ESS-LIMIT: the record's name is made by the CLI from the artifact, the kind and the
+      # clock (planning.rs `evidence_through_a_command`), and a created row's identity in ESS
+      # 0.56.0 is an input field, so it is declared as one. Pinned by
+      # `an_ordinary_suite_ess_wrote_is_recorded_with_its_report` (aep-cli tests).
+      - name: record
+        type: aep.evidence.RecordName
+      - name: suite_version
+        type: String
+        summary: The suite's `provenance.suite_version`, as written.
+      - name: report_suite_version
+        type: String
+        summary: The report's `suite.version`, as written.
+      # ESS-LIMIT: what a suite major is comes from two lists the build holds
+      # (`ORDINARY_SUITE_MAJORS`, `COVERAGE_SUITE_MAJORS`), and ESS 0.56.0 has no operator that
+      # reads the number in `ess-conformance/<N>` (`suite_version any_of [...]` is refused as
+      # `unparsable_predicate`, ESS-SPEC-012). Spelling every version as its own comparison would
+      # copy both lists here, where nothing checks them against the readers; the lists stay in
+      # Rust, and the command takes each version's kind as an input. Pinned by the
+      # aep-ess-evidence `suite_route` tests and
+      # `count_suite_reference_admits_the_frozen_and_ordinary_majors_and_names_any_other`
+      # (aep-domain `ess_coverage_values`).
+      - name: suite_kind
+        type: aep.evidence.SuiteKind
+      - name: report_suite_kind
+        type: aep.evidence.SuiteKind
+      # ESS-LIMIT: whether the suite's original bytes hash to the report's `suite.digest` is a
+      # SHA-256 over a file, and ESS 0.56.0 has no digest operator, so the command takes the
+      # answer as a Boolean. Pinned by
+      # `an_ordinary_suite_whose_bytes_differ_from_the_report_digest_is_refused` (aep-ess-evidence
+      # `ordinary_suites`) and its aep-cli counterpart.
+      - name: suite_digest_matches
+        type: Boolean
+    outcomes:
+      # A version this build does not know is refused by name before any reader interprets the
+      # suite: the route refuses the suite's own version, and the reader it chose the report's.
+      # The count reader also refuses a report naming a coverage major as a version it does not
+      # read (counts.rs `read_report`, `SuiteReference::new`), before comparing the two versions.
+      - name: unsupported-suite-version
+        when:
+          any:
+            - suite_kind == "unknown"
+            - report_suite_kind == "unknown"
+            - all:
+                - suite_kind != "coverage"
+                - report_suite_kind == "coverage"
+        error: aep.evidence.UnsupportedSuiteVersion
+      # A coverage suite goes to the coverage reader, as on 0.71.0, outside this specification.
+      - name: coverage-suite
+        when: suite_kind == "coverage"
+        accepts: nothing
+      - name: suite-version-mismatch
+        when: report_suite_version != suite_version
+        error: aep.evidence.SuiteVersionMismatch
+      - name: suite-digest-mismatch
+        when: suite_digest_matches == false
+        error: aep.evidence.SuiteDigestMismatch
+      # change: an ordinary suite is recorded the way a count-stage one is, as one
+      # `ess_conformance_v2` record whose source carries the report's counts and statuses, at the
+      # report's `completed_at` (`{generated: true}`: the host reads it from the report).
+      - name: recorded
+        creates: aep.evidence.ConformanceRecord
+        instance: record
+        sets:
+          artifact: input.id
+          suite_version: input.suite_version
+          suite_kind: input.suite_kind
+          completed_at: {generated: true}
+        emits: [aep.evidence.ConformanceRecorded]
+        payload:
+          aep.evidence.ConformanceRecorded:
+            record: input.record
+            artifact: input.id
+            suite_version: input.suite_version
+
+views:
+  # Structural: synthesis observes records only through a view.
+  - name: aep.evidence.ConformanceRecords
+    source: aep.evidence.ConformanceRecord
+    consistency: read_your_writes
+    fields:
+      - name: record
+        type: aep.evidence.RecordName
+      - name: artifact
+        type: aep.evidence.ArtifactId
+      - name: suite_version
+        type: String
+      - name: suite_kind
+        type: aep.evidence.SuiteKind
+      - name: completed_at
+        type: Timestamp

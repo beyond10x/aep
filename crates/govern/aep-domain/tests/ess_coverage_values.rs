@@ -408,6 +408,55 @@ fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other(
     }
 }
 
+#[test]
+fn count_suite_reference_admits_the_frozen_and_ordinary_majors_and_names_any_other() {
+    use aep_domain::ess_conformance_coverage::COVERAGE_SUITE_MAJORS;
+    use aep_domain::ess_conformance_v2::{SuiteReference as CountReference, ORDINARY_SUITE_MAJORS};
+    let digest = format!("sha256:{}", "a".repeat(64));
+    let reference = |version: &str| {
+        CountReference::new(version.into(), "sha256-json-bytes/1".into(), digest.clone())
+    };
+    // Each ordinary major is the even neighbour below a coverage major the build knows, and the
+    // two lists never share a major: what a suite is decides its reader, not its number.
+    for major in ORDINARY_SUITE_MAJORS {
+        assert_eq!(major % 2, 0, "{major}");
+        assert!(COVERAGE_SUITE_MAJORS.contains(&(major + 1)), "{major}");
+        assert!(!COVERAGE_SUITE_MAJORS.contains(major), "{major}");
+    }
+    // ESS writes an ordinary suite in the even majors from /6 through /44 (ESS 0.55.0).
+    for major in (1..=4).chain((6..=44).step_by(2)) {
+        let version = format!("ess-conformance/{major}");
+        let admitted = reference(&version).unwrap_or_else(|error| panic!("{version}: {error}"));
+        assert_eq!(admitted.version(), version);
+        let wire = serde_json::json!({"version":version, "digest_profile":"sha256-json-bytes/1", "digest":digest});
+        assert_eq!(
+            serde_json::from_value::<CountReference>(wire).unwrap(),
+            admitted
+        );
+    }
+    for version in [
+        "ess-conformance/5",
+        "ess-conformance/35",
+        "ess-conformance/45",
+        "ess-conformance/46",
+        "ess-conformance/47",
+        "ess-conformance/06",
+        "ess-conformance/+6",
+        "ess-conformance/",
+        "ess-conformance-input/1",
+    ] {
+        let error = reference(version).expect_err(version);
+        let issue = &error.issues[0];
+        assert_eq!(issue.reason, "UnsupportedSuiteVersion", "{version}");
+        assert_eq!(issue.path, "$.suite.version");
+        assert!(
+            issue.detail.contains(version),
+            "{version}: {}",
+            issue.detail
+        );
+    }
+}
+
 /// Every form ESS's `ScenarioId::parse` reads (ESS 0.55.0,
 /// `crates/verify/ess-conformance/src/scenario.rs`), one example each; every disclosure aspect
 /// and both callers (`one_time_response/cells.rs` `Cell::parse`). The first eight are the frozen

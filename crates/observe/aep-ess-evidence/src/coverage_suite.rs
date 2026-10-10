@@ -152,7 +152,7 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
     }
     validate_inventory(&inventory, &ids)?;
     if let Some(seeds) = provenance.get("synthesis_seeds") {
-        admit_seed_record(major(version), seeds, &ids, &inventory)?;
+        admit_seed_record(major(version), seeds, &ids, Some(&inventory))?;
     }
     let definitions = crate::coverage_definition::Definitions::read(&document, transcribed)?;
     Ok(AdmittedSuite {
@@ -186,7 +186,7 @@ const SEED_REQUIRED_MAJORS: [u32; 2] = [42, 43];
 /// Here AEP reads a seed record's structure, as ESS's `synthesis_seeds::admit_json` does, and the
 /// scenario id each application names; `admit_seed_record` checks its names and relations once
 /// the inventory is read. A selected child must carry its parent's record unchanged.
-fn admit_provenance_vocabulary(
+pub(crate) fn admit_provenance_vocabulary(
     major: u32,
     provenance: &Json,
     fields: &BTreeMap<String, Json>,
@@ -308,11 +308,11 @@ struct SeedApplication<'a> {
 /// are ordered by `(scenario, establish_step)` (`synthesis_seeds.rs:275`), and ESS orders a
 /// scenario id by its rendered name (`impl Ord for ScenarioId`, `scenario.rs:1045`), which for an
 /// admitted id is its spelling.
-fn admit_seed_record(
+pub(crate) fn admit_seed_record(
     major: u32,
     seeds: &Json,
     ids: &[ScenarioId],
-    inventory: &Inventory,
+    inventory: Option<&Inventory>,
 ) -> Result<()> {
     let fields = seeds.object()?;
     let mut sources = BTreeMap::new();
@@ -397,7 +397,7 @@ fn admit_seed_applications(
     selections: &[SeedSelection<'_>],
     applications: &[SeedApplication<'_>],
     ids: &[ScenarioId],
-    inventory: &Inventory,
+    inventory: Option<&Inventory>,
 ) -> Result<()> {
     let refuse = |detail: &str| seeds.error("InvalidShape", detail);
     if !applications.windows(2).all(|pair| {
@@ -415,10 +415,13 @@ fn admit_seed_applications(
             return Err(refuse("an application names an authored scenario"));
         }
         let held = ids.iter().any(|id| id.as_str() == application.scenario);
+        // An ordinary suite has no inventory, so nothing it holds was moved outside by a filter.
         let filtered = major == SEED_COVERAGE_MAJOR
-            && inventory.outside.iter().any(|outside| {
-                outside.scenario.as_str() == application.scenario
-                    && outside.reason == OutsideReason::SelectionFilter
+            && inventory.is_some_and(|inventory| {
+                inventory.outside.iter().any(|outside| {
+                    outside.scenario.as_str() == application.scenario
+                        && outside.reason == OutsideReason::SelectionFilter
+                })
             });
         if !held && !filtered {
             return Err(refuse(
@@ -655,11 +658,11 @@ fn id_form(id: &ScenarioId) -> IdForm {
     }
 }
 
-fn major(version: &str) -> u32 {
+pub(crate) fn major(version: &str) -> u32 {
     version
         .strip_prefix("ess-conformance/")
         .and_then(|digits| digits.parse().ok())
-        .expect("an admitted coverage version")
+        .expect("an admitted coverage or ordinary version")
 }
 
 /// Refusal codes ESS added after suite/5, each with the first coverage major that admits it.
@@ -688,7 +691,7 @@ fn admit_refusal_codes(version: &str, inventory: &Inventory, coverage: &Json) ->
     Ok(())
 }
 
-fn admit_id_forms(version: &str, ids: &[ScenarioId], scenarios: &Json) -> Result<()> {
+pub(crate) fn admit_id_forms(version: &str, ids: &[ScenarioId], scenarios: &Json) -> Result<()> {
     let major = major(version);
     for id in ids {
         match id_form(id) {
@@ -718,7 +721,7 @@ fn admit_id_forms(version: &str, ids: &[ScenarioId], scenarios: &Json) -> Result
 }
 
 /// Scenario identities of a suite whose bodies ESS alone interprets.
-fn scenario_keys(scenarios: &Json) -> Result<Vec<ScenarioId>> {
+pub(crate) fn scenario_keys(scenarios: &Json) -> Result<Vec<ScenarioId>> {
     scenarios
         .object()?
         .iter()
