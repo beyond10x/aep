@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UnsupportedSuiteVersion payload",
+  "description": "The suite's `provenance.suite_version` or the report's `suite.version` is a major this build does not know; the refusal is `UnsupportedSuiteVersion` and names the version (story acceptance 3), never a missing field.",
+  "x-ess-name": "aep.evidence.UnsupportedSuiteVersion",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
+    "contract_digest": "slice-sha256/2:e2fcca1a285a97c22a589576f3368a55950e8316c9449f2f44abe04b3109feda",
+    "regenerate": "ess generate"
+  }
+}

@@ -1,17 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$ref": "#/$defs/aep.plan.ProjectRoot",
+  "$ref": "#/$defs/aep.evidence.RecordName",
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
     "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
-    "contract_digest": "slice-sha256/2:72d4f71605476507688fbdce08e71cef043d0429576bbab5178f3ea323793856",
+    "contract_digest": "slice-sha256/2:f2e2f0f519000f5459d8bfa0858d2e2da8385bcdb1fd3fb687821b653443151d",
     "regenerate": "ess generate"
   },
   "$defs": {
-    "aep.plan.ProjectRoot": {
-      "title": "ProjectRoot",
-      "x-ess-name": "aep.plan.ProjectRoot",
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "x-ess-name": "aep.evidence.RecordName",
       "x-ess-kind": "newtype",
       "type": "string"
     }

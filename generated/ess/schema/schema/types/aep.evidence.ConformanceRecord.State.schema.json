@@ -1,22 +1,21 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$ref": "#/$defs/aep.plan.Project.State",
+  "$ref": "#/$defs/aep.evidence.ConformanceRecord.State",
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
     "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
-    "contract_digest": "slice-sha256/2:74084082a606955628005bd0ab3a941fd360613f4fe6a549acb898440f272628",
+    "contract_digest": "slice-sha256/2:a1f22d6fbc48517312a752b73141cb9fe061ae0d04bf544ec9a214da0ef53509",
     "regenerate": "ess generate"
   },
   "$defs": {
-    "aep.plan.Project.State": {
+    "aep.evidence.ConformanceRecord.State": {
       "title": "State",
-      "x-ess-name": "aep.plan.Project.State",
+      "x-ess-name": "aep.evidence.ConformanceRecord.State",
       "x-ess-kind": "enum",
       "type": "string",
       "enum": [
-        "GitNative",
-        "JournalLayout"
+        "Recorded"
       ]
     }
   }
