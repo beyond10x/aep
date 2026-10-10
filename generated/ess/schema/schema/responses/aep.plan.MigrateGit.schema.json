@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "aep plan store migrate git response",
-  "description": "Rewrite an `aep.project/1` Markdown store as an `aep.project/5` Git-native one.",
+  "description": "Rewrite an `aep.project/1` Markdown store as an `aep.project/5` Git-native one, or drop the repeated transitions of an `aep.project/5` store.",
   "x-ess-name": "aep.plan.MigrateGit",
   "x-ess-kind": "command-response",
   "type": "object",
@@ -21,8 +21,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
-    "contract_digest": "slice-sha256/2:6aa39748b6472db21c5b51ba2b91ab9a20d2ba53cc4e386ef66e5066ccd489d0",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:143a270c32a7d728ece5125092bba7a4400679501cd860e24e3a05a38d0a3328",
     "regenerate": "ess generate"
   },
   "$defs": {

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "FlagsWithProjectFile payload",
-  "description": "`--protocols` given while a project file exists: migrate_git.rs:242-248.",
+  "description": "`--protocols` given while a project file exists: migrate_git.rs:265-271.",
   "x-ess-name": "aep.plan.FlagsWithProjectFile",
   "x-ess-kind": "error-payload",
   "type": "object",
@@ -9,8 +9,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
-    "contract_digest": "slice-sha256/2:ab76f87e286fc8211ca21702c52941c2bf64bdb9692c9543624b06dd35964c51",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:b73687d1f7e008254a16192eb6258e6b2880fae5563ded53c212cce3d3a1af00",
     "regenerate": "ess generate"
   }
 }

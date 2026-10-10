@@ -11,4 +11,8 @@ path = "types.rs"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.151" }
 
+[features]
+default = ["exact-numbers"]
+exact-numbers = ["serde_json/arbitrary_precision"]
+
 [workspace]

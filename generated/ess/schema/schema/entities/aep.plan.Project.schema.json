@@ -63,11 +63,11 @@
     },
     "store": {
       "$ref": "#/$defs/aep.plan.Store",
-      "description": "Where the plan is kept; absent means `git` (project.rs:682-689, 642-644). An `aep.project/1` file's `store: markdown` (migrate_git.rs:151-152) is held as absent."
+      "description": "Where the plan is kept; absent means `git` (project.rs:682-689, 642-644). An `aep.project/1` file's `store: markdown` (migrate_git.rs:171-172) is held as absent."
     },
     "planning_scope": {
       "$ref": "#/$defs/aep.plan.PlanningScope",
-      "description": "Required by `aep.project/5` (project.rs:612-626); `aep.project/1` has none (store_command.rs:117). Validated and then not kept: `ProjectConfig` (project.rs:348-377) has no such field."
+      "description": "Required by `aep.project/5` (project.rs:612-626); `aep.project/1` has none (store_command.rs:121). Validated and then not kept: `ProjectConfig` (project.rs:348-377) has no such field."
     },
     "providers": {
       "description": "A URL pattern per external system, each carrying `{key}` (project.rs:699-701).",
@@ -81,6 +81,18 @@
       "$ref": "#/$defs/aep.plan.UtcDate",
       "description": "A UTC date. With it set, whatever the date, `aep plan artifact new review-result` refuses a body with no `findings` block unless `--prose-only <reason>` says why; `aep plan artifact validate` reads the date, and counts as a problem a block-less review-result not created before the start of that date in UTC, an undated one included (see the aep.review domain). Written with no value (empty, `~` or `null`) it is refused naming the key, never read as absent: pinned by `a_findings_required_since_written_empty_or_null_is_refused_naming_the_key` (aep-domain)."
     },
+    "repeated_transitions": {
+      "description": "How many transitions, over every document of the store, are identical in every field to the transition immediately before them in the same document, so that their rendered `transitions` lines are byte-identical. Only an `aep.project/5` store has transitions; `0` for an `aep.project/1` one. A transition that repeats an earlier one that is not immediately before it is not counted.",
+      "type": "integer"
+    },
+    "engineering_clean": {
+      "description": "`git status --porcelain -- .` run in `.engineering/` prints nothing (migrate_git.rs `git_clean`).",
+      "type": "boolean"
+    },
+    "planning_is_directory": {
+      "description": "`.engineering/planning/` is a directory.",
+      "type": "boolean"
+    },
     "state": {
       "$ref": "#/$defs/aep.plan.Project.State"
     }
@@ -91,14 +103,17 @@
     "protocol",
     "profile",
     "providers",
+    "repeated_transitions",
+    "engineering_clean",
+    "planning_is_directory",
     "state"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "30dd95d9b314e9696fb0214d54ea273a32c1a6fcea0b83d13d6454cddb0e653a",
-    "contract_digest": "slice-sha256/2:6eaae23f999e0c67f94b7c8459037a485f9ac81b3f8bef93e01a8e2cb8550a91",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:241c7785e7b9a887d92364cef1630150755d66a56fafa15022f4e4ea5f3091d6",
     "regenerate": "ess generate"
   },
   "$defs": {
