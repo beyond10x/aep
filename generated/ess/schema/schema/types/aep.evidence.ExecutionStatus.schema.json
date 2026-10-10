@@ -1,22 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$ref": "#/$defs/aep.plan.Project.State",
+  "$ref": "#/$defs/aep.evidence.ExecutionStatus",
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
     "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
-    "contract_digest": "slice-sha256/2:90bdc87b862d5acbb8e10ffd6d16f7e9e3b9949872d75c142ce39484b060ddba",
+    "contract_digest": "slice-sha256/2:9a1091b21b6f179a490946d817b37629990b6b20cb1f1e8f4a4cc23228336879",
     "regenerate": "ess generate"
   },
   "$defs": {
-    "aep.plan.Project.State": {
-      "title": "State",
-      "x-ess-name": "aep.plan.Project.State",
+    "aep.evidence.ExecutionStatus": {
+      "title": "ExecutionStatus",
+      "x-ess-name": "aep.evidence.ExecutionStatus",
       "x-ess-kind": "enum",
       "type": "string",
       "enum": [
-        "GitNative",
-        "JournalLayout"
+        "passed",
+        "failed",
+        "inconclusive"
       ]
     }
   }

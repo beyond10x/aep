@@ -7,7 +7,7 @@ title: Evidence records a report from ESS's generated Go and TypeScript runners
 relations:
 - serves: vision:O2
 - informed_by: story:evidence-admits-ordinary-ess-suites
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-10T03:23:33Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-10-10T03:23:33Z", actor: "human:timo", revision: 3}
@@ -46,9 +46,9 @@ equal to the report's `suite.digest`. The suite check passes; the report is refu
 ## Acceptance
 
 1. A report/2 with `producer_profile: go-scenario-status/2` and the exact suite it ran is recorded
-   by `aep plan artifact evidence --from <report> --suite <suite>`: exit 0, one
-   `ess_conformance_v2` record carrying the report's counts, for both a count-stage and a coverage
-   suite reader.
+   by `aep plan artifact evidence --from <report> --suite <suite>`: exit 0, one record carrying the
+   report's counts: `ess_conformance_v2` for an ordinary or count-stage suite,
+   `ess_conformance_coverage_v1` for a coverage suite (the kind each route already writes).
 2. The execution status under `go-scenario-status/2` follows ESS's rule: failed or unsupported
    gives failed, else error or skipped gives inconclusive, else passed; each branch has a test.
 3. `go-scenario-status/1` still refuses error and unsupported counts (`ProfileOutcomeMismatch`), and

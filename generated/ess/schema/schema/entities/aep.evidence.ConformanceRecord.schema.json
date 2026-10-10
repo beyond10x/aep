@@ -21,6 +21,14 @@
       "$ref": "#/$defs/aep.evidence.SuiteKind",
       "description": "`count_stage` or `ordinary`: the two kinds this admission records."
     },
+    "producer_profile": {
+      "$ref": "#/$defs/aep.evidence.ProducerProfile",
+      "description": "The report's profile, written into the record's source as `producer_profile` exactly as the report spells it (ess_conformance_v2.rs `facts`)."
+    },
+    "execution_status": {
+      "$ref": "#/$defs/aep.evidence.ExecutionStatus",
+      "description": "The report's `execution_status`, once the outcomes above have agreed with it."
+    },
     "completed_at": {
       "description": "The report's own `completed_at`, never this process's clock.",
       "type": "string",
@@ -35,6 +43,8 @@
     "artifact",
     "suite_version",
     "suite_kind",
+    "producer_profile",
+    "execution_status",
     "completed_at",
     "state"
   ],
@@ -42,8 +52,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
-    "contract_digest": "slice-sha256/2:da2ccb9bd88f6ee0489a255be7b9ea28114a53e440a90d473cb50c39c8712d05",
+    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "slice-sha256/2:c679856408d998f97894ec7f7451534485b615c5e6cf9317e8102fdf49f4a040",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -60,6 +70,30 @@
       "type": "string",
       "enum": [
         "Recorded"
+      ]
+    },
+    "aep.evidence.ExecutionStatus": {
+      "title": "ExecutionStatus",
+      "x-ess-name": "aep.evidence.ExecutionStatus",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "inconclusive"
+      ]
+    },
+    "aep.evidence.ProducerProfile": {
+      "title": "ProducerProfile",
+      "x-ess-name": "aep.evidence.ProducerProfile",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "rust_scenario_status_1",
+        "go_scenario_status_1",
+        "go_scenario_status_2",
+        "external_scenario_status_1",
+        "unknown"
       ]
     },
     "aep.evidence.RecordName": {

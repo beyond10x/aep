@@ -1,0 +1,55 @@
+{
+  "completed_at": 1791602864817,
+  "conformance_status": "failed",
+  "counts": {
+    "error": 8,
+    "failed": 0,
+    "passed": 0,
+    "skipped": 0,
+    "total": 19,
+    "unsupported": 11
+  },
+  "coverage": {
+    "knowledge": "unknown"
+  },
+  "execution_status": "failed",
+  "format": "ess-conformance-report/2",
+  "implementation": "probe 0.0.0",
+  "outcomes": {
+    "error": [
+      "aep.evidence.RecordFromReport/outcome/execution-status-mismatch",
+      "aep.evidence.RecordFromReport/outcome/profile-outcome-mismatch",
+      "aep.evidence.RecordFromReport/outcome/recorded",
+      "aep.evidence.RecordFromReport/outcome/suite-digest-mismatch",
+      "aep.evidence.RecordFromReport/outcome/suite-version-mismatch",
+      "aep.evidence.RecordFromReport/outcome/unsupported-producer-profile",
+      "aep.evidence.RecordFromReport/outcome/unsupported-suite-version",
+      "aep.plan.ReverseInit/outcome/flag-unfit"
+    ],
+    "failed": [],
+    "passed": [],
+    "skipped": [],
+    "unsupported": [
+      "aep.evidence.RecordFromReport/outcome/coverage-suite",
+      "aep.review.RecordReview/outcome/not-a-review",
+      "aep.review.RecordReview/outcome/prose-only-beside-block",
+      "aep.review.RecordReview/outcome/prose-only-blank",
+      "aep.review.RecordReview/outcome/prose-only-on-other-kind",
+      "aep.review.RecordReview/outcome/recorded-prose-only",
+      "aep.review.RecordReview/outcome/recorded-with-block",
+      "aep.review.RecordReview/outcome/recorded-without-block",
+      "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-prose-only",
+      "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-with-block",
+      "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-without-block"
+    ]
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "go-scenario-status/2",
+  "spec_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+  "specification": "aep/v1",
+  "suite": {
+    "digest": "sha256:849022148b7f488ddaebd4036e273a3b62d7a295eef456a00d5385699303feb0",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/34"
+  }
+}

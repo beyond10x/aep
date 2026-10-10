@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExecutionStatusMismatch payload",
+  "description": "The report's `execution_status` is not the one its counts imply under its producer profile (`ExecutionStatusMismatch at $.execution_status`).",
+  "x-ess-name": "aep.evidence.ExecutionStatusMismatch",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "slice-sha256/2:c5a27fbf01c8281ba30381680257d73c23e64e03a88fdeb35592ab1290b72fad",
+    "regenerate": "ess generate"
+  }
+}

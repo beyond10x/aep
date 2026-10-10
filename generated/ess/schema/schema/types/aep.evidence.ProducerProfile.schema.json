@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.evidence.ProducerProfile",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "slice-sha256/2:c92c44f466adce76bd7f83e2675236417ad75db426c3d17c701b1fc18af4cd89",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.ProducerProfile": {
+      "title": "ProducerProfile",
+      "x-ess-name": "aep.evidence.ProducerProfile",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "rust_scenario_status_1",
+        "go_scenario_status_1",
+        "go_scenario_status_2",
+        "external_scenario_status_1",
+        "unknown"
+      ]
+    }
+  }
+}
