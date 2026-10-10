@@ -2,15 +2,16 @@
 format: aep.planning-md/3
 id: story:migration-writes-each-move-once
 kind: story
-status: active
+status: implemented
 title: Migration never writes a duplicate transition, and drops one already written
 relations:
 - serves: vision:O2
 - informed_by: story:migrate-verify-compares-evidence
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-10T01:30:13Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-10-10T01:30:13Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-10-10T03:10:12Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 # Story: Migration never writes a duplicate transition, and drops one already written
 
