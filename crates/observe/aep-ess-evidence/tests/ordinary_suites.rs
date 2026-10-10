@@ -109,7 +109,10 @@ fn an_ordinary_major_this_build_does_not_know_is_refused_by_name_never_as_a_miss
         "{error}"
     );
     assert!(
-        error.issues.iter().all(|issue| issue.reason != "MissingField"),
+        error
+            .issues
+            .iter()
+            .all(|issue| issue.reason != "MissingField"),
         "{error}"
     );
 }
@@ -122,7 +125,10 @@ fn an_ordinary_suite_carrying_a_coverage_block_is_refused() {
     let mut report: Value = serde_json::from_str(REPORT_34).unwrap();
     report["suite"]["digest"] = digest(&suite).into();
     let error = admit(&report.to_string(), &suite).expect_err("coverage on an ordinary major");
-    assert!(refusal(&error, "UnknownField").contains("coverage"), "{error}");
+    assert!(
+        refusal(&error, "UnknownField").contains("coverage"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -163,7 +169,10 @@ fn every_known_ordinary_major_admits_and_its_coverage_neighbour_does_not() {
     // suite/42 requires a seed record (`synthesis_seeds`), which this fixture has none of.
     let (suite, report) = relabelled("ess-conformance/42");
     let error = admit(&report, &suite).expect_err("suite/42 without seeds");
-    assert!(refusal(&error, "MissingField").contains("synthesis_seeds"), "{error}");
+    assert!(
+        refusal(&error, "MissingField").contains("synthesis_seeds"),
+        "{error}"
+    );
     // An odd major is a coverage suite, never read by the count reader.
     let (suite, report) = relabelled("ess-conformance/35");
     let error = admit(&report, &suite).expect_err("coverage major on the count reader");

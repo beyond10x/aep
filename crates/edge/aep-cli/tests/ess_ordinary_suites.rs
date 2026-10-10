@@ -155,7 +155,10 @@ fn an_ordinary_suite_ess_wrote_is_recorded_with_its_report() {
     );
     assert_eq!(source["execution_status"], "failed");
     assert_eq!(source["conformance_status"], "failed");
-    assert_eq!(source["coverage"], serde_json::json!({"knowledge":"unknown"}));
+    assert_eq!(
+        source["coverage"],
+        serde_json::json!({"knowledge":"unknown"})
+    );
     // The report's own instant, never this process's clock.
     assert_eq!(source["completed_at"], "1700000003700");
 }

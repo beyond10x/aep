@@ -411,9 +411,7 @@ fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other(
 #[test]
 fn count_suite_reference_admits_the_frozen_and_ordinary_majors_and_names_any_other() {
     use aep_domain::ess_conformance_coverage::COVERAGE_SUITE_MAJORS;
-    use aep_domain::ess_conformance_v2::{
-        SuiteReference as CountReference, ORDINARY_SUITE_MAJORS,
-    };
+    use aep_domain::ess_conformance_v2::{SuiteReference as CountReference, ORDINARY_SUITE_MAJORS};
     let digest = format!("sha256:{}", "a".repeat(64));
     let reference = |version: &str| {
         CountReference::new(version.into(), "sha256-json-bytes/1".into(), digest.clone())
