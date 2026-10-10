@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "UnsupportedProducerProfile payload",
+  "description": "The report's `producer_profile` is a spelling this build does not list (`UnsupportedProducerProfile at $.producer_profile`, counts.rs and coverage.rs `read_report`), e.g. `go-scenario-status/3`.",
+  "x-ess-name": "aep.evidence.UnsupportedProducerProfile",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "slice-sha256/2:bd588f3bdf8bbc6e4819ae341935423ac38bf87bc5d2c1ea371c241d22fc1c6b",
+    "regenerate": "ess generate"
+  }
+}

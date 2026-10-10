@@ -9,6 +9,16 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact evidence --from <report/2> --suite <suite>` records a report whose
+  `producer_profile` is `go-scenario-status/2`, the profile the Go and TypeScript runners ESS
+  0.56.0 and later generate write, over a count-stage, ordinary or coverage suite. It was refused
+  as `UnsupportedProducerProfile`. Under that profile every category may be counted: execution is
+  failed when any scenario failed or was unsupported, otherwise inconclusive when any errored or
+  was skipped, otherwise passed. `go-scenario-status/1` still refuses error and unsupported counts,
+  and any other spelling is still `UnsupportedProducerProfile`.
+
 ## [0.71.1] — 2026-10-10
 
 ### Changed

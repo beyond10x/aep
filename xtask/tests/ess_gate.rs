@@ -32,11 +32,11 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 16 scenarios and 68 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 19 scenarios and 68 refusals.
 ///
 /// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, the `aep.review.ReviewResult`
-/// invariant after each of its three recording outcomes, and the five outcomes of
+/// invariant after each of its three recording outcomes, and the eight outcomes of
 /// `aep.evidence.RecordFromReport`.
 ///
 /// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (54) both commands read two row sets
@@ -51,7 +51,7 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (16, 68);
+const SYNTHESIZED: (u64, u64) = (19, 68);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {

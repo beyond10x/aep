@@ -28,6 +28,25 @@
     },
     "suite_digest_matches": {
       "type": "boolean"
+    },
+    "producer_profile": {
+      "$ref": "#/$defs/aep.evidence.ProducerProfile"
+    },
+    "execution_status": {
+      "$ref": "#/$defs/aep.evidence.ExecutionStatus",
+      "description": "The report's `execution_status`, as written."
+    },
+    "failed": {
+      "type": "integer"
+    },
+    "error": {
+      "type": "integer"
+    },
+    "unsupported": {
+      "type": "integer"
+    },
+    "skipped": {
+      "type": "integer"
     }
   },
   "required": [
@@ -37,14 +56,20 @@
     "report_suite_version",
     "suite_kind",
     "report_suite_kind",
-    "suite_digest_matches"
+    "suite_digest_matches",
+    "producer_profile",
+    "execution_status",
+    "failed",
+    "error",
+    "unsupported",
+    "skipped"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
-    "contract_digest": "slice-sha256/2:7373aae59fcf30fb56f09e2e3d4f6da045ef44ee8c63d87e55bd323025f937e4",
+    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "slice-sha256/2:ce6bd0d2233efff1245de53fe5c3a4bde83cad5f5e0eddd3653df9eecf900971",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -53,6 +78,30 @@
       "x-ess-name": "aep.evidence.ArtifactId",
       "x-ess-kind": "newtype",
       "type": "string"
+    },
+    "aep.evidence.ExecutionStatus": {
+      "title": "ExecutionStatus",
+      "x-ess-name": "aep.evidence.ExecutionStatus",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "passed",
+        "failed",
+        "inconclusive"
+      ]
+    },
+    "aep.evidence.ProducerProfile": {
+      "title": "ProducerProfile",
+      "x-ess-name": "aep.evidence.ProducerProfile",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "rust_scenario_status_1",
+        "go_scenario_status_1",
+        "go_scenario_status_2",
+        "external_scenario_status_1",
+        "unknown"
+      ]
     },
     "aep.evidence.RecordName": {
       "title": "RecordName",

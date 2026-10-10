@@ -299,6 +299,14 @@ fn execution_status(
                 CountStatus::Passed
             })
         }
+        // Every category is available, so nothing is a profile mismatch.
+        ProducerProfile::GeneratedRunner => Ok(if counts.failed > 0 || counts.unsupported > 0 {
+            CountStatus::Failed
+        } else if counts.error > 0 || counts.skipped > 0 {
+            CountStatus::Inconclusive
+        } else {
+            CountStatus::Passed
+        }),
     }
 }
 

@@ -4,18 +4,22 @@ summary: >-
   How `aep plan artifact evidence <id> --from <report> --suite <suite>` admits an
   `ess-conformance-report/2` and the exact original suite it ran: which reader a suite goes to by
   what it is, the suite's binding to the report by version and by digest, and the record it
-  writes. Declared for story:evidence-admits-ordinary-ess-suites.
+  writes, and the producer profiles a report may name with the execution status each one implies.
+  Declared for story:evidence-admits-ordinary-ess-suites and
+  story:evidence-admits-generated-runner-profile.
 
 # Paths are relative to the repository root. `planning.rs` is crates/edge/aep-cli/src/planning.rs,
 # `counts.rs`, `count_suite.rs`, `coverage.rs` and `ordinary_suite.rs` are under
-# crates/observe/aep-ess-evidence/src/, and `ess_conformance_v2.rs` and `values.rs` are under
-# crates/govern/aep-domain/src/ (`values.rs` in `ess_conformance_coverage/`), unless a path says
-# otherwise. Functions are named rather than lines, because the change moves them.
+# crates/observe/aep-ess-evidence/src/, and `ess_conformance_v2.rs`, `ess_conformance_coverage.rs`
+# and `values.rs` are under crates/govern/aep-domain/src/ (`values.rs` in
+# `ess_conformance_coverage/`), unless a path says otherwise. Functions are named rather than
+# lines, because the change moves them.
 #
 # Not modelled here: a report/1 (`--from` without `--suite`), `--suite-input` lineage, the
 # coverage reader's own admission (story:current-ess-coverage-suites), the closed vocabulary each
-# reader checks in the report and the suite (unknown fields, statuses, producer profiles, counts
-# against outcomes, scenario id forms gated by major), the spec-digest and selected-id pairing
+# reader checks in the report and the suite (unknown fields, statuses, the runner name and version
+# an external profile carries, counts against outcomes, the conformance status, scenario id forms
+# gated by major), the spec-digest and selected-id pairing
 # (`ModelDigestMismatch`, `SelectedIdsMismatch` in counts.rs `admit_suite`, unchanged), and the
 # planning store's own refusals of the artifact id.
 
@@ -42,6 +46,28 @@ types:
       - coverage      # an odd major in `COVERAGE_SUITE_MAJORS` (values.rs): carries a `coverage` block
       - unknown       # any other spelling or major, e.g. `ess-conformance/46` from an ESS newer than this build
 
+  # change (story:evidence-admits-generated-runner-profile): the report's `producer_profile`, read
+  # by both readers (`ProducerProfile::from_wire` in ess_conformance_v2.rs, called from counts.rs
+  # and coverage.rs `read_report`). On 0.71.1 `go-scenario-status/2`, which the generated Go and
+  # TypeScript runners of ESS 0.56.0 and later write, was `unknown`. A profile ESS adds later is
+  # `unknown` here until AEP lists it.
+  - name: aep.evidence.ProducerProfile
+    kind: enum
+    variants:
+      - rust_scenario_status_1      # `rust-scenario-status/1`: passed, failed, error, unsupported; never skipped
+      - go_scenario_status_1        # `go-scenario-status/1`: passed, failed, skipped; never error or unsupported
+      - go_scenario_status_2        # `go-scenario-status/2`: all five categories
+      - external_scenario_status_1  # `external-scenario-status/1`, alone or with `;runner=<name>@<version>`: the Rust categories
+      - unknown                     # any other spelling, e.g. `go-scenario-status/3`
+
+  # read from: the report's `execution_status` (counts.rs and coverage.rs `status`).
+  - name: aep.evidence.ExecutionStatus
+    kind: enum
+    variants:
+      - passed
+      - failed
+      - inconclusive
+
 entities:
   # One evidence record in the planning store: an immutable file under `.engineering/evidence/`,
   # written once by `evidence` (AGENTS.md *Planning store*). Only the facts this admission writes.
@@ -63,6 +89,14 @@ entities:
       - name: suite_kind
         type: aep.evidence.SuiteKind
         summary: "`count_stage` or `ordinary`: the two kinds this admission records."
+      - name: producer_profile
+        type: aep.evidence.ProducerProfile
+        summary: >-
+          The report's profile, written into the record's source as `producer_profile` exactly as
+          the report spells it (ess_conformance_v2.rs `facts`).
+      - name: execution_status
+        type: aep.evidence.ExecutionStatus
+        summary: The report's `execution_status`, once the outcomes above have agreed with it.
       - name: completed_at
         type: Timestamp
         summary: The report's own `completed_at`, never this process's clock.
@@ -97,6 +131,26 @@ errors:
     summary: >-
       The SHA-256 of the suite's original bytes differs from the report's `suite.digest`
       (`SuiteDigestMismatch`, counts.rs `admit_suite`; story acceptance 2).
+    fields: []
+  # change (story:evidence-admits-generated-runner-profile): on 0.71.1 `go-scenario-status/2`
+  # was refused here.
+  - name: aep.evidence.UnsupportedProducerProfile
+    summary: >-
+      The report's `producer_profile` is a spelling this build does not list
+      (`UnsupportedProducerProfile at $.producer_profile`, counts.rs and coverage.rs
+      `read_report`), e.g. `go-scenario-status/3`.
+    fields: []
+  - name: aep.evidence.ProfileOutcomeMismatch
+    summary: >-
+      The report counts a category its producer profile cannot emit: skipped under
+      `rust-scenario-status/1` or `external-scenario-status/1`, error or unsupported under
+      `go-scenario-status/1` (`ProfileOutcomeMismatch`, ess_conformance_v2.rs `profile_status`
+      and ess_conformance_coverage.rs `execution_status`).
+    fields: []
+  - name: aep.evidence.ExecutionStatusMismatch
+    summary: >-
+      The report's `execution_status` is not the one its counts imply under its producer profile
+      (`ExecutionStatusMismatch at $.execution_status`).
     fields: []
 
 events:
@@ -158,7 +212,37 @@ commands:
       # `ordinary_suites`) and its aep-cli counterpart.
       - name: suite_digest_matches
         type: Boolean
+      # ESS-LIMIT: the report's `producer_profile` is a closed spelling, one with an open runner
+      # suffix (`external-scenario-status/1;runner=<name>@<version>`), and ESS 0.57.0 has no
+      # operator over the parts of a String, so the command takes the spelling's kind. The
+      # spellings stay in Rust (`ProducerProfile::from_wire`). Pinned by
+      # `a_generated_runner_report_is_admitted_by_the_count_stage_reader`,
+      # `unknown_producer_profiles_stay_refused` (aep-ess-evidence `generated_runner_profile`) and
+      # `count_stage_external_profiles_record_exactly_and_near_misses_refuse` (`counts`).
+      - name: producer_profile
+        type: aep.evidence.ProducerProfile
+      - name: execution_status
+        type: aep.evidence.ExecutionStatus
+        summary: The report's `execution_status`, as written.
+      # The report's `counts.<category>`; a count's range (unsigned 64-bit decimal) and its
+      # agreement with `total` and the outcome lists are checked by the readers, not modelled.
+      - name: failed
+        type: Integer
+      - name: error
+        type: Integer
+      - name: unsupported
+        type: Integer
+      - name: skipped
+        type: Integer
     outcomes:
+      # change (story:evidence-admits-generated-runner-profile): both readers read the profile
+      # before the report's suite version, and after the route has refused an unknown suite.
+      - name: unsupported-producer-profile
+        when:
+          all:
+            - suite_kind != "unknown"
+            - producer_profile == "unknown"
+        error: aep.evidence.UnsupportedProducerProfile
       # A version this build does not know is refused by name before any reader interprets the
       # suite: the route refuses the suite's own version, and the reader it chose the report's.
       # The count reader also refuses a report naming a coverage major as a version it does not
@@ -172,6 +256,50 @@ commands:
                 - suite_kind != "coverage"
                 - report_suite_kind == "coverage"
         error: aep.evidence.UnsupportedSuiteVersion
+      # Both readers check the counts against the profile before the suite is paired with the
+      # report, so these two precede the coverage route. `go-scenario-status/1` keeps its
+      # restriction; `go-scenario-status/2` may count every category.
+      - name: profile-outcome-mismatch
+        when:
+          any:
+            - all:
+                - producer_profile == "go_scenario_status_1"
+                - any:
+                    - error > 0
+                    - unsupported > 0
+            - all:
+                - any:
+                    - producer_profile == "rust_scenario_status_1"
+                    - producer_profile == "external_scenario_status_1"
+                - skipped > 0
+        error: aep.evidence.ProfileOutcomeMismatch
+      # The execution rule, past the category restrictions above: failed when any scenario failed
+      # or was unsupported; otherwise inconclusive when any errored or was skipped; otherwise
+      # passed. Under `go-scenario-status/2` all four categories can be nonzero (ESS 0.57.0
+      # `formats.md`, "Generated Go and TypeScript count reports"); under the other profiles the
+      # categories they cannot emit are zero here, so the same rule is each profile's own.
+      - name: execution-status-mismatch
+        when:
+          any:
+            - all:
+                - any:
+                    - failed > 0
+                    - unsupported > 0
+                - execution_status != "failed"
+            - all:
+                - failed == 0
+                - unsupported == 0
+                - any:
+                    - error > 0
+                    - skipped > 0
+                - execution_status != "inconclusive"
+            - all:
+                - failed == 0
+                - unsupported == 0
+                - error == 0
+                - skipped == 0
+                - execution_status != "passed"
+        error: aep.evidence.ExecutionStatusMismatch
       # A coverage suite goes to the coverage reader, as on 0.71.0, outside this specification.
       - name: coverage-suite
         when: suite_kind == "coverage"
@@ -192,6 +320,8 @@ commands:
           artifact: input.id
           suite_version: input.suite_version
           suite_kind: input.suite_kind
+          producer_profile: input.producer_profile
+          execution_status: input.execution_status
           completed_at: {generated: true}
         emits: [aep.evidence.ConformanceRecorded]
         payload:
@@ -214,5 +344,9 @@ views:
         type: String
       - name: suite_kind
         type: aep.evidence.SuiteKind
+      - name: producer_profile
+        type: aep.evidence.ProducerProfile
+      - name: execution_status
+        type: aep.evidence.ExecutionStatus
       - name: completed_at
         type: Timestamp

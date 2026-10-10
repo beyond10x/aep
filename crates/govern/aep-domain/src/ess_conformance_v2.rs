@@ -378,8 +378,12 @@ impl CountStatus {
 pub enum ProducerProfile {
     /// Rust passed/failed/error/unsupported final categories.
     Rust,
-    /// Go passed/failed/skipped final categories.
+    /// Go passed/failed/skipped final categories (`go-scenario-status/1`).
     Go,
+    /// All five final categories, written by the Go and TypeScript runners ESS 0.56.0 and later
+    /// generate (`go-scenario-status/2`): failed or unsupported fails execution; otherwise error
+    /// or skipped makes it inconclusive.
+    GeneratedRunner,
     /// Results a runner outside ESS supplied and ESS assembled into the report; ESS executed
     /// nothing. Rust final categories.
     External {
@@ -393,11 +397,13 @@ const RUNNER_MARK: &str = ";runner=";
 
 impl ProducerProfile {
     /// Reads an exact wire spelling: `rust-scenario-status/1`, `go-scenario-status/1`,
-    /// `external-scenario-status/1` or `external-scenario-status/1;runner=<name>@<version>`.
+    /// `go-scenario-status/2`, `external-scenario-status/1` or
+    /// `external-scenario-status/1;runner=<name>@<version>`.
     pub fn from_wire(text: &str) -> Option<Self> {
         match text {
             "rust-scenario-status/1" => Some(Self::Rust),
             "go-scenario-status/1" => Some(Self::Go),
+            "go-scenario-status/2" => Some(Self::GeneratedRunner),
             EXTERNAL_PROFILE => Some(Self::External { runner: None }),
             other => {
                 let runner = other
@@ -414,6 +420,7 @@ impl ProducerProfile {
         match self {
             Self::Rust => "rust-scenario-status/1".into(),
             Self::Go => "go-scenario-status/1".into(),
+            Self::GeneratedRunner => "go-scenario-status/2".into(),
             Self::External { runner: None } => EXTERNAL_PROFILE.into(),
             Self::External {
                 runner: Some(runner),
@@ -615,6 +622,15 @@ impl EssConformanceV2Reading {
                 if c.failed > 0 {
                     CountStatus::Failed
                 } else if c.skipped > 0 {
+                    CountStatus::Inconclusive
+                } else {
+                    CountStatus::Passed
+                }
+            }
+            ProducerProfile::GeneratedRunner => {
+                if c.failed > 0 || c.unsupported > 0 {
+                    CountStatus::Failed
+                } else if c.error > 0 || c.skipped > 0 {
                     CountStatus::Inconclusive
                 } else {
                     CountStatus::Passed

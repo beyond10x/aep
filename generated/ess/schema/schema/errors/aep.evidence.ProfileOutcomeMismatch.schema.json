@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ProfileOutcomeMismatch payload",
+  "description": "The report counts a category its producer profile cannot emit: skipped under `rust-scenario-status/1` or `external-scenario-status/1`, error or unsupported under `go-scenario-status/1` (`ProfileOutcomeMismatch`, ess_conformance_v2.rs `profile_status` and ess_conformance_coverage.rs `execution_status`).",
+  "x-ess-name": "aep.evidence.ProfileOutcomeMismatch",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "slice-sha256/2:80f78c94f78aad1cc052d8cdc5a735d43758ebc4b00fe6151b6da42d2c191703",
+    "regenerate": "ess generate"
+  }
+}

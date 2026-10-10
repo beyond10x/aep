@@ -38,6 +38,30 @@
       "x-ess-kind": "event-payload",
       "x-ess-name": "aep.evidence.ConformanceRecorded"
     },
+    "aep.evidence.ExecutionStatus": {
+      "enum": [
+        "passed",
+        "failed",
+        "inconclusive"
+      ],
+      "title": "ExecutionStatus",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.ExecutionStatus"
+    },
+    "aep.evidence.ProducerProfile": {
+      "enum": [
+        "rust_scenario_status_1",
+        "go_scenario_status_1",
+        "go_scenario_status_2",
+        "external_scenario_status_1",
+        "unknown"
+      ],
+      "title": "ProducerProfile",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.ProducerProfile"
+    },
     "aep.evidence.RecordName": {
       "title": "RecordName",
       "type": "string",
@@ -336,8 +360,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:d5f2a7b48725e532a6f9cdf65ee63734cdb6f6e429ca24fccce76cbd4d4570b6",
-    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:efac22b940a58e076ee61cd82b3e36402a242e938a90c2c7d85f3dab64812056",
+    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
     "specification_version": "v1",
     "system": "aep"
   }

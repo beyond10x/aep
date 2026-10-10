@@ -1,0 +1,4491 @@
+{
+  "provenance": {
+    "suite_version": "ess-conformance/34",
+    "system": "aep",
+    "specification_version": "v1",
+    "spec_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "7768808b7b544a51cd4cf6473a74c54098d51ec5efd72fc4b76f7ade5728598c",
+    "scenario_initial_state": "empty"
+  },
+  "scenarios": {
+    "aep.evidence.RecordFromReport/outcome/coverage-suite": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `coverage-suite` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "query_view",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_2"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "coverage-suite"
+          }
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.review.ReviewsWithoutFindings"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "coverage-suite"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "kind": "view",
+          "name": "aep.plan.Projects"
+        },
+        {
+          "kind": "view",
+          "name": "aep.plan.Repositories"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.evidence.RecordFromReport/outcome/execution-status-mismatch": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `execution-status-mismatch` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_2"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "execution-status-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ExecutionStatusMismatch"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "failed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "execution-status-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ExecutionStatusMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "failed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "execution-status-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ExecutionStatusMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "inconclusive"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "execution-status-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ExecutionStatusMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "execution-status-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ExecutionStatusMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_2"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "execution-status-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ExecutionStatusMismatch"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "execution-status-mismatch"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.evidence.ExecutionStatusMismatch"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.evidence.RecordFromReport/outcome/profile-outcome-mismatch": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `profile-outcome-mismatch` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "profile-outcome-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ProfileOutcomeMismatch"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "profile-outcome-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ProfileOutcomeMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 0.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "profile-outcome-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ProfileOutcomeMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "external_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "profile-outcome-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ProfileOutcomeMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "profile-outcome-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ProfileOutcomeMismatch"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": false
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "profile-outcome-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.ProfileOutcomeMismatch"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "profile-outcome-mismatch"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.evidence.ProfileOutcomeMismatch"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.evidence.RecordFromReport/outcome/recorded": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `recorded` for an input no other branch's guard claims",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_2"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "ordinary"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "step": "expect_event",
+          "event": "aep.evidence.ConformanceRecorded",
+          "payload": {
+            "artifact": "id",
+            "record": "record",
+            "suite_version": "suite_version"
+          },
+          "shape": {
+            "artifact": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "record": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "suite_version": {
+              "holds": "primitive",
+              "kind": "string"
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.evidence.ConformanceRecords",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "artifact": {
+                "kind": "literal",
+                "value": "id"
+              },
+              "execution_status": {
+                "kind": "literal",
+                "value": "passed"
+              },
+              "producer_profile": {
+                "kind": "literal",
+                "value": "go_scenario_status_2"
+              },
+              "record": {
+                "kind": "observed",
+                "event": "aep.evidence.ConformanceRecorded",
+                "field": "record"
+              },
+              "suite_kind": {
+                "kind": "literal",
+                "value": "count_stage"
+              },
+              "suite_version": {
+                "kind": "literal",
+                "value": "suite_version"
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.evidence.ConformanceRecord"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "recorded"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.evidence.RecordFromReport/outcome/suite-digest-mismatch": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `suite-digest-mismatch` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_2"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": false
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "suite-digest-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.SuiteDigestMismatch"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "suite-digest-mismatch"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.evidence.SuiteDigestMismatch"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.evidence.RecordFromReport/outcome/suite-version-mismatch": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `suite-version-mismatch` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "failed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_2"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "suite-version-mismatch"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.SuiteVersionMismatch"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "suite-version-mismatch"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.evidence.SuiteVersionMismatch"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.evidence.RecordFromReport/outcome/unsupported-producer-profile": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `unsupported-producer-profile` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-producer-profile"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedProducerProfile"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-producer-profile"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedProducerProfile"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-producer-profile"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedProducerProfile"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-producer-profile"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedProducerProfile"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": false
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-producer-profile"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedProducerProfile"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-producer-profile"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.evidence.UnsupportedProducerProfile"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.evidence.RecordFromReport/outcome/unsupported-suite-version": {
+      "purpose": "`aep.evidence.RecordFromReport` answers `unsupported-suite-version` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": -1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "go_scenario_status_2"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-suite-version"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedSuiteVersion"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-suite-version"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedSuiteVersion"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-suite-version"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedSuiteVersion"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-suite-version"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedSuiteVersion"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": true
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "unknown"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-suite-version"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedSuiteVersion"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.evidence.RecordFromReport",
+          "actor": "aep.evidence.Operator",
+          "input": {
+            "error": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "execution_status": {
+              "kind": "literal",
+              "value": "passed"
+            },
+            "failed": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "producer_profile": {
+              "kind": "literal",
+              "value": "rust_scenario_status_1"
+            },
+            "record": {
+              "kind": "literal",
+              "value": "record"
+            },
+            "report_suite_kind": {
+              "kind": "literal",
+              "value": "coverage"
+            },
+            "report_suite_version": {
+              "kind": "literal",
+              "value": "report_suite_version"
+            },
+            "skipped": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "suite_digest_matches": {
+              "kind": "literal",
+              "value": false
+            },
+            "suite_kind": {
+              "kind": "literal",
+              "value": "count_stage"
+            },
+            "suite_version": {
+              "kind": "literal",
+              "value": "suite_version"
+            },
+            "unsupported": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-suite-version"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.evidence.UnsupportedSuiteVersion"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.evidence.ArtifactId"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ExecutionStatus"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.ProducerProfile"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.RecordName"
+        },
+        {
+          "kind": "type",
+          "name": "aep.evidence.SuiteKind"
+        },
+        {
+          "kind": "command",
+          "name": "aep.evidence.RecordFromReport"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.evidence.RecordFromReport",
+            "outcome": "unsupported-suite-version"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.evidence.UnsupportedSuiteVersion"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.evidence.Operator"
+        }
+      ]
+    },
+    "aep.plan.ReverseInit/outcome/flag-unfit": {
+      "purpose": "`aep.plan.ReverseInit` answers `flag-unfit` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.plan.ReverseInit",
+          "actor": "aep.plan.Operator",
+          "input": {
+            "no_verify": {
+              "kind": "literal",
+              "value": true
+            },
+            "planning_scope": {
+              "kind": "literal",
+              "value": "😀planning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scope"
+            },
+            "profile": {
+              "kind": "literal",
+              "value": "profile"
+            },
+            "protocol": {
+              "kind": "literal",
+              "value": "protocol"
+            },
+            "protocols": {
+              "kind": "literal",
+              "value": "protocols"
+            },
+            "root": {
+              "kind": "literal",
+              "value": "root"
+            },
+            "summary": {
+              "kind": "literal",
+              "value": "summary"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.plan.ReverseInit",
+            "outcome": "flag-unfit"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.plan.PlanningScopeUnfit"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.plan.ReverseInit",
+          "actor": "aep.plan.Operator",
+          "input": {
+            "no_verify": {
+              "kind": "literal",
+              "value": true
+            },
+            "planning_scope": {
+              "kind": "literal",
+              "value": ""
+            },
+            "profile": {
+              "kind": "literal",
+              "value": "profile"
+            },
+            "protocol": {
+              "kind": "literal",
+              "value": "protocol"
+            },
+            "protocols": {
+              "kind": "literal",
+              "value": "protocols"
+            },
+            "root": {
+              "kind": "literal",
+              "value": "root"
+            },
+            "summary": {
+              "kind": "literal",
+              "value": "summary"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.plan.ReverseInit",
+            "outcome": "flag-unfit"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.plan.PlanningScopeUnfit"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.ProjectRoot"
+        },
+        {
+          "kind": "command",
+          "name": "aep.plan.ReverseInit"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.plan.ReverseInit",
+            "outcome": "flag-unfit"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.plan.PlanningScopeUnfit"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.plan.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/not-a-review": {
+      "purpose": "`aep.review.RecordReview` answers `not-a-review` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "query_view",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "not-a-review"
+          }
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.review.ReviewsWithoutFindings"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "not-a-review"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.evidence.ConformanceRecords"
+        },
+        {
+          "kind": "view",
+          "name": "aep.plan.Projects"
+        },
+        {
+          "kind": "view",
+          "name": "aep.plan.Repositories"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/prose-only-beside-block": {
+      "purpose": "`aep.review.RecordReview` answers `prose-only-beside-block` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-beside-block"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyBesideBlock"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-beside-block"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.review.ProseOnlyBesideBlock"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/prose-only-blank": {
+      "purpose": "`aep.review.RecordReview` answers `prose-only-blank` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-blank"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyBlank"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-blank"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyBlank"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-blank"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.review.ProseOnlyBlank"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/prose-only-on-other-kind": {
+      "purpose": "`aep.review.RecordReview` answers `prose-only-on-other-kind` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyOnOtherKind"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyOnOtherKind"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyOnOtherKind"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.review.ProseOnlyOnOtherKind"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/recorded-prose-only": {
+      "purpose": "`aep.review.RecordReview` answers `recorded-prose-only` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_event",
+          "event": "aep.review.ReviewRecorded",
+          "payload": {
+            "findings_block": false,
+            "id": "id",
+            "prose_only": "prose_only"
+          },
+          "shape": {
+            "findings_block": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "prose_only": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "findings_block": {
+                "kind": "literal",
+                "value": false
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "prose_only": {
+                "kind": "literal",
+                "value": "prose_only"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewsWithoutFindings",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "prose_only": {
+                "kind": "literal",
+                "value": "prose_only"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/recorded-with-block": {
+      "purpose": "`aep.review.RecordReview` answers `recorded-with-block` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_event",
+          "event": "aep.review.ReviewRecorded",
+          "payload": {
+            "findings_block": true,
+            "id": "id"
+          },
+          "shape": {
+            "findings_block": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "prose_only": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "findings_block": {
+                "kind": "literal",
+                "value": true
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewsWithoutFindings",
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/recorded-without-block": {
+      "purpose": "`aep.review.RecordReview` answers `recorded-without-block` for an input no other branch's guard claims",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_event",
+          "event": "aep.review.ReviewRecorded",
+          "payload": {
+            "findings_block": false,
+            "id": "id"
+          },
+          "shape": {
+            "findings_block": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "prose_only": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "findings_block": {
+                "kind": "literal",
+                "value": false
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewsWithoutFindings",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.evidence.ConformanceRecorded"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.RepeatedTransitionsDropped"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-prose-only": {
+      "purpose": "a `aep.review.ReviewResult` still satisfies what it declares after `aep.review.RecordReview` on `recorded-prose-only`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "any": [
+                "findings_block == false",
+                {
+                  "not": "defined(prose_only)"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-with-block": {
+      "purpose": "a `aep.review.ReviewResult` still satisfies what it declares after `aep.review.RecordReview` on `recorded-with-block`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "any": [
+                "findings_block == false",
+                {
+                  "not": "defined(prose_only)"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-without-block": {
+      "purpose": "a `aep.review.ReviewResult` still satisfies what it declares after `aep.review.RecordReview` on `recorded-without-block`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "any": [
+                "findings_block == false",
+                {
+                  "not": "defined(prose_only)"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    }
+  }
+}
