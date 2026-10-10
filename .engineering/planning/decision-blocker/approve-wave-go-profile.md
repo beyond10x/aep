@@ -2,11 +2,13 @@
 format: aep.planning-md/3
 id: decision-blocker:approve-wave-go-profile
 kind: decision-blocker
-status: open
+status: cleared
 title: Approve the generated-runner profile wave
 relations:
 - blocks: story:evidence-admits-generated-runner-profile
-revision: 1
+revision: 3
+transitions:
+- {from: "open", to: "cleared", at: "2026-10-10T03:23:33Z", actor: "human:timo", revision: 2}
 ---
 # Decision: approve the generated-runner profile wave
 
@@ -24,3 +26,8 @@ patch release 0.71.2?
 
 Approve: the unit adds one admitted input value and its outcome, no command, flag or
 configuration key.
+
+## Decision
+
+Approved as proposed (2026-10-10): one unit worked in the wave tree, one pull request, an
+adversary pass after green, merge on green CI, then patch release 0.71.2.
