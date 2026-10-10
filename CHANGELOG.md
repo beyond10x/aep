@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.71.1] — 2026-10-10
+
 ### Changed
 
 - `aep plan store migrate git` on an `aep.project/5` store no longer refuses it as having nothing
