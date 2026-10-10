@@ -31,7 +31,11 @@ pub(crate) enum MigrateCommand {
     /// Every document becomes `aep.planning-md/3`, its journalled moves become its `transitions`
     /// and each journalled evidence record becomes one file under `.engineering/evidence/`. The
     /// journal is removed; Git history keeps it. Refuses a dirty `.engineering` and refuses the
-    /// whole migration, writing nothing, when any document disagrees with its journal.
+    /// whole migration, writing nothing, when any document disagrees with its journal. A move the
+    /// journal holds twice, identical in every field, is carried once.
+    ///
+    /// On an `aep.project/5` store, drops every transition identical to the one immediately
+    /// before it in its document and writes nothing else; with none, writes nothing and says so.
     Git(migrate_git::GitArgs),
 }
 

@@ -1,5 +1,6 @@
 //! `aep plan store migrate git` over an `aep.project/1` Markdown store — the one reader of that
-//! layout this build keeps — `reverse init` writing `/5`, and the refusal of a `/1` store.
+//! layout this build keeps — `reverse init` writing `/5`, the refusal of a `/1` store, and the
+//! repair `migrate git` makes of a `/5` store that repeats a transition.
 //!
 //! Each test builds a disposable project under Cargo's per-target scratch directory and drives the
 //! real binaries against it.
@@ -1463,3 +1464,224 @@ fn adversary_an_origin_of_only_dot_segments_is_not_written_as_the_scope() {
     let _ = std::fs::remove_dir_all(root);
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+// ---------------------------------------------------------------------------------------------
+// A move written once (story:migration-writes-each-move-once): a `/1` journal holding a move line
+// twice migrates it once, and `migrate git` on a `/5` store drops a transition repeating the one
+// immediately before it.
+// ---------------------------------------------------------------------------------------------
+
+/// The transition a consumer store's `epic:acyclic-latest-upgrades` carried twice after its
+/// migration, as its front matter quoted it.
+const QUOTED_MOVE: &str = "- {from: \"draft\", to: \"proposed\", at: \"2026-09-07T19:51:43Z\", \
+                           actor: \"human:operator\", revision: 4, imported: true}\n";
+
+/// The epic in that shape: `validate` refuses it, and no verb but the repair removes the line.
+fn repeated_epic() -> String {
+    format!(
+        "---\nformat: aep.planning-md/3\nid: epic:acyclic-latest-upgrades\nkind: epic\n\
+         status: proposed\ntitle: Acyclic latest upgrades\nrevision: 4\ntransitions:\n\
+         {QUOTED_MOVE}{QUOTED_MOVE}---\n# Acyclic latest upgrades\n"
+    )
+}
+
+/// A committed `aep.project/5` project named `name`, written by `reverse init`, holding a story
+/// moved once and, when `with_repeat`, the epic repeating its transition.
+fn v5_project(name: &str, with_repeat: bool) -> PathBuf {
+    let project = scratch(name, true);
+    std::fs::remove_dir_all(project.join(".engineering")).expect("the scratch is removable");
+    let init = reverse_init_in(&project, &[]);
+    assert!(init.status.success(), "{}", stderr(&init));
+    let planning = project.join(".engineering/planning");
+    std::fs::create_dir_all(planning.join("story")).expect("the store is writable");
+    std::fs::write(
+        planning.join("story/steady.md"),
+        "---\nformat: aep.planning-md/3\nid: story:steady\nkind: story\nstatus: proposed\n\
+         title: Steady\nrevision: 2\ntransitions:\n\
+         - {from: \"draft\", to: \"proposed\", at: \"2026-09-07T19:00:00Z\", actor: \
+         \"human:operator\", revision: 2}\n---\n# Steady\n",
+    )
+    .expect("the document is writable");
+    if with_repeat {
+        std::fs::create_dir_all(planning.join("epic")).expect("the store is writable");
+        std::fs::write(
+            planning.join("epic/acyclic-latest-upgrades.md"),
+            repeated_epic(),
+        )
+        .expect("the document is writable");
+    }
+    commit_all(&project);
+    project
+}
+
+#[test]
+fn a_v5_document_repeating_its_transition_is_repaired_by_migrate_git_dropping_that_line_only() {
+    let project = v5_project("repair", true);
+    let epic = project.join(".engineering/planning/epic/acyclic-latest-upgrades.md");
+
+    // The defect as the consumer store had it.
+    let refused = aep(&project, &["plan", "artifact", "validate"]);
+    assert_eq!(refused.status.code(), Some(1), "{}", stdout(&refused));
+    for problem in [
+        "epic:acyclic-latest-upgrades: transition 2 moves from `draft`, and the walk before it \
+         stands at `proposed`",
+        "epic:acyclic-latest-upgrades: transition 2 records revision 4, which is not above the \
+         one before it (4)",
+    ] {
+        assert!(
+            stdout(&refused).contains(problem),
+            "the fixture reproduces the refusal: {}",
+            stdout(&refused)
+        );
+    }
+
+    let before = contents(&project);
+    let dry = migrate_in(&project, &["--dry-run"]);
+    assert!(dry.status.success(), "{}{}", stdout(&dry), stderr(&dry));
+    for line in [
+        "would drop 1 repeated transition(s)",
+        "epic:acyclic-latest-upgrades: 1 repeated transition(s)",
+        "dry run: nothing was written",
+    ] {
+        assert!(stdout(&dry).contains(line), "{}", stdout(&dry));
+    }
+    assert_eq!(before, contents(&project), "a dry run changed a file");
+
+    let repaired = migrate_in(&project, &["--verify"]);
+    assert!(
+        repaired.status.success(),
+        "{}{}",
+        stdout(&repaired),
+        stderr(&repaired)
+    );
+    assert!(
+        stdout(&repaired).contains("verified 1 repaired document(s)"),
+        "{}",
+        stdout(&repaired)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&epic).expect("the document reads"),
+        repeated_epic().replacen(QUOTED_MOVE, "", 1),
+        "exactly the repeated line is gone"
+    );
+    let after = contents(&project);
+    let changed: Vec<_> = after
+        .iter()
+        .filter(|entry| !before.contains(entry))
+        .map(|(path, _)| path.clone())
+        .collect();
+    assert_eq!(
+        changed,
+        [".engineering/planning/epic/acyclic-latest-upgrades.md"],
+        "the repair writes nothing else"
+    );
+    assert_eq!(
+        before.len(),
+        after.len(),
+        "the repair adds and removes no file"
+    );
+    ok(&project, &["validate"]);
+}
+
+#[test]
+fn a_v5_store_without_a_repeated_transition_is_left_as_it_was_and_says_so() {
+    let project = v5_project("nothing-to-repair", false);
+    let before = contents(&project);
+    for flags in [&[][..], &["--dry-run"][..], &["--verify"][..]] {
+        let output = migrate_in(&project, flags);
+        assert!(
+            output.status.success(),
+            "{flags:?}: {}{}",
+            stdout(&output),
+            stderr(&output)
+        );
+        assert!(
+            stdout(&output).contains("no transition repeats the one before it")
+                && stdout(&output).contains("nothing was written"),
+            "{flags:?}: {}",
+            stdout(&output)
+        );
+        assert_eq!(before, contents(&project), "{flags:?} changed a file");
+    }
+}
+
+#[test]
+fn a_dirty_v5_store_is_refused_and_left_as_it_was() {
+    let project = v5_project("dirty-v5", true);
+    std::fs::write(
+        project.join(".engineering/planning/story/uncommitted.md"),
+        "---\nformat: aep.planning-md/3\nid: story:uncommitted\nkind: story\nstatus: draft\n\
+         title: Uncommitted\nrevision: 1\n---\n# Uncommitted\n",
+    )
+    .expect("the document is writable");
+    let before = contents(&project);
+    let output = migrate_in(&project, &[]);
+    assert_eq!(output.status.code(), Some(1), "{}", stdout(&output));
+    assert!(
+        stderr(&output).contains("uncommitted changes"),
+        "{}",
+        stderr(&output)
+    );
+    assert_eq!(before, contents(&project), "a refusal writes nothing");
+}
+
+#[test]
+fn a_journal_holding_one_move_line_twice_migrates_it_once_and_verifies() {
+    let project = v1_project("move-twice");
+    let planning = project.join(".engineering/planning");
+    std::fs::create_dir_all(planning.join("story")).expect("the store is writable");
+    for name in ["entry-shape", "event-shape"] {
+        std::fs::write(
+            planning.join(format!("story/{name}.md")),
+            story(name, "proposed", 3),
+        )
+        .expect("the document is writable");
+    }
+    let moved = serde_json::json!({"change": "moved", "from": "draft", "to": "proposed"});
+    let entry = entry_line(MOVED_AT, "story:entry-shape", 2, &moved);
+    let event = event_line(MOVED_AT, "event-shape", 2, &moved);
+    // Each line twice, byte for byte, as a merge of two branches that both carried it leaves it.
+    let lines = [entry.clone(), entry, event.clone(), event];
+    std::fs::write(planning.join("journal.jsonl"), lines.join("\n") + "\n")
+        .expect("the journal is writable");
+    commit_all(&project);
+
+    let dry = migrate_in(&project, &["--dry-run"]);
+    assert!(dry.status.success(), "{}{}", stdout(&dry), stderr(&dry));
+    assert!(
+        stdout(&dry).contains("2 repeated move entries dropped"),
+        "the dry run counts what it drops: {}",
+        stdout(&dry)
+    );
+    assert!(
+        stdout(&dry).contains("carrying 2 transition(s)"),
+        "{}",
+        stdout(&dry)
+    );
+
+    let migrated = migrate_in(&project, &["--verify"]);
+    assert!(
+        migrated.status.success(),
+        "{}{}",
+        stdout(&migrated),
+        stderr(&migrated)
+    );
+    assert!(
+        stdout(&migrated).contains("verified 2 artifact(s)"),
+        "{}",
+        stdout(&migrated)
+    );
+    for name in ["entry-shape", "event-shape"] {
+        let written = std::fs::read_to_string(planning.join(format!("story/{name}.md")))
+            .expect("the document reads");
+        assert_eq!(
+            written.matches("imported: true").count(),
+            1,
+            "the move journalled twice is one transition: {written}"
+        );
+    }
+    ok(&project, &["validate"]);
+}
+
+/// The instant of the move journalled twice.
+const MOVED_AT: &str = "2026-09-07T19:51:43Z";

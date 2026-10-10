@@ -11,6 +11,16 @@
 //! A document whose journal records no move but whose `status` is not its kind's initial state is
 //! carried with one imported transition from that initial state to its status, so `validate` holds
 //! it to its transitions like every other artifact rather than to the format of its first commit.
+//!
+//! A move the journal holds twice — the same line, as a Git merge of `journal.jsonl` can leave it —
+//! is one move, carried once: a move entry identical in every field to one already carried for its
+//! artifact is dropped and counted. Evidence records are never dropped this way; one recorded twice
+//! is two pieces of evidence.
+//!
+//! On a store that already selects `aep.project/5` there is nothing to migrate, and the command
+//! repairs what an earlier build's migration could leave instead ([`repair`]): a transition
+//! identical to the one immediately before it is dropped from its document, and nothing else is
+//! written.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -75,11 +85,13 @@ pub(crate) struct GitArgs {
     /// omitted.
     #[arg(long)]
     engineering: Option<PathBuf>,
-    /// Print what the migration would write and refuse, and write nothing.
+    /// Print what the migration (or, on an `aep.project/5` store, the repair) would write and
+    /// refuse, and write nothing.
     #[arg(long, conflicts_with = "verify")]
     dry_run: bool,
     /// After writing, read the new store back and compare it, artifact by artifact, with what the
-    /// old store answered; any difference exits non-zero.
+    /// old store answered; any difference exits non-zero. On an `aep.project/5` store, read every
+    /// repaired document back and compare it with what was planned.
     #[arg(long)]
     verify: bool,
     /// For a plan with no `project.yaml`: where its governing documents come from, a path or a
@@ -95,6 +107,7 @@ pub(crate) struct GitArgs {
     /// The `planning_scope` to write. When omitted it is derived, in order, from the `origin`
     /// remote's repository name, the primary checkout's directory name, or, outside Git, the
     /// directory holding `.engineering/`.
+    /// Not read on an `aep.project/5` store, whose project file already holds one.
     #[arg(long, value_name = "NAME")]
     planning_scope: Option<String>,
 }
@@ -117,10 +130,20 @@ fn unconfigured_selector(args: &GitArgs, selector_path: &Path) -> Result<String>
     ))
 }
 
-/// Refuses a selector this command does not migrate: anything but a Markdown `aep.project/1`.
+/// The two layouts this command acts on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Selected {
+    /// A Markdown `aep.project/1` store: migrated.
+    JournalLayout,
+    /// An `aep.project/5` store: repaired.
+    GitNative,
+}
+
+/// Which layout the selector names, refusing one this command does not act on: anything but a
+/// Markdown `aep.project/1` or an `aep.project/5`.
 ///
 /// Read as plain YAML, because the project reader of this build refuses `/1` outright.
-fn require_a_v1_markdown_selector(text: &str, selector_path: &Path) -> Result<()> {
+fn selected_layout(text: &str, selector_path: &Path) -> Result<Selected> {
     let value: serde_json::Value =
         serde_yaml::from_str(text).context("the project selector does not read as YAML")?;
     let map = value
@@ -136,10 +159,7 @@ fn require_a_v1_markdown_selector(text: &str, selector_path: &Path) -> Result<()
         anyhow::bail!("{}", aep_domain::project::event_log_store_refusal(version));
     }
     if version == PROJECT_VERSION_V5 {
-        anyhow::bail!(
-            "{} already selects `{PROJECT_VERSION_V5}`; there is nothing to migrate",
-            selector_path.display()
-        );
+        return Ok(Selected::GitNative);
     }
     if version != PROJECT_VERSION_V1 {
         anyhow::bail!(
@@ -149,8 +169,8 @@ fn require_a_v1_markdown_selector(text: &str, selector_path: &Path) -> Result<()
         );
     }
     match map.get("store") {
-        None => Ok(()),
-        Some(serde_json::Value::String(word)) if word == "markdown" => Ok(()),
+        None => Ok(Selected::JournalLayout),
+        Some(serde_json::Value::String(word)) if word == "markdown" => Ok(Selected::JournalLayout),
         Some(_) => anyhow::bail!(
             "{} keeps its plan in a `store:` other than markdown; only a Markdown \
              `{PROJECT_VERSION_V1}` store migrates to `{PROJECT_VERSION_V5}` — a SQLite or \
@@ -195,6 +215,9 @@ struct Plan {
     /// Artifacts the journal never moved that stand past their initial state, each carried with
     /// one imported transition.
     carried: usize,
+    /// Move entries identical in every field to one already carried for the same artifact: one
+    /// move journalled twice, carried once.
+    repeated_moves: usize,
     dropped: BTreeMap<&'static str, usize>,
     unreadable: usize,
     violations: Vec<String>,
@@ -251,7 +274,9 @@ pub(crate) fn run(args: &GitArgs) -> Result<ExitCode> {
     } else {
         unconfigured_selector(args, &selector_path)?
     };
-    require_a_v1_markdown_selector(&selector_text, &selector_path)?;
+    if selected_layout(&selector_text, &selector_path)? == Selected::GitNative {
+        return repair(args, &engineering, &selector_path);
+    }
     // A relative `--engineering .engineering` has the empty path as its parent, which names no
     // directory; made absolute first, its parent is the checkout it was run in.
     let engineering_absolute = std::path::absolute(&engineering)
@@ -385,6 +410,245 @@ fn git_clean(engineering: &Path) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+/// How many of `transitions` are identical in every field to the one immediately before them.
+///
+/// Identical in every field is identical rendered line: [`Transition::flow`] writes each field
+/// the same way every time. One that repeats an earlier transition further back is not counted —
+/// a walk can legitimately pass a status twice — and a document without any counts nothing.
+fn repeated_in(transitions: &[Transition]) -> usize {
+    transitions
+        .windows(2)
+        .filter(|pair| pair[0] == pair[1])
+        .count()
+}
+
+/// `transitions` with each one identical to the one immediately before it dropped.
+fn without_repeats(transitions: &[Transition]) -> Vec<Transition> {
+    let mut kept: Vec<Transition> = Vec::with_capacity(transitions.len());
+    for transition in transitions {
+        if kept.last() != Some(transition) {
+            kept.push(transition.clone());
+        }
+    }
+    kept
+}
+
+/// `text`, a document that reads as `planned` once its repeated transitions are dropped, with
+/// those dropped and every other byte kept: each such line of the frontmatter's `transitions` list
+/// is removed.
+///
+/// The lines are removed only if the result reads back as `planned`. A repeat written in another
+/// shape than the one line `render` writes (a hand-edited document) is not found that way, and the
+/// document is rendered instead, as every verb that writes it would.
+fn repaired_text(text: &str, planned: &PlanningDocument) -> String {
+    let mut kept = String::with_capacity(text.len());
+    let mut fences = 0;
+    let mut in_transitions = false;
+    let mut previous_item: Option<&str> = None;
+    for line in text.split_inclusive('\n') {
+        let content = line.trim_end_matches(['\n', '\r']);
+        if fences < 2 && content == "---" {
+            fences += 1;
+            in_transitions = false;
+        } else if fences == 1 {
+            if content == "transitions:" {
+                in_transitions = true;
+                previous_item = None;
+            } else if in_transitions && content.starts_with("- ") {
+                if previous_item == Some(content) {
+                    continue;
+                }
+                previous_item = Some(content);
+            } else if !content.starts_with(' ') {
+                in_transitions = false;
+            }
+        }
+        kept.push_str(line);
+    }
+    match PlanningDocument::parse(&kept, None) {
+        Ok(read) if read == *planned => kept,
+        _ => planned.render(),
+    }
+}
+
+/// One document of an `aep.project/5` store with its repeated transitions dropped.
+struct Repaired {
+    id: ArtifactId,
+    relative_path: String,
+    dropped: usize,
+    text: String,
+    document: PlanningDocument,
+}
+
+/// Every document of the Git-native store under `planning` that repeats a transition, repaired;
+/// or the documents that do not read, which refuse the repair.
+fn repairs_of(planning: &Path) -> std::result::Result<Vec<Repaired>, Vec<String>> {
+    let store = MarkdownStore::open(planning.to_owned()).load();
+    if !store.failures.is_empty() {
+        return Err(store
+            .failures
+            .iter()
+            .map(|failure| {
+                format!(
+                    "{}: the document does not read: {}",
+                    failure.path.display(),
+                    failure.detail
+                )
+            })
+            .collect());
+    }
+    let mut repairs = Vec::new();
+    let mut unreadable = Vec::new();
+    for (id, stored) in &store.documents {
+        let dropped = repeated_in(&stored.document.frontmatter.transitions);
+        if dropped == 0 {
+            continue;
+        }
+        let path = planning.join(&stored.relative_path);
+        let Ok(text) = fs::read_to_string(&path) else {
+            unreadable.push(format!("{}: the document does not read", path.display()));
+            continue;
+        };
+        let mut document = stored.document.clone();
+        document.frontmatter.transitions = without_repeats(&document.frontmatter.transitions);
+        let text = repaired_text(&text, &document);
+        repairs.push(Repaired {
+            id: id.clone(),
+            relative_path: stored.relative_path.clone(),
+            dropped,
+            text,
+            document,
+        });
+    }
+    if unreadable.is_empty() {
+        Ok(repairs)
+    } else {
+        Err(unreadable)
+    }
+}
+
+/// `aep plan store migrate git` on an `aep.project/5` store: drops every transition identical to
+/// the one immediately before it, from the documents that hold one, and writes nothing else.
+///
+/// The migration's preconditions hold here too — the planning writer fence, a clean
+/// `.engineering` (Git holds what is replaced) and a planning directory — and a document that
+/// does not read refuses the repair, writing nothing. No scope is derived: the project file
+/// already holds one. `--dry-run` names what would be dropped; `--verify` reads every rewritten
+/// document back.
+fn repair(args: &GitArgs, engineering: &Path, selector_path: &Path) -> Result<ExitCode> {
+    let _fence = crate::planning_writer_fence::PlanningWriterFence::acquire(engineering)
+        .context("holding the planning writer fence")?;
+    let clean = git_clean(engineering)?;
+    if !clean.is_empty() {
+        anyhow::bail!(
+            "{} has uncommitted changes; the repair runs on a clean tree so Git holds the \
+             documents it rewrites:\n{clean}",
+            engineering.display()
+        );
+    }
+    let planning = engineering.join(GIT_PLANNING_DIRECTORY);
+    if !planning.is_dir() {
+        anyhow::bail!("there is no planning store at {}", planning.display());
+    }
+
+    let repairs = match repairs_of(&planning) {
+        Ok(repairs) => repairs,
+        Err(refusals) => {
+            for refusal in &refusals {
+                outln!("  refused: {refusal}");
+            }
+            eprintln!(
+                "refused: {} document(s) do not read; nothing was written",
+                refusals.len()
+            );
+            return Ok(ExitCode::FAILURE);
+        }
+    };
+    if repairs.is_empty() {
+        outln!(
+            "{} already selects `{PROJECT_VERSION_V5}` and no transition repeats the one before \
+             it; nothing to migrate or repair, and nothing was written",
+            selector_path.display()
+        );
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    let verb = if args.dry_run { "would drop" } else { "drops" };
+    let dropped: usize = repairs.iter().map(|repaired| repaired.dropped).sum();
+    outln!(
+        "{} already selects `{PROJECT_VERSION_V5}`; {verb} {dropped} repeated transition(s), each \
+         identical to the one immediately before it, from {} document(s), and writes nothing else",
+        selector_path.display(),
+        repairs.len()
+    );
+    for repaired in &repairs {
+        outln!(
+            "  {}: {} repeated transition(s) ({})",
+            repaired.id,
+            repaired.dropped,
+            repaired.relative_path
+        );
+    }
+    if args.dry_run {
+        outln!("dry run: nothing was written");
+        return Ok(ExitCode::SUCCESS);
+    }
+
+    for repaired in &repairs {
+        let path = planning.join(&repaired.relative_path);
+        let directory = path.parent().context("a document path has no directory")?;
+        let name = path
+            .file_name()
+            .context("a document path has no file name")?
+            .to_string_lossy();
+        let temporary = directory.join(format!(".{name}.{}.repair.tmp", std::process::id()));
+        fs::write(&temporary, &repaired.text)
+            .with_context(|| format!("writing {}", temporary.display()))?;
+        fs::rename(&temporary, &path).with_context(|| format!("replacing {}", path.display()))?;
+    }
+    outln!(
+        "dropped {dropped} repeated transition(s) from {} document(s)",
+        repairs.len()
+    );
+    if args.verify {
+        return Ok(verified_repair(&repairs, engineering, &planning));
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `--verify` on an `aep.project/5` store: every rewritten document read back and compared with
+/// the one planned, which repeats no transition.
+fn verified_repair(repairs: &[Repaired], engineering: &Path, planning: &Path) -> ExitCode {
+    let report = MarkdownStore::open(planning.to_owned()).load();
+    let mut differences: Vec<String> = report.failures.iter().map(ToString::to_string).collect();
+    for repaired in repairs {
+        match report.documents.get(&repaired.id) {
+            None => differences.push(format!("{}: missing after the repair", repaired.id)),
+            Some(stored) if stored.document != repaired.document => differences.push(format!(
+                "{}: reads back other than the repair planned",
+                repaired.id
+            )),
+            Some(_) => {}
+        }
+    }
+    if !differences.is_empty() {
+        for difference in &differences {
+            outln!("  {difference}");
+        }
+        eprintln!(
+            "verification failed in {} place(s); `git checkout -- {}` restores the documents",
+            differences.len(),
+            engineering.display()
+        );
+        return ExitCode::FAILURE;
+    }
+    outln!(
+        "verified {} repaired document(s): each reads back as planned and repeats no transition",
+        repairs.len()
+    );
+    ExitCode::SUCCESS
+}
+
 /// The journalled move an entry records, as the transition the Git layout carries.
 fn transition_of(entry: &Entry) -> Option<Transition> {
     match &entry.change {
@@ -443,11 +707,20 @@ fn compute(planning: &Path, lifecycles: &LifecycleRegistry, carrier: &Carrier) -
 
     for (id, stored) in &store.documents {
         let mut moves = Vec::new();
+        // The move entries carried so far: one identical in every field to any of them is the
+        // same move journalled again (a merged `journal.jsonl`), and carrying it would write a
+        // transition the walk cannot take twice. Moves differing in any field are both kept.
+        let mut carried_moves: Vec<Entry> = Vec::new();
         let mut records = Vec::new();
         let mut evidence = BTreeMap::new();
         for entry in by_artifact.remove(id).unwrap_or_default() {
             if let Some(transition) = transition_of(&entry) {
-                moves.push(transition);
+                if carried_moves.contains(&entry) {
+                    plan.repeated_moves += 1;
+                } else {
+                    moves.push(transition);
+                    carried_moves.push(entry);
+                }
                 continue;
             }
             let dropped = match &entry.change {
@@ -566,6 +839,14 @@ fn print_plan(plan: &Plan, scope: &crate::store_command::PlanningScope, dry_run:
             dropped.join(", ")
         }
     );
+    if plan.repeated_moves > 0 {
+        outln!(
+            "{} repeated move entr{} dropped: each is identical in every field to a move already \
+             carried for its artifact, and is carried once",
+            plan.repeated_moves,
+            if plan.repeated_moves == 1 { "y" } else { "ies" }
+        );
+    }
     if plan.carried > 0 {
         outln!(
             "{} artifact(s) the journal never moved stand past their initial state; each carries one \
@@ -959,13 +1240,17 @@ mod tests {
     use std::fs;
     use std::path::{Path, PathBuf};
 
-    use aep_backend_markdown::journal::{Change, Entry};
-    use aep_domain::artifact::{ArtifactId, ArtifactKind, LifecycleRegistry};
+    use aep_backend_markdown::journal::{Change, Entry, Provenance, Transition};
+    use aep_backend_markdown::PlanningDocument;
+    use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactStatus, LifecycleRegistry};
     use aep_domain::evidence::EvidenceKind;
     use aep_domain::project::{GIT_EVIDENCE_DIRECTORY, GIT_PLANNING_DIRECTORY};
     use aep_domain::review::ReviewOutcome;
 
-    use super::{compute, legacy, selector_v5, verify, write, Carrier, Plan};
+    use super::{
+        compute, legacy, repaired_text, repeated_in, selector_v5, verify, without_repeats, write,
+        Carrier, Plan,
+    };
 
     // `verify` runs in the same process as the write it checks, straight after it, so no
     // integration test can change a record in between: these drive the two halves directly.
@@ -1558,5 +1843,180 @@ mod tests {
         .expect("the selector rewrites");
         assert!(written.starts_with('{'), "a JSON selector stays JSON: {written}");
         assert!(written.contains("\"store\":{\"git\":{}}"), "{written}");
+    }
+
+    // A move journalled twice, and a transition written twice
+    // (story:migration-writes-each-move-once).
+
+    /// The instant of the move a consumer store carried twice.
+    const MOVED_AT: &str = "2026-09-07T19:51:43Z";
+
+    /// One move of `story:observed`, as a `/1` mover journalled it.
+    fn moved(at: &str, revision: u64, from: ArtifactStatus, to: ArtifactStatus) -> Entry {
+        Entry {
+            at: at.to_owned(),
+            actor: ACTOR.to_owned(),
+            artifact: observed(),
+            kind: ArtifactKind::Story,
+            revision,
+            change: Change::Moved {
+                from,
+                to,
+                decided_on: Provenance::default(),
+                executor: None,
+                correlation: None,
+            },
+        }
+    }
+
+    #[test]
+    fn a_move_journalled_twice_is_carried_once_and_verifies_clean() {
+        let twice = moved(MOVED_AT, 2, ArtifactStatus::Draft, ArtifactStatus::Proposed);
+        let (plan, planning, evidence) =
+            migrated_at("repeated-move", "proposed", 3, &[twice.clone(), twice]);
+        let written =
+            fs::read_to_string(planning.join("story/observed.md")).expect("the document reads");
+        assert_eq!(
+            written.matches("imported: true").count(),
+            1,
+            "the move journalled twice is one transition: {written}"
+        );
+        assert_eq!(plan.transitions, 1, "the plan counts the move once");
+        assert_eq!(
+            verify(&plan.answered, &planning, &evidence),
+            Vec::<String>::new(),
+            "--verify compares against the move carried once"
+        );
+    }
+
+    #[test]
+    fn moves_that_differ_in_any_one_field_are_each_carried() {
+        let first = moved(MOVED_AT, 2, ArtifactStatus::Draft, ArtifactStatus::Proposed);
+        let with_change = |edit: &dyn Fn(&mut Change)| {
+            let mut entry = first.clone();
+            edit(&mut entry.change);
+            entry
+        };
+        let variants: Vec<(&str, Entry)> = vec![
+            ("at", Entry { at: "2026-09-07T19:51:44Z".to_owned(), ..first.clone() }),
+            ("actor", Entry { actor: "human:second".to_owned(), ..first.clone() }),
+            ("revision", Entry { revision: 3, ..first.clone() }),
+            (
+                "from",
+                with_change(&|change: &mut Change| {
+                    if let Change::Moved { from, .. } = change {
+                        *from = ArtifactStatus::Proposed;
+                    }
+                }),
+            ),
+            (
+                "decided_on",
+                with_change(&|change: &mut Change| {
+                    if let Change::Moved { decided_on, .. } = change {
+                        decided_on.asserted.insert(EvidenceKind::TestResult, 1);
+                    }
+                }),
+            ),
+            (
+                "executor",
+                with_change(&|change: &mut Change| {
+                    if let Change::Moved { executor, .. } = change {
+                        *executor = Some("agent:runner".to_owned());
+                    }
+                }),
+            ),
+            (
+                "correlation",
+                with_change(&|change: &mut Change| {
+                    if let Change::Moved { correlation, .. } = change {
+                        *correlation = Some("wave-7".to_owned());
+                    }
+                }),
+            ),
+        ];
+        for (field, second) in variants {
+            assert_ne!(first, second, "the {field} variant differs from the first move");
+            let (plan, planning, _) = migrated_at(
+                &format!("differing-{field}"),
+                "proposed",
+                5,
+                &[first.clone(), second],
+            );
+            assert_eq!(
+                plan.transitions, 2,
+                "two moves differing in {field} are both carried"
+            );
+            let written = fs::read_to_string(planning.join("story/observed.md"))
+                .expect("the document reads");
+            assert_eq!(written.matches("imported: true").count(), 2, "{written}");
+        }
+    }
+
+    /// The transition a consumer store's `epic:acyclic-latest-upgrades` carried twice.
+    const QUOTED_MOVE: &str = "- {from: \"draft\", to: \"proposed\", at: \"2026-09-07T19:51:43Z\", \
+                               actor: \"human:operator\", revision: 4, imported: true}\n";
+
+    /// That document, as the migration of a journal holding the move twice wrote it.
+    fn quoted_document() -> String {
+        format!(
+            "---\nformat: aep.planning-md/3\nid: epic:acyclic-latest-upgrades\nkind: epic\n\
+             status: proposed\ntitle: Acyclic latest upgrades\nrevision: 4\ntransitions:\n\
+             {QUOTED_MOVE}{QUOTED_MOVE}---\n# Acyclic latest upgrades\n\nBody text --- kept.\n"
+        )
+    }
+
+    #[test]
+    fn the_quoted_repeated_transition_is_dropped_keeping_every_other_byte() {
+        let text = quoted_document();
+        let document = PlanningDocument::parse(&text, None).expect("the document reads");
+        assert_eq!(repeated_in(&document.frontmatter.transitions), 1);
+        let mut planned = document.clone();
+        planned.frontmatter.transitions = without_repeats(&document.frontmatter.transitions);
+        assert_eq!(planned.frontmatter.transitions.len(), 1);
+
+        let repaired = repaired_text(&text, &planned);
+        assert_eq!(
+            repaired,
+            text.replacen(QUOTED_MOVE, "", 1),
+            "exactly the repeated line goes"
+        );
+        assert_eq!(
+            PlanningDocument::parse(&repaired, None).expect("the repair reads"),
+            planned
+        );
+    }
+
+    #[test]
+    fn only_a_transition_identical_to_the_one_immediately_before_it_repeats() {
+        let transition = |at: &str, from: ArtifactStatus, to: ArtifactStatus| Transition {
+            at: at.to_owned(),
+            actor: ACTOR.to_owned(),
+            revision: 2,
+            from,
+            to,
+            decided_on: Provenance::default(),
+            imported: true,
+            executor: None,
+            correlation: None,
+        };
+        let forward = transition(MOVED_AT, ArtifactStatus::Draft, ArtifactStatus::Proposed);
+        let back = transition(MOVED_AT, ArtifactStatus::Proposed, ArtifactStatus::Draft);
+        let later = transition(
+            "2026-09-07T19:51:44Z",
+            ArtifactStatus::Draft,
+            ArtifactStatus::Proposed,
+        );
+
+        let apart = [forward.clone(), back.clone(), forward.clone()];
+        assert_eq!(repeated_in(&apart), 0, "a repeat further back is a walk");
+        assert_eq!(without_repeats(&apart), apart);
+
+        let differing = [forward.clone(), later];
+        assert_eq!(repeated_in(&differing), 0, "differing in one field is not a repeat");
+        assert_eq!(without_repeats(&differing), differing);
+
+        let thrice = [forward.clone(), forward.clone(), forward.clone(), back.clone()];
+        assert_eq!(repeated_in(&thrice), 2);
+        assert_eq!(without_repeats(&thrice), [forward, back]);
     }
 }
