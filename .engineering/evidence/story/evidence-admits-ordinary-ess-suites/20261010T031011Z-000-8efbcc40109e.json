@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-10T03:10:11Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-admits-ordinary-ess-suites",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "PR 108 Gate run 38016802821 (task check), shipped in 0.71.1",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/38016802821"
+  }
+}
