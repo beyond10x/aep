@@ -7097,23 +7097,18 @@ struct Recorded {
     at: String,
 }
 
-/// Wraps an unfiltered coverage suite while leaving other majors for their existing reader.
+/// Wraps an unfiltered coverage suite while leaving a count-stage or ordinary suite for the count
+/// reader.
 fn coverage_input_from_raw_suite(original: &str) -> Result<Option<String>> {
-    // This probe chooses a versioned reader only. Admission re-reads the complete original.
-    // Every major from /5 on goes to the coverage reader, which admits the coverage majors it
-    // knows and refuses any other by name; only suite/1–4 keeps the frozen count reader.
-    let probe = serde_json::from_str::<serde_json::Value>(original).ok();
-    let major = probe
-        .as_ref()
-        .and_then(|value| value.get("provenance"))
-        .and_then(|p| p.get("suite_version"))
-        .and_then(serde_json::Value::as_str)
-        .and_then(|version| version.strip_prefix("ess-conformance/"))
-        .and_then(|digits| digits.parse::<u64>().ok());
-    if major.is_some_and(|major| major >= 5) {
-        return Ok(Some(aep_ess_evidence::wrap_coverage_suite(original)?));
+    // The route is chosen by what the suite is: a coverage major goes to the coverage reader, a
+    // frozen suite/1–4 or an ordinary major from /6 on to the count reader, and a version neither
+    // knows is refused by name here, never as a field one of them misses.
+    match aep_ess_evidence::suite_route(original)? {
+        aep_ess_evidence::SuiteRoute::Coverage => {
+            Ok(Some(aep_ess_evidence::wrap_coverage_suite(original)?))
+        }
+        aep_ess_evidence::SuiteRoute::Count => Ok(None),
     }
-    Ok(None)
 }
 
 /// Reads descriptive report fields; the ladder independently decides whether evidence permits a move.

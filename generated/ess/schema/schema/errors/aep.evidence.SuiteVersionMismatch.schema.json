@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SuiteVersionMismatch payload",
+  "description": "The report's `suite.version` differs from the suite's `provenance.suite_version` (`SuiteVersionMismatch`, counts.rs `admit_suite`; story acceptance 2).",
+  "x-ess-name": "aep.evidence.SuiteVersionMismatch",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:49854d5c6e1748b32ee2b4120ad3a900dadd8b343b52cee7ba7c187b874229d9",
+    "regenerate": "ess generate"
+  }
+}

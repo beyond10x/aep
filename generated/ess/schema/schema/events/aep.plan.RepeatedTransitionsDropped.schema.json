@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RepeatedTransitionsDropped payload",
+  "x-ess-name": "aep.plan.RepeatedTransitionsDropped",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "engineering": {
+      "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+    },
+    "dropped": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "engineering",
+    "dropped"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:0404b3c737339ee63f01f9b85bbd16afee0b78bfdb26dd6603e0b3c05387fbfe",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.EngineeringDirectory": {
+      "title": "EngineeringDirectory",
+      "x-ess-name": "aep.plan.EngineeringDirectory",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

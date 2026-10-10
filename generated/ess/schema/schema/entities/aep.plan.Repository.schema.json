@@ -11,7 +11,7 @@
     },
     "engineering": {
       "$ref": "#/$defs/aep.plan.EngineeringDirectory",
-      "description": "`<root>/<project directory>`: reverse.rs:1354 (`root.join(project_directory())`); migrate_git.rs:255-261 reads the root back as that directory's parent, made absolute first.",
+      "description": "`<root>/<project directory>`: reverse.rs:1354 (`root.join(project_directory())`); migrate_git.rs:280-286 reads the root back as that directory's parent, made absolute first.",
       "x-ess-relation": {
         "name": "project",
         "kind": "references",
@@ -22,7 +22,7 @@
       }
     },
     "directory_name": {
-      "description": "The root's last path component, made absolute and canonicalized where it can be, lossily decoded: store_command.rs:139-146 (`planning_scope`).",
+      "description": "The root's last path component, made absolute and canonicalized where it can be, lossily decoded: store_command.rs:143-150 (`planning_scope`).",
       "type": "string"
     },
     "planning_has_entries": {
@@ -30,15 +30,15 @@
       "type": "boolean"
     },
     "planning_is_directory": {
-      "description": "`.engineering/planning/` is a directory: migrate_git.rs:276-280.",
+      "description": "`.engineering/planning/` is a directory: migrate_git.rs:301-305.",
       "type": "boolean"
     },
     "evidence_has_entries": {
-      "description": "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:277, 281.",
+      "description": "`.engineering/evidence/` reads as a directory holding an entry: migrate_git.rs:302, 306.",
       "type": "boolean"
     },
     "engineering_clean": {
-      "description": "`git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:267-274 and 371-386 (`git_clean`).",
+      "description": "`git status --porcelain -- .` run in `.engineering/` prints nothing: migrate_git.rs:292-299 and 371-386 (`git_clean`).",
       "type": "boolean"
     },
     "in_git_repository": {
@@ -46,12 +46,16 @@
       "type": "boolean"
     },
     "origin_repository_name": {
-      "description": "The last path segment of the `origin` remote's first URL, as `git remote get-url origin` answers it (`insteadOf` applied), with a `?query` or `#fragment` and a trailing `.git` removed. Empty, and so refused as unfit, when the URL has no path segment (a host or host:port only) or its last segment is `.` or `..`. Absent when there is no Git repository, it has no `origin` remote, or `git` cannot be run: no origin is then observed, and the next source decides. store_command.rs:148-149, 168-252 (`origin_url`, `repository_name_of_url`).",
+      "description": "The last path segment of the `origin` remote's first URL, as `git remote get-url origin` answers it (`insteadOf` applied), with a `?query` or `#fragment` and a trailing `.git` removed. Empty, and so refused as unfit, when the URL has no path segment (a host or host:port only) or its last segment is `.` or `..`. Absent when there is no Git repository, it has no `origin` remote, or `git` cannot be run: no origin is then observed, and the next source decides. store_command.rs:152-153, 172-256 (`origin_url`, `repository_name_of_url`).",
       "type": "string"
     },
     "git_common_directory_holder": {
-      "description": "The name of the directory holding the Git common directory, present only when that directory is named `.git`. In a linked worktree this is the primary checkout, not the worktree's own directory: store_command.rs:151-157.",
+      "description": "The name of the directory holding the Git common directory, present only when that directory is named `.git`. In a linked worktree this is the primary checkout, not the worktree's own directory: store_command.rs:155-161.",
       "type": "string"
+    },
+    "journal_repeated_moves": {
+      "description": "How many move entries of the `aep.project/1` journal `.engineering/planning/journal.jsonl` are identical in every field to a move entry earlier in the journal about the same artifact. Moves that differ in any field are not counted; evidence records are never counted, since one recorded twice is two pieces of evidence. `0` without a journal.",
+      "type": "integer"
     },
     "state": {
       "$ref": "#/$defs/aep.plan.Repository.State"
@@ -66,14 +70,15 @@
     "evidence_has_entries",
     "engineering_clean",
     "in_git_repository",
+    "journal_repeated_moves",
     "state"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
-    "contract_digest": "slice-sha256/2:6e8c2c1fbf56d680a84cb6e2af51990573ccff5b0fa59750b28817a92abce665",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:241c7785e7b9a887d92364cef1630150755d66a56fafa15022f4e4ea5f3091d6",
     "regenerate": "ess generate"
   },
   "$defs": {

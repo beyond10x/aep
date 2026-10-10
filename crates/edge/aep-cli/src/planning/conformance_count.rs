@@ -14,12 +14,12 @@
 //! | kind | passed means |
 //! |---|---|
 //! | `ess_conformance` (report/1) | `0 of N scenario(s) failed`, N > 0 |
-//! | `ess_conformance_v2` (report/2, count-stage suite) | `execution_status: passed`, no failed count, total > 0 |
+//! | `ess_conformance_v2` (report/2, count-stage or ordinary suite) | `execution_status: passed`, no failed count, total > 0 |
 //! | `ess_conformance_coverage_v1` (report/2, coverage suite) | `conformance_status: passed`, no failed count |
 //!
-//! A count-stage record's `conformance_status` is `inconclusive` by construction — a suite/1–4 has
-//! no coverage inventory, so the adapter refuses any other value — which is why its execution
-//! status is what is read. That puts it level with a report/1, which carries no coverage either.
+//! A count-stage record's `conformance_status` is `inconclusive` by construction — a suite/1–4 or
+//! an ordinary suite from /6 on has no coverage inventory, so the adapter refuses any other value
+//! — which is why its execution status is what is read. That puts it level with a report/1, which carries no coverage either.
 //!
 //! A record that does not count is still shown, with its reason, so a refusal says why the record
 //! somebody just made did not pay for the rung.

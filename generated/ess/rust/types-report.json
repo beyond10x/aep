@@ -1,26 +1,32 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+  "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:5811fe1ca895ddeee3abcc6364f5058acd8c665d31e8a4969cbcf70214ea9cfa",
-    "projection_digest": "d203646190254b9b5b730795c19ba67fd95e45467e7ac6888f550e8ca9fad5d8"
+    "contract_digest": "slice-sha256/2:d5f2a7b48725e532a6f9cdf65ee63734cdb6f6e429ca24fccce76cbd4d4570b6",
+    "projection_digest": "8bd0f0a67d02308d596924af997079b16060263fadb5b685b6554a699a195865"
   },
-  "generator_version": "0.56.0",
+  "generator_version": "0.57.0",
   "target": "rust",
   "configuration": {
     "language": "rust",
     "package": "aep-plan-ess"
   },
   "roots": [
+    "aep.evidence.ArtifactId",
+    "aep.evidence.ConformanceRecord.State",
+    "aep.evidence.ConformanceRecorded",
+    "aep.evidence.RecordName",
+    "aep.evidence.SuiteKind",
     "aep.plan.EngineeringDirectory",
     "aep.plan.PlanningScope",
     "aep.plan.PostgresStore",
     "aep.plan.Project.State",
     "aep.plan.ProjectAdopted",
     "aep.plan.ProjectRoot",
+    "aep.plan.RepeatedTransitionsDropped",
     "aep.plan.Repository.State",
     "aep.plan.ScopeSource",
     "aep.plan.SqliteStore",
@@ -33,12 +39,18 @@
     "aep.review.ReviewResult.State"
   ],
   "declarations": {
+    "aep.evidence.ArtifactId": "AepEvidenceArtifactId",
+    "aep.evidence.ConformanceRecord.State": "AepEvidenceConformanceRecordState",
+    "aep.evidence.ConformanceRecorded": "AepEvidenceConformanceRecorded",
+    "aep.evidence.RecordName": "AepEvidenceRecordName",
+    "aep.evidence.SuiteKind": "AepEvidenceSuiteKind",
     "aep.plan.EngineeringDirectory": "AepPlanEngineeringDirectory",
     "aep.plan.PlanningScope": "AepPlanPlanningScope",
     "aep.plan.PostgresStore": "AepPlanPostgresStore",
     "aep.plan.Project.State": "AepPlanProjectState",
     "aep.plan.ProjectAdopted": "AepPlanProjectAdopted",
     "aep.plan.ProjectRoot": "AepPlanProjectRoot",
+    "aep.plan.RepeatedTransitionsDropped": "AepPlanRepeatedTransitionsDropped",
     "aep.plan.Repository.State": "AepPlanRepositoryState",
     "aep.plan.ScopeSource": "AepPlanScopeSource",
     "aep.plan.SqliteStore": "AepPlanSqliteStore",
@@ -51,6 +63,81 @@
     "aep.review.ReviewResult.State": "AepReviewReviewResultState"
   },
   "annotations": [
+    {
+      "pointer": "/$defs/aep.evidence.ArtifactId/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ArtifactId/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ArtifactId/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ConformanceRecord.State/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ConformanceRecord.State/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ConformanceRecord.State/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ConformanceRecorded/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ConformanceRecorded/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.ConformanceRecorded/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.RecordName/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.RecordName/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.RecordName/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SuiteKind/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SuiteKind/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SuiteKind/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
     {
       "pointer": "/$defs/aep.plan.EngineeringDirectory/title",
       "rule": "title",
@@ -143,6 +230,21 @@
     },
     {
       "pointer": "/$defs/aep.plan.ProjectRoot/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.RepeatedTransitionsDropped/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.plan.RepeatedTransitionsDropped/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.RepeatedTransitionsDropped/x-ess-name",
       "rule": "x-ess-name",
       "detail": "model identity and wire mapping retained in source.schema.json"
     },
@@ -329,6 +431,16 @@
       "detail": "enforce the retained model invariant statements; structural codecs do not evaluate predicates"
     },
     {
+      "pointer": "/$defs/aep.plan.RepeatedTransitionsDropped/properties/dropped",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.plan.RepeatedTransitionsDropped/properties/dropped",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
       "pointer": "/$defs/aep.plan.Store",
       "rule": "oneOf",
       "detail": "validate exclusive branch membership against the source schema"
@@ -337,6 +449,16 @@
       "pointer": "/$defs/aep.plan.Store",
       "rule": "untagged_selection",
       "detail": "native union decoding chooses the first structurally decodable alternative; it does not certify source branch constraints or external dispatch"
+    },
+    {
+      "pointer": "/$defs/aep.plan.StoreMigrated/properties/repeated_moves_dropped",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.plan.StoreMigrated/properties/repeated_moves_dropped",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
     },
     {
       "pointer": "/$defs/aep.plan.UtcDate/x-ess-invariants",

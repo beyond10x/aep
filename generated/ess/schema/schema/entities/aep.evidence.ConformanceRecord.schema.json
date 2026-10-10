@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ConformanceRecord",
+  "description": "A recorded report/2 run against an exact count-stage or ordinary suite.",
+  "x-ess-name": "aep.evidence.ConformanceRecord",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "record": {
+      "$ref": "#/$defs/aep.evidence.RecordName"
+    },
+    "artifact": {
+      "$ref": "#/$defs/aep.evidence.ArtifactId",
+      "description": "The artifact the record is evidence for."
+    },
+    "suite_version": {
+      "description": "The suite's `provenance.suite_version`, equal to the report's `suite.version`; written into the record's source as `suite.version` (planning.rs `recorded_from_report`).",
+      "type": "string"
+    },
+    "suite_kind": {
+      "$ref": "#/$defs/aep.evidence.SuiteKind",
+      "description": "`count_stage` or `ordinary`: the two kinds this admission records."
+    },
+    "completed_at": {
+      "description": "The report's own `completed_at`, never this process's clock.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.evidence.ConformanceRecord.State"
+    }
+  },
+  "required": [
+    "record",
+    "artifact",
+    "suite_version",
+    "suite_kind",
+    "completed_at",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:da2ccb9bd88f6ee0489a255be7b9ea28114a53e440a90d473cb50c39c8712d05",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "x-ess-name": "aep.evidence.ArtifactId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.ConformanceRecord.State": {
+      "title": "State",
+      "x-ess-name": "aep.evidence.ConformanceRecord.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Recorded"
+      ]
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "x-ess-name": "aep.evidence.RecordName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.SuiteKind": {
+      "title": "SuiteKind",
+      "x-ess-name": "aep.evidence.SuiteKind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "count_stage",
+        "ordinary",
+        "coverage",
+        "unknown"
+      ]
+    }
+  }
+}

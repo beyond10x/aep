@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SuiteDigestMismatch payload",
+  "description": "The SHA-256 of the suite's original bytes differs from the report's `suite.digest` (`SuiteDigestMismatch`, counts.rs `admit_suite`; story acceptance 2).",
+  "x-ess-name": "aep.evidence.SuiteDigestMismatch",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:f4b440af8741fcee082d275735eeb9e4678465003380a154e77c2d447b665bc5",
+    "regenerate": "ess generate"
+  }
+}

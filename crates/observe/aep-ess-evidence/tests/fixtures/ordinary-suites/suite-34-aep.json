@@ -1,0 +1,1610 @@
+{
+  "provenance": {
+    "suite_version": "ess-conformance/34",
+    "system": "aep",
+    "specification_version": "v1",
+    "spec_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "6481a1d87c788bdd4262bd4a25e5370a642d37e588f0fdf29051803daad93695",
+    "scenario_initial_state": "empty"
+  },
+  "scenarios": {
+    "aep.plan.ReverseInit/outcome/flag-unfit": {
+      "purpose": "`aep.plan.ReverseInit` answers `flag-unfit` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.plan.ReverseInit",
+          "actor": "aep.plan.Operator",
+          "input": {
+            "no_verify": {
+              "kind": "literal",
+              "value": true
+            },
+            "planning_scope": {
+              "kind": "literal",
+              "value": "😀planning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scopeplanning_scope"
+            },
+            "profile": {
+              "kind": "literal",
+              "value": "profile"
+            },
+            "protocol": {
+              "kind": "literal",
+              "value": "protocol"
+            },
+            "protocols": {
+              "kind": "literal",
+              "value": "protocols"
+            },
+            "root": {
+              "kind": "literal",
+              "value": "root"
+            },
+            "summary": {
+              "kind": "literal",
+              "value": "summary"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.plan.ReverseInit",
+            "outcome": "flag-unfit"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.plan.PlanningScopeUnfit"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.plan.ReverseInit",
+          "actor": "aep.plan.Operator",
+          "input": {
+            "no_verify": {
+              "kind": "literal",
+              "value": true
+            },
+            "planning_scope": {
+              "kind": "literal",
+              "value": ""
+            },
+            "profile": {
+              "kind": "literal",
+              "value": "profile"
+            },
+            "protocol": {
+              "kind": "literal",
+              "value": "protocol"
+            },
+            "protocols": {
+              "kind": "literal",
+              "value": "protocols"
+            },
+            "root": {
+              "kind": "literal",
+              "value": "root"
+            },
+            "summary": {
+              "kind": "literal",
+              "value": "summary"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.plan.ReverseInit",
+            "outcome": "flag-unfit"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.plan.PlanningScopeUnfit"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.ProjectRoot"
+        },
+        {
+          "kind": "command",
+          "name": "aep.plan.ReverseInit"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.plan.ReverseInit",
+            "outcome": "flag-unfit"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.plan.PlanningScopeUnfit"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.plan.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/not-a-review": {
+      "purpose": "`aep.review.RecordReview` answers `not-a-review` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "query_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "snapshot_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "not-a-review"
+          }
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.plan.Projects"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.plan.Repositories"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view_unchanged",
+          "view": "aep.review.ReviewsWithoutFindings"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "not-a-review"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.plan.Projects"
+        },
+        {
+          "kind": "view",
+          "name": "aep.plan.Repositories"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/prose-only-beside-block": {
+      "purpose": "`aep.review.RecordReview` answers `prose-only-beside-block` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-beside-block"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyBesideBlock"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-beside-block"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.review.ProseOnlyBesideBlock"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/prose-only-blank": {
+      "purpose": "`aep.review.RecordReview` answers `prose-only-blank` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-blank"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyBlank"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-blank"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyBlank"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-blank"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.review.ProseOnlyBlank"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/prose-only-on-other-kind": {
+      "purpose": "`aep.review.RecordReview` answers `prose-only-on-other-kind` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyOnOtherKind"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.review.ReviewRecorded"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyOnOtherKind"
+        },
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "kind"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": ""
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "aep.review.ProseOnlyOnOtherKind"
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "prose-only-on-other-kind"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "error",
+          "name": "aep.review.ProseOnlyOnOtherKind"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/recorded-prose-only": {
+      "purpose": "`aep.review.RecordReview` answers `recorded-prose-only` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_event",
+          "event": "aep.review.ReviewRecorded",
+          "payload": {
+            "findings_block": false,
+            "id": "id",
+            "prose_only": "prose_only"
+          },
+          "shape": {
+            "findings_block": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "prose_only": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "findings_block": {
+                "kind": "literal",
+                "value": false
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "prose_only": {
+                "kind": "literal",
+                "value": "prose_only"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewsWithoutFindings",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "prose_only": {
+                "kind": "literal",
+                "value": "prose_only"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/recorded-with-block": {
+      "purpose": "`aep.review.RecordReview` answers `recorded-with-block` for an input that satisfies that branch's guard",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_event",
+          "event": "aep.review.ReviewRecorded",
+          "payload": {
+            "findings_block": true,
+            "id": "id"
+          },
+          "shape": {
+            "findings_block": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "prose_only": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "findings_block": {
+                "kind": "literal",
+                "value": true
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewsWithoutFindings",
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.RecordReview/outcome/recorded-without-block": {
+      "purpose": "`aep.review.RecordReview` answers `recorded-without-block` for an input no other branch's guard claims",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "expect_event",
+          "event": "aep.review.ReviewRecorded",
+          "payload": {
+            "findings_block": false,
+            "id": "id"
+          },
+          "shape": {
+            "findings_block": {
+              "holds": "primitive",
+              "kind": "boolean"
+            },
+            "id": {
+              "holds": "primitive",
+              "kind": "string"
+            },
+            "prose_only": {
+              "holds": "primitive",
+              "kind": "string",
+              "optional": true
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.ProjectAdopted"
+        },
+        {
+          "step": "expect_no_event",
+          "event": "aep.plan.StoreMigrated"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "findings_block": {
+                "kind": "literal",
+                "value": false
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Active"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewsWithoutFindings",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "engineering": {
+                "kind": "literal",
+                "value": "engineering"
+              },
+              "id": {
+                "kind": "instance",
+                "instance": "review-result"
+              },
+              "superseded_by_block": {
+                "kind": "literal",
+                "value": false
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.ProjectAdopted"
+        },
+        {
+          "kind": "event",
+          "name": "aep.plan.StoreMigrated"
+        },
+        {
+          "kind": "event",
+          "name": "aep.review.ReviewRecorded"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewsWithoutFindings"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-prose-only": {
+      "purpose": "a `aep.review.ReviewResult` still satisfies what it declares after `aep.review.RecordReview` on `recorded-prose-only`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            },
+            "prose_only": {
+              "kind": "literal",
+              "value": "prose_only"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "any": [
+                "findings_block == false",
+                {
+                  "not": "defined(prose_only)"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-prose-only"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-with-block": {
+      "purpose": "a `aep.review.ReviewResult` still satisfies what it declares after `aep.review.RecordReview` on `recorded-with-block`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": true
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "any": [
+                "findings_block == false",
+                {
+                  "not": "defined(prose_only)"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-with-block"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    },
+    "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-without-block": {
+      "purpose": "a `aep.review.ReviewResult` still satisfies what it declares after `aep.review.RecordReview` on `recorded-without-block`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "aep.review.RecordReview",
+          "actor": "aep.review.Operator",
+          "input": {
+            "engineering": {
+              "kind": "literal",
+              "value": "engineering"
+            },
+            "findings_block": {
+              "kind": "literal",
+              "value": false
+            },
+            "id": {
+              "kind": "literal",
+              "value": "id"
+            },
+            "kind": {
+              "kind": "literal",
+              "value": "review-result"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "review-result",
+          "entity": "aep.review.ReviewResult",
+          "event": "aep.review.ReviewRecorded",
+          "field": "id"
+        },
+        {
+          "step": "expect_no_error"
+        },
+        {
+          "step": "query_view",
+          "view": "aep.review.ReviewResults"
+        },
+        {
+          "step": "expect_view",
+          "view": "aep.review.ReviewResults",
+          "expectation": {
+            "expect": "satisfies",
+            "predicate": {
+              "any": [
+                "findings_block == false",
+                {
+                  "not": "defined(prose_only)"
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "aep.plan.EngineeringDirectory"
+        },
+        {
+          "kind": "type",
+          "name": "aep.review.ReviewId"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.plan.Project"
+        },
+        {
+          "kind": "entity",
+          "name": "aep.review.ReviewResult"
+        },
+        {
+          "kind": "command",
+          "name": "aep.review.RecordReview"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "aep.review.RecordReview",
+            "outcome": "recorded-without-block"
+          }
+        },
+        {
+          "kind": "view",
+          "name": "aep.review.ReviewResults"
+        },
+        {
+          "kind": "actor",
+          "name": "aep.review.Operator"
+        }
+      ]
+    }
+  }
+}

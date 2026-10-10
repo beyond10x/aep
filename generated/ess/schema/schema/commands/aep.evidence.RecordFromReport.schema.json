@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact evidence --from --suite input",
+  "description": "Record a report/2 against the exact suite it ran, bound by version and digest.",
+  "x-ess-name": "aep.evidence.RecordFromReport",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/aep.evidence.ArtifactId"
+    },
+    "record": {
+      "$ref": "#/$defs/aep.evidence.RecordName"
+    },
+    "suite_version": {
+      "description": "The suite's `provenance.suite_version`, as written.",
+      "type": "string"
+    },
+    "report_suite_version": {
+      "description": "The report's `suite.version`, as written.",
+      "type": "string"
+    },
+    "suite_kind": {
+      "$ref": "#/$defs/aep.evidence.SuiteKind"
+    },
+    "report_suite_kind": {
+      "$ref": "#/$defs/aep.evidence.SuiteKind"
+    },
+    "suite_digest_matches": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "id",
+    "record",
+    "suite_version",
+    "report_suite_version",
+    "suite_kind",
+    "report_suite_kind",
+    "suite_digest_matches"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:7373aae59fcf30fb56f09e2e3d4f6da045ef44ee8c63d87e55bd323025f937e4",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "x-ess-name": "aep.evidence.ArtifactId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "x-ess-name": "aep.evidence.RecordName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.SuiteKind": {
+      "title": "SuiteKind",
+      "x-ess-name": "aep.evidence.SuiteKind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "count_stage",
+        "ordinary",
+        "coverage",
+        "unknown"
+      ]
+    }
+  }
+}

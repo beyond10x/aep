@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.evidence.SuiteKind",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
+    "contract_digest": "slice-sha256/2:0a4ae569ecf9bd6b5aa762f1dc8b6a5b39836da6c037277431a5abef30e87f90",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.SuiteKind": {
+      "title": "SuiteKind",
+      "x-ess-name": "aep.evidence.SuiteKind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "count_stage",
+        "ordinary",
+        "coverage",
+        "unknown"
+      ]
+    }
+  }
+}

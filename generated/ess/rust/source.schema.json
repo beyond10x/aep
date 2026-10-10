@@ -1,5 +1,61 @@
 {
   "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.evidence.ArtifactId"
+    },
+    "aep.evidence.ConformanceRecord.State": {
+      "enum": [
+        "Recorded"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.ConformanceRecord.State"
+    },
+    "aep.evidence.ConformanceRecorded": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/aep.evidence.ArtifactId"
+        },
+        "record": {
+          "$ref": "#/$defs/aep.evidence.RecordName"
+        },
+        "suite_version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "record",
+        "artifact",
+        "suite_version"
+      ],
+      "title": "ConformanceRecorded",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.evidence.ConformanceRecorded"
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.evidence.RecordName"
+    },
+    "aep.evidence.SuiteKind": {
+      "enum": [
+        "count_stage",
+        "ordinary",
+        "coverage",
+        "unknown"
+      ],
+      "title": "SuiteKind",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.SuiteKind"
+    },
     "aep.plan.EngineeringDirectory": {
       "title": "EngineeringDirectory",
       "type": "string",
@@ -74,6 +130,25 @@
       "type": "string",
       "x-ess-kind": "newtype",
       "x-ess-name": "aep.plan.ProjectRoot"
+    },
+    "aep.plan.RepeatedTransitionsDropped": {
+      "additionalProperties": false,
+      "properties": {
+        "dropped": {
+          "type": "integer"
+        },
+        "engineering": {
+          "$ref": "#/$defs/aep.plan.EngineeringDirectory"
+        }
+      },
+      "required": [
+        "engineering",
+        "dropped"
+      ],
+      "title": "RepeatedTransitionsDropped",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.plan.RepeatedTransitionsDropped"
     },
     "aep.plan.Repository.State": {
       "enum": [
@@ -179,6 +254,9 @@
         "planning_scope": {
           "$ref": "#/$defs/aep.plan.PlanningScope"
         },
+        "repeated_moves_dropped": {
+          "type": "integer"
+        },
         "scope_source": {
           "$ref": "#/$defs/aep.plan.ScopeSource"
         }
@@ -186,7 +264,8 @@
       "required": [
         "engineering",
         "planning_scope",
-        "scope_source"
+        "scope_source",
+        "repeated_moves_dropped"
       ],
       "title": "StoreMigrated",
       "type": "object",
@@ -257,8 +336,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:5811fe1ca895ddeee3abcc6364f5058acd8c665d31e8a4969cbcf70214ea9cfa",
-    "source_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+    "contract_digest": "slice-sha256/2:d5f2a7b48725e532a6f9cdf65ee63734cdb6f6e429ca24fccce76cbd4d4570b6",
+    "source_digest": "98a804d05ef72cf4c2243ba8450d0af0b93d7ca0beade398ee5ebb9e28c43bc8",
     "specification_version": "v1",
     "system": "aep"
   }

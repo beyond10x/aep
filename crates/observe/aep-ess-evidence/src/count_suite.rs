@@ -2,7 +2,10 @@
 //!
 //! This checks the complete legacy suite, including unused metadata/dependencies. It does not
 //! execute steps, infer inventory, or reinterpret a major according to the fields it happens to use.
-use aep_domain::ess_conformance_v2::{lower_kebab, qualified_name, ScenarioId};
+//! An ordinary suite from /6 on is handed to `ordinary_suite`, which reads its keys only.
+use aep_domain::ess_conformance_v2::{
+    is_frozen_suite_version, is_ordinary_suite_version, lower_kebab, qualified_name, ScenarioId,
+};
 use aep_domain::evidence::SpecDigest;
 use aep_domain::{FactPath, Node, Predicate};
 
@@ -24,10 +27,12 @@ pub(crate) fn admit(value: &Json) -> Result<AdmittedSuite> {
         .get("suite_version")
         .ok_or_else(|| provenance.error("MissingField", "suite_version"))?;
     let version = marker.text()?;
-    if !matches!(
-        version,
-        "ess-conformance/1" | "ess-conformance/2" | "ess-conformance/3" | "ess-conformance/4"
-    ) {
+    // What the suite is decides how it is read: an ordinary major has its own reader, and any
+    // version neither list holds is refused by name before its body is interpreted.
+    if is_ordinary_suite_version(version) {
+        return crate::ordinary_suite::admit(value, version);
+    }
+    if !is_frozen_suite_version(version) {
         return Err(marker.error("UnsupportedSuiteVersion", version));
     }
     let root = value.closed(&["provenance", "scenarios"], &[])?;

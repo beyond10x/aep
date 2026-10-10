@@ -1,8 +1,9 @@
-//! Frozen standalone report/2 reader. Full suite vocabulary is checked before byte pairing.
+//! Standalone report/2 reader over a suite with no coverage: a frozen suite/1–4, or an ordinary
+//! suite from /6 on. The suite's vocabulary is checked before byte pairing.
 use aep_domain::ess_conformance_v2::{
-    CountStatus, EssAdmissionError, EssConformanceV2Reader, EssConformanceV2Reading,
-    EssConformanceV2Sources, ProducerProfile, ReadingInput, ScenarioCounts, ScenarioId,
-    SuiteReference,
+    is_ordinary_suite_version, CountStatus, EssAdmissionError, EssConformanceV2Reader,
+    EssConformanceV2Reading, EssConformanceV2Sources, ProducerProfile, ReadingInput,
+    ScenarioCounts, ScenarioId, SuiteReference,
 };
 use aep_domain::evidence::{Evidence, Producer, Provenance, SpecDigest};
 use aep_domain::time::{ObservedAt, Timestamp};
@@ -13,7 +14,8 @@ use std::fmt::Write;
 use crate::count_json::{Json, Result};
 use crate::AdaptedEvidence;
 
-/// The optional pure original-byte reader for report/2 and the frozen suite/1–4 vocabulary.
+/// The optional pure original-byte reader for report/2 over a frozen suite/1–4 or a known
+/// ordinary suite.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct CountStageReader;
 
@@ -97,12 +99,19 @@ fn read_report(report_json: &str) -> Result<EssConformanceV2Reading> {
         &["passed", "failed", "error", "unsupported", "skipped"],
         &[],
     )?;
+    // A frozen suite keeps the frozen id grammar; an ordinary one is read in the grammar current
+    // ESS writes, and its suite reader gates each form by major.
+    let parse: fn(String) -> Result<ScenarioId> = if is_ordinary_suite_version(suite.version()) {
+        ScenarioId::new
+    } else {
+        ScenarioId::frozen
+    };
     let ids = |category: &str| {
         outcomes[category]
             .array()?
             .iter()
             .map(|id| {
-                ScenarioId::frozen(id.text()?.to_owned()).map_err(|mut error| {
+                parse(id.text()?.to_owned()).map_err(|mut error| {
                     for issue in &mut error.issues {
                         issue.path.clone_from(&id.path);
                     }
@@ -187,7 +196,8 @@ fn admit_suite(suite_json: &str, reading: &EssConformanceV2Reading) -> Result<()
     Ok(())
 }
 
-/// Admits one original report/2 and suite/1–4 pair as exact typed AEP diagnostics.
+/// Admits one original report/2 and its frozen suite/1–4 or ordinary suite as exact typed AEP
+/// diagnostics.
 ///
 /// # Errors
 /// Refuses malformed/unsupported source vocabulary, incoherent counts or mismatching original bytes.
