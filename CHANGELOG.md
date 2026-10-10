@@ -9,6 +9,15 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact evidence --from <report/2> --suite <suite>` records a report over an ordinary
+  suite, the even `ess-conformance/<N>` major from /6 through /44 that ESS 0.56.0 and later write
+  by default (no `coverage` block), as an `ess_conformance_v2` record, bound to the suite by its
+  version and original-byte digest. It was refused as `MissingField at $suite.coverage`. A suite
+  is now routed by what it is: a coverage major to the coverage reader as before, and a version
+  this build does not know is refused as `UnsupportedSuiteVersion`, naming it.
+
 ## [0.71.0] — 2026-10-09
 
 ### Added

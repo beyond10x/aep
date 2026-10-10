@@ -1,0 +1,47 @@
+{
+  "completed_at": 1700000003700,
+  "conformance_status": "failed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 5,
+    "skipped": 0,
+    "total": 11,
+    "unsupported": 6
+  },
+  "coverage": {
+    "knowledge": "unknown"
+  },
+  "execution_status": "failed",
+  "format": "ess-conformance-report/2",
+  "implementation": "interpreted 0.57.0",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "aep.plan.ReverseInit/outcome/flag-unfit",
+      "aep.review.RecordReview/outcome/not-a-review",
+      "aep.review.RecordReview/outcome/prose-only-beside-block",
+      "aep.review.RecordReview/outcome/prose-only-blank",
+      "aep.review.RecordReview/outcome/prose-only-on-other-kind"
+    ],
+    "skipped": [],
+    "unsupported": [
+      "aep.review.RecordReview/outcome/recorded-prose-only",
+      "aep.review.RecordReview/outcome/recorded-with-block",
+      "aep.review.RecordReview/outcome/recorded-without-block",
+      "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-prose-only",
+      "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-with-block",
+      "aep.review.ReviewResult/invariant/after/aep.review.RecordReview/recorded-without-block"
+    ]
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "0ce38fd1066140ff09c3ef61828af7dd673c1d12b41963b6995485e8001dc49c",
+  "specification": "aep/v1",
+  "suite": {
+    "digest": "sha256:b1a95da4ba1a0d9e9a5c2e5f03962e012ad813b037160b919161b0f5685b753a",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/34"
+  }
+}

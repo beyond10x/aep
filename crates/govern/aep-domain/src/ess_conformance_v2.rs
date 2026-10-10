@@ -218,17 +218,60 @@ pub struct SuiteReference {
     digest: String,
 }
 
+/// The `ess-conformance/<N>` majors the frozen count-stage vocabulary was transcribed for.
+pub const FROZEN_SUITE_MAJORS: &[u32] = &[1, 2, 3, 4];
+
+/// The ordinary `ess-conformance/<N>` majors from /6 on: suites with no `coverage` block, which
+/// ESS 0.56.0 and later write by default.
+///
+/// Transcribed from ESS at 0.55.0, beside [`COVERAGE_SUITE_MAJORS`]: each ordinary major from /6
+/// on is the even neighbour below its odd coverage counterpart, and /44 is the newest ESS writes.
+/// Adding the next one is a deliberate edit here, never inferred from its number, so an ordinary
+/// suite from a newer ESS is refused by name until AEP knows it; the suite reader gates what each
+/// major added that AEP reads, exactly as it does for the coverage counterpart.
+///
+/// [`COVERAGE_SUITE_MAJORS`]: crate::ess_conformance_coverage::COVERAGE_SUITE_MAJORS
+pub const ORDINARY_SUITE_MAJORS: &[u32] = &[
+    6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44,
+];
+
+/// The major `version` spells exactly as ESS writes it (`ess-conformance/<N>`, no leading zero).
+fn suite_major(version: &str) -> Option<u32> {
+    version
+        .strip_prefix("ess-conformance/")
+        .filter(|digits| {
+            !digits.is_empty()
+                && !digits.starts_with('0')
+                && digits.bytes().all(|b| b.is_ascii_digit())
+        })
+        .and_then(|digits| digits.parse::<u32>().ok())
+}
+
+/// Whether `version` spells one of the [`FROZEN_SUITE_MAJORS`] exactly as ESS writes it.
+pub fn is_frozen_suite_version(version: &str) -> bool {
+    suite_major(version).is_some_and(|major| FROZEN_SUITE_MAJORS.contains(&major))
+}
+
+/// Whether `version` spells one of the [`ORDINARY_SUITE_MAJORS`] exactly as ESS writes it.
+pub fn is_ordinary_suite_version(version: &str) -> bool {
+    suite_major(version).is_some_and(|major| ORDINARY_SUITE_MAJORS.contains(&major))
+}
+
+/// Whether the count reader admits `version`: a frozen major or a known ordinary one. Neither
+/// carries a `coverage` block; a coverage major is the coverage reader's.
+pub fn is_count_suite_version(version: &str) -> bool {
+    is_frozen_suite_version(version) || is_ordinary_suite_version(version)
+}
+
 impl SuiteReference {
-    /// Checks the version/profile and canonical byte-digest spelling.
+    /// Checks the version/profile and canonical byte-digest spelling. The version is a frozen
+    /// count-stage major or a known ordinary one ([`is_count_suite_version`]).
     pub fn new(
         version: String,
         digest_profile: String,
         digest: String,
     ) -> Result<Self, EssAdmissionError> {
-        if !matches!(
-            version.as_str(),
-            "ess-conformance/1" | "ess-conformance/2" | "ess-conformance/3" | "ess-conformance/4"
-        ) {
+        if !is_count_suite_version(&version) {
             return Err(EssAdmissionError::new(
                 "UnsupportedSuiteVersion",
                 "$.suite.version",

@@ -8,9 +8,11 @@ summary: >-
   which rewrites an `aep.project/1` Markdown store as an `aep.project/5` Git-native one, both
   deriving the store's `planning_scope`; and how `aep plan artifact new` records a `review-result`
   with a `findings` block or a prose-only reason, and how `aep plan artifact validate` places one
-  without a block once the project file sets `findings_required_since`. Retrofitted from the
-  code; every declaration cites it.
+  without a block once the project file sets `findings_required_since`; and how
+  `aep plan artifact evidence --from <report/2> --suite <suite>` admits a suite by what it is.
+  Retrofitted from the code; every declaration cites it.
 
 domains:
   - aep.plan
   - aep.review
+  - aep.evidence

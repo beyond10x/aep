@@ -14,9 +14,12 @@ mod coverage;
 mod coverage_definition;
 mod coverage_suite;
 mod coverage_wire;
+mod ordinary_suite;
+mod route;
 
 pub use counts::{adapt_json_v2, CountStageReader};
 pub use coverage::{adapt_json_coverage, wrap_coverage_suite, CoverageReader};
+pub use route::{suite_route, SuiteRoute};
 
 use aep_domain::evidence::{EssConformanceResult, Evidence, Producer, Provenance, SpecDigest};
 use aep_domain::time::{ObservedAt, Timestamp};
