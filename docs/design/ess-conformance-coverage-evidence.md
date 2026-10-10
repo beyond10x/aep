@@ -194,7 +194,7 @@ emits the fact, including zero counts and false booleans. No numeric fact passes
 | `completed_at` | Text: exact completion epoch milliseconds as canonical unsigned decimal. | Every admitted reading. |
 | `execution_status` | Text: recomputed `passed`, `failed` or `inconclusive` under the producer profile. | Every admitted reading. |
 | `conformance_status` | Text: recomputed `passed`, `failed` or `inconclusive` under complete-selection/1. | Every admitted reading. |
-| `producer_profile` | Text: `rust-scenario-status/1`, `go-scenario-status/1`, `external-scenario-status/1` or `external-scenario-status/1;runner=<name>@<version>`, exactly as the report spells it, runner included. | Every admitted reading. |
+| `producer_profile` | Text: `rust-scenario-status/1`, `go-scenario-status/1`, `go-scenario-status/2`, `external-scenario-status/1` or `external-scenario-status/1;runner=<name>@<version>`, exactly as the report spells it, runner included. | Every admitted reading. |
 | `policy` | Text: exactly `complete-selection/1`. | Every admitted reading. |
 | `spec_digest` | Text: the admitted existing 64-lowercase-hex model digest. | Every admitted reading. |
 | `suite.version` | Text: the admitted coverage-suite version, `ess-conformance/5` through `/33`. | Every admitted reading. |
