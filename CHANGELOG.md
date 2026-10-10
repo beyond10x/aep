@@ -9,6 +9,22 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+- `aep plan store migrate git` on an `aep.project/5` store no longer refuses it as having nothing
+  to migrate: it drops every transition identical to the one immediately before it in its
+  document, writes nothing else, and names each document it changed; with none it writes nothing
+  and says so. It still refuses a dirty `.engineering`. `--dry-run` names what it would drop, and
+  `--verify` reads every rewritten document back.
+
+### Fixed
+
+- `aep plan store migrate git` wrote a move the `aep.project/1` journal held twice (as a Git merge
+  of `journal.jsonl` can leave it) as two identical transitions, which `aep plan artifact validate`
+  then refused and no verb could remove. A move entry identical in every field to one already
+  carried for its artifact is now carried once, and the migration (`--dry-run` too) prints how many
+  it dropped. Moves that differ in any field, and repeated evidence records, are all kept.
+
 ## [0.71.0] — 2026-10-09
 
 ### Added

@@ -31,22 +31,25 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 11 scenarios and 61 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 11 scenarios and 68 refusals.
 ///
 /// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, and the `aep.review.ReviewResult`
 /// invariant after each of its three recording outcomes.
 ///
-/// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (47) both commands read two row sets
+/// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (54) both commands read two row sets
 /// ("a scenario arranges the rows of one selector per command in this cut"), and neither entity
 /// has a creating command in aep (a repository is a directory, an `aep.project/1` file was written
-/// by an earlier build). In `aep.review` (14): `findings-required` needs a project file that sets
+/// by an earlier build). Seven of them came with the repair of an `aep.project/5` store
+/// (story:migration-writes-each-move-once): five `aep.plan.MigrateGit` outcomes in place of
+/// `nothing-to-migrate`, and the `aep.plan.Project` invariant after the three that keep or update
+/// the row. In `aep.review` (14): `findings-required` needs a project file that sets
 /// `findings_required_since`, which no declared command writes; every `ValidateFindings` outcome
 /// and the invariant after each one need a review whose `created_before_opt_in` and
 /// `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (11, 61);
+const SYNTHESIZED: (u64, u64) = (11, 68);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {
