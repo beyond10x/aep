@@ -434,8 +434,21 @@ fn real_planning_pair_preserves_full_u64_diagnostics_and_refusals_do_not_open_st
             source["counts"],
             serde_json::json!({"total":1,"passed":1,"failed":0,"error":0,"unsupported":0,"skipped":0})
         );
-        assert_eq!(source["report_input"], report_arg);
-        assert_eq!(source["suite_input"], suite_arg);
+        // Named from the repository the store sits in (two directories above it), never as the
+        // absolute path given (story:evidence-records-relative-inputs).
+        let from_root = |path: &Path| {
+            format!(
+                "{}/{}",
+                directory.file_name().unwrap().to_str().unwrap(),
+                path.file_name().unwrap().to_str().unwrap()
+            )
+        };
+        assert_eq!(source["report_input"], from_root(&report_path));
+        assert_eq!(source["suite_input"], from_root(&suite_path));
+        assert!(
+            !text.contains(report_arg) && !text.contains(suite_arg),
+            "{text}"
+        );
         assert_eq!(source["execution_status"], "passed");
         assert_eq!(source["conformance_status"], "inconclusive");
         assert_eq!(

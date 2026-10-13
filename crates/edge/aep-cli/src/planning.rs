@@ -49,6 +49,8 @@ mod waves;
 mod git_record;
 // Which recorded ESS conformance records pay for a specification's move.
 mod conformance_count;
+// How an evidence record names a file it read: from the repository root, beside its digest.
+mod recorded_input;
 // Where `validate` places a review-result by its findings block, decided from facts it is handed.
 mod findings_standing;
 
@@ -7112,9 +7114,13 @@ fn coverage_input_from_raw_suite(original: &str) -> Result<Option<String>> {
 }
 
 /// Reads descriptive report fields; the ladder independently decides whether evidence permits a move.
+///
+/// `root` is the repository the store sits in: every file the record names is named from it, or by
+/// its file name when it lies outside it, beside its digest (`recorded_input`), never as typed.
 // Keep the format-specific report and suite evidence checks together before constructing Recorded.
 #[allow(clippy::too_many_lines)]
 fn recorded_from_report(
+    root: &Path,
     path: &Path,
     suite: Option<&Path>,
     suite_input: Option<&Path>,
@@ -7129,7 +7135,15 @@ fn recorded_from_report(
         if let Some(input_path) = suite_input {
             let input = std::fs::read_to_string(input_path)
                 .with_context(|| format!("reading {}", input_path.display()))?;
-            return recorded_coverage(path, &text, input_path, &input, "original_input");
+            return recorded_coverage(
+                &input,
+                &CoverageInputs {
+                    root,
+                    report: (path, &text),
+                    suite: (input_path, &input),
+                    transport: "original_input",
+                },
+            );
         }
         let suite_path = suite.context(
             "MissingSuite: report/2 requires --suite with the exact original suite JSON",
@@ -7137,7 +7151,16 @@ fn recorded_from_report(
         let suite_json = std::fs::read_to_string(suite_path)
             .with_context(|| format!("reading {}", suite_path.display()))?;
         if let Some(input) = coverage_input_from_raw_suite(&suite_json)? {
-            return recorded_coverage(path, &text, suite_path, &input, "wrapped_raw_suite");
+            // The digest is of the suite as given, not of the carrier it is wrapped in here.
+            return recorded_coverage(
+                &input,
+                &CoverageInputs {
+                    root,
+                    report: (path, &text),
+                    suite: (suite_path, &suite_json),
+                    transport: "wrapped_raw_suite",
+                },
+            );
         }
         let adapted = aep_ess_evidence::adapt_json_v2(&text, &suite_json)?;
         let aep_domain::evidence::Evidence::EssConformanceV2(sources) = adapted.evidence() else {
@@ -7150,10 +7173,16 @@ fn recorded_from_report(
         if !entity_core::is_valid_timestamp(&recorded_at) {
             anyhow::bail!("PlanningTimestampUnsupported: valid report completed_at {} renders as {recorded_at}, which the planning event backend cannot record; original source time is unchanged", data.completed_at.epoch_millis());
         }
+        // Named once both readers have admitted the pair, as `aep.evidence.RecordFromReport`
+        // orders `input-path-not-portable`.
+        let report_input = recorded_input::recorded_input(root, path, text.as_bytes())?;
+        let suite_input = recorded_input::recorded_input(root, suite_path, suite_json.as_bytes())?;
         // Structured source text preserves exact diagnostics and escaped original references.
         // It is descriptive planning history, not a typed source archive or qualification.
         let source = serde_json::json!({
-            "format":"ess-conformance-report/2", "report_input":path.display().to_string(), "suite_input":suite_path.display().to_string(),
+            "format":"ess-conformance-report/2",
+            "report_input":report_input.name, "report_input_digest":report_input.digest,
+            "suite_input":suite_input.name, "suite_input_digest":suite_input.digest,
             "specification":data.specification, "implementation":data.implementation, "spec_digest":data.spec_digest,
             "producer_profile":data.producer_profile.wire(), "suite":data.suite,
             "execution_status":data.execution_status.as_str(), "conformance_status":data.conformance_status.as_str(),
@@ -7164,7 +7193,7 @@ fn recorded_from_report(
         return Ok(Recorded {
             kind: aep_domain::evidence::EvidenceKind::EssConformanceV2,
             source,
-            reference: Some(path.display().to_string()),
+            reference: Some(report_input.reference()),
             at: data.completed_at.epoch_millis().to_string(),
         });
     }
@@ -7246,21 +7275,30 @@ fn recorded_from_report(
             )
         })?;
 
+    // The source line stays the one `conformance_count` reads; the reference carries the digest.
+    let named = recorded_input::recorded_input(root, path, text.as_bytes())?;
     Ok(Recorded {
         kind: aep_domain::evidence::EvidenceKind::EssConformance,
         source,
-        reference: Some(path.display().to_string()),
+        reference: Some(named.reference()),
         at,
     })
 }
 
-fn recorded_coverage(
-    path: &Path,
-    report_json: &str,
-    input_path: &Path,
-    input_json: &str,
-    transport: &str,
-) -> Result<Recorded> {
+/// The two files a coverage record names, each as its path and the text read from it, the
+/// repository they are named from, and how the suite reached the coverage reader.
+struct CoverageInputs<'a> {
+    root: &'a Path,
+    report: (&'a Path, &'a str),
+    suite: (&'a Path, &'a str),
+    transport: &'a str,
+}
+
+/// A coverage record: `input_json` is what the coverage reader reads, the suite as given or the
+/// carrier it was wrapped in; the record names and digests the files as given (`inputs`).
+fn recorded_coverage(input_json: &str, inputs: &CoverageInputs<'_>) -> Result<Recorded> {
+    let (path, report_json) = inputs.report;
+    let (input_path, input_text) = inputs.suite;
     let adapted = aep_ess_evidence::adapt_json_coverage(report_json, input_json)?;
     let aep_domain::Evidence::EssConformanceCoverageV1(sources) = adapted.evidence() else {
         unreachable!("coverage adapter returns coverage evidence");
@@ -7271,8 +7309,15 @@ fn recorded_coverage(
     if !entity_core::is_valid_timestamp(&recorded_at) {
         anyhow::bail!("PlanningTimestampUnsupported: valid report completed_at {} renders as {recorded_at}, which the planning event backend cannot record; original source time is unchanged", data.completed_at.epoch_millis());
     }
+    // Named once the coverage reader has admitted the pair (`input-path-not-portable`).
+    let report_input = recorded_input::recorded_input(inputs.root, path, report_json.as_bytes())?;
+    let suite_input =
+        recorded_input::recorded_input(inputs.root, input_path, input_text.as_bytes())?;
     let source = serde_json::json!({
-        "format":"ess-conformance-report/2", "report_input":path.display().to_string(), "suite_input":input_path.display().to_string(), "input_transport":transport,
+        "format":"ess-conformance-report/2",
+        "report_input":report_input.name, "report_input_digest":report_input.digest,
+        "suite_input":suite_input.name, "suite_input_digest":suite_input.digest,
+        "input_transport":inputs.transport,
         "specification":data.specification, "implementation":data.implementation, "spec_digest":data.spec_digest,
         "producer_profile":data.producer_profile.wire(), "suite":data.suite, "selection":data.coverage.selection,
         "execution_status":data.execution_status.as_str(), "conformance_status":data.conformance_status.as_str(),
@@ -7283,7 +7328,7 @@ fn recorded_coverage(
     Ok(Recorded {
         kind: aep_domain::evidence::EvidenceKind::EssConformanceCoverageV1,
         source,
-        reference: Some(path.display().to_string()),
+        reference: Some(report_input.reference()),
         at: data.completed_at.epoch_millis().to_string(),
     })
 }
@@ -7307,9 +7352,14 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     // them; the flags are how the same record is made when there is no report to read.
     let read = match request.from {
         Some(report) => {
-            let mut read = recorded_from_report(report, request.suite, request.suite_input)?;
-            // `--ref` still wins: the report's path is where this process found it, and a CI run
-            // URL is where anybody else can.
+            let mut read = recorded_from_report(
+                &args.repository_root(),
+                report,
+                request.suite,
+                request.suite_input,
+            )?;
+            // `--ref` still wins: the record's own reference names the report by its place in the
+            // repository and its digest, and a CI run URL is where anybody else can find it.
             if let Some(reference) = request.reference {
                 read.reference = Some(reference.to_owned());
             }
@@ -7341,13 +7391,18 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
         .documents
         .get(&id)
         .with_context(|| opened.missing(&id))?;
-    let _ = stored;
+    // What the record just written is judged against, read before the write as the move reads it.
+    let judged_as = (
+        stored.document.frontmatter.kind.clone(),
+        stored.document.frontmatter.model_digest.clone(),
+    );
 
     // The two keys and the kind are made of each other: neither is meaningful without the other,
     // and either without the kind is a record whose shape says one thing and whose word says
     // another. Refused here, at the edge, because the check that matters — *does that review review
     // this artifact* — needs the store, and a domain type that cannot see one could not make it.
     let answers = review_outcome_of(&opened, &id, kind, request)?;
+    let from_report = read.is_some();
     let (source, reference, at) = if let Some(read) = read {
         (read.source, read.reference, read.at)
     } else {
@@ -7393,6 +7448,15 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
                 .map(|(kind, count)| format!("{}={count}", kind.as_str()))
                 .collect();
             outln!("  on hand: {}", held.join(", "));
+            // A record read from a report is judged on its own, so one that does not count is
+            // shown with its reason rather than only as a count that did not move.
+            if from_report {
+                match conformance_count::verdict(kind, &source, &judged_as.0, judged_as.1.as_ref())
+                {
+                    Ok(()) => outln!("  this record: counts"),
+                    Err(reason) => outln!("  this record: does not count: {reason}"),
+                }
+            }
         }
         Format::Yaml | Format::Json => crate::print_serialised(&on_hand, args.format)?,
     }

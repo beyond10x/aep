@@ -137,12 +137,24 @@ fn an_ordinary_suite_ess_wrote_is_recorded_with_its_report() {
     assert_eq!(recorded.len(), 1, "one record: {recorded:?}");
     let change = &recorded[0]["change"];
     assert_eq!(change["kind"], "ess_conformance_v2", "{change}");
-    assert_eq!(change["reference"], report.to_str().unwrap());
+    // Both fixtures lie outside the repository the scratch store sits in, so each is named by its
+    // file name beside its digest, never by the path it was given as
+    // (story:evidence-records-relative-inputs).
+    let report_digest = digest(&std::fs::read_to_string(&report).unwrap());
+    assert_eq!(
+        change["reference"],
+        format!("report-34-aep.json@{report_digest}")
+    );
     let source: serde_json::Value =
         serde_json::from_str(change["source"].as_str().unwrap()).unwrap();
     assert_eq!(source["format"], "ess-conformance-report/2");
-    assert_eq!(source["report_input"], report.to_str().unwrap());
-    assert_eq!(source["suite_input"], suite.to_str().unwrap());
+    assert_eq!(source["report_input"], "report-34-aep.json");
+    assert_eq!(source["report_input_digest"], report_digest);
+    assert_eq!(source["suite_input"], "suite-34-aep.json");
+    assert_eq!(
+        source["suite_input_digest"],
+        digest(&std::fs::read_to_string(&suite).unwrap())
+    );
     assert_eq!(source["specification"], "aep/v1");
     assert_eq!(source["suite"]["version"], "ess-conformance/34");
     assert_eq!(

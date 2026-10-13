@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InputPathNotPortable payload",
+  "description": "An input would be named neither by its path relative to the repository root nor, outside the root, by its file name alone: an absolute path or a parent component would reach the record (`InputPathNotPortable`, planning.rs `recorded_input`). Nothing is written.",
+  "x-ess-name": "aep.evidence.InputPathNotPortable",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:6506b47c067fe062483497bf8099dbee8e7d9efa0af043c38382a2f02a177be7",
+    "regenerate": "ess generate"
+  }
+}

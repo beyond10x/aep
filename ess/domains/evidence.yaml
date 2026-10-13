@@ -4,9 +4,11 @@ summary: >-
   How `aep plan artifact evidence <id> --from <report> --suite <suite>` admits an
   `ess-conformance-report/2` and the exact original suite it ran: which reader a suite goes to by
   what it is, the suite's binding to the report by version and by digest, and the record it
-  writes, and the producer profiles a report may name with the execution status each one implies.
-  Declared for story:evidence-admits-ordinary-ess-suites and
-  story:evidence-admits-generated-runner-profile.
+  writes, and the producer profiles a report may name with the execution status each one implies,
+  and how the record names its inputs: by a path relative to the repository root, or by file name
+  for an input outside it, each beside its digest. Declared for
+  story:evidence-admits-ordinary-ess-suites, story:evidence-admits-generated-runner-profile and
+  story:evidence-records-relative-inputs.
 
 # Paths are relative to the repository root. `planning.rs` is crates/edge/aep-cli/src/planning.rs,
 # `counts.rs`, `count_suite.rs`, `coverage.rs` and `ordinary_suite.rs` are under
@@ -20,8 +22,12 @@ summary: >-
 # reader checks in the report and the suite (unknown fields, statuses, the runner name and version
 # an external profile carries, counts against outcomes, the conformance status, scenario id forms
 # gated by major), the spec-digest and selected-id pairing
-# (`ModelDigestMismatch`, `SelectedIdsMismatch` in counts.rs `admit_suite`, unchanged), and the
-# planning store's own refusals of the artifact id.
+# (`ModelDigestMismatch`, `SelectedIdsMismatch` in counts.rs `admit_suite`, unchanged), the
+# planning store's own refusals of the artifact id, and whether a record counts toward a move
+# (`conformance_count.rs` judges a record already written; `evidence` prints that judgement for
+# the record it wrote). The rule for how a record names its inputs (aep.evidence.InputForm) is
+# declared on this command and holds as well for the report/1 and coverage records, which name
+# their inputs through the same function (planning.rs `recorded_input`).
 
 types:
   # read from: the artifact id `evidence <id>` names (planning.rs `record_evidence`, `artifact_id`).
@@ -68,6 +74,24 @@ types:
       - failed
       - inconclusive
 
+  # change (story:evidence-records-relative-inputs): how a record names a file it read
+  # (`report_input`, `suite_input`, and the `reference` it writes when `--ref` gives none),
+  # decided by planning.rs `recorded_input` against the repository root the store is in
+  # (`StoreLocation::repository_root`), both made absolute and normalized without resolving a
+  # link. On 0.71.2 every input was named as typed, so an absolute local path reached the record.
+  - name: aep.evidence.InputForm
+    kind: enum
+    variants:
+      - repository_relative  # inside the root: the path from the root, `/`-separated, no `.` or `..` component
+      - file_name            # outside the root: the file's name alone, no directory component
+      - as_typed             # anything else: an absolute path, or one with a parent component
+
+  # change (story:evidence-records-relative-inputs): `sha256:` and the 64 lowercase hex digits of
+  # the SHA-256 of the input's bytes as read (planning.rs `recorded_input`).
+  - name: aep.evidence.InputDigest
+    kind: newtype
+    of: String
+
 entities:
   # One evidence record in the planning store: an immutable file under `.engineering/evidence/`,
   # written once by `evidence` (AGENTS.md *Planning store*). Only the facts this admission writes.
@@ -100,6 +124,28 @@ entities:
       - name: completed_at
         type: Timestamp
         summary: The report's own `completed_at`, never this process's clock.
+      # change (story:evidence-records-relative-inputs): on 0.71.2 these were the paths as typed.
+      - name: report_input
+        type: String
+        summary: >-
+          The report, named as aep.evidence.InputForm `repository_relative` or `file_name`;
+          written into the record's source as `report_input`.
+      - name: report_input_digest
+        type: aep.evidence.InputDigest
+        summary: The report's digest, written into the record's source as `report_input_digest`.
+      - name: suite_input
+        type: String
+        summary: >-
+          The suite, named the same way; written into the record's source as `suite_input`.
+      - name: suite_input_digest
+        type: aep.evidence.InputDigest
+        summary: The suite's digest, written into the record's source as `suite_input_digest`.
+      - name: reference
+        type: String
+        summary: >-
+          The record's `reference` when `--ref` gives none: `report_input`, `@`, and
+          `report_input_digest`, e.g. `reports/run.json@sha256:<64 hex>`. A `--ref` is the
+          caller's words and is written as given.
     lifecycle:
       # An evidence file is never edited or deleted (AGENTS.md *Planning store*, rule 2).
       initial: Recorded
@@ -151,6 +197,16 @@ errors:
     summary: >-
       The report's `execution_status` is not the one its counts imply under its producer profile
       (`ExecutionStatusMismatch at $.execution_status`).
+    fields: []
+  # change (story:evidence-records-relative-inputs): the rule a record's input names keep. On
+  # 0.71.2 the record kept the path as typed, so a record made with an absolute path carried the
+  # operator's local directories, which mean nothing on another machine and which Gates'
+  # personal-paths scan refuses.
+  - name: aep.evidence.InputPathNotPortable
+    summary: >-
+      An input would be named neither by its path relative to the repository root nor, outside
+      the root, by its file name alone: an absolute path or a parent component would reach the
+      record (`InputPathNotPortable`, planning.rs `recorded_input`). Nothing is written.
     fields: []
 
 events:
@@ -234,6 +290,33 @@ commands:
         type: Integer
       - name: skipped
         type: Integer
+      # change (story:evidence-records-relative-inputs): how the report and the suite are named.
+      # ESS-LIMIT: which form a path takes is decided by comparing its components with the
+      # repository root's, and ESS 0.59.0 has no operator over the parts of a String or a path,
+      # so the command takes each input's form. The decision stays in Rust (planning.rs
+      # `recorded_input`). Pinned by
+      # `a_count_stage_report_2_inside_the_repository_is_recorded_relative_to_its_root_with_digests`,
+      # `a_coverage_report_2_inside_the_repository_is_recorded_relative_to_its_root_with_digests`,
+      # `a_report_1_inside_the_repository_is_recorded_relative_to_its_root_with_its_digest`,
+      # `an_input_outside_the_repository_is_recorded_by_file_name_and_digest` (aep-cli
+      # `evidence_relative_inputs`) and the `recorded_input` unit tests (aep-cli planning).
+      - name: report_input_form
+        type: aep.evidence.InputForm
+      - name: suite_input_form
+        type: aep.evidence.InputForm
+      - name: report_input
+        type: String
+      - name: suite_input
+        type: String
+      # ESS-LIMIT: a digest is a SHA-256 over a file, and ESS 0.59.0 has no digest operator, so
+      # the command takes each digest as written.
+      - name: report_input_digest
+        type: aep.evidence.InputDigest
+      - name: suite_input_digest
+        type: aep.evidence.InputDigest
+      - name: reference
+        type: String
+        summary: "`report_input`@`report_input_digest`, as aep.evidence.ConformanceRecord says."
     outcomes:
       # change (story:evidence-admits-generated-runner-profile): both readers read the profile
       # before the report's suite version, and after the route has refused an unknown suite.
@@ -310,6 +393,15 @@ commands:
       - name: suite-digest-mismatch
         when: suite_digest_matches == false
         error: aep.evidence.SuiteDigestMismatch
+      # change (story:evidence-records-relative-inputs): an input is named after both readers
+      # have admitted the pair, as the record's source is built, and a name that is neither form
+      # is refused rather than written.
+      - name: input-path-not-portable
+        when:
+          any:
+            - report_input_form == "as_typed"
+            - suite_input_form == "as_typed"
+        error: aep.evidence.InputPathNotPortable
       # change: an ordinary suite is recorded the way a count-stage one is, as one
       # `ess_conformance_v2` record whose source carries the report's counts and statuses, at the
       # report's `completed_at` (`{generated: true}`: the host reads it from the report).
@@ -323,6 +415,11 @@ commands:
           producer_profile: input.producer_profile
           execution_status: input.execution_status
           completed_at: {generated: true}
+          report_input: input.report_input
+          report_input_digest: input.report_input_digest
+          suite_input: input.suite_input
+          suite_input_digest: input.suite_input_digest
+          reference: input.reference
         emits: [aep.evidence.ConformanceRecorded]
         payload:
           aep.evidence.ConformanceRecorded:
@@ -350,3 +447,13 @@ views:
         type: aep.evidence.ExecutionStatus
       - name: completed_at
         type: Timestamp
+      - name: report_input
+        type: String
+      - name: report_input_digest
+        type: aep.evidence.InputDigest
+      - name: suite_input
+        type: String
+      - name: suite_input_digest
+        type: aep.evidence.InputDigest
+      - name: reference
+        type: String

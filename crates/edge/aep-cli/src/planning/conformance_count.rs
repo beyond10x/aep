@@ -73,6 +73,23 @@ pub(crate) fn count(
     (counted, discounted)
 }
 
+/// Whether one record of `kind` with `source` counts toward a move of an artifact of kind
+/// `artifact` at `model_digest`, by the same judgement as [`count`]; `Err` carries why not.
+///
+/// `evidence --from` prints it for the record it has just written, so a record that does not count
+/// is not shown only as a zero on hand.
+pub(crate) fn verdict(
+    kind: EvidenceKind,
+    source: &str,
+    artifact: &ArtifactKind,
+    model_digest: Option<&SpecDigest>,
+) -> Result<(), String> {
+    if !artifact.carries_model_digest() || !is_conformance(kind) {
+        return Ok(());
+    }
+    judge(kind, source, model_digest)
+}
+
 /// `true` for the three kinds an ESS conformance report is recorded as.
 fn is_conformance(kind: EvidenceKind) -> bool {
     matches!(
@@ -258,6 +275,37 @@ mod tests {
         let other =
             judge(coverage, &v2("conformance_status", "passed", OTHER), at.as_ref()).unwrap_err();
         assert!(other.contains(OTHER), "{other}");
+    }
+
+    #[test]
+    fn a_single_records_verdict_is_the_count_judgement_on_a_specification_only() {
+        let spec = ArtifactKind::ExecutableSystemSpecification;
+        let failed = v1(DIGEST, 2);
+        let refused = verdict(
+            EvidenceKind::EssConformance,
+            &failed,
+            &spec,
+            Some(&digest(DIGEST)),
+        )
+        .unwrap_err();
+        assert_eq!(
+            Err(refused),
+            judge(EvidenceKind::EssConformance, &failed, Some(&digest(DIGEST)))
+        );
+        assert_eq!(
+            verdict(
+                EvidenceKind::EssConformance,
+                &v1(DIGEST, 0),
+                &spec,
+                Some(&digest(DIGEST))
+            ),
+            Ok(())
+        );
+        // Elsewhere every record counts, as `count` counts it.
+        assert_eq!(
+            verdict(EvidenceKind::EssConformance, &failed, &ArtifactKind::Story, None),
+            Ok(())
+        );
     }
 
     #[test]

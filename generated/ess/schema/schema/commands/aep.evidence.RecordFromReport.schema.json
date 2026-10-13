@@ -47,6 +47,28 @@
     },
     "skipped": {
       "type": "integer"
+    },
+    "report_input_form": {
+      "$ref": "#/$defs/aep.evidence.InputForm"
+    },
+    "suite_input_form": {
+      "$ref": "#/$defs/aep.evidence.InputForm"
+    },
+    "report_input": {
+      "type": "string"
+    },
+    "suite_input": {
+      "type": "string"
+    },
+    "report_input_digest": {
+      "$ref": "#/$defs/aep.evidence.InputDigest"
+    },
+    "suite_input_digest": {
+      "$ref": "#/$defs/aep.evidence.InputDigest"
+    },
+    "reference": {
+      "description": "`report_input`@`report_input_digest`, as aep.evidence.ConformanceRecord says.",
+      "type": "string"
     }
   },
   "required": [
@@ -62,14 +84,21 @@
     "failed",
     "error",
     "unsupported",
-    "skipped"
+    "skipped",
+    "report_input_form",
+    "suite_input_form",
+    "report_input",
+    "suite_input",
+    "report_input_digest",
+    "suite_input_digest",
+    "reference"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
-    "contract_digest": "slice-sha256/2:ce6bd0d2233efff1245de53fe5c3a4bde83cad5f5e0eddd3653df9eecf900971",
+    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:a69d29062e7ddc13d6f181318b2ca528d709db1b7060211a0b9d00b14a8a4f5f",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -88,6 +117,23 @@
         "passed",
         "failed",
         "inconclusive"
+      ]
+    },
+    "aep.evidence.InputDigest": {
+      "title": "InputDigest",
+      "x-ess-name": "aep.evidence.InputDigest",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.InputForm": {
+      "title": "InputForm",
+      "x-ess-name": "aep.evidence.InputForm",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "repository_relative",
+        "file_name",
+        "as_typed"
       ]
     },
     "aep.evidence.ProducerProfile": {
