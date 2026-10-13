@@ -9,6 +9,20 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact evidence --from <report>` (with `--suite` or `--suite-input` for a report/2)
+  no longer writes the paths it was given into the record. The record names the report and the
+  suite by their path relative to the repository root, beside the `sha256:` digest of each file,
+  and an input outside the repository by its file name and digest alone; its reference, when
+  `--ref` gives none, is `<name>@sha256:<digest>`. This holds for report/1, count-stage and
+  ordinary report/2, and coverage report/2 records. Records already in a store, absolute paths
+  included, are read, counted and validated as before, and nothing rewrites them.
+- After recording a conformance report, the same command says whether the record counts toward a
+  move: `counts`, or `does not count:` with the reason, such as a failed run or one against
+  another `model_digest`. It printed only the counts on hand, so a record that did not count
+  showed as a zero with no reason.
+
 ## [0.71.2] — 2026-10-10
 
 ### Fixed

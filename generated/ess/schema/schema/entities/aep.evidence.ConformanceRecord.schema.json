@@ -34,6 +34,26 @@
       "type": "string",
       "format": "date-time"
     },
+    "report_input": {
+      "description": "The report, named as aep.evidence.InputForm `repository_relative` or `file_name`; written into the record's source as `report_input`.",
+      "type": "string"
+    },
+    "report_input_digest": {
+      "$ref": "#/$defs/aep.evidence.InputDigest",
+      "description": "The report's digest, written into the record's source as `report_input_digest`."
+    },
+    "suite_input": {
+      "description": "The suite, named the same way; written into the record's source as `suite_input`.",
+      "type": "string"
+    },
+    "suite_input_digest": {
+      "$ref": "#/$defs/aep.evidence.InputDigest",
+      "description": "The suite's digest, written into the record's source as `suite_input_digest`."
+    },
+    "reference": {
+      "description": "The record's `reference` when `--ref` gives none: `report_input`, `@`, and `report_input_digest`, e.g. `reports/run.json@sha256:<64 hex>`. A `--ref` is the caller's words and is written as given.",
+      "type": "string"
+    },
     "state": {
       "$ref": "#/$defs/aep.evidence.ConformanceRecord.State"
     }
@@ -46,14 +66,19 @@
     "producer_profile",
     "execution_status",
     "completed_at",
+    "report_input",
+    "report_input_digest",
+    "suite_input",
+    "suite_input_digest",
+    "reference",
     "state"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
-    "contract_digest": "slice-sha256/2:c679856408d998f97894ec7f7451534485b615c5e6cf9317e8102fdf49f4a040",
+    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:94ba1b7c37d743b6e128dfeb1d722f7277c41cb0e0510def115bcc71087d9c8c",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -82,6 +107,12 @@
         "failed",
         "inconclusive"
       ]
+    },
+    "aep.evidence.InputDigest": {
+      "title": "InputDigest",
+      "x-ess-name": "aep.evidence.InputDigest",
+      "x-ess-kind": "newtype",
+      "type": "string"
     },
     "aep.evidence.ProducerProfile": {
       "title": "ProducerProfile",

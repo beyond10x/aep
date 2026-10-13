@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.evidence.InputDigest",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:a38c801403a6a51e28426c288bbd2f8ba61c070b3462ad648931ea8339c3fd85",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.InputDigest": {
+      "title": "InputDigest",
+      "x-ess-name": "aep.evidence.InputDigest",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

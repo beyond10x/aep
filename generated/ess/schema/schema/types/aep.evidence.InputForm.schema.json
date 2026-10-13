@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.evidence.InputForm",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:7e9f67c898c67536910685f5ce56cc0ebef96b9413ed84c3713c5b4c031371e6",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.InputForm": {
+      "title": "InputForm",
+      "x-ess-name": "aep.evidence.InputForm",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "repository_relative",
+        "file_name",
+        "as_typed"
+      ]
+    }
+  }
+}

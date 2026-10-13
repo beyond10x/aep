@@ -49,6 +49,23 @@
       "x-ess-kind": "enum",
       "x-ess-name": "aep.evidence.ExecutionStatus"
     },
+    "aep.evidence.InputDigest": {
+      "title": "InputDigest",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.evidence.InputDigest"
+    },
+    "aep.evidence.InputForm": {
+      "enum": [
+        "repository_relative",
+        "file_name",
+        "as_typed"
+      ],
+      "title": "InputForm",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.InputForm"
+    },
     "aep.evidence.ProducerProfile": {
       "enum": [
         "rust_scenario_status_1",
@@ -360,8 +377,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:efac22b940a58e076ee61cd82b3e36402a242e938a90c2c7d85f3dab64812056",
-    "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+    "contract_digest": "slice-sha256/2:56723a66d1518868d6384d46fe2374adf1b9003cf4904d4ad2b174c4a4a448ac",
+    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
     "specification_version": "v1",
     "system": "aep"
   }

@@ -5,6 +5,8 @@
 //! The fixtures under `fixtures/generated-runner/` in aep-ess-evidence's tests were written by
 //! `ess 0.57.0` and its generated Go package; their README says how. The outcomes are
 //! `aep.evidence.RecordFromReport` in `ess/domains/evidence.yaml`.
+use sha2::{Digest as _, Sha256};
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 const GENERATED_RUNNER: &str = "crates/observe/aep-ess-evidence/tests/fixtures/generated-runner";
@@ -38,6 +40,22 @@ fn text(output: &std::process::Output) -> String {
 
 fn success(output: &std::process::Output) {
     assert!(output.status.success(), "{}", text(output));
+}
+
+/// `sha256:` and the lowercase hex of the SHA-256 of the file at `path`.
+fn digest(path: &Path) -> String {
+    Sha256::digest(std::fs::read(path).unwrap()).iter().fold(
+        "sha256:".to_owned(),
+        |mut text, byte| {
+            write!(text, "{byte:02x}").unwrap();
+            text
+        },
+    )
+}
+
+/// A file's name, as a record names an input outside the repository its store sits in.
+fn file_name(path: &Path) -> &str {
+    path.file_name().unwrap().to_str().unwrap()
 }
 
 /// A scratch directory holding a store with one story, `story:generated`.
@@ -111,11 +129,20 @@ fn recorded_once(name: &str, report: &str, suite: &str) -> (String, serde_json::
     let recorded = evidence(&store);
     assert_eq!(recorded.len(), 1, "one record: {recorded:?}");
     let change = &recorded[0]["change"];
-    assert_eq!(change["reference"], report.to_str().unwrap());
+    // The fixtures lie outside the repository the scratch store sits in, so each is named by its
+    // file name beside its digest, never by the path it was given as
+    // (story:evidence-records-relative-inputs).
+    assert_eq!(
+        change["reference"],
+        format!("{}@{}", file_name(&report), digest(&report))
+    );
     let source: serde_json::Value =
         serde_json::from_str(change["source"].as_str().unwrap()).unwrap();
     assert_eq!(source["format"], "ess-conformance-report/2");
-    assert_eq!(source["suite_input"], suite.to_str().unwrap());
+    assert_eq!(source["report_input"], file_name(&report));
+    assert_eq!(source["report_input_digest"], digest(&report));
+    assert_eq!(source["suite_input"], file_name(&suite));
+    assert_eq!(source["suite_input_digest"], digest(&suite));
     assert_eq!(source["specification"], "aep/v1");
     assert_eq!(source["producer_profile"], "go-scenario-status/2");
     assert_eq!(source["policy"], "complete-selection/1");

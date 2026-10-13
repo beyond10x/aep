@@ -1,14 +1,14 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "74fecb9e0960b1bf6a1a312b4812f32db2010044acb2f475001ea775d6be714a",
+  "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:efac22b940a58e076ee61cd82b3e36402a242e938a90c2c7d85f3dab64812056",
-    "projection_digest": "3bdcd088315dec66a9bc8236fa69bd9e8d2f5211b2b8b70fb42ba6cdea467ed8"
+    "contract_digest": "slice-sha256/2:56723a66d1518868d6384d46fe2374adf1b9003cf4904d4ad2b174c4a4a448ac",
+    "projection_digest": "f7ef16b2d6497bd47fc42797165fe39feef42d8087cddeee13b64df324a6b9b4"
   },
-  "generator_version": "0.57.0",
+  "generator_version": "0.59.0",
   "target": "rust",
   "configuration": {
     "language": "rust",
@@ -19,6 +19,8 @@
     "aep.evidence.ConformanceRecord.State",
     "aep.evidence.ConformanceRecorded",
     "aep.evidence.ExecutionStatus",
+    "aep.evidence.InputDigest",
+    "aep.evidence.InputForm",
     "aep.evidence.ProducerProfile",
     "aep.evidence.RecordName",
     "aep.evidence.SuiteKind",
@@ -45,6 +47,8 @@
     "aep.evidence.ConformanceRecord.State": "AepEvidenceConformanceRecordState",
     "aep.evidence.ConformanceRecorded": "AepEvidenceConformanceRecorded",
     "aep.evidence.ExecutionStatus": "AepEvidenceExecutionStatus",
+    "aep.evidence.InputDigest": "AepEvidenceInputDigest",
+    "aep.evidence.InputForm": "AepEvidenceInputForm",
     "aep.evidence.ProducerProfile": "AepEvidenceProducerProfile",
     "aep.evidence.RecordName": "AepEvidenceRecordName",
     "aep.evidence.SuiteKind": "AepEvidenceSuiteKind",
@@ -124,6 +128,36 @@
     },
     {
       "pointer": "/$defs/aep.evidence.ExecutionStatus/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.InputDigest/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.InputDigest/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.InputDigest/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.InputForm/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.InputForm/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.InputForm/x-ess-name",
       "rule": "x-ess-name",
       "detail": "model identity and wire mapping retained in source.schema.json"
     },
