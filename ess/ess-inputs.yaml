@@ -5,4 +5,5 @@ specification:
   - domains/plan.yaml
   - domains/review.yaml
   - domains/evidence.yaml
+  - domains/drive.yaml
 scenarios: []

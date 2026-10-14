@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.Step.State",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "6d09b8d4567d524ec3799d0873469db819484025753b282ddb5be2e44928d6f0",
+    "contract_digest": "slice-sha256/2:41a7181a833d3f0a8bfb7b749dbe819b8059e3db98659057bad1a07bb93e081c",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.Step.State": {
+      "title": "State",
+      "x-ess-name": "aep.drive.Step.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Declared"
+      ]
+    }
+  }
+}

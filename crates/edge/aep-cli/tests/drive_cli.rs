@@ -571,6 +571,32 @@ fn status_reports_the_run_and_whether_the_lock_is_free() {
     assert!(text.contains("map        fixture/drive"), "{text}");
 }
 
+/// story:llm-step-declares-judgement, acceptance 3: `aep drive status --run <run>` prints the
+/// number of llm steps declared and the number run, and the run's own report says the same.
+///
+/// The fixture map is commands only (an `aep` invocation refuses a model-backed map), so both
+/// counts are zero; what is asserted is that the line is there, read from the persisted cursor,
+/// and agrees with the report. The driver-level counts are pinned in aep-driver's `driving`
+/// tests, with a retried llm step.
+#[test]
+fn status_prints_the_llm_steps_a_run_declared_and_ran() {
+    let fixture = Fixture::new("status-llm-steps", false);
+    let run = fixture.drive(&["run"], &[]);
+    assert!(
+        stdout(&run).contains("llm steps  0 declared, 0 run"),
+        "{}",
+        said(&run)
+    );
+    let output = fixture.drive(&["status"], &["--run", "DRIVE-1/1"]);
+    let text = stdout(&output);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert!(text.contains("run        DRIVE-1/1"), "{text}");
+    assert!(text.contains("llm steps  0 declared, 0 run"), "{text}");
+    let cursor = fixture.cursor("DRIVE-1/1");
+    assert_eq!(cursor["llm_steps_declared"], 0, "{cursor}");
+    assert_eq!(cursor["llm_steps_run"], 0, "{cursor}");
+}
+
 #[test]
 fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
     // The real map, cross-validated against the real workflow by the document loader.
@@ -818,7 +844,8 @@ fn a_map_that_is_both_uncoverable_and_unspawnable_reports_the_defect_that_travel
     let with_an_llm_step = format!(
         "{}\x20 review:\n\x20   steps:\n\x20     - kind: llm\n\
          \x20       description: a step that needs a harness this machine has not got\n\
-         \x20       prompt: judge the change\n",
+         \x20       prompt: judge the change\n\
+         \x20       judgement: whether the change is right is a judgement no command makes\n",
         std::fs::read_to_string(&map).expect("the fixture map")
     );
     write(&map, &with_an_llm_step);
@@ -876,7 +903,10 @@ fn model_start_and_resume_refuse_without_changing_the_project() {
     let source = std::fs::read_to_string(&map).expect("map");
     write(
         &map,
-        &format!("{source}  review:\n    steps:\n      - kind: llm\n        prompt: review\n"),
+        &format!(
+            "{source}  review:\n    steps:\n      - kind: llm\n        prompt: review\n        \
+             judgement: whether the change is right is a judgement no command makes\n"
+        ),
     );
     let before = tree(&fixture.directory);
     for verb in [vec!["run"], vec!["resume", "DRIVE-1/1"]] {

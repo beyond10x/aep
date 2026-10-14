@@ -283,6 +283,7 @@
           "description": "Ask a model, with a tool set the protocol derived.",
           "type": "object",
           "required": [
+            "judgement",
             "kind",
             "prompt"
           ],
@@ -310,6 +311,11 @@
                 "string",
                 "null"
               ]
+            },
+            "judgement": {
+              "description": "What this step decides that no command could, in one line.\n\nRead as optional so a step without one reaches validation and is refused there with its path, accumulating with every other problem in the map, rather than failing the whole document as a deserialization error would. The published schema requires it.",
+              "type": "string",
+              "minLength": 1
             },
             "kind": {
               "type": "string",

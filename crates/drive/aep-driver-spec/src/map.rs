@@ -315,6 +315,43 @@ fn validated_context(
     kept
 }
 
+/// Checks an `llm` step's judgement: present, and not blank.
+///
+/// Refused at `<step>.judgement` with a stable code: `missing_declaration` when the key is absent,
+/// `empty_declaration` when it says nothing.
+fn validated_judgement(
+    judgement: Option<&str>,
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Option<String> {
+    match judgement.map(str::trim) {
+        None => {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::MissingDeclaration,
+                    format!("{location}.judgement"),
+                    "an llm step says what it decides that no command could, and this one does \
+                     not",
+                )
+                .with_hint(
+                    "write `judgement:` with one line naming the decision only a model can make; a \
+                     step that has none is a candidate for a `command` step",
+                ),
+            );
+            None
+        }
+        Some("") => {
+            errors.push(ValidationError::new(
+                ValidationCode::EmptyDeclaration,
+                format!("{location}.judgement"),
+                "a blank judgement says nothing about why this step needs a model",
+            ));
+            None
+        }
+        Some(line) => Some(line.to_owned()),
+    }
+}
+
 /// Checks a step's write scope.
 ///
 /// Two rules, and the second is the one that matters: the **last rule must be a catch-all**. A path
@@ -421,6 +458,15 @@ pub struct RawLlmStep {
     /// What this step is for, in one line.
     #[serde(default)]
     pub description: Option<String>,
+    /// What this step decides that no command could, in one line.
+    ///
+    /// Read as optional so a step without one reaches validation and is refused there with its
+    /// path, accumulating with every other problem in the map, rather than failing the whole
+    /// document as a deserialization error would. The published schema requires it.
+    // No `#[serde(default)]`: serde reads an absent `Option` as `None` without it, and with it
+    // schemars would not mark the key required.
+    #[schemars(required, length(min = 1))]
+    pub judgement: Option<String>,
 }
 
 /// An `operator` step, as written.
@@ -668,6 +714,11 @@ pub struct LlmStep {
     /// What this step is for, in one line.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    /// What this step decides that no command could, in one line; never blank.
+    ///
+    /// Required because a model is the expensive, unrepeatable way to decide anything: a step
+    /// that cannot say why it needs one is a candidate for a `command` step.
+    pub judgement: String,
 }
 
 impl LlmStep {
@@ -783,6 +834,17 @@ impl StepMap {
         self.states
             .get(state)
             .map_or(DEFAULT_VISIT_BUDGET, |entry| entry.visit_budget)
+    }
+
+    /// How many `llm` steps this map declares, over every state.
+    pub fn llm_steps_declared(&self) -> u32 {
+        let count = self
+            .states
+            .values()
+            .flat_map(|entry| entry.steps.iter())
+            .filter(|step| step.kind() == StepKind::Llm)
+            .count();
+        u32::try_from(count).unwrap_or(u32::MAX)
     }
 
     /// Every evidence kind any step of this map declares.
@@ -1170,8 +1232,10 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
                 ));
                 return None;
             }
+            let judgement = validated_judgement(step.judgement.as_deref(), location, errors);
             let context = validated_context(&step.context, location, errors);
             let scope = validated_scope(&step.scope, location, errors)?;
+            let judgement = judgement?;
             Some(Step::Llm(LlmStep {
                 prompt: step.prompt,
                 context,
@@ -1181,6 +1245,7 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
                     .harness
                     .unwrap_or_else(|| LlmStep::DEFAULT_HARNESS.to_owned()),
                 description: step.description,
+                judgement,
             }))
         }
         RawStep::Operator(step) => {
@@ -1349,7 +1414,7 @@ mod tests {
     #[test]
     fn a_kind_no_exit_status_can_carry_loads_when_the_verifier_writes_the_record() {
         let states = r#"{"implement":{"steps":[
-            {"kind":"llm","prompt":"do the work"},
+            {"kind":"llm","prompt":"do the work","judgement":"what the work is, which no command decides"},
             {"kind":"command","run":["aep","observe","trace","evidence","--transcript","{transcript}"],
              "evidence":{"kind":"trace_conformance","verifier":"trace-checker",
                          "record":"{run_directory}/trace.yaml"}}]}}"#;
@@ -1449,12 +1514,89 @@ mod tests {
     fn a_transcript_placeholder_with_no_session_before_it_is_refused() {
         let states = r#"{"implement":{"steps":[
             {"kind":"command","run":["aep","observe","trace","check","--transcript","{transcript}"]},
-            {"kind":"llm","prompt":"too late to help the step above"}]}}"#;
+            {"kind":"llm","prompt":"too late to help the step above","judgement":"j"}]}}"#;
         let errors = read(&map_json("adp/default/1", states)).expect_err("refused");
         assert!(
             errors.contains(ValidationCode::MissingDeclaration),
             "{errors}"
         );
+    }
+
+    /// story:llm-step-declares-judgement, acceptance 1: an `llm` step that does not say why it
+    /// needs a model is refused at load, with a stable code at the step's own path.
+    ///
+    /// The step is the second of its state so the path's index is read, not assumed; and a
+    /// `command` and an `operator` step beside it carry no judgement and are not refused.
+    #[test]
+    fn an_llm_step_without_a_judgement_is_refused_with_a_stable_code_at_its_path() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"command","run":["cargo","test"]},
+            {"kind":"llm","prompt":"write the change"},
+            {"kind":"operator","prompt":"approve it"}]}}"#;
+        let errors = read(&map_json("adp/default/1", states)).expect_err("refused");
+        assert_eq!(errors.len(), 1, "one refusal, for the llm step: {errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::MissingDeclaration, "{errors}");
+        assert_eq!(
+            refusal.location,
+            "driver-steps[development/default].states.implement.steps[1].judgement",
+            "the refusal names the step it is about"
+        );
+    }
+
+    /// A judgement of nothing says nothing, and is refused at the same path.
+    #[test]
+    fn an_llm_step_with_a_blank_judgement_is_refused_at_its_path() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"llm","prompt":"write the change","judgement":"   "}]}}"#;
+        let errors = read(&map_json("adp/default/1", states)).expect_err("refused");
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::EmptyDeclaration, "{errors}");
+        assert_eq!(
+            refusal.location,
+            "driver-steps[development/default].states.implement.steps[0].judgement"
+        );
+    }
+
+    /// Missing judgements accumulate, one per step, across states (invariant *Validation
+    /// accumulates*).
+    #[test]
+    fn every_llm_step_without_a_judgement_is_reported_not_only_the_first() {
+        let states = r#"{"implement":{"steps":[{"kind":"llm","prompt":"a"},{"kind":"llm","prompt":"b"}]},
+            "review":{"steps":[{"kind":"llm","prompt":"c"}]}}"#;
+        let errors = read(&map_json("adp/default/1", states)).expect_err("refused");
+        let locations: Vec<&str> = errors
+            .as_slice()
+            .iter()
+            .filter(|error| error.code == ValidationCode::MissingDeclaration)
+            .map(|error| error.location.as_str())
+            .collect();
+        assert_eq!(
+            locations,
+            [
+                "driver-steps[development/default].states.implement.steps[0].judgement",
+                "driver-steps[development/default].states.implement.steps[1].judgement",
+                "driver-steps[development/default].states.review.steps[0].judgement",
+            ],
+            "{errors}"
+        );
+    }
+
+    /// A judgement that says something is kept, trimmed, and the map counts its `llm` steps.
+    #[test]
+    fn an_llm_step_keeps_its_judgement_and_the_map_counts_its_llm_steps() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"llm","prompt":"a","judgement":"  what the change should say  "},
+            {"kind":"command","run":["cargo","test"]}]},
+            "review":{"steps":[{"kind":"llm","prompt":"b","judgement":"whether it is right"},
+            {"kind":"operator","prompt":"approve it"}]}}"#;
+        let map = read(&map_json("adp/default/1", states)).expect("valid");
+        let Step::Llm(step) = &map.steps_for(&StateId::new("implement").unwrap())[0] else {
+            panic!("the first step is the llm step");
+        };
+        assert_eq!(step.judgement, "what the change should say");
+        assert_eq!(map.llm_steps_declared(), 2, "two llm steps over two states");
     }
 
     #[test]
@@ -1469,7 +1611,7 @@ mod tests {
         // deserialization failure rather than a validation one, and no relaxation of a rule can
         // reintroduce it.
         let text = r#"{"format":"aep.driver-steps/1","id":"a","workflow":"adp/default/1",
-            "states":{"implement":{"steps":[{"kind":"llm","prompt":"go",
+            "states":{"implement":{"steps":[{"kind":"llm","prompt":"go","judgement":"j",
             "evidence":{"kind":"test_result","verifier":"test-runner"}}]}}}"#;
         let outcome: Result<RawStepMap, _> = serde_json::from_str(text);
         assert!(
@@ -1532,7 +1674,7 @@ mod tests {
         let states = r#"{"implement":{"steps":[
             {"kind":"command","run":["x"]},
             {"kind":"command","run":["y"],"retries":0},
-            {"kind":"llm","prompt":"go"},
+            {"kind":"llm","prompt":"go","judgement":"j"},
             {"kind":"operator","prompt":"decide"}]}}"#;
         let map = read(&map_json("adp/default/1", states)).expect("valid");
         let steps = map.steps_for(&StateId::new("implement").unwrap());
@@ -1663,7 +1805,9 @@ mod tests {
     // --- declared context and write scope ---------------------------------------------------
 
     fn llm_step(extra: &str) -> String {
-        format!(r#"{{"specify":{{"steps":[{{"kind":"llm","prompt":"write it down"{extra}}}]}}}}"#)
+        format!(
+            r#"{{"specify":{{"steps":[{{"kind":"llm","prompt":"write it down","judgement":"what to write down"{extra}}}]}}}}"#
+        )
     }
 
     fn only_llm_step(extra: &str) -> Result<StepMap, ValidationErrors> {

@@ -1,12 +1,12 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "d5eca32701921c49c335671168d1c629f0f510168f83c9c40ccc14619a6fc500",
+  "source_digest": "6d09b8d4567d524ec3799d0873469db819484025753b282ddb5be2e44928d6f0",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:94b754ac0dc2f158d1d43d74b2cce5a2ad9140b6894b788913730afc9834a923",
-    "projection_digest": "e17e5af2b8f21a383510f426a1c72f5b47785c7b3a857f9b37c66ee778c0df2c"
+    "contract_digest": "slice-sha256/2:15ecf8908705898d79448b48b97e1fbdd0d72affcc99f3d2b1f3d9900df96ea9",
+    "projection_digest": "5a9b1a41506de5743f4dc8b2fc06c22faa03c51b5e1c9ccc4e6aa7131cd7609f"
   },
   "generator_version": "0.59.0",
   "target": "rust",
@@ -15,6 +15,15 @@
     "package": "aep-plan-ess"
   },
   "roots": [
+    "aep.drive.LlmStepBegun",
+    "aep.drive.Run.State",
+    "aep.drive.RunId",
+    "aep.drive.RunStarted",
+    "aep.drive.Step.State",
+    "aep.drive.StepDeclared",
+    "aep.drive.StepKind",
+    "aep.drive.StepMapId",
+    "aep.drive.StepPath",
     "aep.evidence.ArtifactId",
     "aep.evidence.ConformanceRecord.State",
     "aep.evidence.ConformanceRecorded",
@@ -46,6 +55,15 @@
     "aep.review.ReviewResult.State"
   ],
   "declarations": {
+    "aep.drive.LlmStepBegun": "AepDriveLlmStepBegun",
+    "aep.drive.Run.State": "AepDriveRunState",
+    "aep.drive.RunId": "AepDriveRunId",
+    "aep.drive.RunStarted": "AepDriveRunStarted",
+    "aep.drive.Step.State": "AepDriveStepState",
+    "aep.drive.StepDeclared": "AepDriveStepDeclared",
+    "aep.drive.StepKind": "AepDriveStepKind",
+    "aep.drive.StepMapId": "AepDriveStepMapId",
+    "aep.drive.StepPath": "AepDriveStepPath",
     "aep.evidence.ArtifactId": "AepEvidenceArtifactId",
     "aep.evidence.ConformanceRecord.State": "AepEvidenceConformanceRecordState",
     "aep.evidence.ConformanceRecorded": "AepEvidenceConformanceRecorded",
@@ -77,6 +95,141 @@
     "aep.review.ReviewResult.State": "AepReviewReviewResultState"
   },
   "annotations": [
+    {
+      "pointer": "/$defs/aep.drive.LlmStepBegun/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.LlmStepBegun/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.LlmStepBegun/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Run.State/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Run.State/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Run.State/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunId/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunId/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunId/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunStarted/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunStarted/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunStarted/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Step.State/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Step.State/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Step.State/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepDeclared/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepDeclared/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepDeclared/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepKind/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepKind/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepKind/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepMapId/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepMapId/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepMapId/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepPath/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepPath/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.StepPath/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
     {
       "pointer": "/$defs/aep.evidence.ArtifactId/title",
       "rule": "title",
@@ -544,6 +697,16 @@
     }
   ],
   "obligations": [
+    {
+      "pointer": "/$defs/aep.drive.RunStarted/properties/llm_steps_declared",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunStarted/properties/llm_steps_declared",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
     {
       "pointer": "/$defs/aep.plan.PlanningScope/x-ess-invariants",
       "rule": "model_invariants",

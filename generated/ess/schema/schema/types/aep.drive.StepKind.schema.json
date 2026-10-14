@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.StepKind",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "6d09b8d4567d524ec3799d0873469db819484025753b282ddb5be2e44928d6f0",
+    "contract_digest": "slice-sha256/2:b13aba1afa1482cc1b18b9ab6f034f21c59396deb24dab62a79bc1c4f0687b92",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.StepKind": {
+      "title": "StepKind",
+      "x-ess-name": "aep.drive.StepKind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "command",
+        "llm",
+        "operator"
+      ]
+    }
+  }
+}

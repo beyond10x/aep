@@ -321,6 +321,8 @@ states:
           suite: unit
       - kind: llm                # ask a model, with a tool set the protocol derived
         description: Explain what failed.
+        judgement: >-           # required: what this step decides that no command could
+          Why a red suite failed is a diagnosis; the suite says that it failed, not why.
         skills: [planning]
         harness: claude-code     # `claude-code` when the document is silent
         prompt: >-
@@ -337,6 +339,13 @@ applied to a state graph it was not written against.
 Only a `command` step may carry `evidence:`. An `llm` step cannot be given one, so anything a model
 is supposed to have achieved that is *checkable* is observed by the command step after it — which is
 what keeps `independent: true` honestly satisfiable.
+
+Every `llm` step carries `judgement:`, one line saying what the step decides that no command could.
+A step without one is refused at load with `missing_declaration` at
+`driver-steps[<map>].states.<state>.steps[<index>].judgement`, and a blank one with
+`empty_declaration` at the same path. `aep drive run`, `aep drive resume` and
+`aep drive status --run <run>` print `llm steps  <declared> declared, <run> run`: the map's `llm`
+steps, and the attempts the run has made at them, retries included.
 
 Without `record:`, the driver mints the record from the program's exit status, so the kind has to be
 one an exit status can carry: `test_result`, `static_analysis`, `contract_result` or `diff`
@@ -369,6 +378,7 @@ than in the driver:
 ```yaml
       - kind: llm
         description: Make the smallest change that satisfies the unit.
+        judgement: Writing the change is authorship, which no command performs.
         scope:
           - paths: [".engineering/planning/**"]
             write: denied         # the CLI owns every mutation of the store, bodies included

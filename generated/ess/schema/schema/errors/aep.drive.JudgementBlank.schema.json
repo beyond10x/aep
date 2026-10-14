@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JudgementBlank payload",
+  "description": "An `llm` step whose `judgement:` is empty or whitespace only. The refusal's code is `empty_declaration` at the same path (map.rs `validate_step`).",
+  "x-ess-name": "aep.drive.JudgementBlank",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "6d09b8d4567d524ec3799d0873469db819484025753b282ddb5be2e44928d6f0",
+    "contract_digest": "slice-sha256/2:54c87c6d98172895ee562b498cedac19fd9198f35a83cd1af389291691f8885a",
+    "regenerate": "ess generate"
+  }
+}

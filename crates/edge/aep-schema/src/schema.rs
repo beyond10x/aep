@@ -357,14 +357,26 @@ mod tests {
         let validator = definition("driver-steps.schema.json", "RawStep");
         accepts(
             &validator,
+            &serde_json::json!({
+                "kind": "llm",
+                "prompt": "implement the acceptance statement",
+                "judgement": "writing the change is authorship, which no command performs"
+            }),
+            "an llm step is a prompt, the skills to load, and why it needs a model",
+        );
+        // story:llm-step-declares-judgement: the schema says what the loader refuses, so an editor
+        // flags an llm step that does not say why it needs a model.
+        refuses(
+            &validator,
             &serde_json::json!({"kind": "llm", "prompt": "implement the acceptance statement"}),
-            "an llm step is a prompt and the skills to load",
+            "an llm step without a judgement is refused at load",
         );
         refuses(
             &validator,
             &serde_json::json!({
                 "kind": "llm",
                 "prompt": "implement it",
+                "judgement": "writing the change is authorship",
                 "evidence": {"kind": "test_result", "verifier": "test-runner"}
             }),
             "an agent's own statement never satisfies an independence requirement, so a step kind \

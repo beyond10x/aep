@@ -507,6 +507,11 @@ pub struct RunReport {
     pub steps_run: u32,
     /// How many pieces of evidence were submitted.
     pub evidence_submitted: u32,
+    /// How many `llm` steps the run's map declares.
+    pub llm_steps_declared: u32,
+    /// How many attempts the run has begun at those steps, over its whole life: a retried step
+    /// is two, and the attempts before a resume count.
+    pub llm_steps_run: u32,
     /// The engine's own reasons, verbatim.
     ///
     /// Never summarised and never re-worded. The engine's sentence is the one the workflow author
@@ -721,7 +726,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         run_id: &RunId,
         execution: &Execution,
     ) -> DriverCursor {
-        match carried {
+        let mut cursor = match carried {
             Some(mut existing) => {
                 if let Some(stolen) = &self.options.stolen_lock {
                     existing.took_lock_from = Some(stolen.clone());
@@ -734,7 +739,11 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                 self.map,
                 self.options.stolen_lock.clone(),
             ),
-        }
+        };
+        // A cursor carried from an older build has neither count; the map is the one its digest
+        // pins (`resume` refuses another), so both are exact when filled in here.
+        sync_llm_counts(self.map, &mut cursor);
+        cursor
     }
 
     fn run<X: StepExecutors>(
@@ -1106,6 +1115,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
             None => cursor.begin_attempt(state, index).attempt,
         };
+        sync_llm_counts(self.map, cursor);
         self.directory.persist(&execution.snapshot(), cursor)?;
         Ok(attempt)
     }
@@ -1425,8 +1435,11 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
     ) -> Result<RunReport, DriveError> {
         cursor.status = status;
         cursor.reasons.clone_from(&progress.reasons);
+        sync_llm_counts(self.map, &mut cursor);
         self.directory.persist(&execution.snapshot(), &cursor)?;
         Ok(RunReport {
+            llm_steps_declared: cursor.llm_steps_declared.unwrap_or_default(),
+            llm_steps_run: cursor.llm_steps_run.unwrap_or_default(),
             cursor,
             transitions: progress.transitions,
             steps_run: progress.steps_run,
@@ -1461,8 +1474,11 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         progress.reasons.extend(failures);
         cursor.status = RunStatus::StoreBroken;
         cursor.reasons.clone_from(&progress.reasons);
+        sync_llm_counts(self.map, &mut cursor);
         self.directory.persist(snapshot, &cursor)?;
         Ok(RunReport {
+            llm_steps_declared: cursor.llm_steps_declared.unwrap_or_default(),
+            llm_steps_run: cursor.llm_steps_run.unwrap_or_default(),
             cursor,
             transitions: progress.transitions,
             steps_run: progress.steps_run,
@@ -1508,11 +1524,37 @@ fn fresh_cursor(
         took_lock_from: stolen,
         owed: None,
         answers: Vec::new(),
+        llm_steps_declared: None,
+        llm_steps_run: None,
     };
     // Counted on entry, and the initial state is an entry. A budget that only counted re-entries
     // would let a one-state workflow run forever.
     cursor.record_visit(&initial);
     cursor
+}
+
+/// Writes the cursor's two `llm` counts from the map and the cursor's own attempt record.
+///
+/// Derived rather than incremented: the cursor already counts every attempt at `<state>#<index>`
+/// for the life of the run and never resets, so the attempts at the map's `llm` steps are the
+/// count, and a resume, a retried step and an older cursor all come out right with no second
+/// counter that could drift from the first.
+fn sync_llm_counts(map: &StepMap, cursor: &mut DriverCursor) {
+    let run: u32 = map
+        .states
+        .iter()
+        .flat_map(|(state, entry)| {
+            entry
+                .steps
+                .iter()
+                .enumerate()
+                .filter(|(_, step)| matches!(step, Step::Llm(_)))
+                .map(move |(index, _)| (state, index))
+        })
+        .map(|(state, index)| cursor.attempts_at(state, index))
+        .sum();
+    cursor.llm_steps_declared = Some(map.llm_steps_declared());
+    cursor.llm_steps_run = Some(run);
 }
 
 /// Reads one JSON record.

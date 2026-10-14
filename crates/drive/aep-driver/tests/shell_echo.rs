@@ -161,6 +161,7 @@ states:
       - kind: llm
         harness: shell-echo
         prompt: write the code
+        judgement: what the code should say is authorship, which no command performs
       - kind: command
         run: [git, diff]
         evidence:
