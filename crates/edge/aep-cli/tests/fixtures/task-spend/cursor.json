@@ -1,0 +1,20 @@
+{
+  "run": "AUTH-142/3",
+  "task": "AUTH-142",
+  "execution": "AUTH-142.1",
+  "workflow": "adp/default/1",
+  "map": "development/default",
+  "map_digest": "0000000000000000000000000000000000000000000000000000000000000000",
+  "engine_version": "0.72.0",
+  "state": "verify",
+  "step": 0,
+  "visits": {
+    "receive": 1, "specify": 1, "decompose": 1, "establish_verifiers": 1,
+    "implement": 1, "verify": 1
+  },
+  "attempts": { "specify#0": 1, "implement#0": 1 },
+  "iterations": 6,
+  "status": "running",
+  "llm_steps_declared": 6,
+  "llm_steps_run": 2
+}

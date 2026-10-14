@@ -9,6 +9,20 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan artifact evidence <id> --kind task_spend --from <file>` records what one source says a
+  task spent, as a `task_spend` evidence record: model calls, the five token figures (input,
+  output, cache read, cache write, thinking) and their total, cost in micro-USD, wall time, and
+  for a driven run the llm steps declared and run. The file is a transcript (Claude Code
+  `stream-json` or `metaharness.event/1`), an `eval.run-manifest/1` (its `tokens`,
+  `cost_micro_usd` and `wall_time_ms`) or a driven run's `cursor.json`. Several terminal records
+  of one session are charged once, as `aep eval run` charges them. A figure the source does not
+  state is left out of the record and printed `unknown`, never `0`. The record keeps the source's
+  `sha256:` digest and its path from the repository root; a source outside the repository is
+  refused with `SpendSourceOutsideRepository`, naming the path. `--at` may name when it was
+  observed.
+
 ## [0.72.0] — 2026-10-14
 
 ### Changed

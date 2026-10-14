@@ -71,9 +71,42 @@ impl RecordedInput {
 /// `InputPathNotPortable` when the name would be empty, absolute or carry a `.` or `..`
 /// component; the working directory cannot be read to make a relative path absolute.
 pub(crate) fn recorded_input(root: &Path, path: &Path, bytes: &[u8]) -> Result<RecordedInput> {
+    let (name, form) = name_and_form(root, path)?;
+    if !form.admits(&name) {
+        bail!(
+            "InputPathNotPortable: {} would be recorded as `{name}`, which is not a {} name: \
+             neither a path relative to the repository root {} nor a file name; nothing was \
+             recorded",
+            path.display(),
+            form.wire(),
+            lexically_absolute(root)?.display()
+        );
+    }
+    Ok(RecordedInput {
+        name,
+        digest: sha256(bytes),
+    })
+}
+
+/// `path`'s name from the repository at `root`, or [`None`] when it is not one: the path lies
+/// outside the root, or is the root itself.
+///
+/// The `repository_relative` form alone, for a record that names nothing outside the repository
+/// (`aep.evidence.SpendSourceOutsideRepository`).
+///
+/// # Errors
+///
+/// The working directory cannot be read to make a relative path absolute.
+pub(crate) fn repository_relative(root: &Path, path: &Path) -> Result<Option<String>> {
+    let (name, form) = name_and_form(root, path)?;
+    Ok((form == InputForm::RepositoryRelative && form.admits(&name)).then_some(name))
+}
+
+/// The name `path` would be recorded under from `root`, and the form that name takes.
+fn name_and_form(root: &Path, path: &Path) -> Result<(String, InputForm)> {
     let root = lexically_absolute(root)?;
     let absolute = lexically_absolute(path)?;
-    let (name, form) = match absolute.strip_prefix(&root) {
+    Ok(match absolute.strip_prefix(&root) {
         Ok(relative) if relative.components().next().is_some() => (
             relative
                 .components()
@@ -89,20 +122,6 @@ pub(crate) fn recorded_input(root: &Path, path: &Path, bytes: &[u8]) -> Result<R
                 .unwrap_or_default(),
             InputForm::FileName,
         ),
-    };
-    if !form.admits(&name) {
-        bail!(
-            "InputPathNotPortable: {} would be recorded as `{name}`, which is not a {} name: \
-             neither a path relative to the repository root {} nor a file name; nothing was \
-             recorded",
-            path.display(),
-            form.wire(),
-            root.display()
-        );
-    }
-    Ok(RecordedInput {
-        name,
-        digest: sha256(bytes),
     })
 }
 
@@ -142,7 +161,7 @@ fn lexically_absolute(path: &Path) -> Result<PathBuf> {
 }
 
 /// `sha256:` and the lowercase hex of the SHA-256 of `bytes`.
-fn sha256(bytes: &[u8]) -> String {
+pub(crate) fn sha256(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .fold("sha256:".to_owned(), |mut text, byte| {

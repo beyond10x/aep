@@ -21,6 +21,10 @@
       "$ref": "#/$defs/aep.evidence.InputDigest",
       "description": "`sha256:` and the SHA-256 of the source's bytes as read, as aep.evidence.InputDigest says."
     },
+    "source_input": {
+      "description": "The source, named as aep.evidence.InputForm `repository_relative`; never a file name alone and never an absolute path.",
+      "type": "string"
+    },
     "model_calls": {
       "description": "Distinct API requests the transcript records (`Census::api_requests`, `api_request_count` in ir.rs). Absent when the source records none.",
       "type": "integer"
@@ -43,6 +47,10 @@
     },
     "thinking_tokens": {
       "description": "Billed thinking tokens the API reported (`RunUsage::thinking_tokens`).",
+      "type": "integer"
+    },
+    "total_tokens": {
+      "description": "The total the source states (an `eval.run-manifest/1`'s `tokens`), or, for a transcript or a driven run, the sum of the five split figures when all five are known; otherwise absent.",
       "type": "integer"
     },
     "cost_micro_usd": {
@@ -70,14 +78,15 @@
     "artifact",
     "source",
     "source_digest",
+    "source_input",
     "state"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
-    "contract_digest": "slice-sha256/2:8dfba87be6d2d006c7322bf064214662e0033ee5b7778d1a1f1bff7ea398b5c5",
+    "source_digest": "3190de88c2014ba1468fe4e6ec649677142d29f957851b25a3c222651eeecdbc",
+    "contract_digest": "slice-sha256/2:6ac855f478aa358dc510316aa6f51e12da11733b8b0332c3e61da3cdf7106c23",
     "regenerate": "ess generate"
   },
   "$defs": {

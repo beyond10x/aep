@@ -989,6 +989,163 @@ impl TraceConformanceResult {
     }
 }
 
+/// The one source a [`TaskSpend`] record's figures are read from: `aep.evidence.SpendSource`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpendSource {
+    /// A harness transcript: its terminal records and its API requests.
+    Transcript,
+    /// An `eval.run-manifest/1`.
+    RunManifest,
+    /// A driven run's cursor: the llm steps its map declares and the ones it ran.
+    DrivenRun,
+}
+
+impl SpendSource {
+    /// Every source, in the specification's order.
+    pub const ALL: [Self; 3] = [Self::Transcript, Self::RunManifest, Self::DrivenRun];
+
+    /// The source as the record writes it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Transcript => "transcript",
+            Self::RunManifest => "run_manifest",
+            Self::DrivenRun => "driven_run",
+        }
+    }
+}
+
+/// The figures of one [`TaskSpend`] record, each [`None`] when the source does not state it.
+///
+/// Never zero for unknown (invariant *Unknown differs from false*): an absent figure is left out
+/// of the record and printed `unknown`, and a `0` here is a zero the source stated.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct SpendFigures {
+    /// Distinct API requests the transcript records.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model_calls: Option<u64>,
+    /// Uncached input tokens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_tokens: Option<u64>,
+    /// Output tokens.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_tokens: Option<u64>,
+    /// Tokens read from the cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_read_tokens: Option<u64>,
+    /// Tokens written to the cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_write_tokens: Option<u64>,
+    /// Billed thinking tokens the API reported.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thinking_tokens: Option<u64>,
+    /// The total the source states, or the sum of the five split figures when all five are
+    /// known ([`Self::with_split_total`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u64>,
+    /// What the task cost, in millionths of a US dollar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost_micro_usd: Option<u64>,
+    /// Wall-clock duration in milliseconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wall_time_ms: Option<u64>,
+    /// For a driven run, how many llm steps its map declares.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm_steps_declared: Option<u64>,
+    /// For a driven run, how many llm step attempts it began.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm_steps_run: Option<u64>,
+}
+
+impl SpendFigures {
+    /// Every figure's name, in the specification's order (`aep.evidence.SpendRecord`).
+    pub const NAMES: [&'static str; 11] = [
+        "model_calls",
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "thinking_tokens",
+        "total_tokens",
+        "cost_micro_usd",
+        "wall_time_ms",
+        "llm_steps_declared",
+        "llm_steps_run",
+    ];
+
+    /// Every figure with its name, in [`Self::NAMES`] order.
+    pub fn named(&self) -> [(&'static str, Option<u64>); 11] {
+        let values = [
+            self.model_calls,
+            self.input_tokens,
+            self.output_tokens,
+            self.cache_read_tokens,
+            self.cache_write_tokens,
+            self.thinking_tokens,
+            self.total_tokens,
+            self.cost_micro_usd,
+            self.wall_time_ms,
+            self.llm_steps_declared,
+            self.llm_steps_run,
+        ];
+        let mut named = [("", None); 11];
+        for (slot, (name, value)) in named.iter_mut().zip(Self::NAMES.into_iter().zip(values)) {
+            *slot = (name, value);
+        }
+        named
+    }
+
+    /// The figures with [`Self::total_tokens`] filled in from the five split figures, when the
+    /// source stated no total and all five are known.
+    ///
+    /// Four of five is not a total: it would understate the run by the one nobody stated. A sum
+    /// that overflows is not a figure either. A stated total is kept as it is.
+    #[must_use]
+    pub fn with_split_total(mut self) -> Self {
+        if self.total_tokens.is_none() {
+            self.total_tokens = [
+                self.input_tokens,
+                self.output_tokens,
+                self.cache_read_tokens,
+                self.cache_write_tokens,
+                self.thinking_tokens,
+            ]
+            .into_iter()
+            .try_fold(0_u64, |total, figure| total.checked_add(figure?));
+        }
+        self
+    }
+
+    /// Every figure as the command prints it: its value, or `unknown` — never `0` for a figure
+    /// the source did not state.
+    pub fn printed(&self) -> Vec<(&'static str, String)> {
+        self.named()
+            .into_iter()
+            .map(|(name, value)| {
+                (
+                    name,
+                    value.map_or_else(|| "unknown".to_owned(), |value| value.to_string()),
+                )
+            })
+            .collect()
+    }
+}
+
+/// What one source says one task spent: the body of a `task_spend` record,
+/// `aep.evidence.SpendRecord` less the artifact and the record name the store holds.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct TaskSpend {
+    /// Which kind of source the figures were read from.
+    pub source: SpendSource,
+    /// The source's path from the repository root, `/`-separated.
+    pub source_input: String,
+    /// `sha256:` and the SHA-256 of the source's bytes as read.
+    pub source_digest: String,
+    /// The figures, each absent when the source does not state it.
+    #[serde(flatten)]
+    pub figures: SpendFigures,
+}
+
 /// What a conformance run found when it checked an implementation against a specification.
 ///
 /// This is the join between the two halves of the project: a specification generates its own
@@ -1261,6 +1418,12 @@ pub enum EvidenceKind {
     /// that is what makes a behavioural claim about an LLM step admissible without the LLM minting
     /// anything.
     TraceConformance,
+    /// What one source says one task spent: model calls, tokens, cost, wall time and llm steps.
+    ///
+    /// Written by `aep plan artifact evidence <id> --kind task_spend --from <file>` from a
+    /// transcript, an `eval.run-manifest/1` or a driven run's cursor; the record is a
+    /// [`TaskSpend`]. A measurement, not a verdict: nothing about it passes or fails.
+    TaskSpend,
 }
 
 impl EvidenceKind {
@@ -1284,6 +1447,7 @@ impl EvidenceKind {
         Self::EssConformanceV2,
         Self::EssConformanceCoverageV1,
         Self::TraceConformance,
+        Self::TaskSpend,
     ];
 
     /// The kind as written in documents and fact paths.
@@ -1307,6 +1471,7 @@ impl EvidenceKind {
             Self::EssConformanceV2 => "ess_conformance_v2",
             Self::EssConformanceCoverageV1 => "ess_conformance_coverage_v1",
             Self::TraceConformance => "trace_conformance",
+            Self::TaskSpend => "task_spend",
         }
     }
 
@@ -1360,7 +1525,11 @@ impl EvidenceKind {
             Self::ContractResult => &[Verifier::ContractRunner],
             Self::PropertyTestResult => &[Verifier::PropertyTester, Verifier::ModelChecker],
             Self::DeploymentResult => &[Verifier::PolicyEngine, Verifier::TelemetryQuery],
-            Self::MetricObservation | Self::HealthObservation => &[Verifier::TelemetryQuery],
+            // A spend is a figure read off a recording of a run, as a metric is read off a running
+            // system.
+            Self::MetricObservation | Self::HealthObservation | Self::TaskSpend => {
+                &[Verifier::TelemetryQuery]
+            }
             Self::Approval => &[Verifier::HumanApproval],
             Self::Diff => &[Verifier::Compiler, Verifier::StaticAnalyzer],
             Self::Artifact => &[Verifier::ArtifactValidator],
@@ -2760,5 +2929,93 @@ scenarios_total: 24
                 "{kind} has no verifier that can establish it"
             );
         }
+    }
+
+    #[test]
+    fn task_spend_is_a_kind_spelled_the_way_the_record_is_written() {
+        assert_eq!(EvidenceKind::TaskSpend.as_str(), "task_spend");
+        assert_eq!(
+            EvidenceKind::parse("task_spend").expect("the canonical name parses"),
+            EvidenceKind::TaskSpend
+        );
+        assert!(EvidenceKind::ALL.contains(&EvidenceKind::TaskSpend));
+    }
+
+    fn five_known() -> SpendFigures {
+        SpendFigures {
+            input_tokens: Some(16),
+            output_tokens: Some(3_017),
+            cache_read_tokens: Some(309_588),
+            cache_write_tokens: Some(18_809),
+            thinking_tokens: Some(38),
+            ..SpendFigures::default()
+        }
+    }
+
+    #[test]
+    fn the_split_total_is_the_sum_of_the_five_only_when_all_five_are_known() {
+        assert_eq!(
+            five_known().with_split_total().total_tokens,
+            Some(16 + 3_017 + 309_588 + 18_809 + 38)
+        );
+        let four = SpendFigures {
+            thinking_tokens: None,
+            ..five_known()
+        };
+        assert_eq!(
+            four.with_split_total().total_tokens,
+            None,
+            "a total over four of five figures would understate the five, so it is unknown"
+        );
+        let stated = SpendFigures {
+            total_tokens: Some(30_412),
+            ..SpendFigures::default()
+        };
+        assert_eq!(
+            stated.with_split_total().total_tokens,
+            Some(30_412),
+            "a total the source states is kept, and no split is invented for it"
+        );
+        let overflowing = SpendFigures {
+            input_tokens: Some(u64::MAX),
+            ..five_known()
+        };
+        assert_eq!(
+            overflowing.with_split_total().total_tokens,
+            None,
+            "a sum that does not fit is not a figure"
+        );
+    }
+
+    #[test]
+    fn an_unknown_figure_is_printed_unknown_never_zero_and_written_absent() {
+        let figures = SpendFigures {
+            cost_micro_usd: Some(0),
+            ..SpendFigures::default()
+        };
+        let printed = figures.printed();
+        assert_eq!(printed.len(), SpendFigures::NAMES.len());
+        for (name, value) in &printed {
+            let expected = if *name == "cost_micro_usd" {
+                "0"
+            } else {
+                "unknown"
+            };
+            assert_eq!(value, expected, "{name}");
+        }
+        let record = TaskSpend {
+            source: SpendSource::Transcript,
+            source_input: "runs/t.jsonl".to_owned(),
+            source_digest: format!("sha256:{}", "0".repeat(64)),
+            figures,
+        };
+        let written = serde_json::to_value(&record).expect("a record serializes");
+        assert_eq!(written["cost_micro_usd"], 0, "a stated zero is a figure");
+        for name in SpendFigures::NAMES {
+            if name != "cost_micro_usd" {
+                assert!(written.get(name).is_none(), "{name} absent: {written}");
+            }
+        }
+        assert_eq!(written["source"], "transcript");
     }
 }

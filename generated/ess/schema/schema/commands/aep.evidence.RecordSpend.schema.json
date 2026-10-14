@@ -18,6 +18,12 @@
     "source_digest": {
       "$ref": "#/$defs/aep.evidence.InputDigest"
     },
+    "source_input_form": {
+      "$ref": "#/$defs/aep.evidence.InputForm"
+    },
+    "source_input": {
+      "type": "string"
+    },
     "model_calls": {
       "type": "integer"
     },
@@ -36,6 +42,9 @@
     "thinking_tokens": {
       "type": "integer"
     },
+    "total_tokens": {
+      "type": "integer"
+    },
     "cost_micro_usd": {
       "type": "integer"
     },
@@ -52,14 +61,16 @@
   "required": [
     "id",
     "record",
-    "source"
+    "source",
+    "source_input_form",
+    "source_input"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
-    "contract_digest": "slice-sha256/2:cfd893b84bfc6fa0b1b17e62b2898ea8b97871d952d4b67c5e69887ce40bd635",
+    "source_digest": "3190de88c2014ba1468fe4e6ec649677142d29f957851b25a3c222651eeecdbc",
+    "contract_digest": "slice-sha256/2:8f523cbd69f58d74d1bc0fdd667bc49c5603aa651bc6cbf224b61a79f1a1cd77",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -74,6 +85,17 @@
       "x-ess-name": "aep.evidence.InputDigest",
       "x-ess-kind": "newtype",
       "type": "string"
+    },
+    "aep.evidence.InputForm": {
+      "title": "InputForm",
+      "x-ess-name": "aep.evidence.InputForm",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "repository_relative",
+        "file_name",
+        "as_typed"
+      ]
     },
     "aep.evidence.RecordName": {
       "title": "RecordName",

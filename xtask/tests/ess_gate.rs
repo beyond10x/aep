@@ -33,13 +33,14 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 31 scenarios and 68 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 32 scenarios and 68 refusals.
 ///
 /// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, the `aep.review.ReviewResult`
 /// invariant after each of its three recording outcomes, the nine outcomes of
-/// `aep.evidence.RecordFromReport`, the two outcomes of `aep.evidence.RecordSpend`
-/// (`source-digest-missing` and `recorded`, story:task-spend-is-modelled), and nine in `aep.drive`:
+/// `aep.evidence.RecordFromReport`, the three outcomes of `aep.evidence.RecordSpend`
+/// (`source-digest-missing` and `recorded`, story:task-spend-is-modelled, and
+/// `source-outside-repository`, story:evidence-records-task-spend), and nine in `aep.drive`:
 /// the three outcomes of `aep.drive.DeclareStep`, the `aep.drive.Step` invariant after `declared`,
 /// `StartRun`, both outcomes of `RunLlmStep`, `ShowStatus` and the `aep.drive.LlmStepsDeclared`
 /// aggregate. Neither adds a refusal.
@@ -56,7 +57,7 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (31, 68);
+const SYNTHESIZED: (u64, u64) = (32, 68);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {

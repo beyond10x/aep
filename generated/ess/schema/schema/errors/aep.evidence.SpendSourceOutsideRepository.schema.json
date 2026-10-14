@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpendSourceOutsideRepository payload",
+  "description": "The source lies outside the repository root, or its path from the root would carry a `.` or `..` component (`SpendSourceOutsideRepository`, planning/task_spend.rs `read_spend`); the refusal names the path as given. Nothing is written.",
+  "x-ess-name": "aep.evidence.SpendSourceOutsideRepository",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "3190de88c2014ba1468fe4e6ec649677142d29f957851b25a3c222651eeecdbc",
+    "contract_digest": "slice-sha256/2:d36c06f51e3660e00e761f3e49a31ceca6c8f0301db8916d58254952a630138a",
+    "regenerate": "ess generate"
+  }
+}

@@ -53,6 +53,8 @@ mod conformance_count;
 mod recorded_input;
 // Where `validate` places a review-result by its findings block, decided from facts it is handed.
 mod findings_standing;
+// What a `task_spend` record reads out of a transcript, a run manifest or a driven run's cursor.
+mod task_spend;
 
 /// Where a new document's body is seeded from, relative to the document tree.
 const TEMPLATE_DIRECTORY: &str = "artifacts/templates";
@@ -1274,10 +1276,15 @@ pub(crate) enum ArtifactCommand {
         /// Refuses a report of no scenarios, for the reason `contract evidence` refuses a run that
         /// checked nothing: a suite that ran nothing also failed nothing, so recording it would
         /// discharge the obligation on the strength of a run that asserted nothing.
+        ///
+        /// With `--kind task_spend` it is instead a transcript, an `eval.run-manifest/1` or a
+        /// driven run's `cursor.json`, inside the repository, and the record is what that source
+        /// says the task spent: model calls, tokens, cost, wall time and llm steps, each printed
+        /// `unknown` when the source does not state it. `--at` may name when it was observed.
         #[arg(
             long,
             value_name = "REPORT",
-            conflicts_with_all = ["kind", "source", "at", "review", "outcome"]
+            conflicts_with_all = ["source", "review", "outcome"]
         )]
         from: Option<PathBuf>,
         /// Exact original suite JSON required beside a standalone ESS report/2.
@@ -1303,7 +1310,8 @@ pub(crate) enum ArtifactCommand {
         /// artifact that was reviewed. A review is immutable once recorded, so what happened next
         /// cannot be an edit to it and is this record instead.
         ///
-        /// Omitted only with `--from`, which reads the kind out of the report.
+        /// Omitted only with `--from`, which reads the kind out of the report; beside `--from` it
+        /// is only `task_spend`.
         #[arg(long, required_unless_present = "from")]
         kind: Option<String>,
         /// Where it came from — `task check`, a CI run URL, a person's name.
@@ -7347,11 +7355,61 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     if request.suite_input.is_some() && request.suite.is_some() {
         anyhow::bail!("--suite-input conflicts with --suite");
     }
+    // Beside `--from`, `--kind` says the file is a spend source rather than a conformance report,
+    // and it is the one kind that does.
+    let spend_from = match (request.from, request.kind) {
+        (Some(from), Some(kind)) => {
+            let named = EvidenceKind::parse(kind.trim())
+                .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
+            if named != EvidenceKind::TaskSpend {
+                anyhow::bail!(
+                    "`--kind {}` cannot be used with `--from <report>`: the report states its own \
+                     kind. The one kind `--from` takes is `{}`, which reads a transcript, an \
+                     `eval.run-manifest/1` or a driven run's cursor",
+                    named.as_str(),
+                    EvidenceKind::TaskSpend.as_str()
+                );
+            }
+            if request.suite.is_some() || request.suite_input.is_some() {
+                anyhow::bail!(
+                    "`--suite` and `--suite-input` pair with a conformance report; a `{}` source \
+                     is read alone",
+                    EvidenceKind::TaskSpend.as_str()
+                );
+            }
+            Some(from)
+        }
+        _ => None,
+    };
+    if request.from.is_some() && spend_from.is_none() && request.at.is_some() {
+        anyhow::bail!(
+            "`--at` cannot be used with `--from <report>`: the report states when its run \
+             completed, and this verb will not stamp a run with another instant"
+        );
+    }
+
+    // A spend source is read, and refused when it lies outside the repository, before the store
+    // is opened: a refusal writes nothing.
+    let spend = match spend_from {
+        Some(from) => Some(task_spend::read_spend(&args.repository_root(), from)?),
+        None => None,
+    };
 
     // `--from` reads the kind, the source and the instant out of a report that already states
     // them; the flags are how the same record is made when there is no report to read.
-    let read = match request.from {
-        Some(report) => {
+    let read = match (request.from, &spend) {
+        (Some(_), Some(record)) => Some(Recorded {
+            kind: EvidenceKind::TaskSpend,
+            source: serde_json::to_string(record)?,
+            reference: Some(request.reference.map_or_else(
+                || format!("{}@{}", record.source_input, record.source_digest),
+                ToOwned::to_owned,
+            )),
+            // A transcript, a manifest's date or a cursor states no instant this record could
+            // take as its own, so it is the caller's `--at` or now, read at the edge.
+            at: request.at.map_or_else(now_at_the_edge, str::to_owned),
+        }),
+        (Some(report), None) => {
             let mut read = recorded_from_report(
                 &args.repository_root(),
                 report,
@@ -7365,7 +7423,7 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
             }
             Some(read)
         }
-        None => None,
+        (None, _) => None,
     };
 
     let kind = if let Some(read) = &read {
@@ -7402,7 +7460,7 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     // another. Refused here, at the edge, because the check that matters — *does that review review
     // this artifact* — needs the store, and a domain type that cannot see one could not make it.
     let answers = review_outcome_of(&opened, &id, kind, request)?;
-    let from_report = read.is_some();
+    let from_report = read.is_some() && spend.is_none();
     let (source, reference, at) = if let Some(read) = read {
         (read.source, read.reference, read.at)
     } else {
@@ -7437,11 +7495,24 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
     let on_hand = opened.evidence_on_hand(&id)?;
     match args.format {
         Format::Text => {
-            match answers {
-                Some((review, outcome)) => {
+            match (answers, &spend) {
+                (Some((review, outcome)), _) => {
                     outln!("{id}: {} recorded — {review} was {outcome}", kind.as_str());
                 }
-                None => outln!("{id}: {} recorded from {source}", kind.as_str()),
+                // Every figure on a line of its own, `unknown` where the source states none: a
+                // figure left off the printout would read as one nobody asked about.
+                (None, Some(record)) => {
+                    outln!(
+                        "{id}: {} recorded from {} {}",
+                        kind.as_str(),
+                        record.source.as_str(),
+                        record.source_input
+                    );
+                    for (name, value) in record.figures.printed() {
+                        outln!("  {name:<20} {value}");
+                    }
+                }
+                (None, None) => outln!("{id}: {} recorded from {source}", kind.as_str()),
             }
             let held: Vec<String> = on_hand
                 .iter()
