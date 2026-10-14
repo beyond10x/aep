@@ -1,12 +1,12 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+  "source_digest": "d5eca32701921c49c335671168d1c629f0f510168f83c9c40ccc14619a6fc500",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:56723a66d1518868d6384d46fe2374adf1b9003cf4904d4ad2b174c4a4a448ac",
-    "projection_digest": "f7ef16b2d6497bd47fc42797165fe39feef42d8087cddeee13b64df324a6b9b4"
+    "contract_digest": "slice-sha256/2:94b754ac0dc2f158d1d43d74b2cce5a2ad9140b6894b788913730afc9834a923",
+    "projection_digest": "e17e5af2b8f21a383510f426a1c72f5b47785c7b3a857f9b37c66ee778c0df2c"
   },
   "generator_version": "0.59.0",
   "target": "rust",
@@ -23,6 +23,9 @@
     "aep.evidence.InputForm",
     "aep.evidence.ProducerProfile",
     "aep.evidence.RecordName",
+    "aep.evidence.SpendRecord.State",
+    "aep.evidence.SpendRecorded",
+    "aep.evidence.SpendSource",
     "aep.evidence.SuiteKind",
     "aep.plan.EngineeringDirectory",
     "aep.plan.PlanningScope",
@@ -51,6 +54,9 @@
     "aep.evidence.InputForm": "AepEvidenceInputForm",
     "aep.evidence.ProducerProfile": "AepEvidenceProducerProfile",
     "aep.evidence.RecordName": "AepEvidenceRecordName",
+    "aep.evidence.SpendRecord.State": "AepEvidenceSpendRecordState",
+    "aep.evidence.SpendRecorded": "AepEvidenceSpendRecorded",
+    "aep.evidence.SpendSource": "AepEvidenceSpendSource",
     "aep.evidence.SuiteKind": "AepEvidenceSuiteKind",
     "aep.plan.EngineeringDirectory": "AepPlanEngineeringDirectory",
     "aep.plan.PlanningScope": "AepPlanPlanningScope",
@@ -188,6 +194,51 @@
     },
     {
       "pointer": "/$defs/aep.evidence.RecordName/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRecord.State/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRecord.State/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRecord.State/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRecorded/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRecorded/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRecorded/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendSource/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendSource/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendSource/x-ess-name",
       "rule": "x-ess-name",
       "detail": "model identity and wire mapping retained in source.schema.json"
     },
