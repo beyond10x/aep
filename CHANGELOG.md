@@ -16,6 +16,10 @@ belongs in the commit message or in `docs/design/`.
   with `missing_declaration` at `driver-steps[<map>].states.<state>.steps[<index>].judgement` (a
   blank one with `empty_declaration`), and the published `driver-steps` schema requires the key.
   Both shipped maps under `drivers/development/` declare it on all six of their `llm` steps.
+- The published `driver-steps` schema refuses the blank, empty or zero values the loader refuses:
+  a whitespace-only `judgement`, `prompt`, `context` entry, scope path, `depends_on` or evidence
+  `record`, an empty `run` or scope `paths` list, and a `visit_budget` or `circuit_breaker` of 0.
+  A whitespace-only `run` is still refused only at load.
 
 ### Added
 

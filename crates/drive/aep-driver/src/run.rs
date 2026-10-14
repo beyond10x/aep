@@ -1103,6 +1103,9 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         index: usize,
         tally: &mut Tally,
     ) -> Result<u32, DriveError> {
+        // Before the attempt is recorded, so a count started from an older cursor's attempts
+        // does not include the one counted below.
+        sync_llm_counts(self.map, cursor);
         let attempt = match tally.retry_in_flight.take() {
             Some(in_flight) if in_flight.state == *state && in_flight.step == index => {
                 in_flight.attempt
@@ -1115,7 +1118,17 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
             None => cursor.begin_attempt(state, index).attempt,
         };
-        sync_llm_counts(self.map, cursor);
+        // Counted here rather than derived from `attempts`: a `--retry-in-flight` retry keeps the
+        // attempt number its id names, so `attempts` does not move, yet the model is called again.
+        let is_llm = self
+            .map
+            .states
+            .get(state)
+            .and_then(|entry| entry.steps.get(index))
+            .is_some_and(|step| matches!(step, Step::Llm(_)));
+        if is_llm {
+            cursor.llm_steps_run = cursor.llm_steps_run.map(|run| run + 1);
+        }
         self.directory.persist(&execution.snapshot(), cursor)?;
         Ok(attempt)
     }
@@ -1533,13 +1546,18 @@ fn fresh_cursor(
     cursor
 }
 
-/// Writes the cursor's two `llm` counts from the map and the cursor's own attempt record.
+/// Fills in the cursor's two `llm` counts.
 ///
-/// Derived rather than incremented: the cursor already counts every attempt at `<state>#<index>`
-/// for the life of the run and never resets, so the attempts at the map's `llm` steps are the
-/// count, and a resume, a retried step and an older cursor all come out right with no second
-/// counter that could drift from the first.
+/// `llm_steps_declared` comes from the map, which the cursor's digest pins. `llm_steps_run` is
+/// incremented by `Session::begin_attempt`, once per attempt begun at an `llm` step, an in-flight
+/// retry included, because `attempts` cannot see that retry. A fresh cursor, or one written before
+/// the count existed, starts it here from the attempts recorded at the map's `llm` steps; an older
+/// build's in-flight retries are not in that record, so for such a cursor it is a lower bound.
 fn sync_llm_counts(map: &StepMap, cursor: &mut DriverCursor) {
+    cursor.llm_steps_declared = Some(map.llm_steps_declared());
+    if cursor.llm_steps_run.is_some() {
+        return;
+    }
     let run: u32 = map
         .states
         .iter()
@@ -1553,7 +1571,6 @@ fn sync_llm_counts(map: &StepMap, cursor: &mut DriverCursor) {
         })
         .map(|(state, index)| cursor.attempts_at(state, index))
         .sum();
-    cursor.llm_steps_declared = Some(map.llm_steps_declared());
     cursor.llm_steps_run = Some(run);
 }
 

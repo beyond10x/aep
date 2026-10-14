@@ -497,3 +497,142 @@ fn an_aliased_field_is_never_left_required_under_its_canonical_spelling() {
         }
     }
 }
+
+/// A step map that loads, with one step of each kind and every field the loader refuses when it
+/// is blank, empty or zero.
+fn sound_step_map() -> Value {
+    serde_json::json!({
+        "format": "aep.driver-steps/1",
+        "id": "test/blanks",
+        "workflow": "adp/default/1",
+        "states": {
+            "implement": {
+                "visit_budget": 3,
+                "steps": [
+                    {
+                        "kind": "llm",
+                        "prompt": "write the change",
+                        "judgement": "which change the story asks for",
+                        "context": ["README.md"],
+                        "scope": [
+                            {"paths": ["crates/**"], "write": "allowed"},
+                            {"paths": ["**"], "write": "denied"}
+                        ]
+                    },
+                    {
+                        "kind": "command",
+                        "run": ["cargo", "test"],
+                        "depends_on": "registry",
+                        "circuit_breaker": 2,
+                        "evidence": {
+                            "kind": "test_result",
+                            "suite": "unit",
+                            "verifier": "test-runner",
+                            "record": "target/result.json"
+                        }
+                    },
+                    {"kind": "operator", "prompt": "approve the specification"}
+                ]
+            }
+        }
+    })
+}
+
+/// The `driver-steps` schema refuses every blank, empty or zero value the loader refuses, so an
+/// editor never shows as valid a map the load refuses.
+///
+/// One case per field `map.rs` refuses with `empty_declaration` that a schema keyword can
+/// express. Not here: a `run` of only blank words (the loader refuses it, and no keyword the
+/// schema derive offers says "at least one item is not blank"), a map with no states, and a glob
+/// in `context` (the loader's refusal is about globs, not emptiness).
+#[test]
+fn the_step_map_schema_refuses_every_blank_value_the_loader_refuses() {
+    let schema = validator("driver-steps.schema.json");
+    let sound = sound_step_map();
+    let text = serde_json::to_string(&sound).expect("serialises");
+    aep_schema::parse::step_map(&text, None)
+        .unwrap_or_else(|error| panic!("the sound map loads: {error}"));
+    let problems: Vec<String> = schema
+        .iter_errors(&sound)
+        .map(|error| format!("{}: {error}", error.instance_path()))
+        .collect();
+    assert!(
+        problems.is_empty(),
+        "the schema accepts the sound map: {problems:?}"
+    );
+
+    let blank = Value::from("  ");
+    let cases: [(&str, &str, Value); 12] = [
+        (
+            "llm judgement",
+            "/states/implement/steps/0/judgement",
+            blank.clone(),
+        ),
+        (
+            "llm prompt",
+            "/states/implement/steps/0/prompt",
+            blank.clone(),
+        ),
+        (
+            "llm context entry",
+            "/states/implement/steps/0/context/0",
+            blank.clone(),
+        ),
+        (
+            "scope path",
+            "/states/implement/steps/0/scope/0/paths/0",
+            blank.clone(),
+        ),
+        (
+            "scope paths",
+            "/states/implement/steps/0/scope/0/paths",
+            serde_json::json!([]),
+        ),
+        (
+            "command run",
+            "/states/implement/steps/1/run",
+            serde_json::json!([]),
+        ),
+        (
+            "depends_on",
+            "/states/implement/steps/1/depends_on",
+            blank.clone(),
+        ),
+        (
+            "circuit_breaker",
+            "/states/implement/steps/1/circuit_breaker",
+            0.into(),
+        ),
+        (
+            "evidence record",
+            "/states/implement/steps/1/evidence/record",
+            blank.clone(),
+        ),
+        (
+            "operator prompt",
+            "/states/implement/steps/2/prompt",
+            blank.clone(),
+        ),
+        ("visit_budget", "/states/implement/visit_budget", 0.into()),
+        (
+            "empty judgement",
+            "/states/implement/steps/0/judgement",
+            Value::from(""),
+        ),
+    ];
+    for (name, pointer, value) in cases {
+        let mut document = sound.clone();
+        *document
+            .pointer_mut(pointer)
+            .unwrap_or_else(|| panic!("{pointer} is in the sound map")) = value;
+        let text = serde_json::to_string(&document).expect("serialises");
+        assert!(
+            aep_schema::parse::step_map(&text, None).is_err(),
+            "the loader refuses a {name} that is blank, empty or zero"
+        );
+        assert!(
+            !schema.is_valid(&document),
+            "the published schema accepts a {name} the loader refuses"
+        );
+    }
+}

@@ -101,13 +101,16 @@ entities:
           How many `llm` steps the map declares, over every state (map.rs
           `StepMap::llm_steps_declared`).
       # change (story:llm-step-declares-judgement): new in the cursor
-      # (`DriverCursor::llm_steps_run`, written by run.rs `sync_llm_counts`).
+      # (`DriverCursor::llm_steps_run`, counted by run.rs `Session::begin_attempt` and filled in
+      # for an older cursor by `sync_llm_counts`).
       - name: llm_steps_run
         type: Integer
         summary: >-
           How many `llm` step attempts the run has begun, over its whole life, resumes included:
-          the sum of the cursor's `attempts` at every `llm` step of the map. A step retried once
-          is two, as `steps run` counts it.
+          one per `aep.drive.RunLlmStep`. A step retried once is two, as `steps run` counts it,
+          and an unresolved attempt retried with `--retry-in-flight` is a second attempt although
+          it keeps its attempt number. A cursor written before the count existed starts from the
+          sum of its `attempts` at every `llm` step of the map.
     lifecycle:
       # The run's status (running, completed, blocked, …) is not modelled here.
       initial: Started
@@ -250,7 +253,7 @@ commands:
             llm_steps_declared: input.llm_steps_declared
 
   # The driver beginning one attempt at an `llm` step (run.rs `Session::begin_attempt`, which
-  # persists the cursor before the model is called).
+  # persists the cursor before the model is called), a `--retry-in-flight` retry included.
   - name: aep.drive.RunLlmStep
     naming:
       wire: drive-llm-step-begin

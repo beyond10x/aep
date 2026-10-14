@@ -219,6 +219,7 @@ pub struct RawStepMap {
 pub struct RawStateSteps {
     /// How many times this state may be entered before the run stops.
     #[serde(default)]
+    #[schemars(range(min = 1))]
     pub visit_budget: Option<u32>,
     /// The steps, in the order the author wants them run.
     #[serde(default)]
@@ -265,6 +266,7 @@ pub enum WriteScope {
 #[serde(deny_unknown_fields)]
 pub struct RawScopeRule {
     /// The paths this rule is about, as globs relative to the working tree.
+    #[schemars(length(min = 1), inner(regex(pattern = r"\S")))]
     pub paths: Vec<String>,
     /// What writing is allowed on them.
     pub write: WriteScope,
@@ -409,6 +411,7 @@ fn validated_scope(
 #[serde(deny_unknown_fields)]
 pub struct RawCommandStep {
     /// The program and its arguments.
+    #[schemars(length(min = 1))]
     pub run: Vec<String>,
     /// What this step is for, in one line.
     #[serde(default)]
@@ -421,9 +424,11 @@ pub struct RawCommandStep {
     pub retries: Option<u32>,
     /// The outside thing this step needs, if it needs one.
     #[serde(default)]
+    #[schemars(regex(pattern = r"\S"))]
     pub depends_on: Option<String>,
     /// After how many failures of `depends_on` to stop attempting it in this run.
     #[serde(default)]
+    #[schemars(range(min = 1))]
     pub circuit_breaker: Option<u32>,
 }
 
@@ -434,6 +439,7 @@ pub struct RawCommandStep {
 #[serde(deny_unknown_fields)]
 pub struct RawLlmStep {
     /// What the model is asked to do.
+    #[schemars(regex(pattern = r"\S"))]
     pub prompt: String,
     /// Files the run is given before it starts, instead of discovering them.
     ///
@@ -445,6 +451,7 @@ pub struct RawLlmStep {
     /// paid for on every turn rather than once. It is still usually a saving, because what it
     /// replaces — a discovery read — is a call, a turn, *and* a result that joins the same replay.
     #[serde(default)]
+    #[schemars(inner(regex(pattern = r"\S")))]
     pub context: Vec<String>,
     /// Where this step may write, in order. First match wins.
     #[serde(default)]
@@ -465,7 +472,7 @@ pub struct RawLlmStep {
     /// document as a deserialization error would. The published schema requires it.
     // No `#[serde(default)]`: serde reads an absent `Option` as `None` without it, and with it
     // schemars would not mark the key required.
-    #[schemars(required, length(min = 1))]
+    #[schemars(required, regex(pattern = r"\S"))]
     pub judgement: Option<String>,
 }
 
@@ -474,6 +481,7 @@ pub struct RawLlmStep {
 #[serde(deny_unknown_fields)]
 pub struct RawOperatorStep {
     /// What the person is being asked for.
+    #[schemars(regex(pattern = r"\S"))]
     pub prompt: String,
     /// What this step is for, in one line.
     #[serde(default)]
@@ -499,6 +507,7 @@ pub struct RawEvidenceMapping {
     pub tool: Option<ToolRef>,
     /// Where the program writes the evidence record, when it writes one itself.
     #[serde(default)]
+    #[schemars(regex(pattern = r"\S"))]
     pub record: Option<String>,
 }
 
@@ -1224,18 +1233,23 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
             usable.then_some(Step::Command(step))
         }
         RawStep::Llm(step) => {
-            if step.prompt.trim().is_empty() {
+            // Every field is checked before any refusal returns, so a blank prompt and a missing
+            // judgement are reported together (invariant *Validation accumulates*).
+            let prompted = !step.prompt.trim().is_empty();
+            if !prompted {
                 errors.push(ValidationError::new(
                     ValidationCode::EmptyDeclaration,
                     format!("{location}.prompt"),
                     "an llm step with an empty prompt asks for nothing",
                 ));
-                return None;
             }
             let judgement = validated_judgement(step.judgement.as_deref(), location, errors);
             let context = validated_context(&step.context, location, errors);
             let scope = validated_scope(&step.scope, location, errors)?;
             let judgement = judgement?;
+            if !prompted {
+                return None;
+            }
             Some(Step::Llm(LlmStep {
                 prompt: step.prompt,
                 context,
@@ -1396,7 +1410,7 @@ mod tests {
             {"kind":"command","run":[]},
             {"kind":"command","run":["x"],"evidence":{"kind":"metric_observation","verifier":"compiler"}},
             {"kind":"command","run":["x"],"evidence":{"kind":"test_result","verifier":"test-runner"}},
-            {"kind":"llm","prompt":"  "}]}}"#;
+            {"kind":"llm","prompt":"  ","judgement":"which change"}]}}"#;
         let errors = read(&map_json("adp/default/1", states)).expect_err("refused");
         assert_eq!(
             errors.len(),
