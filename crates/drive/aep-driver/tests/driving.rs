@@ -1715,3 +1715,264 @@ fn an_llm_attempt_retried_in_flight_after_a_crash_counts_as_a_second_run() {
         "the llm step's model ran twice, once before the crash and once on the retry"
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// Run inputs, kept output and an explained verdict (story:command-step-expects-failure)
+// ---------------------------------------------------------------------------------------------
+
+/// A harness that does what each step it is handed says, and remembers what it was handed.
+///
+/// [`Fake`] is scripted and ignores the step; this one reads it, because what is under test is
+/// what the driver hands an executor: a command's words with its inputs filled in, and an `llm`
+/// step's context resolved to files that exist.
+#[derive(Debug, Default)]
+struct Reader {
+    /// Each command step's words, as handed.
+    commands: Vec<Vec<String>>,
+    /// Each `llm` step's context entries as handed, with the content of each one that was a file.
+    contexts: Vec<Vec<(String, Option<String>)>>,
+    /// The reason a `diff` step's verdict is given with, when it is given one.
+    explain: Option<&'static str>,
+}
+
+impl CommandStepExecutor for Reader {
+    fn run_command(&mut self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome {
+        self.commands.push(step.run.clone());
+        // An `output:` is kept where the step map says it is, as `aep-cli`'s executor keeps it.
+        if let Some(output) = &step.output {
+            std::fs::write(
+                context.run_directory.join(output),
+                format!("collected by {}\n", step.run.join(" ")),
+            )
+            .expect("the run directory is writable");
+        }
+        let verifier = |verifier| Producer::Verifier { verifier };
+        let submission = match step.evidence.as_ref().map(|mapping| mapping.kind) {
+            Some(aep_domain::evidence::EvidenceKind::Diff) => EvidenceSubmission::new(
+                Evidence::Diff(ChangeSet {
+                    files_changed: 1,
+                    lines_added: 1,
+                    lines_removed: 0,
+                    revision_before: None,
+                    revision_after: None,
+                    paths: vec!["src/lib.rs".to_owned()],
+                }),
+                verifier(Verifier::Compiler),
+                ObservedAt::new(Timestamp::EPOCH),
+            ),
+            Some(_) => EvidenceSubmission::new(
+                Evidence::TestResult(TestResult::passing(TestSuite::Unit, 1)),
+                verifier(Verifier::TestRunner),
+                ObservedAt::new(Timestamp::EPOCH),
+            ),
+            None => return StepOutcome::Nothing,
+        };
+        match (self.explain, &submission.evidence) {
+            (Some(reason), Evidence::Diff(_)) => StepOutcome::Explained {
+                submission: Box::new(submission),
+                reason: reason.to_owned(),
+            },
+            _ => StepOutcome::Observed(Box::new(submission)),
+        }
+    }
+}
+
+impl LlmStepExecutor for Reader {
+    fn run_llm(
+        &mut self,
+        step: &LlmStep,
+        _: &StepContext<'_>,
+        _: StepAuthorizer<'_>,
+    ) -> StepOutcome {
+        self.contexts.push(
+            step.context
+                .iter()
+                .map(|entry| (entry.clone(), std::fs::read_to_string(entry).ok()))
+                .collect(),
+        );
+        StepOutcome::Nothing
+    }
+}
+
+impl OperatorStepExecutor for Reader {
+    fn run_operator(&mut self, _: &OperatorStep, _: &StepContext<'_>) -> StepOutcome {
+        StepOutcome::Paused {
+            reason: "a person is owed a question".to_owned(),
+        }
+    }
+}
+
+/// A command keeps what it printed, a later `llm` step's context names it with an input beside
+/// it, and a suite ends the run.
+const INPUT_MAP: &str = r"
+format: aep.driver-steps/1
+id: test/inputs
+workflow: test/linear/1
+states:
+  implement:
+    steps:
+      - kind: command
+        run: [git, log, '{input.since}..HEAD']
+        output: collected.txt
+      - kind: llm
+        prompt: write the change the log asks for
+        judgement: what the change should say is authorship, which no command performs
+        context: ['{run_directory}/collected.txt', '{input.notes}']
+      - kind: command
+        run: [git, diff]
+        evidence:
+          kind: diff
+          verifier: compiler
+  verify:
+    steps:
+      - kind: command
+        run: [cargo, test]
+        evidence:
+          kind: test_result
+          verifier: test-runner
+          suite: unit
+";
+
+/// The two inputs [`INPUT_MAP`] names.
+fn inputs(notes: &Path) -> std::collections::BTreeMap<String, String> {
+    [
+        ("since".to_owned(), "v0.72.0".to_owned()),
+        ("notes".to_owned(), notes.display().to_string()),
+    ]
+    .into()
+}
+
+/// story:command-step-expects-failure, acceptance 5: a placeholder naming an input the run was
+/// not given stops the run before any step, naming it — and with nothing persisted, so there is
+/// no half-started run to resume.
+#[test]
+fn a_placeholder_naming_an_input_the_run_was_not_given_is_refused_before_any_step() {
+    let root = scratch("input-missing");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(INPUT_MAP);
+    let run = run_directory(&root);
+    let mut reader = Reader::default();
+    let given = [("since".to_owned(), "v0.72.0".to_owned())].into();
+
+    let refused = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut reader,
+        &DriverOptions {
+            inputs: given,
+            ..DriverOptions::default()
+        },
+    )
+    .expect_err("the run was not given `notes`");
+
+    let DriveError::Validation(errors) = &refused else {
+        panic!("a missing input is a refusal of the map against the run: {refused}");
+    };
+    assert_eq!(errors.len(), 1, "{errors}");
+    let refusal = &errors.as_slice()[0];
+    assert_eq!(
+        refusal.code,
+        aep_domain::error::ValidationCode::UndeclaredReference
+    );
+    assert!(
+        refusal.to_string().contains("{input.notes}"),
+        "the refusal names the placeholder: {refusal}"
+    );
+    assert!(
+        reader.commands.is_empty() && reader.contexts.is_empty(),
+        "no step ran: {reader:?}"
+    );
+    assert!(!run.has_cursor(), "nothing was persisted");
+}
+
+/// story:command-step-expects-failure, acceptances 4 and 6: `{input.<name>}` is filled in before
+/// the executor sees a command, and a later `llm` step whose context names
+/// `{run_directory}/<file>` is handed the file an earlier command step kept there.
+#[test]
+fn a_later_llm_step_is_handed_the_output_an_earlier_command_step_kept() {
+    let root = scratch("kept-output");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(INPUT_MAP);
+    let run = run_directory(&root);
+    let notes = root.join("notes.md");
+    std::fs::write(&notes, "release notes\n").expect("the notes are writable");
+    let mut reader = Reader::default();
+
+    let report = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut reader,
+        &DriverOptions {
+            inputs: inputs(&notes),
+            ..DriverOptions::default()
+        },
+    )
+    .expect("the run finishes");
+
+    assert_eq!(report.status(), RunStatus::Completed, "{:?}", report.notes);
+    assert_eq!(
+        reader.commands[0],
+        ["git", "log", "v0.72.0..HEAD"],
+        "the input is filled in where the word names it"
+    );
+    let collected = run.path().join("collected.txt");
+    assert_eq!(
+        reader.contexts,
+        [vec![
+            (
+                collected.display().to_string(),
+                Some("collected by git log v0.72.0..HEAD\n".to_owned())
+            ),
+            (
+                notes.display().to_string(),
+                Some("release notes\n".to_owned())
+            ),
+        ]],
+        "the llm step is handed what the command step kept, and the input's file"
+    );
+}
+
+/// An explained verdict is submitted like any other, and its reason is in the run's report.
+#[test]
+fn an_explained_verdict_is_submitted_and_its_reason_is_in_the_report() {
+    let root = scratch("explained");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(MAP);
+    let run = run_directory(&root);
+    let mut reader = Reader {
+        explain: Some("nothing reproduced"),
+        ..Reader::default()
+    };
+
+    let report = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut reader,
+        &DriverOptions::default(),
+    )
+    .expect("the run finishes");
+
+    assert_eq!(report.status(), RunStatus::Completed, "{:?}", report.notes);
+    assert_eq!(report.evidence_submitted, 2, "the diff and the suite");
+    assert!(
+        report
+            .notes
+            .iter()
+            .any(|note| note.contains("step 1 of `implement`")
+                && note.ends_with("nothing reproduced")),
+        "the reason travels with the verdict: {:?}",
+        report.notes
+    );
+}

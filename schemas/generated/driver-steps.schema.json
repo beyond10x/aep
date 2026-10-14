@@ -126,6 +126,25 @@
         "ess_conformance_result"
       ]
     },
+    "Expect": {
+      "description": "Which exit status of a `command` step is the passing verdict.\n\n`failure` is how a bug fix names its reproducing command: the command is expected to fail before the fix, so a nonzero exit is what *reproduced* means, and an exit of zero is a failing verdict whose reason is [`NOTHING_REPRODUCED`]. A process that did not finish is still no verdict at all, whatever the step expects.",
+      "oneOf": [
+        {
+          "description": "Exit `0` is the pass, as every step before the key existed read it.",
+          "type": "string",
+          "enum": [
+            "success"
+          ]
+        },
+        {
+          "description": "Any exit but `0` is the pass; exit `0` reproduced nothing.",
+          "type": "string",
+          "enum": [
+            "failure"
+          ]
+        }
+      ]
+    },
     "PinnedWorkflowRef": {
       "description": "Reference to a workflow at a major version, such as `adp/default/1`. The version is mandatory: a step map is an instruction sheet for one state graph.",
       "type": "string",
@@ -305,11 +324,32 @@
                 }
               ]
             },
+            "expect": {
+              "description": "Which exit status is the passing verdict. `success` when the document is silent.",
+              "default": null,
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/Expect"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "kind": {
               "type": "string",
               "enum": [
                 "command"
               ]
+            },
+            "output": {
+              "description": "A file name in the run directory the program's standard output is written to.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[^./\\\\][^/\\\\]*$"
             },
             "retries": {
               "description": "How many times to retry a step that could not run at all.",

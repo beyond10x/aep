@@ -21,6 +21,13 @@
       "description": "How many `llm` step attempts the run has begun, over its whole life, resumes included: one per `aep.drive.RunLlmStep`. A step retried once is two, as `steps run` counts it, and an unresolved attempt retried with `--retry-in-flight` is a second attempt although it keeps its attempt number. A cursor written before the count existed starts from the sum of its `attempts` at every `llm` step of the map.",
       "type": "integer"
     },
+    "inputs": {
+      "description": "The `--input <name>=<value>` pairs the run was started with, by name; a resume reads them back rather than taking new ones.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.RunInput"
+      }
+    },
     "state": {
       "$ref": "#/$defs/aep.drive.Run.State"
     }
@@ -30,17 +37,24 @@
     "map",
     "llm_steps_declared",
     "llm_steps_run",
+    "inputs",
     "state"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "50fc07b65a27cec5bb80f858be2ffb20fb9c0870a2c7eff9235d4a5adb765080",
-    "contract_digest": "slice-sha256/2:355ca22f5ad9a051dcd9b1bcdcc5c4acf2ea1547fd9870ce5aa56a9e0bcf3311",
+    "source_digest": "0539881fefdd7bdf8e28e371b4e21f100ada517473869f290eb6fefcf2bb135b",
+    "contract_digest": "slice-sha256/2:a77938a273900387b491c59b6152b8d6aecac6720d30b284eb00bcf7769bf710",
     "regenerate": "ess generate"
   },
   "$defs": {
+    "aep.drive.InputName": {
+      "title": "InputName",
+      "x-ess-name": "aep.drive.InputName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
     "aep.drive.Run.State": {
       "title": "State",
       "x-ess-name": "aep.drive.Run.State",
@@ -55,6 +69,25 @@
       "x-ess-name": "aep.drive.RunId",
       "x-ess-kind": "newtype",
       "type": "string"
+    },
+    "aep.drive.RunInput": {
+      "title": "RunInput",
+      "x-ess-name": "aep.drive.RunInput",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/aep.drive.InputName"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "additionalProperties": false
     },
     "aep.drive.StepMapId": {
       "title": "StepMapId",

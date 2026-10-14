@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ExpectationReadsRecord payload",
+  "description": "A `command` step with `expect: failure` whose evidence names `record:`. The verdict is then the document the verifier wrote and no exit status is read, so there is nothing to invert. The refusal's code is `unsupported_construct` at `<step>.expect` (map.rs `validate_step`).",
+  "x-ess-name": "aep.drive.ExpectationReadsRecord",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0539881fefdd7bdf8e28e371b4e21f100ada517473869f290eb6fefcf2bb135b",
+    "contract_digest": "slice-sha256/2:83d6590be2780505415728e96118a2b5282443752d1ce7dccac628f1153acf65",
+    "regenerate": "ess generate"
+  }
+}

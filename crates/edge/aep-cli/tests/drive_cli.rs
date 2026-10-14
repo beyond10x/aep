@@ -2498,3 +2498,89 @@ fn adversary_a_run_directory_that_was_removed_is_not_handed_out_to_a_second_run(
          names it is ambiguous:\n{text}"
     );
 }
+
+// ------------------------------------------------------------------------------------------------
+// story:command-step-expects-failure: `--input`, `expect: failure` and `output:`
+// ------------------------------------------------------------------------------------------------
+
+/// The fixture map with its red suite turned into a reproduction: the command's exit status is a
+/// run input, and the step expects it to fail.
+fn reproducing_map() -> String {
+    step_map(false).replace(
+        "\x20     - kind: command\n\
+         \x20       description: the red suite\n\
+         \x20       run: [sh, -c, \"exit 1\"]\n",
+        "\x20     - kind: command\n\
+         \x20       description: the reproduction\n\
+         \x20       run: [sh, -c, \"echo reproducing; exit {input.code}\"]\n\
+         \x20       expect: failure\n\
+         \x20       output: reproduction.txt\n",
+    )
+}
+
+/// story:command-step-expects-failure, acceptance 5, at the command line: a run that names an
+/// input it was not given is refused before a lock is taken or a run id allocated, naming it.
+#[test]
+fn a_run_naming_an_input_it_was_not_given_is_refused_before_a_run_is_allocated() {
+    let fixture = Fixture::new("input-missing", false);
+    let map = reproducing_map();
+    assert!(
+        map.contains("{input.code}"),
+        "the fixture names the input:\n{map}"
+    );
+    write(&fixture.directory.join("steps.yaml"), &map);
+
+    let output = fixture.drive(&["run"], &[]);
+    let text = said(&output);
+    assert_eq!(code(&output), 1, "{text}");
+    assert!(
+        text.contains("{input.code}"),
+        "the refusal names it:\n{text}"
+    );
+    assert!(
+        text.contains("--input code=<value>"),
+        "and says how to give it:\n{text}"
+    );
+    assert!(
+        !fixture.runs().join("DRIVE-1").exists() && !fixture.lock().exists(),
+        "no run was allocated and no lock taken"
+    );
+}
+
+/// story:command-step-expects-failure, acceptances 1, 2, 4 and 6, through the binary: the input
+/// fills the command line, the step's output is kept, the launch record remembers the input, and
+/// an exit of `0` from a step expecting failure is reported as nothing reproduced.
+#[test]
+fn an_input_fills_the_command_and_an_expected_failure_is_read_inverted() {
+    let reproduced = Fixture::new("input-reproduced", false);
+    write(&reproduced.directory.join("steps.yaml"), &reproducing_map());
+    let output = reproduced.drive(&["run"], &["--input", "code=1"]);
+    let text = said(&output);
+    assert!(
+        text.contains("establish_verifiers -> implement"),
+        "a reproduced failure is passing evidence, and the run walks on:\n{text}"
+    );
+    assert!(!text.contains("nothing reproduced"), "{text}");
+    let run = reproduced.runs().join("DRIVE-1").join("1");
+    assert_eq!(
+        std::fs::read_to_string(run.join("reproduction.txt")).expect("the output is kept"),
+        "reproducing\n"
+    );
+    let launch: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(run.join("launch.json")).expect("a launch record"),
+    )
+    .expect("the launch record is JSON");
+    assert_eq!(
+        launch["inputs"]["code"], "1",
+        "a resume reads it back: {launch}"
+    );
+
+    let nothing = Fixture::new("input-nothing-reproduced", false);
+    write(&nothing.directory.join("steps.yaml"), &reproducing_map());
+    let output = nothing.drive(&["run"], &["--input", "code=0"]);
+    let text = said(&output);
+    assert!(
+        text.contains("exited 0, and the step expects it to fail: nothing reproduced"),
+        "the failing verdict says why:\n{text}"
+    );
+}

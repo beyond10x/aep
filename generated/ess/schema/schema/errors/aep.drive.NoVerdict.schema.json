@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "NoVerdict payload",
+  "description": "The command was killed by a signal and has no exit status. Whatever the step expects, a process that did not finish observed nothing, and nothing is submitted (D5's `Unknown`; drive.rs `run_command`).",
+  "x-ess-name": "aep.drive.NoVerdict",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "0539881fefdd7bdf8e28e371b4e21f100ada517473869f290eb6fefcf2bb135b",
+    "contract_digest": "slice-sha256/2:b6b9480db1ec1e54b205c8698681ad9c9e00b4d3527a883993f6106e6e19e338",
+    "regenerate": "ess generate"
+  }
+}
