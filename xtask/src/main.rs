@@ -535,11 +535,13 @@ fn tag_is_on_main(root: &Path, commit: &str) -> (bool, String) {
     }
 }
 
-/// Whether the planning store holds a `test_result` naming `commit`, in full or abbreviated.
-fn release_recorded(root: &Path, commit: &str) -> bool {
-    let short = &commit[..commit.len().min(7)];
-    planning_records(root).iter().any(|line| {
-        line.contains("\"test_result\"") && (line.contains(commit) || line.contains(short))
+/// Whether the planning store holds the release record of `version` at `commit`
+/// (`release_cut::is_release_record`). Any other `test_result` that mentions the commit, such as
+/// a story's gate record on the release branch head, does not count.
+fn release_recorded(root: &Path, version: &str, commit: &str) -> bool {
+    planning_records(root).iter().any(|text| {
+        serde_json::from_str::<serde_json::Value>(text)
+            .is_ok_and(|record| release_cut::is_release_record(&record, version, commit))
     })
 }
 
@@ -570,7 +572,7 @@ fn release_check(root: &Path) -> Result<()> {
         .output()
         .is_ok_and(|output| output.status.success());
     let short = &commit[..commit.len().min(7)];
-    let gated = release_recorded(root, &commit);
+    let gated = release_recorded(root, &tag, &commit);
 
     let (on_main, main_detail) = tag_is_on_main(root, &commit);
 
@@ -597,7 +599,7 @@ fn release_check(root: &Path) -> Result<()> {
             format!("gh release view {tag}"),
         ),
         (
-            "planning store holds a test_result naming the tag's commit",
+            "planning store holds the release record of the tag's commit",
             gated,
             format!("planning store, commit {short}"),
         ),

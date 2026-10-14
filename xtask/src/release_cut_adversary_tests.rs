@@ -89,7 +89,7 @@ fn files(root: &Path) -> String {
 // prepare: version comparison
 
 /// `prepare 1.0.01` is (1, 0, 1) to `parse_version`, so it passes as above `1.0.0` and is written
-/// into the manifest; Cargo refuses a leading zero in a SemVer number, so the release commit does
+/// into the manifest; Cargo refuses a leading zero in a `SemVer` number, so the release commit does
 /// not build and the tag that follows is not a version anything else reads as `1.0.1`.
 #[test]
 fn prepare_refuses_a_version_with_a_leading_zero() {
