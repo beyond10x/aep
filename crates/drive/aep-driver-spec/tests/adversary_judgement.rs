@@ -9,7 +9,7 @@ use aep_driver_spec::map::{RawStepMap, StepMap};
 
 fn load(states: &str) -> Result<StepMap, ValidationErrors> {
     let raw: RawStepMap = serde_json::from_str(&format!(
-        r#"{{"format":"aep.driver-steps/1","id":"development/default",
+        r#"{{"format":"aep.driver-steps/2","id":"development/default",
             "workflow":"adp/default/1","states":{states}}}"#
     ))
     .expect("the fixture deserializes");

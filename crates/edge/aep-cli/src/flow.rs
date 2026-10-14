@@ -1164,16 +1164,22 @@ root:
     fn both_shipped_maps_validate_and_say_why_each_llm_step_needs_a_model() {
         for name in ["default.yaml", "checks.yaml"] {
             let map = shipped(name);
-            let judgements: Vec<&str> = map
+            // Release 0.72.1: the rule binds a map that adopts it, and the shipped maps do.
+            assert_eq!(map.format(), "aep.driver-steps/2", "{name} adopts the rule");
+            let judgements: Vec<Option<&str>> = map
                 .states
                 .values()
                 .flat_map(|entry| entry.steps.iter())
                 .filter_map(|step| match step {
-                    Step::Llm(llm) => Some(llm.judgement.as_str()),
+                    Step::Llm(llm) => Some(llm.judgement.as_deref()),
                     _ => None,
                 })
                 .collect();
             assert_eq!(judgements.len(), 6, "{name} has six llm steps");
+            let judgements: Vec<&str> = judgements
+                .into_iter()
+                .map(|line| line.unwrap_or_else(|| panic!("{name}: an llm step has no judgement")))
+                .collect();
             assert_eq!(map.llm_steps_declared(), 6, "{name}");
             assert!(
                 judgements.iter().all(|line| !line.trim().is_empty()),

@@ -88,6 +88,16 @@
       "x-ess-kind": "enum",
       "x-ess-name": "aep.drive.StepKind"
     },
+    "aep.drive.StepMapFormat": {
+      "enum": [
+        "v1",
+        "v2"
+      ],
+      "title": "StepMapFormat",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.StepMapFormat"
+    },
     "aep.drive.StepMapId": {
       "title": "StepMapId",
       "type": "string",
@@ -520,8 +530,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:15ecf8908705898d79448b48b97e1fbdd0d72affcc99f3d2b1f3d9900df96ea9",
-    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:30d36c601ecf71ac393d46129e01929f5444edf6f85082dcb26525f71bea4a05",
+    "source_digest": "50fc07b65a27cec5bb80f858be2ffb20fb9c0870a2c7eff9235d4a5adb765080",
     "specification_version": "v1",
     "system": "aep"
   }

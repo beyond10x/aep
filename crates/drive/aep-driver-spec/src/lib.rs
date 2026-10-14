@@ -7,7 +7,7 @@
 //! run leaves behind and the harness-neutral description of what a model may hold while it runs.
 //!
 //! ```yaml
-//! format: aep.driver-steps/1
+//! format: aep.driver-steps/2
 //! id: development/default
 //! workflow: adp/default/1
 //! states:
@@ -69,9 +69,17 @@ pub mod map;
 pub mod pin;
 pub mod tool;
 
-/// The step-map format version this build reads.
+/// The step-map format version new maps are written in, and the newest this build reads.
 ///
-/// A document declaring anything else is refused rather than guessed at: a step map that a newer
-/// driver wrote may name step kinds this one cannot execute, and executing the ones it recognises
-/// would be a run that silently skipped the rest.
-pub const STEP_MAP_FORMAT: &str = "aep.driver-steps/1";
+/// `aep.driver-steps/2` adopts the judgement rule: every `llm` step says what it decides that no
+/// command could. This build also reads [`STEP_MAP_FORMAT_V1`]; a document declaring anything else
+/// is refused rather than guessed at: a step map that a newer driver wrote may name step kinds this
+/// one cannot execute, and executing the ones it recognises would be a run that silently skipped
+/// the rest.
+pub const STEP_MAP_FORMAT: &str = "aep.driver-steps/2";
+
+/// The step-map format version every protocol tree before 0.72.0 ships.
+///
+/// Still read, as it was before the judgement rule existed: a store pins its protocol tree to an
+/// immutable revision, so a rule applied to `/1` would refuse maps that can never gain the key.
+pub const STEP_MAP_FORMAT_V1: &str = "aep.driver-steps/1";

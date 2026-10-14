@@ -32,7 +32,7 @@
 # `--map` says which one. That refusal names both ids (`crates/edge/aep-cli/src/drive.rs:376-388`)
 # and is the same position `aep plan artifact move` takes on an illegal transition: the driver does
 # not guess which document the run is under.
-format: aep.driver-steps/1
+format: aep.driver-steps/2
 id: development/default
 # Pinned, and the pin is mandatory. A step map names states and orders steps inside them, so an
 # unpinned one is an instruction sheet for whatever happens to be in the tree. The refusal this
