@@ -2,11 +2,15 @@
 format: aep.planning-md/3
 id: story:release-cutting-commands
 kind: story
-status: draft
+status: active
 title: The release steps are commands
 relations:
 - decomposes: epic:deterministic-delivery-workflows
-revision: 2
+- serves: vision:O2
+revision: 4
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-14T07:23:46Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-10-14T07:23:47Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 # Story: The release steps are commands
 
