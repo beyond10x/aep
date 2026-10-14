@@ -9,7 +9,7 @@ relations:
 - depends_on: story:task-spend-is-modelled
 - depends_on: story:llm-step-declares-judgement
 - depends_on: story:concurrent-command-steps
-revision: 3
+revision: 4
 ---
 # Story: Evidence records a task's model calls, tokens and cost
 
@@ -61,3 +61,11 @@ Inferred:
   `story:command-step-expects-failure` and `story:llm-step-declares-judgement`.
 - `story:llm-step-declares-judgement`: it also regenerates `schemas/generated/driver-steps.schema.json`,
   and that story produces the per-run llm step counts.
+
+## Open question
+
+The spend record of `story:task-spend-is-modelled` (`ess/domains/evidence.yaml`, `SpendRecord`)
+holds the five split token figures only. An `eval.run-manifest/1` states one total, `tokens`, so the
+fixture line above has no field to land in. Decide before building: add a total-tokens figure to
+the record (a specification change first), or record a manifest's total as unknown split figures
+and drop that part of the line.
