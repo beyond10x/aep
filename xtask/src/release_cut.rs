@@ -103,7 +103,7 @@ impl Forge for GhForge {
                 "--limit",
                 "20",
                 "--json",
-                "databaseId,url,conclusion,headSha",
+                "databaseId,url,conclusion,headSha,headBranch",
             ])
             .current_dir(root)
             .output()
@@ -116,27 +116,44 @@ impl Forge for GhForge {
         }
         let runs: serde_json::Value =
             serde_json::from_slice(&output.stdout).context("reading gh run list's JSON")?;
-        let runs: Vec<ReleaseRun> = runs
-            .as_array()
-            .context("gh run list printed something other than a JSON array")?
-            .iter()
-            .filter(|run| run["headSha"].as_str() == Some(commit))
-            .filter_map(|run| {
-                Some(ReleaseRun {
-                    id: run["databaseId"].as_u64()?,
-                    url: run["url"].as_str()?.to_owned(),
-                    conclusion: run["conclusion"].as_str().unwrap_or_default().to_owned(),
-                })
-            })
-            .collect();
-        // A re-run after a failure is a second run at the same commit; the one that succeeded is
-        // the release.
-        Ok(runs
-            .iter()
-            .find(|run| run.conclusion == "success")
-            .or_else(|| runs.first())
-            .cloned())
+        select_release_run(&runs, tag, commit)
     }
+}
+
+/// The `Release` run for `tag` at `commit`, out of `gh run list --json
+/// databaseId,url,conclusion,headSha,headBranch` (newest first).
+///
+/// Only runs at `commit` on the `tag` ref count. A re-run after a failure is a second run at the
+/// same commit, so any run that succeeded is the release, whatever came before or after it; with
+/// none, the newest is returned so `record` names why it refuses (still running, failure, …).
+///
+/// # Errors
+///
+/// When `runs` is not a JSON array.
+pub(crate) fn select_release_run(
+    runs: &serde_json::Value,
+    tag: &str,
+    commit: &str,
+) -> Result<Option<ReleaseRun>> {
+    let runs: Vec<ReleaseRun> = runs
+        .as_array()
+        .context("gh run list printed something other than a JSON array")?
+        .iter()
+        .filter(|run| run["headSha"].as_str() == Some(commit))
+        .filter(|run| run["headBranch"].as_str() == Some(tag))
+        .filter_map(|run| {
+            Some(ReleaseRun {
+                id: run["databaseId"].as_u64()?,
+                url: run["url"].as_str()?.to_owned(),
+                conclusion: run["conclusion"].as_str().unwrap_or_default().to_owned(),
+            })
+        })
+        .collect();
+    Ok(runs
+        .iter()
+        .find(|run| run.conclusion == "success")
+        .or_else(|| runs.first())
+        .cloned())
 }
 
 /// The `aep` this release is recorded with: `AEP_BIN` when set, else `aep` on the path.
@@ -173,6 +190,25 @@ const RELEASE_WORKFLOW_FILE: &str = "release.yml";
 /// The epic every release is recorded on (`AGENTS.md` § *Releases and commits*, step 7).
 const RELEASE_EPIC: &str = "epic:planning-on-entity-runtime";
 
+/// How a release record's source begins: `release <version>: tag commit <full sha>`.
+fn release_source_prefix(version: &str, commit: &str) -> String {
+    format!("release {version}: tag commit {commit}")
+}
+
+/// Whether one planning record is the release record of `version` at `commit`: a `test_result`
+/// on the release epic whose source begins `release <version>: tag commit <commit>`.
+///
+/// `record` and `cargo xtask release` both decide "recorded" with this, so a gate record that
+/// merely mentions the tag's commit (a story's `task check` on the release branch head) is not
+/// mistaken for the release record.
+pub(crate) fn is_release_record(record: &serde_json::Value, version: &str, commit: &str) -> bool {
+    record["artifact"].as_str() == Some(RELEASE_EPIC)
+        && record["change"]["kind"].as_str() == Some("test_result")
+        && record["change"]["source"]
+            .as_str()
+            .is_some_and(|source| source.starts_with(&release_source_prefix(version, commit)))
+}
+
 impl GitWriter {
     fn run(&self, root: &Path, arguments: &[&str]) -> Result<()> {
         let output = Command::new(&self.program)
@@ -196,16 +232,52 @@ impl GitWriter {
 
 /// A bare `major.minor.patch`, as a comparable triple.
 fn parse_version(version: &str) -> Option<(u64, u64, u64)> {
+    // SemVer numbers are digits with no leading zero; Cargo refuses `1.0.01` in a manifest.
+    let number = |part: Option<&str>| -> Option<u64> {
+        let part = part?;
+        let digits = !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit());
+        if !digits || (part.len() > 1 && part.starts_with('0')) {
+            return None;
+        }
+        part.parse().ok()
+    };
     let mut parts = version.split('.');
     let triple = (
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
-        parts.next()?.parse().ok()?,
+        number(parts.next())?,
+        number(parts.next())?,
+        number(parts.next())?,
     );
-    if parts.next().is_some() || !version.chars().all(|c| c.is_ascii_digit() || c == '.') {
-        return None;
+    parts.next().is_none().then_some(triple)
+}
+
+/// Refuses unless the tag `version` is annotated with the release message `aep <version>`: a
+/// lightweight tag, or one with another message, at the right commit is not the release tag.
+fn require_release_tag_object(root: &Path, version: &str) -> Result<()> {
+    let reference = format!("refs/tags/{version}");
+    let kind = text(&git_at(
+        root,
+        &["cat-file", "-t", &reference],
+        "the release tag must be annotated",
+    )?);
+    let wanted = tag_message(version);
+    if kind != "tag" {
+        bail!(
+            "tag {version} is a lightweight tag, not the annotated `{wanted}` tag; delete it \
+             (`git tag -d {version}`) and run `cargo xtask release tag` again"
+        );
     }
-    Some(triple)
+    let message = text(&git_at(
+        root,
+        &["for-each-ref", "--format=%(contents:subject)", &reference],
+        "the release tag carries the release message",
+    )?);
+    if message != wanted {
+        bail!(
+            "tag {version} is annotated `{message}`, not `{wanted}`; delete it \
+             (`git tag -d {version}`) and run `cargo xtask release tag` again"
+        );
+    }
+    Ok(())
 }
 
 fn is_date(date: &str) -> bool {
@@ -444,6 +516,7 @@ pub(crate) fn tag(root: &Path, writer: &GitWriter) -> Result<()> {
     let head = head(root)?;
     match tag_commit(root, &version) {
         Some(commit) if commit == head => {
+            require_release_tag_object(root, &version)?;
             println!("tag {version} is already at HEAD {head}");
             return Ok(());
         }
@@ -514,6 +587,7 @@ pub(crate) fn pin(root: &Path, writer: &GitWriter, status: &dyn StatusOutput) ->
     status.write(root)?;
     let changed = changed_paths(root)?;
     if changed.is_empty() {
+        require_release_tag_object(root, &version)?;
         println!("the status output for {version} is already committed at {head}");
         return Ok(());
     }
@@ -548,7 +622,7 @@ pub(crate) fn record(root: &Path, forge: &dyn Forge, recorder: &dyn Recorder) ->
     if !on_main {
         bail!("tag {version} (commit {commit}) is not on origin/main: {detail}");
     }
-    if release_recorded(root, &commit) {
+    if release_recorded(root, &version, &commit) {
         println!("release {version} is already recorded for commit {commit}");
         return Ok(());
     }
@@ -576,7 +650,8 @@ pub(crate) fn record(root: &Path, forge: &dyn Forge, recorder: &dyn Recorder) ->
         "test_result",
         "--source",
         &format!(
-            "release {version}: tag commit {commit}, Release run {}; task check exit 0",
+            "{}, Release run {}; task check exit 0",
+            release_source_prefix(&version, &commit),
             run.id
         ),
         "--ref",
@@ -592,6 +667,10 @@ pub(crate) fn record(root: &Path, forge: &dyn Forge, recorder: &dyn Recorder) ->
     );
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "release_cut_adversary_tests.rs"]
+mod adversary_tests;
 
 #[cfg(test)]
 mod tests {
@@ -888,7 +967,9 @@ mod tests {
                 + 1];
             let reference =
                 &arguments[arguments.iter().position(|a| a == "--ref").expect("ref") + 1];
+            // The real CLI names the artifact in every record (`.engineering/evidence/**`).
             let record = serde_json::json!({
+                "artifact": arguments[3],
                 "change": {"change": "evidence", "kind": "test_result", "source": source, "reference": reference}
             });
             fs::write(directory.join("record.json"), record.to_string())?;
@@ -976,6 +1057,191 @@ mod tests {
         let refusal = record(&root, &StubForge(Some(failed)), &aep).expect_err("failed run");
         let text = format!("{refusal:#}");
         assert!(text.contains("failure") && text.contains("42"), "{text}");
+        assert!(aep.0.borrow().is_empty());
+    }
+
+    // tag and pin: only the annotated `aep <version>` tag is the release tag
+
+    #[test]
+    fn tag_refuses_a_lightweight_tag_at_head_naming_why() {
+        let (_scratch, root) = checkout("tag-lightweight");
+        prepared(&root);
+        git(&root, &["tag", "9.9.9"]);
+        let before = snapshot(&root);
+        let refusal = tag(&root, &GitWriter::plain()).expect_err("lightweight");
+        let text = format!("{refusal:#}");
+        assert!(
+            text.contains("lightweight") && text.contains("aep 9.9.9"),
+            "{text}"
+        );
+        assert_eq!(snapshot(&root), before);
+    }
+
+    #[test]
+    fn tag_refuses_an_annotated_tag_at_head_with_another_message() {
+        let (_scratch, root) = checkout("tag-wrong-message");
+        prepared(&root);
+        git(&root, &["tag", "-a", "9.9.9", "-m", "something else"]);
+        let refusal = tag(&root, &GitWriter::plain()).expect_err("wrong message");
+        let text = format!("{refusal:#}");
+        assert!(
+            text.contains("something else") && text.contains("aep 9.9.9"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn pin_does_not_accept_a_lightweight_tag_at_the_pin_commit_as_done() {
+        let (_scratch, root, _commit) = released("pin-lightweight");
+        git(&root, &["tag", "-f", "9.9.9", "HEAD"]);
+        let refusal = pin(&root, &GitWriter::plain(), &NewestTag).expect_err("lightweight");
+        assert!(
+            format!("{refusal:#}").contains("lightweight"),
+            "{refusal:#}"
+        );
+    }
+
+    // record: which planning record is the release record
+
+    fn release_record(artifact: &str, kind: &str, source: &str) -> serde_json::Value {
+        serde_json::json!({
+            "artifact": artifact,
+            "change": {"change": "evidence", "kind": kind, "source": source}
+        })
+    }
+
+    const SHA: &str = "7c0c8c473f66322464aadd7b4ef7459f12f1a80a";
+
+    #[test]
+    fn the_record_record_writes_is_the_release_record() {
+        let source = format!("release 0.71.3: tag commit {SHA}, Release run 1; task check exit 0");
+        let record = release_record(super::RELEASE_EPIC, "test_result", &source);
+        assert!(super::is_release_record(&record, "0.71.3", SHA));
+    }
+
+    #[test]
+    fn a_record_on_another_artifact_or_kind_or_version_is_not_the_release_record() {
+        let source = format!("release 0.71.3: tag commit {SHA}, Release run 1; task check exit 0");
+        for (record, why) in [
+            (
+                release_record("story:some-story", "test_result", &source),
+                "another artifact",
+            ),
+            (
+                release_record(super::RELEASE_EPIC, "review_result", &source),
+                "another kind",
+            ),
+            (
+                release_record(
+                    super::RELEASE_EPIC,
+                    "test_result",
+                    &format!("task check exit 0 at {SHA}"),
+                ),
+                "a source that only mentions the commit",
+            ),
+            (
+                release_record(
+                    super::RELEASE_EPIC,
+                    "test_result",
+                    &format!("release 0.71.3: tag commit {}", &SHA[..7]),
+                ),
+                "an abbreviated commit",
+            ),
+        ] {
+            assert!(!super::is_release_record(&record, "0.71.3", SHA), "{why}");
+        }
+        let record = release_record(super::RELEASE_EPIC, "test_result", &source);
+        assert!(
+            !super::is_release_record(&record, "0.71.4", SHA),
+            "another version"
+        );
+    }
+
+    // the Release run, out of `gh run list`
+
+    fn gh_run(id: u64, sha: &str, branch: &str, conclusion: &str) -> serde_json::Value {
+        serde_json::json!({
+            "databaseId": id,
+            "url": format!("https://github.com/beyond10x/aep/actions/runs/{id}"),
+            "conclusion": conclusion,
+            "headSha": sha,
+            "headBranch": branch,
+        })
+    }
+
+    #[test]
+    fn a_rerun_after_a_failure_selects_the_run_that_succeeded() {
+        let newest_first = serde_json::json!([
+            gh_run(2, SHA, "9.9.9", "success"),
+            gh_run(1, SHA, "9.9.9", "failure"),
+        ]);
+        let run = super::select_release_run(&newest_first, "9.9.9", SHA)
+            .expect("an array")
+            .expect("a run");
+        assert_eq!((run.id, run.conclusion.as_str()), (2, "success"));
+
+        let success_then_failed_rerun = serde_json::json!([
+            gh_run(3, SHA, "9.9.9", "failure"),
+            gh_run(2, SHA, "9.9.9", "success"),
+        ]);
+        let run = super::select_release_run(&success_then_failed_rerun, "9.9.9", SHA)
+            .expect("an array")
+            .expect("a run");
+        assert_eq!(run.id, 2);
+    }
+
+    #[test]
+    fn a_run_for_another_commit_or_another_branch_is_ignored() {
+        let other = "0000000000000000000000000000000000000000";
+        let runs = serde_json::json!([
+            gh_run(5, other, "9.9.9", "success"),
+            gh_run(4, SHA, "main", "success"),
+        ]);
+        assert_eq!(
+            super::select_release_run(&runs, "9.9.9", SHA).expect("an array"),
+            None
+        );
+        let runs = serde_json::json!([
+            gh_run(5, other, "9.9.9", "success"),
+            gh_run(3, SHA, "9.9.9", "failure"),
+        ]);
+        let run = super::select_release_run(&runs, "9.9.9", SHA)
+            .expect("an array")
+            .expect("the run at the commit");
+        assert_eq!((run.id, run.conclusion.as_str()), (3, "failure"));
+    }
+
+    #[test]
+    fn select_release_run_refuses_output_that_is_not_an_array() {
+        let refusal =
+            super::select_release_run(&serde_json::json!({}), "9.9.9", SHA).expect_err("object");
+        assert!(format!("{refusal:#}").contains("JSON array"), "{refusal:#}");
+    }
+
+    /// The forge as `gh run list` printed it, through the same selection `GhForge` makes.
+    struct ListedRuns(serde_json::Value);
+
+    impl Forge for ListedRuns {
+        fn release_run(&self, _root: &Path, tag: &str, commit: &str) -> Result<Option<ReleaseRun>> {
+            super::select_release_run(&self.0, tag, commit)
+        }
+    }
+
+    #[test]
+    fn record_refuses_when_every_release_run_for_the_tag_failed() {
+        let (_scratch, root, commit) = released("record-only-failed");
+        git(&root, &["push", "-q", "origin", "main"]);
+        let runs = serde_json::json!([
+            gh_run(8, &commit, "9.9.9", "failure"),
+            gh_run(7, &commit, "9.9.9", "failure"),
+        ]);
+        let aep = StubAep::default();
+        let refusal = record(&root, &ListedRuns(runs), &aep).expect_err("only failures");
+        let text = format!("{refusal:#}");
+        assert!(
+            text.contains("failure") && text.contains("runs/8"),
+            "{text}"
+        );
         assert!(aep.0.borrow().is_empty());
     }
 }
