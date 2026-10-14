@@ -1,9 +1,11 @@
 domain: aep.drive
 
 summary: >-
-  The steps of an `aep.driver-steps/1` step map as the map loader admits them: each step's kind,
-  and the `judgement:` line every `llm` step carries to say what no command could decide, refused
-  by a stable code at the step's path when absent; and the counts a driven run keeps of its map's
+  The steps of a step map as the map loader admits them: each step's kind, the format version of
+  the map it belongs to, and the `judgement:` line an `llm` step carries to say what no command
+  could decide, required by an `aep.driver-steps/2` map and refused there by a stable code at the
+  step's path when absent, optional in an `aep.driver-steps/1` map (every protocol tree before
+  0.72.0 is one, and a pinned tree can never gain the key); and the counts a driven run keeps of its map's
   `llm` steps, declared and run, which `aep drive run`, `aep drive resume` and
   `aep drive status --run <run>` print and the run's report carries. Declared for
   story:llm-step-declares-judgement.
@@ -13,7 +15,9 @@ summary: >-
 # is crates/edge/aep-cli/src/drive.rs, unless a path says otherwise. Functions are named rather
 # than lines, because the change moves them.
 #
-# Not modelled here: the rest of a step map (its format, its workflow pin, visit budgets, the
+# Not modelled here: the rest of a step map (its workflow pin, a format string other than the two
+# this build reads, which `StepMap::try_from` refuses with `unsupported_format_version` before
+# any step is admitted, visit budgets, the
 # `command` step's evidence mapping, placeholders and circuit breaker, the `llm` step's context,
 # scope, skills and harness, the `operator` step's prompt), the two-phase cross-validation against
 # the workflow and the protocol (`StepMap::cross_validate`, `StepMap::check_run`), and every other
@@ -38,6 +42,17 @@ types:
     kind: newtype
     of: String
 
+  # read from: a step map's `format:` (map.rs `StepMapFormat`, read by `StepMap::try_from`).
+  # `v1` is `aep.driver-steps/1`, `v2` is `aep.driver-steps/2`; any other string is refused
+  # before a step is admitted (`unsupported_format_version`), so it never reaches a step.
+  # change (release 0.72.1): new. 0.72.0 read only `/1` and applied the judgement rule to it,
+  # which refused every map of every protocol tree a store pinned before 0.72.0.
+  - name: aep.drive.StepMapFormat
+    kind: enum
+    variants:
+      - v1  # `aep.driver-steps/1`: an llm step's judgement is optional
+      - v2  # `aep.driver-steps/2`: every llm step carries a judgement
+
   # read from: a step's `kind:` (map.rs `RawStep`, `StepKind`).
   - name: aep.drive.StepKind
     kind: enum
@@ -51,7 +66,7 @@ entities:
   # the repository; nothing writes one through `aep`.
   - name: aep.drive.Step
     naming:
-      summary: One validated step of an aep.driver-steps/1 map.
+      summary: One validated step of an aep.driver-steps/1 or aep.driver-steps/2 map.
     identity:
       name: path
       type: aep.drive.StepPath
@@ -59,21 +74,30 @@ entities:
       - name: map
         type: aep.drive.StepMapId
         summary: The map the step belongs to.
+      # change (release 0.72.1): new. The format version of the map the step belongs to
+      # (map.rs `StepMap::format`), which decides whether its judgement is required.
+      - name: format
+        type: aep.drive.StepMapFormat
+        summary: The format version of the map the step belongs to.
       - name: kind
         type: aep.drive.StepKind
         summary: What sort of step it is.
       # change (story:llm-step-declares-judgement): new on an `llm` step (map.rs `RawLlmStep`,
       # `LlmStep::judgement`). On 0.71.3 an `llm` step had `prompt, context, scope, skills,
       # harness, description`, and none of them said why a model was needed.
+      # change (release 0.72.1): optional again in a `v1` map.
       - name: judgement
         type: Optional<String>
         summary: >-
           What this step decides that no command could, in one line. Present on every `llm`
-          step; a `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).
+          step of a `v2` map, and on an `llm` step of a `v1` map when its author wrote one; a
+          `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).
     invariants:
-      # Every `llm` step the loader admits carries its judgement (the `judgement-missing` outcome).
+      # Every `llm` step of a `v2` map the loader admits carries its judgement (the
+      # `judgement-missing` outcome). A `v1` map adopted no such rule.
       - any:
           - kind != "llm"
+          - format == "v1"
           - defined(judgement)
     lifecycle:
       # A loaded map is immutable: a run pins its digest (cursor.rs `DriverCursor::map_digest`).
@@ -132,14 +156,15 @@ errors:
   # *Validation accumulates*).
   - name: aep.drive.JudgementMissing
     summary: >-
-      An `llm` step without a `judgement:` key. The refusal's code is `missing_declaration` and
+      An `llm` step of an `aep.driver-steps/2` map without a `judgement:` key. The refusal's code is `missing_declaration` and
       its path is the step's, `driver-steps[<map>].states.<state>.steps[<index>].judgement`
       (map.rs `validate_step`; story acceptance 1).
     fields: []
   - name: aep.drive.JudgementBlank
     summary: >-
-      An `llm` step whose `judgement:` is empty or whitespace only. The refusal's code is
-      `empty_declaration` at the same path (map.rs `validate_step`).
+      An `llm` step whose `judgement:` is empty or whitespace only, in a map of either format
+      version. The refusal's code is `empty_declaration` at the same path (map.rs
+      `validate_step`).
     fields: []
   - name: aep.drive.RunNotFound
     summary: >-
@@ -174,16 +199,20 @@ commands:
   # `aep drive` verb that reads a map does before anything runs.
   #
   # change (story:llm-step-declares-judgement): an `llm` step is refused without a judgement.
+  # change (release 0.72.1): only in a `v2` map. A `v1` map loads as it did in 0.71.x: its `llm`
+  # step may omit the judgement, and one it writes must not be blank.
   - name: aep.drive.DeclareStep
     naming:
       wire: driver-steps-load-step
       display: aep drive run --map
-      summary: Admit one step of a step map, refusing an llm step that says no judgement.
+      summary: Admit one step of a step map, refusing an llm step of a v2 map that says no judgement.
     input:
       - name: path
         type: aep.drive.StepPath
       - name: map
         type: aep.drive.StepMapId
+      - name: format
+        type: aep.drive.StepMapFormat
       - name: kind
         type: aep.drive.StepKind
       - name: judgement
@@ -193,17 +222,30 @@ commands:
         when:
           all:
             - kind == "llm"
+            - format == "v2"
             - not defined(judgement)
         error: aep.drive.JudgementMissing
-      - name: declared
+      # An `llm` step whose judgement is written and empty, in a map of either format version.
+      # ESS-LIMIT: a judgement of only whitespace is refused too, and ESS 0.59.0 has no predicate
+      # for it (no trimmed form of a String, as at aep.review.RecordReview `prose-only-blank`), so
+      # `declared` below admits one. Pinned by
+      # `an_llm_step_with_a_blank_judgement_is_refused_at_its_path` and
+      # `a_v1_llm_step_with_a_blank_judgement_is_still_refused` (aep-driver-spec map tests).
+      - name: judgement-blank
         when:
-          any:
-            - kind != "llm"
-            - judgement.utf8_bytes >= 1
+          all:
+            - kind == "llm"
+            # An absent judgement leaves its byte length unknown, which selects nothing.
+            - judgement.utf8_bytes == 0
+        error: aep.drive.JudgementBlank
+      # What is left: a `command` or `operator` step, an `llm` step with a judgement, and an `llm`
+      # step of a `v1` map without one.
+      - name: declared
         creates: aep.drive.Step
         instance: path
         sets:
           map: input.map
+          format: input.format
           kind: input.kind
           judgement: input.judgement
         emits: [aep.drive.StepDeclared]
@@ -211,13 +253,6 @@ commands:
           aep.drive.StepDeclared:
             path: input.path
             kind: input.kind
-      # What is left is an `llm` step whose judgement is empty.
-      # ESS-LIMIT: a judgement of only whitespace is refused too, and ESS 0.59.0 has no predicate
-      # for it (no trimmed form of a String, as at aep.review.RecordReview `prose-only-blank`), so
-      # `declared` above admits one. Pinned by
-      # `an_llm_step_with_a_blank_judgement_is_refused_at_its_path` (aep-driver-spec map tests).
-      - name: judgement-blank
-        error: aep.drive.JudgementBlank
 
   # `aep drive run` allocating a run (run.rs `fresh_cursor`, then `sync_llm_counts`).
   - name: aep.drive.StartRun
@@ -317,6 +352,8 @@ views:
         type: aep.drive.Step.State
       - name: map
         type: aep.drive.StepMapId
+      - name: format
+        type: aep.drive.StepMapFormat
       - name: kind
         type: aep.drive.StepKind
       - name: judgement

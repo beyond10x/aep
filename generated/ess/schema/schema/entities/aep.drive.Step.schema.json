@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Step",
-  "description": "One validated step of an aep.driver-steps/1 map.",
+  "description": "One validated step of an aep.driver-steps/1 or aep.driver-steps/2 map.",
   "x-ess-name": "aep.drive.Step",
   "x-ess-kind": "entity",
   "type": "object",
@@ -13,12 +13,16 @@
       "$ref": "#/$defs/aep.drive.StepMapId",
       "description": "The map the step belongs to."
     },
+    "format": {
+      "$ref": "#/$defs/aep.drive.StepMapFormat",
+      "description": "The format version of the map the step belongs to."
+    },
     "kind": {
       "$ref": "#/$defs/aep.drive.StepKind",
       "description": "What sort of step it is."
     },
     "judgement": {
-      "description": "What this step decides that no command could, in one line. Present on every `llm` step; a `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).",
+      "description": "What this step decides that no command could, in one line. Present on every `llm` step of a `v2` map, and on an `llm` step of a `v1` map when its author wrote one; a `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).",
       "type": "string"
     },
     "state": {
@@ -28,6 +32,7 @@
   "required": [
     "path",
     "map",
+    "format",
     "kind",
     "state"
   ],
@@ -35,8 +40,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
-    "contract_digest": "slice-sha256/2:f894b888292b0c1d178471d2f811ddbd019e0e24f348264b0d73e67309420744",
+    "source_digest": "50fc07b65a27cec5bb80f858be2ffb20fb9c0870a2c7eff9235d4a5adb765080",
+    "contract_digest": "slice-sha256/2:e5666c81c64f8360d1599510263f53e42826c2c9f1c58eeba2861173184322de",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -58,6 +63,16 @@
         "command",
         "llm",
         "operator"
+      ]
+    },
+    "aep.drive.StepMapFormat": {
+      "title": "StepMapFormat",
+      "x-ess-name": "aep.drive.StepMapFormat",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "v1",
+        "v2"
       ]
     },
     "aep.drive.StepMapId": {

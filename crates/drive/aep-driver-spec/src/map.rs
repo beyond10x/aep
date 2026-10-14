@@ -47,7 +47,7 @@ use aep_domain::workflow::Workflow;
 
 use crate::digest::digest_of_canonical;
 use crate::pin::PinnedWorkflowRef;
-use crate::STEP_MAP_FORMAT;
+use crate::{STEP_MAP_FORMAT, STEP_MAP_FORMAT_V1};
 
 /// How many times a state may be entered before the driver stops, when the map does not say.
 ///
@@ -317,16 +317,22 @@ fn validated_context(
     kept
 }
 
-/// Checks an `llm` step's judgement: present, and not blank.
+/// Checks an `llm` step's judgement: present when the map's format requires one, and never blank.
 ///
-/// Refused at `<step>.judgement` with a stable code: `missing_declaration` when the key is absent,
-/// `empty_declaration` when it says nothing.
+/// Refused at `<step>.judgement` with a stable code: `missing_declaration` when the key is absent
+/// from an `aep.driver-steps/2` map, `empty_declaration` when it says nothing, in either version.
+/// An `aep.driver-steps/1` map adopted no such rule, so its step may omit the key.
+///
+/// `None` is a refusal; `Some(None)` is a `/1` step that wrote no judgement.
+#[allow(clippy::option_option)] // Refused, absent and present are three different answers.
 fn validated_judgement(
     judgement: Option<&str>,
+    format: StepMapFormat,
     location: &str,
     errors: &mut ValidationErrors,
-) -> Option<String> {
+) -> Option<Option<String>> {
     match judgement.map(str::trim) {
+        None if !format.requires_judgement() => Some(None),
         None => {
             errors.push(
                 ValidationError::new(
@@ -350,7 +356,7 @@ fn validated_judgement(
             ));
             None
         }
-        Some(line) => Some(line.to_owned()),
+        Some(line) => Some(Some(line.to_owned())),
     }
 }
 
@@ -467,12 +473,13 @@ pub struct RawLlmStep {
     pub description: Option<String>,
     /// What this step decides that no command could, in one line.
     ///
-    /// Read as optional so a step without one reaches validation and is refused there with its
-    /// path, accumulating with every other problem in the map, rather than failing the whole
-    /// document as a deserialization error would. The published schema requires it.
-    // No `#[serde(default)]`: serde reads an absent `Option` as `None` without it, and with it
-    // schemars would not mark the key required.
-    #[schemars(required, regex(pattern = r"\S"))]
+    /// Required in an `aep.driver-steps/2` map and optional in an `aep.driver-steps/1` one, so it
+    /// is read as optional: a `/2` step without one reaches validation and is refused there with
+    /// its path, accumulating with every other problem in the map, rather than failing the whole
+    /// document as a deserialization error would. The published schema requires it for `/2` at
+    /// the map's level, where the format version is.
+    #[serde(default)]
+    #[schemars(regex(pattern = r"\S"))]
     pub judgement: Option<String>,
 }
 
@@ -725,9 +732,12 @@ pub struct LlmStep {
     pub description: Option<String>,
     /// What this step decides that no command could, in one line; never blank.
     ///
-    /// Required because a model is the expensive, unrepeatable way to decide anything: a step
-    /// that cannot say why it needs one is a candidate for a `command` step.
-    pub judgement: String,
+    /// Always present in an `aep.driver-steps/2` map, because a model is the expensive,
+    /// unrepeatable way to decide anything: a step that cannot say why it needs one is a candidate
+    /// for a `command` step. `None` only in an `aep.driver-steps/1` map, which predates the rule.
+    /// Skipped when absent, so a `/1` map's digest is the one 0.71.x computed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub judgement: Option<String>,
 }
 
 impl LlmStep {
@@ -802,12 +812,77 @@ pub struct StateSteps {
     pub steps: Vec<Step>,
 }
 
+/// A step-map format version this build reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum StepMapFormat {
+    /// `aep.driver-steps/1`, which every protocol tree before 0.72.0 ships: an `llm` step's
+    /// judgement is optional, and one it writes must not be blank.
+    V1,
+    /// `aep.driver-steps/2`: every `llm` step carries a judgement.
+    V2,
+}
+
+impl StepMapFormat {
+    /// The version a document spells, or `None` for one this build does not read.
+    pub fn parse(format: &str) -> Option<Self> {
+        match format {
+            STEP_MAP_FORMAT_V1 => Some(Self::V1),
+            STEP_MAP_FORMAT => Some(Self::V2),
+            _ => None,
+        }
+    }
+
+    /// The version a document spells, refusing one this build does not read.
+    ///
+    /// A refused version still answers the newest, so the document's steps are checked under the
+    /// strictest rules and every other problem of it is reported beside the refusal.
+    fn validated(format: &str, errors: &mut ValidationErrors) -> Self {
+        Self::parse(format).unwrap_or_else(|| {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::UnsupportedFormatVersion,
+                    "driver-steps.format",
+                    format!(
+                        "this build reads `{STEP_MAP_FORMAT}` and `{STEP_MAP_FORMAT_V1}`, and the \
+                         document is written in `{format}`"
+                    ),
+                )
+                .with_hint(
+                    "a step map from a newer driver may name step kinds this one cannot run, and \
+                     running the rest would be a run that silently skipped them",
+                ),
+            );
+            Self::V2
+        })
+    }
+
+    /// The version as a document spells it.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::V1 => STEP_MAP_FORMAT_V1,
+            Self::V2 => STEP_MAP_FORMAT,
+        }
+    }
+
+    /// Whether an `llm` step of a map in this version must carry a judgement.
+    pub fn requires_judgement(self) -> bool {
+        self == Self::V2
+    }
+}
+
 /// A validated step map.
 ///
 /// Obtained only through [`TryFrom<RawStepMap>`], which is what makes possession of one the
 /// evidence that its format version, its pin and its steps were checked.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct StepMap {
+    /// The format version this map is written in, which decides whether its `llm` steps must
+    /// carry a judgement.
+    ///
+    /// Not serialized, so not in [`Self::digest`]: a `/1` map digests exactly as 0.71.x computed
+    /// it, and a run that build started resumes under this one.
+    #[serde(skip)]
+    pub format: StepMapFormat,
     /// What this map is.
     pub id: StepMapId,
     /// The workflow it is written against, pinned to a major version.
@@ -820,12 +895,9 @@ pub struct StepMap {
 }
 
 impl StepMap {
-    /// The format version this map is written in.
-    ///
-    /// A constant rather than a field: a value of this type is one whose version was checked, and
-    /// a field holding it would be a second place for it to be wrong.
+    /// The format version this map is written in, as the document spells it.
     pub fn format(&self) -> &'static str {
-        STEP_MAP_FORMAT
+        self.format.as_str()
     }
 
     /// The steps of one state, or nothing when the map is silent about it.
@@ -1024,22 +1096,7 @@ impl TryFrom<RawStepMap> for StepMap {
     fn try_from(raw: RawStepMap) -> Result<Self, Self::Error> {
         let mut errors = ValidationErrors::new();
 
-        if raw.format != STEP_MAP_FORMAT {
-            errors.push(
-                ValidationError::new(
-                    ValidationCode::UnsupportedFormatVersion,
-                    "driver-steps.format",
-                    format!(
-                        "this build reads `{STEP_MAP_FORMAT}`, and the document is written in `{}`",
-                        raw.format
-                    ),
-                )
-                .with_hint(
-                    "a step map from a newer driver may name step kinds this one cannot run, and \
-                     running the rest would be a run that silently skipped them",
-                ),
-            );
-        }
+        let format = StepMapFormat::validated(&raw.format, &mut errors);
 
         let workflow = match PinnedWorkflowRef::try_from(raw.workflow.clone()) {
             Ok(pin) => Some(pin),
@@ -1069,9 +1126,12 @@ impl TryFrom<RawStepMap> for StepMap {
             }
             let mut steps = Vec::with_capacity(entry.steps.len());
             for (index, step) in entry.steps.into_iter().enumerate() {
-                if let Some(step) =
-                    validate_step(step, &format!("{location}.steps[{index}]"), &mut errors)
-                {
+                if let Some(step) = validate_step(
+                    step,
+                    &format!("{location}.steps[{index}]"),
+                    format,
+                    &mut errors,
+                ) {
                     steps.push(step);
                 }
             }
@@ -1124,6 +1184,7 @@ impl TryFrom<RawStepMap> for StepMap {
         };
 
         errors.into_result(Self {
+            format,
             id: raw.id,
             workflow,
             title: raw.title,
@@ -1179,7 +1240,12 @@ fn validate_circuit_breaker(
 }
 
 /// Validates one step, pushing what is wrong with it and returning it when nothing is.
-fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) -> Option<Step> {
+fn validate_step(
+    raw: RawStep,
+    location: &str,
+    format: StepMapFormat,
+    errors: &mut ValidationErrors,
+) -> Option<Step> {
     match raw {
         RawStep::Command(command) => {
             let mut usable = true;
@@ -1232,36 +1298,7 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
             }
             usable.then_some(Step::Command(step))
         }
-        RawStep::Llm(step) => {
-            // Every field is checked before any refusal returns, so a blank prompt and a missing
-            // judgement are reported together (invariant *Validation accumulates*).
-            let prompted = !step.prompt.trim().is_empty();
-            if !prompted {
-                errors.push(ValidationError::new(
-                    ValidationCode::EmptyDeclaration,
-                    format!("{location}.prompt"),
-                    "an llm step with an empty prompt asks for nothing",
-                ));
-            }
-            let judgement = validated_judgement(step.judgement.as_deref(), location, errors);
-            let context = validated_context(&step.context, location, errors);
-            let scope = validated_scope(&step.scope, location, errors)?;
-            let judgement = judgement?;
-            if !prompted {
-                return None;
-            }
-            Some(Step::Llm(LlmStep {
-                prompt: step.prompt,
-                context,
-                scope,
-                skills: step.skills,
-                harness: step
-                    .harness
-                    .unwrap_or_else(|| LlmStep::DEFAULT_HARNESS.to_owned()),
-                description: step.description,
-                judgement,
-            }))
-        }
+        RawStep::Llm(step) => validate_llm_step(step, location, format, errors),
         RawStep::Operator(step) => {
             if step.prompt.trim().is_empty() {
                 errors.push(ValidationError::new(
@@ -1277,6 +1314,43 @@ fn validate_step(raw: RawStep, location: &str, errors: &mut ValidationErrors) ->
             }))
         }
     }
+}
+
+/// Validates one `llm` step of a map written in `format`.
+fn validate_llm_step(
+    step: RawLlmStep,
+    location: &str,
+    format: StepMapFormat,
+    errors: &mut ValidationErrors,
+) -> Option<Step> {
+    // Every field is checked before any refusal returns, so a blank prompt and a missing
+    // judgement are reported together (invariant *Validation accumulates*).
+    let prompted = !step.prompt.trim().is_empty();
+    if !prompted {
+        errors.push(ValidationError::new(
+            ValidationCode::EmptyDeclaration,
+            format!("{location}.prompt"),
+            "an llm step with an empty prompt asks for nothing",
+        ));
+    }
+    let judgement = validated_judgement(step.judgement.as_deref(), format, location, errors);
+    let context = validated_context(&step.context, location, errors);
+    let scope = validated_scope(&step.scope, location, errors)?;
+    let judgement = judgement?;
+    if !prompted {
+        return None;
+    }
+    Some(Step::Llm(LlmStep {
+        prompt: step.prompt,
+        context,
+        scope,
+        skills: step.skills,
+        harness: step
+            .harness
+            .unwrap_or_else(|| LlmStep::DEFAULT_HARNESS.to_owned()),
+        description: step.description,
+        judgement,
+    }))
 }
 
 /// Validates an evidence mapping against what a driver can mint from an exit status.
@@ -1363,7 +1437,16 @@ mod tests {
         serde_json::from_str(json).expect("the fixture deserializes")
     }
 
+    /// A map in the current format, `aep.driver-steps/2`, which adopts the judgement rule.
     fn map_json(workflow: &str, states: &str) -> String {
+        format!(
+            r#"{{"format":"aep.driver-steps/2","id":"development/default",
+                "workflow":"{workflow}","states":{states}}}"#
+        )
+    }
+
+    /// A map in `aep.driver-steps/1`, as every protocol tree before 0.72.0 writes one.
+    fn map_json_v1(workflow: &str, states: &str) -> String {
         format!(
             r#"{{"format":"aep.driver-steps/1","id":"development/default",
                 "workflow":"{workflow}","states":{states}}}"#
@@ -1395,10 +1478,71 @@ mod tests {
 
     #[test]
     fn a_wrong_format_version_is_refused() {
-        let text = r#"{"format":"aep.driver-steps/2","id":"development/default",
+        let text = r#"{"format":"aep.driver-steps/3","id":"development/default",
                        "workflow":"adp/default/1","states":{"implement":{"steps":[]}}}"#;
         let errors = read(text).expect_err("refused");
         assert!(errors.contains(ValidationCode::UnsupportedFormatVersion));
+    }
+
+    /// Both format versions this build reads load, and the map says which one it is.
+    #[test]
+    fn a_map_carries_the_format_version_it_was_written_in() {
+        let v1 = read(&map_json_v1("adp/default/1", ONE_COMMAND)).expect("a /1 map loads");
+        let v2 = read(&map_json("adp/default/1", ONE_COMMAND)).expect("a /2 map loads");
+        assert_eq!(v1.format(), "aep.driver-steps/1");
+        assert_eq!(v2.format(), "aep.driver-steps/2");
+        assert_eq!(
+            STEP_MAP_FORMAT, "aep.driver-steps/2",
+            "new maps are written in /2"
+        );
+    }
+
+    /// Release 0.72.1: an `aep.driver-steps/1` map adopted no judgement rule. Every protocol tree
+    /// before 0.72.0 ships one, and a store pinning such a tree can never add the key, so its
+    /// `llm` step loads without one, as it did in 0.71.x, and is still counted.
+    #[test]
+    fn a_v1_llm_step_without_a_judgement_loads_as_it_did_before_0_72() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"command","run":["cargo","test"]},
+            {"kind":"llm","prompt":"write the change"}]},
+            "review":{"steps":[{"kind":"llm","prompt":"review it"}]}}"#;
+        let map = read(&map_json_v1("adp/default/1", states))
+            .unwrap_or_else(|errors| panic!("a /1 map needs no judgement: {errors}"));
+        let Step::Llm(step) = &map.steps_for(&StateId::new("implement").unwrap())[1] else {
+            panic!("the second step is the llm step");
+        };
+        assert_eq!(step.judgement, None, "nothing is invented for it");
+        assert_eq!(map.llm_steps_declared(), 2, "both llm steps are counted");
+    }
+
+    /// A /1 map that writes a judgement is held to it: a blank one says nothing, in either format.
+    #[test]
+    fn a_v1_llm_step_with_a_blank_judgement_is_still_refused() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"llm","prompt":"write the change","judgement":"  "}]}}"#;
+        let errors = read(&map_json_v1("adp/default/1", states)).expect_err("refused");
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::EmptyDeclaration, "{errors}");
+        assert_eq!(
+            refusal.location,
+            "driver-steps[development/default].states.implement.steps[0].judgement"
+        );
+    }
+
+    /// A /1 map's judgement, when written, is kept as a /2 map's is.
+    #[test]
+    fn a_v1_llm_step_keeps_the_judgement_it_writes() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"llm","prompt":"a","judgement":"  what the change should say  "}]}}"#;
+        let map = read(&map_json_v1("adp/default/1", states)).expect("valid");
+        let Step::Llm(step) = &map.steps_for(&StateId::new("implement").unwrap())[0] else {
+            panic!("the first step is the llm step");
+        };
+        assert_eq!(
+            step.judgement.as_deref(),
+            Some("what the change should say")
+        );
     }
 
     #[test]
@@ -1609,7 +1753,10 @@ mod tests {
         let Step::Llm(step) = &map.steps_for(&StateId::new("implement").unwrap())[0] else {
             panic!("the first step is the llm step");
         };
-        assert_eq!(step.judgement, "what the change should say");
+        assert_eq!(
+            step.judgement.as_deref(),
+            Some("what the change should say")
+        );
         assert_eq!(map.llm_steps_declared(), 2, "two llm steps over two states");
     }
 
@@ -1657,7 +1804,7 @@ mod tests {
         ] {
             let mut errors = ValidationErrors::new();
             let raw: RawStep = serde_json::from_str(fragment).expect("parses as a raw step");
-            let step = validate_step(raw, "steps[0]", &mut errors);
+            let step = validate_step(raw, "steps[0]", StepMapFormat::V2, &mut errors);
             assert!(step.is_none(), "{fragment} must not load");
             let said = errors.to_string();
             assert!(
@@ -1675,7 +1822,7 @@ mod tests {
             r#"{"kind":"command","run":["x"],"depends_on":"staging-cluster","circuit_breaker":3}"#,
         )
         .expect("parses as a raw step");
-        let step = validate_step(raw, "steps[0]", &mut errors).expect("loads");
+        let step = validate_step(raw, "steps[0]", StepMapFormat::V2, &mut errors).expect("loads");
         let Step::Command(command) = step else {
             panic!("expected a command step");
         };

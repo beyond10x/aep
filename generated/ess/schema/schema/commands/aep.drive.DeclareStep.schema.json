@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "aep drive run --map input",
-  "description": "Admit one step of a step map, refusing an llm step that says no judgement.",
+  "description": "Admit one step of a step map, refusing an llm step of a v2 map that says no judgement.",
   "x-ess-name": "aep.drive.DeclareStep",
   "x-ess-kind": "command-input",
   "type": "object",
@@ -11,6 +11,9 @@
     },
     "map": {
       "$ref": "#/$defs/aep.drive.StepMapId"
+    },
+    "format": {
+      "$ref": "#/$defs/aep.drive.StepMapFormat"
     },
     "kind": {
       "$ref": "#/$defs/aep.drive.StepKind"
@@ -22,14 +25,15 @@
   "required": [
     "path",
     "map",
+    "format",
     "kind"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
-    "contract_digest": "slice-sha256/2:5a66dbc7c01328c9b46c36a48bd1c973a0ea4dd1471e5f108cfe1b8bc24d39b0",
+    "source_digest": "50fc07b65a27cec5bb80f858be2ffb20fb9c0870a2c7eff9235d4a5adb765080",
+    "contract_digest": "slice-sha256/2:e92e377eb6082ffee529ad3e85e49657a9f27cb72780d24cf16fabec5b252487",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -42,6 +46,16 @@
         "command",
         "llm",
         "operator"
+      ]
+    },
+    "aep.drive.StepMapFormat": {
+      "title": "StepMapFormat",
+      "x-ess-name": "aep.drive.StepMapFormat",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "v1",
+        "v2"
       ]
     },
     "aep.drive.StepMapId": {
