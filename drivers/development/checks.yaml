@@ -63,7 +63,7 @@
 # trace documents in this repository live today. That coupling is worth seeing: the map depends on a
 # path under `conformance/trace/`, and a rename there stops this step producing a record
 # — it does not block the run, because nothing gates on `trace_conformance` yet.
-format: aep.driver-steps/1
+format: aep.driver-steps/2
 id: development/checks
 # Pinned like its sibling, and for the same reason: a map names states and orders steps inside them,
 # so an unpinned one is an instruction sheet for whatever happens to be in the tree.

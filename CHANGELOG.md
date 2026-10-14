@@ -9,6 +9,23 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Fixed
+
+- A store whose `protocols:` pins a protocol tree older than 0.72.0 validates again. 0.72.0 applied
+  the `judgement:` rule to every `aep.driver-steps/1` map, so `aep plan artifact validate` refused
+  the step maps of every such tree with `missing_declaration` at each `llm` step's `.judgement`,
+  and a pinned tree can never gain the key. An `aep.driver-steps/1` map loads as it did in 0.71.x
+  again: `judgement:` is optional, and one it writes must not be blank (`empty_declaration`).
+
+### Changed
+
+- The `judgement:` rule belongs to a new step-map format version, `aep.driver-steps/2`: every `llm`
+  step of a `/2` map carries one, refused as in 0.72.0 when absent (`missing_declaration`) or
+  blank (`empty_declaration`). The loader reads `/1` and `/2` and refuses any other version. Both
+  shipped maps under `drivers/development/` are `/2`. The published `driver-steps` schema says the
+  same: `format` is one of the two versions, and `judgement` is required on an `llm` step of a `/2`
+  map only.
+
 ## [0.72.0] — 2026-10-14
 
 ### Changed

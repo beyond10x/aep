@@ -161,12 +161,52 @@ pub fn generated_schemas() -> Vec<GeneratedSchema> {
             "trace-spec",
             "what an agent run must have looked like",
         ),
-        entry::<RawStepMap>(
-            "RawStepMap",
-            "driver-steps",
-            "what a harness does in each state of a workflow",
-        ),
+        step_map_entry(),
     ]
+}
+
+/// The step-map schema, saying what the loader says about the format version.
+///
+/// `format` is one of the two versions the loader reads, and the judgement rule binds only the
+/// version that adopts it: in an `aep.driver-steps/2` map every `llm` step requires `judgement`,
+/// and in an `aep.driver-steps/1` map, which every protocol tree before 0.72.0 ships, it is
+/// optional. The derive cannot say that, because the step does not know its map's version, so the
+/// rule is written on the map, where the version is.
+fn step_map_entry() -> GeneratedSchema {
+    use aep_driver_spec::{STEP_MAP_FORMAT, STEP_MAP_FORMAT_V1};
+
+    let mut entry = entry::<RawStepMap>(
+        "RawStepMap",
+        "driver-steps",
+        "what a harness does in each state of a workflow",
+    );
+    let root = &mut entry.schema.schema;
+    let object = root.object.as_mut().expect("a step map is an object");
+    let format = object
+        .properties
+        .get_mut("format")
+        .expect("a step map has a format");
+    if let schemars::schema::Schema::Object(format) = format {
+        format.enum_values = Some(vec![STEP_MAP_FORMAT_V1.into(), STEP_MAP_FORMAT.into()]);
+    }
+    let rule = |value: serde_json::Value| -> Box<schemars::schema::Schema> {
+        Box::new(serde_json::from_value(value).expect("a literal schema"))
+    };
+    let subschemas = root.subschemas.get_or_insert_with(Default::default);
+    subschemas.if_schema = Some(rule(serde_json::json!({
+        "required": ["format"],
+        "properties": {"format": {"const": STEP_MAP_FORMAT}}
+    })));
+    subschemas.then_schema = Some(rule(serde_json::json!({
+        "properties": {"states": {"additionalProperties": {"properties": {"steps": {"items": {
+            "if": {"required": ["kind"], "properties": {"kind": {"const": "llm"}}},
+            "then": {
+                "required": ["judgement"],
+                "properties": {"judgement": {"type": "string"}}
+            }
+        }}}}}}
+    })));
+    entry
 }
 
 #[cfg(test)]
@@ -364,12 +404,13 @@ mod tests {
             }),
             "an llm step is a prompt, the skills to load, and why it needs a model",
         );
-        // story:llm-step-declares-judgement: the schema says what the loader refuses, so an editor
-        // flags an llm step that does not say why it needs a model.
-        refuses(
+        // Release 0.72.1: a step alone does not know its map's format version, and an
+        // `aep.driver-steps/1` map's llm step may omit its judgement. The map's schema requires
+        // it for `/2` (`the_step_map_schema_requires_a_judgement_only_where_the_format_adopts_it`).
+        accepts(
             &validator,
             &serde_json::json!({"kind": "llm", "prompt": "implement the acceptance statement"}),
-            "an llm step without a judgement is refused at load",
+            "an llm step of a /1 map loads without a judgement",
         );
         refuses(
             &validator,
@@ -382,6 +423,70 @@ mod tests {
             "an agent's own statement never satisfies an independence requirement, so a step kind \
              that could mint evidence from a model's output would unpick the whole loop",
         );
+    }
+
+    /// story:llm-step-declares-judgement and release 0.72.1: the schema says what the loader
+    /// refuses, so an editor flags an llm step of a `/2` map that does not say why it needs a
+    /// model, and does not flag one of a `/1` map, which the loader reads as it did in 0.71.x.
+    #[test]
+    fn the_step_map_schema_requires_a_judgement_only_where_the_format_adopts_it() {
+        let entry = generated_schemas()
+            .into_iter()
+            .find(|entry| entry.filename == "driver-steps.schema.json")
+            .expect("the step-map schema is published");
+        let schema: serde_json::Value =
+            serde_json::from_str(&entry.to_json().expect("serialises")).expect("JSON");
+        let validator = jsonschema::validator_for(&schema).expect("a usable schema");
+        let map = |format: &str, step: serde_json::Value| {
+            serde_json::json!({
+                "format": format,
+                "id": "test/judgement",
+                "workflow": "adp/default/1",
+                "states": {"implement": {"steps": [
+                    {"kind": "command", "run": ["cargo", "test"]},
+                    step
+                ]}}
+            })
+        };
+        let bare = serde_json::json!({"kind": "llm", "prompt": "write the change"});
+        let judged = serde_json::json!({
+            "kind": "llm", "prompt": "write the change", "judgement": "which change"
+        });
+        for (document, loads, why) in [
+            (
+                map("aep.driver-steps/2", bare.clone()),
+                false,
+                "a /2 llm step needs a judgement",
+            ),
+            (
+                map("aep.driver-steps/2", judged.clone()),
+                true,
+                "a /2 llm step with one loads",
+            ),
+            (
+                map("aep.driver-steps/1", bare.clone()),
+                true,
+                "a /1 llm step may omit it",
+            ),
+            (
+                map("aep.driver-steps/1", judged),
+                true,
+                "a /1 llm step may write it",
+            ),
+            (
+                map("aep.driver-steps/3", bare),
+                false,
+                "no other version is read",
+            ),
+        ] {
+            let text = serde_json::to_string(&document).expect("serialises");
+            assert_eq!(
+                crate::parse::step_map(&text, None).is_ok(),
+                loads,
+                "the loader: {why}"
+            );
+            assert_eq!(validator.is_valid(&document), loads, "the schema: {why}");
+        }
     }
 
     #[test]

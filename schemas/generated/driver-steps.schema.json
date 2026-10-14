@@ -3,6 +3,50 @@
   "title": "RawStepMap",
   "description": "A step map as it is written, before anything has checked what it claims.",
   "type": "object",
+  "if": {
+    "required": [
+      "format"
+    ],
+    "properties": {
+      "format": {
+        "const": "aep.driver-steps/2"
+      }
+    }
+  },
+  "then": {
+    "properties": {
+      "states": {
+        "additionalProperties": {
+          "properties": {
+            "steps": {
+              "items": {
+                "if": {
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "llm"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "judgement"
+                  ],
+                  "properties": {
+                    "judgement": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
   "required": [
     "format",
     "id",
@@ -11,7 +55,11 @@
   "properties": {
     "format": {
       "description": "The format version the document says it is written in.",
-      "type": "string"
+      "type": "string",
+      "enum": [
+        "aep.driver-steps/1",
+        "aep.driver-steps/2"
+      ]
     },
     "id": {
       "description": "What this map is, such as `development/default`.",
@@ -288,7 +336,6 @@
           "description": "Ask a model, with a tool set the protocol derived.",
           "type": "object",
           "required": [
-            "judgement",
             "kind",
             "prompt"
           ],
@@ -319,8 +366,12 @@
               ]
             },
             "judgement": {
-              "description": "What this step decides that no command could, in one line.\n\nRead as optional so a step without one reaches validation and is refused there with its path, accumulating with every other problem in the map, rather than failing the whole document as a deserialization error would. The published schema requires it.",
-              "type": "string",
+              "description": "What this step decides that no command could, in one line.\n\nRequired in an `aep.driver-steps/2` map and optional in an `aep.driver-steps/1` one, so it is read as optional: a `/2` step without one reaches validation and is refused there with its path, accumulating with every other problem in the map, rather than failing the whole document as a deserialization error would. The published schema requires it for `/2` at the map's level, where the format version is.",
+              "default": null,
+              "type": [
+                "string",
+                "null"
+              ],
               "pattern": "\\S"
             },
             "kind": {

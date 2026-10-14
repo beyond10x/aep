@@ -33,7 +33,7 @@ description: AEP terms, defined once.
 | **Truth** | `True`, `False`, or `Unknown`. Only True permits a guarded transition. |
 | **Harness** | The external system that runs an agent and asks AEP what is owed, permitted, and done. |
 | **Execution** | One task's run through a workflow: state, evidence order, events, and audit trail. |
-| **Step map** | An `aep.driver-steps/1` document saying what a harness does in each workflow state. |
+| **Step map** | An `aep.driver-steps/2` (or, before 0.72.0, `/1`) document saying what a harness does in each workflow state. |
 | **Driven run** | A workflow walk by `aep drive`; the driver asks the engine and performs only the steps it permits. |
 | **Planning store** | The plan of one repository. Since `aep.project/5` it is the Git-native store: one Markdown file per artifact and one JSON file per evidence record, written through `aep plan artifact`, with Git as the history. |
 | **Backend** | An implementation of the AEP storage command and query contracts. |
