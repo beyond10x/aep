@@ -185,6 +185,13 @@ entities:
   # in `RunOutcome`, `RunUsage` and `RawRunManifest`. Integers throughout; a cost a transcript
   # states in US dollars (`total_cost_usd`, `ModelUsage::cost_usd`) is recorded in micro-USD, the
   # unit `eval.run-manifest/1` already writes (`cost_micro_usd`).
+  #
+  # change (story:evidence-records-task-spend): a transcript's token, cost and wall-time figures
+  # are folded per session (planning/task_spend.rs `transcript_figures`, eval.rs
+  # `every_session`): within one session the largest of its terminal records, which restate
+  # running counters, and across sessions their sum. A figure is absent for the task when any
+  # session states none, when a session never reaches a terminal record, or when the sum
+  # overflows: a sum over some of the sessions understates the task by the ones left out.
   - name: aep.evidence.SpendRecord
     naming:
       summary: The model calls, tokens, cost, wall time and llm steps one source attributes to one task.
@@ -205,8 +212,9 @@ entities:
       - name: source_input
         type: String
         summary: >-
-          The source, named as aep.evidence.InputForm `repository_relative`; never a file name
-          alone and never an absolute path.
+          The source, named as aep.evidence.InputForm `repository_relative` after every link in
+          its path and in the root's is resolved, so it names the file whose bytes were read;
+          never a file name alone and never an absolute path.
       - name: model_calls
         type: Optional<Integer>
         summary: >-
@@ -228,13 +236,16 @@ entities:
         type: Optional<Integer>
         summary: Billed thinking tokens the API reported (`RunUsage::thinking_tokens`).
       # change (story:evidence-records-task-spend): new. A manifest states one total and no split,
-      # so its split figures stay absent and this holds its `tokens`.
+      # so its split figures stay absent and this holds its `tokens`. One rule for every source,
+      # the one `aep eval run` writes a manifest's `tokens` by (eval.rs `TOKEN_KEYS`): thinking
+      # tokens are not added, since an API's output count may already hold them.
       - name: total_tokens
         type: Optional<Integer>
         summary: >-
           The total the source states (an `eval.run-manifest/1`'s `tokens`), or, for a transcript
-          or a driven run, the sum of the five split figures when all five are known; otherwise
-          absent.
+          or a driven run, the sum of input, output, cache read and cache write tokens when all
+          four are known and the sum fits; otherwise absent. Thinking tokens are their own figure
+          and are not part of it.
       - name: cost_micro_usd
         type: Optional<Integer>
         summary: >-
@@ -324,9 +335,20 @@ errors:
   # be named by an absolute local path or by a bare file name nobody could find again.
   - name: aep.evidence.SpendSourceOutsideRepository
     summary: >-
-      The source lies outside the repository root, or its path from the root would carry a `.` or
-      `..` component (`SpendSourceOutsideRepository`, planning/task_spend.rs `read_spend`); the
+      The source lies outside the repository root once every link in its path and in the root's
+      is resolved, a directory link out of the repository and a `..` after one included
+      (`SpendSourceOutsideRepository`, planning/recorded_input.rs `repository_relative`); the
       refusal names the path as given. Nothing is written.
+    fields: []
+  # change (story:evidence-records-task-spend): a file no spend reader recognises, or one stating
+  # a figure no reader can convert, would otherwise be recorded as a spend of unknown figures:
+  # unreadable is not unstated.
+  - name: aep.evidence.SpendSourceUnreadable
+    summary: >-
+      The source is no `eval.run-manifest/1`, driven run cursor or transcript a reader
+      recognises (a transcript with no terminal record and no request), or a terminal record's
+      `total_cost_usd` is neither a number nor `null` (`SpendSourceUnreadable`,
+      planning/task_spend.rs `read_spend`); the refusal names the file. Nothing is written.
     fields: []
 
 events:
@@ -581,14 +603,26 @@ commands:
         type: Optional<aep.evidence.InputDigest>
       # change (story:evidence-records-task-spend): how the source is named.
       # ESS-LIMIT: as on aep.evidence.RecordFromReport, which form a path takes is decided by
-      # comparing its components with the repository root's, and ESS 0.59.0 has no operator over
-      # the parts of a path, so the command takes the form. The decision is planning.rs
-      # `recorded_input`'s. Pinned by `a_spend_source_outside_the_repository_is_refused_naming_it`
-      # (aep-cli `evidence_task_spend`).
+      # comparing its components with the repository root's, after resolving links in both, and
+      # ESS 0.59.0 has no operator over the parts of a path or the filesystem, so the command
+      # takes the form. The decision is planning/recorded_input.rs `repository_relative`'s.
+      # Pinned by `a_spend_source_outside_the_repository_is_refused_naming_it`,
+      # `a_source_reached_through_a_link_to_outside_the_repository_is_refused` and
+      # `a_dot_dot_after_a_link_names_the_file_the_record_read` (aep-cli `evidence_task_spend`
+      # and `evidence_task_spend_adversary`).
       - name: source_input_form
         type: aep.evidence.InputForm
       - name: source_input
         type: String
+      # change (story:evidence-records-task-spend): whether a reader recognises the source and
+      # can convert every figure it states.
+      # ESS-LIMIT: recognising a transcript, a manifest or a cursor is parsing a file, and
+      # ESS 0.59.0 has no operator over a file's bytes, so the command takes the answer as a
+      # Boolean. The decision is planning/task_spend.rs `figures_of`'s. Pinned by
+      # `a_cost_written_as_text_is_refused_not_recorded_unknown` and
+      # `a_json_file_that_is_no_spend_source_is_refused` (aep-cli `evidence_task_spend_adversary`).
+      - name: source_readable
+        type: Boolean
       - name: model_calls
         type: Optional<Integer>
       - name: input_tokens
@@ -602,10 +636,11 @@ commands:
       - name: thinking_tokens
         type: Optional<Integer>
       # change (story:evidence-records-task-spend): new.
-      # ESS-LIMIT: the total is read from the manifest or summed from the five split figures, and
-      # ESS 0.59.0 has no arithmetic over Optional inputs, so the command takes the total as
-      # read. The rule is `SpendFigures::with_split_total` (aep-domain evidence.rs), pinned by its
-      # unit tests and by the aep-cli `evidence_task_spend` tests.
+      # ESS-LIMIT: the total is read from the manifest or summed from the four split figures
+      # other than thinking tokens, and ESS 0.59.0 has no arithmetic over Optional inputs, so the
+      # command takes the total as read. The rule is `SpendFigures::with_split_total` (aep-domain
+      # evidence.rs), pinned by its unit tests and by the aep-cli `evidence_task_spend` tests and
+      # `a_transcript_total_equals_the_total_its_run_manifest_states`.
       - name: total_tokens
         type: Optional<Integer>
       - name: cost_micro_usd
@@ -622,9 +657,16 @@ commands:
       - name: source-outside-repository
         when: source_input_form != "repository_relative"
         error: aep.evidence.SpendSourceOutsideRepository
+      # change (story:evidence-records-task-spend): `--kind task_spend` with no `--from` names no
+      # file, so no digest (planning.rs `record_evidence`). Pinned by
+      # `task_spend_without_a_source_file_is_refused_and_writes_nothing`.
       - name: source-digest-missing
         when: missing(source_digest)
         error: aep.evidence.SpendSourceDigestMissing
+      # change (story:evidence-records-task-spend): unreadable is not unstated.
+      - name: source-unreadable
+        when: source_readable == false
+        error: aep.evidence.SpendSourceUnreadable
       # An absent figure is written absent: each `sets:` entry reads an Optional input, so the
       # record never gains a zero the source did not state.
       - name: recorded

@@ -7437,8 +7437,20 @@ fn record_evidence(args: &StoreArgs, id: &str, request: &EvidenceRequest<'_>) ->
         // Built rather than wrapped in a `context`, which would put the advice in front of the
         // list it is advice about. The refusal has to **end** with the two kinds, because that is
         // the part a reader who did not find their word in fifteen names still needs.
-        EvidenceKind::parse(kind.trim())
-            .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?
+        let kind = EvidenceKind::parse(kind.trim())
+            .map_err(|error| anyhow::anyhow!("{error}. {}", nearest_evidence_kinds()))?;
+        // A spend record is the figures a file states beside that file's digest; `--source` alone
+        // names no file, so there is no digest to tie the figures to (aep.evidence.RecordSpend,
+        // `source-digest-missing`). Refused before the store is opened: a refusal writes nothing.
+        if kind == EvidenceKind::TaskSpend {
+            anyhow::bail!(
+                "SpendSourceDigestMissing: a `{}` record is read from a file, and it keeps that \
+                 file's digest; `--source` names none, so nothing was recorded. Name the \
+                 transcript, `eval.run-manifest/1` or driven run's cursor with `--from <file>`",
+                kind.as_str()
+            );
+        }
+        kind
     };
 
     let opened = open(&args.location, true)?;

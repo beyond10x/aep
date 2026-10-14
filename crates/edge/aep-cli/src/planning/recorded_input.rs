@@ -8,9 +8,11 @@
 //! the input. The rule is `aep.evidence.InputForm` and `aep.evidence.InputPathNotPortable` in
 //! `ess/domains/evidence.yaml`.
 //!
-//! Both paths are made absolute against the working directory and normalized by their components
-//! alone. Nothing here resolves a link: `canonicalize` would turn a root reached through a
-//! symlink into its target and could put that target's directories into the name.
+//! For a report or a suite both paths are made absolute against the working directory and
+//! normalized by their components alone. Nothing there resolves a link: `canonicalize` would turn
+//! a root reached through a symlink into its target and could put that target's directories into
+//! a file name. A spend source, which must lie inside the repository, is the exception
+//! ([`repository_relative`]): it and the root are both resolved, so neither side keeps a link.
 
 use anyhow::{bail, Context, Result};
 use sha2::{Digest as _, Sha256};
@@ -88,18 +90,63 @@ pub(crate) fn recorded_input(root: &Path, path: &Path, bytes: &[u8]) -> Result<R
     })
 }
 
-/// `path`'s name from the repository at `root`, or [`None`] when it is not one: the path lies
+/// A file inside the repository, found by resolving every link on the way to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Contained {
+    /// Its path from the repository root, `/`-separated, in the `repository_relative` form.
+    pub(crate) name: String,
+    /// The resolved path, which is the one to read: the bytes digested are the bytes named.
+    pub(crate) path: PathBuf,
+}
+
+/// `path`'s name from the repository at `root`, or [`None`] when it is not one: the file lies
 /// outside the root, or is the root itself.
 ///
 /// The `repository_relative` form alone, for a record that names nothing outside the repository
-/// (`aep.evidence.SpendSourceOutsideRepository`).
+/// (`aep.evidence.SpendSourceOutsideRepository`). Unlike [`recorded_input`], both paths are
+/// resolved through the filesystem, links included, before they are compared: the lexical
+/// reading would admit a directory link out of the repository, and would read `link/..` as the
+/// root where the operating system reads the link target's parent, so the record would name one
+/// file beside the digest of another. A path that does not resolve is refused as outside when it
+/// lies outside the root as written, and is otherwise a file that cannot be read.
 ///
 /// # Errors
 ///
-/// The working directory cannot be read to make a relative path absolute.
-pub(crate) fn repository_relative(root: &Path, path: &Path) -> Result<Option<String>> {
-    let (name, form) = name_and_form(root, path)?;
-    Ok((form == InputForm::RepositoryRelative && form.admits(&name)).then_some(name))
+/// The root cannot be resolved; a path inside the root as written cannot be resolved; the
+/// working directory cannot be read to make a relative path absolute.
+pub(crate) fn repository_relative(root: &Path, path: &Path) -> Result<Option<Contained>> {
+    let resolved = match std::fs::canonicalize(path) {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            let (_, form) = name_and_form(root, path)?;
+            if form == InputForm::RepositoryRelative {
+                return Err(error).with_context(|| format!("reading {}", path.display()));
+            }
+            return Ok(None);
+        }
+    };
+    let root = std::fs::canonicalize(root)
+        .with_context(|| format!("resolving the repository root {}", root.display()))?;
+    let Ok(relative) = resolved.strip_prefix(&root) else {
+        return Ok(None);
+    };
+    let mut parts = Vec::new();
+    for component in relative.components() {
+        let Component::Normal(part) = component else {
+            return Ok(None);
+        };
+        let Some(part) = part.to_str() else {
+            return Ok(None);
+        };
+        parts.push(part);
+    }
+    let name = parts.join("/");
+    Ok(InputForm::RepositoryRelative
+        .admits(&name)
+        .then_some(Contained {
+            name,
+            path: resolved,
+        }))
 }
 
 /// The name `path` would be recorded under from `root`, and the form that name takes.

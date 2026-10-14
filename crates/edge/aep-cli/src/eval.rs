@@ -3003,9 +3003,8 @@ pub fn totals_of(sessions: &[Vec<serde_json::Value>], refusals: &mut Vec<StreamR
 /// One quantity over a stream's sessions: [`highest`] within one, [`accumulate`] across them.
 ///
 /// `sessions` holds each session's terminal records in stream order, and `figure` reads the
-/// quantity off one record. The fold [`totals_of`] applies to a run manifest's three quantities
-/// and `aep plan artifact evidence --kind task_spend` to a transcript's figures, so one session's
-/// restated running counters are charged once wherever they are read.
+/// quantity off one record. The fold [`totals_of`] applies to a run manifest's three quantities;
+/// [`every_session`] is the stricter one a `task_spend` record takes.
 pub fn per_session<T>(sessions: &[Vec<T>], mut figure: impl FnMut(&T) -> Option<u64>) -> Option<u64> {
     let mut total = None;
     for terminal in sessions {
@@ -3016,6 +3015,32 @@ pub fn per_session<T>(sessions: &[Vec<T>], mut figure: impl FnMut(&T) -> Option<
         accumulate(&mut total, session);
     }
     total
+}
+
+/// One quantity over a stream's sessions, stated only when every session states it.
+///
+/// [`per_session`]'s fold, [`highest`] within one session, so restated running counters are
+/// charged once; but across sessions a sum over some of them is not the task's figure, it
+/// understates the task by the ones left out. So the total is [`None`] when any session states
+/// none — one that never reached a terminal record (an empty bucket) included — or when the sum
+/// overflows, which is no figure either. `aep plan artifact evidence --kind task_spend` folds a
+/// transcript's figures with it; `aep eval run` keeps [`per_session`], whose matrix reports a
+/// total over the runs that stated one.
+pub fn every_session<T>(
+    sessions: &[Vec<T>],
+    mut figure: impl FnMut(&T) -> Option<u64>,
+) -> Option<u64> {
+    // No session at all states nothing, and nothing is not a zero.
+    if sessions.is_empty() {
+        return None;
+    }
+    sessions.iter().try_fold(0_u64, |total, terminal| {
+        let mut session = None;
+        for ended in terminal {
+            highest(&mut session, figure(ended));
+        }
+        total.checked_add(session?)
+    })
 }
 
 /// Keeps the larger of one session's terminal records, where the record stated one.

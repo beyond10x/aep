@@ -24,6 +24,9 @@
     "source_input": {
       "type": "string"
     },
+    "source_readable": {
+      "type": "boolean"
+    },
     "model_calls": {
       "type": "integer"
     },
@@ -63,14 +66,15 @@
     "record",
     "source",
     "source_input_form",
-    "source_input"
+    "source_input",
+    "source_readable"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "3190de88c2014ba1468fe4e6ec649677142d29f957851b25a3c222651eeecdbc",
-    "contract_digest": "slice-sha256/2:8f523cbd69f58d74d1bc0fdd667bc49c5603aa651bc6cbf224b61a79f1a1cd77",
+    "source_digest": "61ce5e1bb6c86a051686bbd9ed9983698687575150d9c8998ec189803142b1a1",
+    "contract_digest": "slice-sha256/2:c33cb2f91109ebc768935d43256b0bd1b907441fb228acfd7d9949ed8bbd43c8",
     "regenerate": "ess generate"
   },
   "$defs": {

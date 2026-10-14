@@ -253,17 +253,20 @@ fn a_claude_code_transcript_records_its_requests_usage_cost_and_wall_time() {
         record["thinking_tokens"],
         usage["output_tokens_details"]["thinking_tokens"]
     );
-    let five: u64 = [
+    let four: u64 = [
         &usage["input_tokens"],
         &usage["output_tokens"],
         &usage["cache_read_input_tokens"],
         &usage["cache_creation_input_tokens"],
-        &usage["output_tokens_details"]["thinking_tokens"],
     ]
     .iter()
     .map(|figure| figure.as_u64().unwrap())
     .sum();
-    assert_eq!(record["total_tokens"], five, "all five known: their sum");
+    assert_eq!(
+        record["total_tokens"], four,
+        "all four token keys known: their sum, as `aep eval run` totals a manifest's `tokens`, \
+         thinking tokens not added"
+    );
     // `0.25222239999999996` US dollars, to the nearest millionth.
     assert_eq!(
         terminal["total_cost_usd"].as_f64(),

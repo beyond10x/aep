@@ -13,15 +13,23 @@ belongs in the commit message or in `docs/design/`.
 
 - `aep plan artifact evidence <id> --kind task_spend --from <file>` records what one source says a
   task spent, as a `task_spend` evidence record: model calls, the five token figures (input,
-  output, cache read, cache write, thinking) and their total, cost in micro-USD, wall time, and
+  output, cache read, cache write, thinking), a token total, cost in micro-USD, wall time, and
   for a driven run the llm steps declared and run. The file is a transcript (Claude Code
   `stream-json` or `metaharness.event/1`), an `eval.run-manifest/1` (its `tokens`,
-  `cost_micro_usd` and `wall_time_ms`) or a driven run's `cursor.json`. Several terminal records
-  of one session are charged once, as `aep eval run` charges them. A figure the source does not
-  state is left out of the record and printed `unknown`, never `0`. The record keeps the source's
-  `sha256:` digest and its path from the repository root; a source outside the repository is
-  refused with `SpendSourceOutsideRepository`, naming the path. `--at` may name when it was
-  observed.
+  `cost_micro_usd` and `wall_time_ms`) or a driven run's `cursor.json`. The token total has one
+  rule for every source, the one a run manifest's `tokens` follows: input, output, cache read and
+  cache write tokens, stated only when all four are known; thinking tokens are not added. Several
+  terminal records of one session are charged once, as `aep eval run` charges them; across
+  sessions a figure is stated only when every session states it and the sum fits, so a session
+  that states no cost, or never reaches its terminal record, leaves the task's figure unknown. A
+  figure the source does not state is left out of the record and printed `unknown`, never `0`.
+  The record keeps the source's `sha256:` digest and its path from the repository root with
+  links resolved; a source outside the repository, a directory link out of it included, is
+  refused with `SpendSourceOutsideRepository`, naming the path. A file no reader recognises as a
+  transcript, manifest or cursor, or a `total_cost_usd` that is neither a number nor `null`, is
+  refused with `SpendSourceUnreadable`, naming the file; `--kind task_spend` without `--from` is
+  refused with `SpendSourceDigestMissing`. Each refusal writes nothing. `--at` may name when it
+  was observed.
 
 ## [0.72.0] — 2026-10-14
 

@@ -65,7 +65,7 @@ is missing here fails the build.
 | `aep plan artifact evidence <id> --kind <kind> --source <source> [--ref <reference>] [--at <instant>]` | records one observation about the artifact as an [evidence file](./evidence-file.md) |
 | `aep plan artifact evidence <id> --kind review_outcome --review <review-result-id> --outcome no-op\|fixed\|escalated` | records what became of a review, on the reviewed artifact |
 | `aep plan artifact evidence <id> --from <report> [--suite <suite.json> \| --suite-input <input.json>] [--ref …]` | reads kind, source and completion time out of an ESS conformance report (`ess-conformance-report/1`, or `/2` with its exact suite or suite input); refuses a report of no scenarios |
-| `aep plan artifact evidence <id> --kind task_spend --from <file> [--ref …] [--at <instant>]` | records what a transcript, an `eval.run-manifest/1` or a driven run's `cursor.json` says the task spent — model calls, five token figures and their total, cost, wall time, llm steps declared and run — printing `unknown` for a figure it does not state; the source must lie inside the repository and is named by its path and digest |
+| `aep plan artifact evidence <id> --kind task_spend --from <file> [--ref …] [--at <instant>]` | records what a transcript, an `eval.run-manifest/1` or a driven run's `cursor.json` says the task spent — model calls, five token figures and their total (thinking tokens not added, as in a run manifest's `tokens`), cost, wall time, llm steps declared and run — printing `unknown` for a figure it does not state; the source must lie inside the repository once links are resolved, must be a file a reader recognises, and is named by its path and digest |
 
 ### Read
 

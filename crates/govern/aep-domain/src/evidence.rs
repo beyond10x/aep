@@ -1039,8 +1039,8 @@ pub struct SpendFigures {
     /// Billed thinking tokens the API reported.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thinking_tokens: Option<u64>,
-    /// The total the source states, or the sum of the five split figures when all five are
-    /// known ([`Self::with_split_total`]).
+    /// The total the source states, or the sum of input, output, cache read and cache write
+    /// tokens when all four are known ([`Self::with_split_total`]); thinking tokens are not added.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub total_tokens: Option<u64>,
     /// What the task cost, in millionths of a US dollar.
@@ -1095,11 +1095,14 @@ impl SpendFigures {
         named
     }
 
-    /// The figures with [`Self::total_tokens`] filled in from the five split figures, when the
-    /// source stated no total and all five are known.
+    /// The figures with [`Self::total_tokens`] filled in from the split figures, when the source
+    /// stated no total: input, output, cache read and cache write tokens, when all four are known.
     ///
-    /// Four of five is not a total: it would understate the run by the one nobody stated. A sum
-    /// that overflows is not a figure either. A stated total is kept as it is.
+    /// One rule for every source, the one `aep eval run` writes a run manifest's `tokens` by
+    /// (its `TOKEN_KEYS`), so one run's total does not depend on which of its files was read.
+    /// Thinking tokens are their own figure and are not added: an API's output count may already
+    /// hold them. Three of four is not a total: it would understate the run by the one nobody
+    /// stated. A sum that overflows is not a figure either. A stated total is kept as it is.
     #[must_use]
     pub fn with_split_total(mut self) -> Self {
         if self.total_tokens.is_none() {
@@ -1108,7 +1111,6 @@ impl SpendFigures {
                 self.output_tokens,
                 self.cache_read_tokens,
                 self.cache_write_tokens,
-                self.thinking_tokens,
             ]
             .into_iter()
             .try_fold(0_u64, |total, figure| total.checked_add(figure?));
@@ -2941,7 +2943,7 @@ scenarios_total: 24
         assert!(EvidenceKind::ALL.contains(&EvidenceKind::TaskSpend));
     }
 
-    fn five_known() -> SpendFigures {
+    fn all_known() -> SpendFigures {
         SpendFigures {
             input_tokens: Some(16),
             output_tokens: Some(3_017),
@@ -2953,19 +2955,30 @@ scenarios_total: 24
     }
 
     #[test]
-    fn the_split_total_is_the_sum_of_the_five_only_when_all_five_are_known() {
+    fn the_split_total_is_the_sum_of_the_four_token_keys_only_when_all_four_are_known() {
         assert_eq!(
-            five_known().with_split_total().total_tokens,
-            Some(16 + 3_017 + 309_588 + 18_809 + 38)
+            all_known().with_split_total().total_tokens,
+            Some(16 + 3_017 + 309_588 + 18_809),
+            "input, output, cache read and cache write, as `aep eval run` totals a manifest's \
+             `tokens`; thinking tokens are their own figure and are not added"
         );
-        let four = SpendFigures {
+        let no_thinking = SpendFigures {
             thinking_tokens: None,
-            ..five_known()
+            ..all_known()
         };
         assert_eq!(
-            four.with_split_total().total_tokens,
+            no_thinking.with_split_total().total_tokens,
+            Some(16 + 3_017 + 309_588 + 18_809),
+            "an unknown thinking count leaves the total as it is"
+        );
+        let three = SpendFigures {
+            cache_write_tokens: None,
+            ..all_known()
+        };
+        assert_eq!(
+            three.with_split_total().total_tokens,
             None,
-            "a total over four of five figures would understate the five, so it is unknown"
+            "a total over three of the four figures would understate them, so it is unknown"
         );
         let stated = SpendFigures {
             total_tokens: Some(30_412),
@@ -2978,7 +2991,7 @@ scenarios_total: 24
         );
         let overflowing = SpendFigures {
             input_tokens: Some(u64::MAX),
-            ..five_known()
+            ..all_known()
         };
         assert_eq!(
             overflowing.with_split_total().total_tokens,
