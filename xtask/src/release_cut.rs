@@ -594,6 +594,10 @@ pub(crate) fn record(root: &Path, forge: &dyn Forge, recorder: &dyn Recorder) ->
 }
 
 #[cfg(test)]
+#[path = "release_cut_adversary_tests.rs"]
+mod adversary_tests;
+
+#[cfg(test)]
 mod tests {
     use std::cell::RefCell;
     use std::fs;
