@@ -2,14 +2,28 @@
 format: aep.planning-md/3
 id: story:evidence-records-task-spend
 kind: story
-status: draft
+status: active
 title: Evidence records a task's model calls, tokens and cost
 relations:
 - decomposes: epic:deterministic-delivery-workflows
 - depends_on: story:task-spend-is-modelled
 - depends_on: story:llm-step-declares-judgement
-- depends_on: story:concurrent-command-steps
-revision: 4
+- serves: vision:O2
+scope:
+- confidence: cited
+  path: crates/edge/aep-cli/src/planning.rs
+- confidence: cited
+  path: crates/govern/aep-domain/src/evidence.rs
+- confidence: inferred
+  path: crates/observe/trace-domain
+- confidence: cited
+  path: ess/domains/evidence.yaml
+- confidence: cited
+  path: schemas/generated/driver-steps.schema.json
+revision: 8
+transitions:
+- {from: "draft", to: "proposed", at: "2026-10-14T19:07:13Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "proposed", to: "active", at: "2026-10-14T19:07:13Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
 ---
 # Story: Evidence records a task's model calls, tokens and cost
 
