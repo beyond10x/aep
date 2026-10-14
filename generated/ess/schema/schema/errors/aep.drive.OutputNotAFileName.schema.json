@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutputNotAFileName payload",
+  "description": "A `command` step whose `output:` is blank, holds a path separator, starts with `.`, or is a name the run directory already uses for its own records (map.rs `CommandStep::RESERVED_OUTPUTS`). The refusal's code is `empty_declaration` for a blank one and `unsupported_construct` otherwise, at `<step>.output` (map.rs `validated_output`).",
+  "x-ess-name": "aep.drive.OutputNotAFileName",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "1c1b495c54ce59e88b8495d12cef86a448fd99a217a62f0321e765a4713a41f9",
+    "contract_digest": "slice-sha256/2:76118104172148b585ce5415086b656004f261ce6ab2429e0f49e27f42e2a01f",
+    "regenerate": "ess generate"
+  }
+}

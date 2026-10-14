@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InputMissing payload",
+  "description": "A step names `{input.<name>}` and the run was not given `--input <name>=<value>`. Refused before a run id is allocated and again before the driver runs any step, with code `undeclared_reference` at the step's path and a message naming the placeholder (map.rs `StepMap::check_inputs`, drive.rs `start_with_host`, run.rs `Session::check_map`).",
+  "x-ess-name": "aep.drive.InputMissing",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "1c1b495c54ce59e88b8495d12cef86a448fd99a217a62f0321e765a4713a41f9",
+    "contract_digest": "slice-sha256/2:7c7b81e0eebe37741c6847fec6824f97a82a78546d3e64360df8c919126eb74b",
+    "regenerate": "ess generate"
+  }
+}

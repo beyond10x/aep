@@ -150,7 +150,7 @@ names `metaharness aep drive`, which runs model sessions over the same governor.
 
 | Command | Does |
 |---|---|
-| `aep drive run [--map <file-or-id>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap] [--budget-usd <usd> --assume-usd-per-run <usd>]` | starts a run of the project's task, allocating an id such as `AUTH-142/3`; exits `0` when it completes or stops for an operator |
+| `aep drive run [--map <file-or-id>] [--input <name>=<value>]… [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap] [--budget-usd <usd> --assume-usd-per-run <usd>]` | starts a run of the project's task, allocating an id such as `AUTH-142/3`; exits `0` when it completes or stops for an operator. Each `--input` fills `{input.<name>}` in the map's steps; a run naming one it was not given is refused before an id is allocated, and a resume uses the inputs the run started with |
 | `aep drive status [--run <id>]` | what the last run, or the named one, is doing, and who holds the lock |
 | `aep drive resume <run> [--pause-on-approval] [--approver …] [--max-iterations 25] [--budget-usd <usd>] [--take-lock] [--retry-in-flight <attempt> \| --record-in-flight-no-verdict]` | continues a stopped run; a budget may only narrow. The two in-flight flags resolve an outside attempt whose result is uncertain |
 | `aep drive transition [--run <id>]` | answers one `transition` hook document from a native loop on standard input: exit `0` proceeds, `2` refuses with a reason; writes nothing |

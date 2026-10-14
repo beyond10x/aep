@@ -9,6 +9,25 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- A `kind: command` step of an `aep.driver-steps/1` map may declare `expect: failure`: a nonzero
+  exit is then the passing verdict, and an exit of `0` submits failing evidence whose reason,
+  `nothing reproduced`, is printed as a note of the run. A process killed by a signal is still no
+  verdict. `expect: failure` beside an evidence `record:` is refused at `<step>.expect` with
+  `unsupported_construct`. A step without `expect` behaves, and digests, as before.
+- `aep drive run --input <name>=<value>` (repeatable) gives a run named inputs, which a step names
+  as `{input.<name>}` in its `run` words, its evidence `record:` path and an `llm` step's
+  `context`. A run whose map names an input it was not given is refused before a run id is
+  allocated, with `undeclared_reference` at the step naming the placeholder; a resume uses the
+  inputs recorded in the run's `launch.json`.
+- A command step may declare `output: <file>`: its standard output is written to
+  `{run_directory}/<file>`. An `llm` step's `context` may name `{run_directory}/<file>`, and the
+  session is handed that file. An output name that is blank, holds a path separator, starts with
+  `.` or is one of the run directory's own records is refused at `<step>.output`.
+- The ESS specification (`ess/domains/drive.yaml`) models `expect`, `output`, run inputs, and
+  reading a command's exit status against its expectation.
+
 ## [0.72.0] — 2026-10-14
 
 ### Changed

@@ -315,6 +315,53 @@ pub struct RunArgs {
     /// the record by hand is legitimately in.
     #[arg(long)]
     pub allow_evidence_gap: bool,
+    /// A named input the step map's `{input.<name>}` is filled in with. Repeatable.
+    ///
+    /// How a bug fix names its reproducing command and a release its version: the map is written
+    /// once, and the run says what it is about. Every input a step names must be given, and the
+    /// run is refused before a run id is allocated when one is not. A resume uses the inputs the
+    /// run was started with.
+    #[arg(long = "input", value_name = "NAME=VALUE", value_parser = parse_input)]
+    pub input: Vec<(String, String)>,
+}
+
+
+/// Reads one `--input <name>=<value>`.
+///
+/// The name is the one `{input.<name>}` is recognised by
+/// ([`aep_driver_spec::map::valid_input_name`]), so every input this accepts is one a map can
+/// name. The value is everything after the first `=`, and may be empty.
+///
+/// # Errors
+///
+/// When there is no `=`, or the name is not a lowercase word.
+pub fn parse_input(argument: &str) -> std::result::Result<(String, String), String> {
+    let Some((name, value)) = argument.split_once('=') else {
+        return Err(format!("`{argument}` is not `<name>=<value>`"));
+    };
+    if !aep_driver_spec::map::valid_input_name(name) {
+        return Err(format!(
+            "`{name}` is not an input name: a lowercase letter, then lowercase letters, digits, \
+             `_` and `-`, as `{{input.<name>}}` names it"
+        ));
+    }
+    Ok((name.to_owned(), value.to_owned()))
+}
+
+
+/// The run's inputs by name, refusing a name given twice rather than letting the last one win.
+///
+/// # Errors
+///
+/// Naming the input given twice.
+pub fn run_inputs(given: &[(String, String)]) -> Result<std::collections::BTreeMap<String, String>> {
+    let mut inputs = std::collections::BTreeMap::new();
+    for (name, value) in given {
+        if inputs.insert(name.clone(), value.clone()).is_some() {
+            bail!("`--input {name}` is given twice; a run has one value for each input");
+        }
+    }
+    Ok(inputs)
 }
 
 
@@ -612,17 +659,9 @@ pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitC
         .map_err(|errors| anyhow::anyhow!("{errors}"))
         .context("the task cannot be resolved")?;
 
-    // Phase two of the map's cross-validation, run **before the first step executes**. The protocol
-    // in force comes from the task, which no document loader has seen, so this cannot have happened
-    // at load: without it a map validates and then fails at `ProtocolError::EvidenceRejected`
-    // halfway through a run that has already spent a budget.
-    let refusals = inputs.map.check_run(&plan.protocol, &plan.workflow);
-    if !refusals.is_empty() {
-        outln!("{} is not runnable against this task:", inputs.map_origin);
-        for refusal in refusals.as_slice() {
-            outln!("  - {refusal}");
-        }
-        return Ok(ExitCode::from(1));
+    let run_inputs = run_inputs(&args.input)?;
+    if let Some(code) = refuse_unrunnable(&inputs, &plan, &run_inputs) {
+        return Ok(code);
     }
 
     // The static pre-flights, both checked before the lock is taken for the same reason: a run
@@ -687,6 +726,7 @@ pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitC
         pause_on_approval: args.pause_on_approval,
         approver: args.approver.clone(),
         plugin_dirs: inputs.plugin_dirs.clone(),
+        inputs: run_inputs.clone(),
         extra: prepared.launch_fields.clone(),
     };
     launch.write_required(directory.path())?;
@@ -704,6 +744,7 @@ pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitC
         // anybody looks a week later when two runs turn out to have overlapped.
         stolen_lock: lock.stolen().cloned(),
         in_flight_resolution: None,
+        inputs: run_inputs,
     };
     let context = ExecutorContext {
         working_directory: inputs.project.clone(),
@@ -838,6 +879,12 @@ pub fn resume_with_host(args: &ResumeArgs, host: &dyn ExecutionHost) -> Result<E
         } else {
             None
         },
+        // The values the run was started with: a resume that took new ones would be a run whose
+        // second half was about something its own launch record does not name.
+        inputs: launch
+            .as_ref()
+            .map(|l| l.inputs.clone())
+            .unwrap_or_default(),
     };
     let context = ExecutorContext {
         working_directory: inputs.project.clone(),
@@ -1125,6 +1172,33 @@ pub fn report_evidence_gap(report: &CoverageReport, origin: &str, allowed: bool)
          will arrive from outside the run, pass `--allow-evidence-gap` and accept that the run \
          stops at the guard."
     );
+}
+
+
+/// Refuses a start whose map cannot run against this task or these inputs.
+///
+/// Phase two of the map's cross-validation, run **before the first step executes**. The protocol
+/// in force comes from the task, which no document loader has seen, so this cannot have happened
+/// at load: without it a map validates and then fails at `ProtocolError::EvidenceRejected`
+/// halfway through a run that has already spent a budget. The run's inputs are checked against
+/// what the map's steps name in the same refusal: an `{input.<name>}` nobody gave is a fact about
+/// this invocation that the first step naming it would otherwise find, after a run id, a lock and
+/// every step before it.
+pub fn refuse_unrunnable(
+    inputs: &Inputs,
+    plan: &aep_domain::plan::ExecutionPlan,
+    run_inputs: &std::collections::BTreeMap<String, String>,
+) -> Option<ExitCode> {
+    let mut refusals = inputs.map.check_run(&plan.protocol, &plan.workflow);
+    refusals.extend(inputs.map.check_inputs(run_inputs));
+    if refusals.is_empty() {
+        return None;
+    }
+    outln!("{} is not runnable against this task:", inputs.map_origin);
+    for refusal in refusals.as_slice() {
+        outln!("  - {refusal}");
+    }
+    Some(ExitCode::from(1))
 }
 
 
@@ -1754,6 +1828,22 @@ impl CommandStepExecutor for CliExecutors {
             };
         };
 
+        // What the program printed, kept where the map said, whatever its verdict: a step that
+        // expects failure collects most when it fails. A later step names it as
+        // `{run_directory}/<file>`, so a kept output that could not be written is a step that
+        // observed nothing it promised to keep.
+        if let Some(name) = &step.output {
+            let kept = context.run_directory.join(name);
+            if let Err(error) = fs::write(&kept, &output.stdout) {
+                return StepOutcome::NoVerdict {
+                    reason: format!(
+                        "`{rendered}` ran, and what it printed could not be kept at {}: {error}",
+                        kept.display()
+                    ),
+                };
+            }
+        }
+
         // A verifier that wrote its own record: read what it wrote. The exit status is not
         // consulted at all — `aep observe trace evidence` exits 0 on a run that gapped, because the
         // verdict is in the document and the engine is what decides on it.
@@ -1763,28 +1853,52 @@ impl CommandStepExecutor for CliExecutors {
             }
         }
 
-        let Some(mapping) = &step.evidence else {
-            return if code == 0 {
-                StepOutcome::Nothing
-            } else {
-                StepOutcome::NoVerdict {
-                    reason: format!(
-                        "`{rendered}` exited {code} and declares no evidence, so \
-                                     nothing was observed"
-                    ),
-                }
-            };
-        };
+        command_verdict(step, code, &rendered)
+    }
+}
 
-        match mint(mapping, code == 0, &rendered, observed_now()) {
-            Some(submission) => StepOutcome::Observed(Box::new(submission)),
-            None => StepOutcome::NoVerdict {
+
+/// What a `command` step's exit status says, once a process exited with one.
+///
+/// The step's `expect:` decides which exit is the pass ([`CommandStep::verdict`]); everything
+/// after that is as it was. A step that expects failure and exited `0` submits a **failing**
+/// record — the reproduction a bug fix depends on did not happen, which is a verdict and not an
+/// absence — and the reason travels beside it into the run's report.
+pub fn command_verdict(step: &CommandStep, code: i32, rendered: &str) -> StepOutcome {
+    let verdict = step.verdict(code);
+    let Some(mapping) = &step.evidence else {
+        return match (verdict.passed, verdict.reason) {
+            (true, _) => StepOutcome::Nothing,
+            (false, Some(reason)) => StepOutcome::NoVerdict {
                 reason: format!(
-                    "`{rendered}` exited {code}, and a `{}` record has no form that says so",
-                    mapping.kind.as_str()
+                    "`{rendered}` exited {code}, and the step expects it to fail: {reason}"
                 ),
             },
-        }
+            (false, None) => StepOutcome::NoVerdict {
+                reason: format!(
+                    "`{rendered}` exited {code} and declares no evidence, so nothing was observed"
+                ),
+            },
+        };
+    };
+
+    match mint(mapping, verdict.passed, rendered, observed_now()) {
+        Some(submission) => match verdict.reason {
+            Some(reason) => StepOutcome::Explained {
+                submission: Box::new(submission),
+                reason: format!(
+                    "`{rendered}` exited {code}, and the step expects it to fail: {reason}"
+                ),
+            },
+            None => StepOutcome::Observed(Box::new(submission)),
+        },
+        None => StepOutcome::NoVerdict {
+            reason: format!(
+                "`{rendered}` exited {code}, and a `{}` record has no form that says so{}",
+                mapping.kind.as_str(),
+                verdict.reason.map_or_else(String::new, |reason| format!(": {reason}"))
+            ),
+        },
     }
 }
 
@@ -2443,6 +2557,12 @@ pub struct Launch {
     pub approver: Option<ActorRef>,
     /// The plugin directories the sessions loaded.
     pub plugin_dirs: Vec<PathBuf>,
+    /// The run's `--input <name>=<value>` pairs, which a resume fills `{input.<name>}` with.
+    ///
+    /// `#[serde(default)]`, so a run started before inputs existed resumes with none, and not
+    /// written when empty, so such a run's launch record reads as it did.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub inputs: std::collections::BTreeMap<String, String>,
     /// Host-owned launch fields, retained verbatim when a neutral reader updates a run.
     #[serde(flatten)]
     pub extra: std::collections::BTreeMap<String, serde_json::Value>,

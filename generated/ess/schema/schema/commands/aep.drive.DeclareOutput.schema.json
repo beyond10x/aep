@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep drive run --map input",
+  "description": "Admit a command step's output file name, refusing one that is not a name of its own.",
+  "x-ess-name": "aep.drive.DeclareOutput",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "path": {
+      "$ref": "#/$defs/aep.drive.StepPath"
+    },
+    "output": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "path",
+    "output"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "1c1b495c54ce59e88b8495d12cef86a448fd99a217a62f0321e765a4713a41f9",
+    "contract_digest": "slice-sha256/2:9770e80f6dad9a0f6ec99786b230cef1e70ab4fab066af805a4b39f22df0e543",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.StepPath": {
+      "title": "StepPath",
+      "x-ess-name": "aep.drive.StepPath",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

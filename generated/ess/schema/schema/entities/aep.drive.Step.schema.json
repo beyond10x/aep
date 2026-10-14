@@ -21,6 +21,21 @@
       "description": "What this step decides that no command could, in one line. Present on every `llm` step; a `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).",
       "type": "string"
     },
+    "expect": {
+      "$ref": "#/$defs/aep.drive.Expectation",
+      "description": "Which exit status is the passing verdict. A step that does not write the key holds `success`, and behaves, and digests, exactly as before the key existed. Every `llm` and `operator` step holds `success`: neither has the key (`deny_unknown_fields` refuses it, as for `judgement` on a `command` step)."
+    },
+    "output": {
+      "description": "A file name in the run directory the step's standard output is written to, so a later step names it as `{run_directory}/<file>`. An `llm` or `operator` step has no such key.",
+      "type": "string"
+    },
+    "inputs_named": {
+      "description": "The run inputs the step names, each once, in the order it names them.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
+    },
     "state": {
       "$ref": "#/$defs/aep.drive.Step.State"
     }
@@ -29,17 +44,35 @@
     "path",
     "map",
     "kind",
+    "expect",
+    "inputs_named",
     "state"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
-    "contract_digest": "slice-sha256/2:f894b888292b0c1d178471d2f811ddbd019e0e24f348264b0d73e67309420744",
+    "source_digest": "1c1b495c54ce59e88b8495d12cef86a448fd99a217a62f0321e765a4713a41f9",
+    "contract_digest": "slice-sha256/2:be0d7489915a1a3cdc0bcf662b369725cf9fcc15ada473c4ccf4874779a69e25",
     "regenerate": "ess generate"
   },
   "$defs": {
+    "aep.drive.Expectation": {
+      "title": "Expectation",
+      "x-ess-name": "aep.drive.Expectation",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "success",
+        "failure"
+      ]
+    },
+    "aep.drive.InputName": {
+      "title": "InputName",
+      "x-ess-name": "aep.drive.InputName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
     "aep.drive.Step.State": {
       "title": "State",
       "x-ess-name": "aep.drive.Step.State",

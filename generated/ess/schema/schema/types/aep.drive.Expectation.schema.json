@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.Expectation",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "1c1b495c54ce59e88b8495d12cef86a448fd99a217a62f0321e765a4713a41f9",
+    "contract_digest": "slice-sha256/2:ba334548d281ac40a8585bfe68818567ffde6b5f00e978cecaf9b249cb361d70",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.Expectation": {
+      "title": "Expectation",
+      "x-ess-name": "aep.drive.Expectation",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "success",
+        "failure"
+      ]
+    }
+  }
+}

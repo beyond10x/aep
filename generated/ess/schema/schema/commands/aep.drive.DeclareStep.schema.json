@@ -17,22 +17,56 @@
     },
     "judgement": {
       "type": "string"
+    },
+    "expect": {
+      "$ref": "#/$defs/aep.drive.Expectation"
+    },
+    "output": {
+      "type": "string"
+    },
+    "reads_record": {
+      "type": "boolean"
+    },
+    "inputs_named": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
     }
   },
   "required": [
     "path",
     "map",
-    "kind"
+    "kind",
+    "expect",
+    "reads_record",
+    "inputs_named"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
-    "contract_digest": "slice-sha256/2:5a66dbc7c01328c9b46c36a48bd1c973a0ea4dd1471e5f108cfe1b8bc24d39b0",
+    "source_digest": "1c1b495c54ce59e88b8495d12cef86a448fd99a217a62f0321e765a4713a41f9",
+    "contract_digest": "slice-sha256/2:90e65983ee4ca6a3c8f993bda5bb2a592afa7d477325e22b65531937fd304174",
     "regenerate": "ess generate"
   },
   "$defs": {
+    "aep.drive.Expectation": {
+      "title": "Expectation",
+      "x-ess-name": "aep.drive.Expectation",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "success",
+        "failure"
+      ]
+    },
+    "aep.drive.InputName": {
+      "title": "InputName",
+      "x-ess-name": "aep.drive.InputName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
     "aep.drive.StepKind": {
       "title": "StepKind",
       "x-ess-name": "aep.drive.StepKind",

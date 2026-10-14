@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.InputName",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "1c1b495c54ce59e88b8495d12cef86a448fd99a217a62f0321e765a4713a41f9",
+    "contract_digest": "slice-sha256/2:4a9a43fe18df2c307f50a08f1b3ee12b815e07e0b5d30241ba98160b5a33766d",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.InputName": {
+      "title": "InputName",
+      "x-ess-name": "aep.drive.InputName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}
