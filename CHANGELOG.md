@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.72.0] — 2026-10-14
+
 ### Changed
 
 - Every `kind: llm` step of an `aep.driver-steps/1` map carries `judgement:`, one line saying what
