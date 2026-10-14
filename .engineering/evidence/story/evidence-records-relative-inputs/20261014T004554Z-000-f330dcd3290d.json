@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-14T00:45:54Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-records-relative-inputs",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "PR 115 Gate (task check) passed on 62228053d; evidence_relative_inputs 7 passed (6 of 7 red before the fix); aep-cli 717 passed",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/38479280317"
+  }
+}
