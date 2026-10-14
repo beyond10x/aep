@@ -209,12 +209,13 @@ branch from `origin/main` and replay its changes as a new bot commit (`git cherr
 
 Tags are bare semantic versions (`0.64.0`). A release:
 
-1. On a `release/<version>` branch from current `origin/main`: set the workspace version in
-   `Cargo.toml` (and `Cargo.lock`), and turn `## [Unreleased]` into `## [<version>] — <date>`.
-2. Commit `chore: release <version>` and create the annotated tag locally:
-   `b10x-gates bot -- tag -a <version> -m "aep <version>"`.
-3. Run `cargo xtask status` (it derives `docs/status.md` and the website currency from the tag),
-   fold its output into the release commit, and re-create the tag on that commit.
+1. On a `release/<version>` branch from current `origin/main`:
+   `cargo xtask release prepare <version> --date <date>` sets the workspace version in
+   `Cargo.toml` and `Cargo.lock` and turns `## [Unreleased]` into `## [<version>] — <date>`.
+2. Commit `chore: release <version>`, then `cargo xtask release tag` creates the annotated tag
+   locally through the bot (`b10x-gates bot -- tag -a <version> -m "aep <version>"`).
+3. `cargo xtask release pin` runs `cargo xtask status` (it derives `docs/status.md` and the
+   website currency from the tag), commits its output and moves the tag to that commit.
 4. Full gate on that tree: `AEP_BIN=<target>/release/aep task check`, exit 0.
 5. Push the branch and the tag, open the release PR through `b10x-gates api`, and merge it through
    the bot with a merge commit (never a squash) once the required checks are green, so the tagged
@@ -222,7 +223,8 @@ Tags are bare semantic versions (`0.64.0`). A release:
    head.
 6. Verify the `Release` workflow run for the tag succeeded and the GitHub Release carries the four
    `aep-<version>-<target>.tar.gz` archives and `SHA256SUMS`.
-7. Record the release on a `plan/release-<version>-record` branch:
+7. Record the release on a `plan/release-<version>-record` branch: `cargo xtask release record`
+   finds the tag's `Release` run (read-only) and runs
    `aep plan artifact evidence epic:planning-on-entity-runtime --kind test_result --source "release
    <version>: tag commit <sha>, Release run <id>; task check exit 0" --ref <Release run URL>`,
    committed first; then run `cargo xtask status` and commit its output. The pins move only once a
