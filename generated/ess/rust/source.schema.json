@@ -1,5 +1,105 @@
 {
   "$defs": {
+    "aep.drive.LlmStepBegun": {
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/aep.drive.RunId"
+        }
+      },
+      "required": [
+        "run"
+      ],
+      "title": "LlmStepBegun",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.drive.LlmStepBegun"
+    },
+    "aep.drive.Run.State": {
+      "enum": [
+        "Started"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.Run.State"
+    },
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.drive.RunId"
+    },
+    "aep.drive.RunStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "llm_steps_declared": {
+          "type": "integer"
+        },
+        "run": {
+          "$ref": "#/$defs/aep.drive.RunId"
+        }
+      },
+      "required": [
+        "run",
+        "llm_steps_declared"
+      ],
+      "title": "RunStarted",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.drive.RunStarted"
+    },
+    "aep.drive.Step.State": {
+      "enum": [
+        "Declared"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.Step.State"
+    },
+    "aep.drive.StepDeclared": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/aep.drive.StepKind"
+        },
+        "path": {
+          "$ref": "#/$defs/aep.drive.StepPath"
+        }
+      },
+      "required": [
+        "path",
+        "kind"
+      ],
+      "title": "StepDeclared",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.drive.StepDeclared"
+    },
+    "aep.drive.StepKind": {
+      "enum": [
+        "command",
+        "llm",
+        "operator"
+      ],
+      "title": "StepKind",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.StepKind"
+    },
+    "aep.drive.StepMapId": {
+      "title": "StepMapId",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.drive.StepMapId"
+    },
+    "aep.drive.StepPath": {
+      "title": "StepPath",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.drive.StepPath"
+    },
     "aep.evidence.ArtifactId": {
       "title": "ArtifactId",
       "type": "string",
@@ -377,8 +477,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:56723a66d1518868d6384d46fe2374adf1b9003cf4904d4ad2b174c4a4a448ac",
-    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:f0f11d5ffad4d71f280728274e2a9d0e1d9ef6a65afed03c2e82098f8b5c0dff",
+    "source_digest": "086048ec7783e5d54198672dc09bfdf9ea535430325fcaee66a0878bd874ae14",
     "specification_version": "v1",
     "system": "aep"
   }

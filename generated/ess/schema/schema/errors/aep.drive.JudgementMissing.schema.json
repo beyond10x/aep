@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JudgementMissing payload",
+  "description": "An `llm` step without a `judgement:` key. The refusal's code is `missing_declaration` and its path is the step's, `driver-steps[<map>].states.<state>.steps[<index>].judgement` (map.rs `validate_step`; story acceptance 1).",
+  "x-ess-name": "aep.drive.JudgementMissing",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "086048ec7783e5d54198672dc09bfdf9ea535430325fcaee66a0878bd874ae14",
+    "contract_digest": "slice-sha256/2:08125366474b642fcc8a37a5b5471d5cc59881ce5b9cf15ca36f1fcd79fb75c8",
+    "regenerate": "ess generate"
+  }
+}

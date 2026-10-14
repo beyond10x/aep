@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "StepDeclared payload",
+  "x-ess-name": "aep.drive.StepDeclared",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "path": {
+      "$ref": "#/$defs/aep.drive.StepPath"
+    },
+    "kind": {
+      "$ref": "#/$defs/aep.drive.StepKind"
+    }
+  },
+  "required": [
+    "path",
+    "kind"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "086048ec7783e5d54198672dc09bfdf9ea535430325fcaee66a0878bd874ae14",
+    "contract_digest": "slice-sha256/2:faecdb6b465ab7f7b4af9ed89ce528dde70345b418e1d9ee746188f430bb83e7",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.StepKind": {
+      "title": "StepKind",
+      "x-ess-name": "aep.drive.StepKind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "command",
+        "llm",
+        "operator"
+      ]
+    },
+    "aep.drive.StepPath": {
+      "title": "StepPath",
+      "x-ess-name": "aep.drive.StepPath",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

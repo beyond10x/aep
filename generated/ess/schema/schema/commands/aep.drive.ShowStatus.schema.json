@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep drive status input",
+  "description": "Report a run, with the llm steps its map declares and the ones it ran.",
+  "x-ess-name": "aep.drive.ShowStatus",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "run": {
+      "$ref": "#/$defs/aep.drive.RunId"
+    }
+  },
+  "required": [
+    "run"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "086048ec7783e5d54198672dc09bfdf9ea535430325fcaee66a0878bd874ae14",
+    "contract_digest": "slice-sha256/2:d02a6c9cbc579d16768f76fc2aef5156c825b777951745ff3e647c603e5b8029",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "x-ess-name": "aep.drive.RunId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

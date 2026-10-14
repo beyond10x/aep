@@ -803,7 +803,8 @@ root:
                receive:\n    \
                  steps:\n      \
                    - kind: llm\n        \
-                       prompt: Read the task and write down what was asked for.\n"
+                       prompt: Read the task and write down what was asked for.\n        \
+                       judgement: What a task asks for is interpretation.\n"
         );
         aep_schema::parse::step_map(&text, None).expect("parses")
     }
@@ -1155,6 +1156,30 @@ root:
             refusal.contains("development/oneshot"),
             "and it names the document that will not apply: {refusal}"
         );
+    }
+
+    /// story:llm-step-declares-judgement, acceptance 2: both shipped maps load, and every `llm`
+    /// step of each says what no command could decide.
+    #[test]
+    fn both_shipped_maps_validate_and_say_why_each_llm_step_needs_a_model() {
+        for name in ["default.yaml", "checks.yaml"] {
+            let map = shipped(name);
+            let judgements: Vec<&str> = map
+                .states
+                .values()
+                .flat_map(|entry| entry.steps.iter())
+                .filter_map(|step| match step {
+                    Step::Llm(llm) => Some(llm.judgement.as_str()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(judgements.len(), 6, "{name} has six llm steps");
+            assert_eq!(map.llm_steps_declared(), 6, "{name}");
+            assert!(
+                judgements.iter().all(|line| !line.trim().is_empty()),
+                "{name}: every llm step says why it needs a model: {judgements:?}"
+            );
+        }
     }
 
     /// The header says which map filled the nodes, because two maps fit `adp/default/2` and

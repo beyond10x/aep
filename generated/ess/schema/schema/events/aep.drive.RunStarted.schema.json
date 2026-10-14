@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RunStarted payload",
+  "x-ess-name": "aep.drive.RunStarted",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "run": {
+      "$ref": "#/$defs/aep.drive.RunId"
+    },
+    "llm_steps_declared": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "run",
+    "llm_steps_declared"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "086048ec7783e5d54198672dc09bfdf9ea535430325fcaee66a0878bd874ae14",
+    "contract_digest": "slice-sha256/2:60a5d54fec2cac6ea00236fd3cb72e6a8f62c9e9153e4dddf626c61b8d142a32",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "x-ess-name": "aep.drive.RunId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

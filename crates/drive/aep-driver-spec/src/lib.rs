@@ -16,6 +16,7 @@
 //!       - kind: llm
 //!         skills: [planning]
 //!         prompt: implement the story's acceptance statement
+//!         judgement: what the change should say is authorship, which no command performs
 //!       - kind: command
 //!         run: [cargo, test, --workspace]
 //!         evidence:

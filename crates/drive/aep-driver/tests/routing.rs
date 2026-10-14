@@ -24,6 +24,7 @@ states:
     steps:
       - kind: llm
         prompt: write the code
+        judgement: what the code should say is authorship, which no command performs
       - kind: command
         run: [cargo, test]
         evidence:
@@ -58,6 +59,8 @@ fn cursor(state: &str) -> DriverCursor {
         took_lock_from: None,
         owed: None,
         answers: Vec::new(),
+        llm_steps_declared: None,
+        llm_steps_run: None,
     }
 }
 

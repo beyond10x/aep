@@ -1,0 +1,349 @@
+domain: aep.drive
+
+summary: >-
+  The steps of an `aep.driver-steps/1` step map as the map loader admits them: each step's kind,
+  and the `judgement:` line every `llm` step carries to say what no command could decide, refused
+  by a stable code at the step's path when absent; and the counts a driven run keeps of its map's
+  `llm` steps, declared and run, which `aep drive run`, `aep drive resume` and
+  `aep drive status --run <run>` print and the run's report carries. Declared for
+  story:llm-step-declares-judgement.
+
+# Paths are relative to the repository root. `map.rs` and `cursor.rs` are under
+# crates/drive/aep-driver-spec/src/, `run.rs` is crates/drive/aep-driver/src/run.rs and `drive.rs`
+# is crates/edge/aep-cli/src/drive.rs, unless a path says otherwise. Functions are named rather
+# than lines, because the change moves them.
+#
+# Not modelled here: the rest of a step map (its format, its workflow pin, visit budgets, the
+# `command` step's evidence mapping, placeholders and circuit breaker, the `llm` step's context,
+# scope, skills and harness, the `operator` step's prompt), the two-phase cross-validation against
+# the workflow and the protocol (`StepMap::cross_validate`, `StepMap::check_run`), and every other
+# fact of a run's cursor (state, visits, attempts per step, in-flight attempt, owed answers). Each
+# is unchanged by this story.
+
+types:
+  # read from: a step map's `id`, such as `development/default` (map.rs `StepMapId`).
+  - name: aep.drive.StepMapId
+    kind: newtype
+    of: String
+
+  # read from: where a step sits in its map, as every refusal of it names it:
+  # `driver-steps[<map>].states.<state>.steps[<index>]` (map.rs `StepMap::try_from`, the
+  # `location` it hands `validate_step`).
+  - name: aep.drive.StepPath
+    kind: newtype
+    of: String
+
+  # read from: a run's id, `<task>/<n>` such as `AUTH-142/3` (cursor.rs `RunId`).
+  - name: aep.drive.RunId
+    kind: newtype
+    of: String
+
+  # read from: a step's `kind:` (map.rs `RawStep`, `StepKind`).
+  - name: aep.drive.StepKind
+    kind: enum
+    variants:
+      - command   # runs a program and maps its result to evidence
+      - llm       # asks a model, with a tool set the protocol derived
+      - operator  # stops and hands the run to a person
+
+entities:
+  # One step of a step map, as the loader admitted it (map.rs `Step`). A step map is a document in
+  # the repository; nothing writes one through `aep`.
+  - name: aep.drive.Step
+    naming:
+      summary: One validated step of an aep.driver-steps/1 map.
+    identity:
+      name: path
+      type: aep.drive.StepPath
+    fields:
+      - name: map
+        type: aep.drive.StepMapId
+        summary: The map the step belongs to.
+      - name: kind
+        type: aep.drive.StepKind
+        summary: What sort of step it is.
+      # change (story:llm-step-declares-judgement): new on an `llm` step (map.rs `RawLlmStep`,
+      # `LlmStep::judgement`). On 0.71.3 an `llm` step had `prompt, context, scope, skills,
+      # harness, description`, and none of them said why a model was needed.
+      - name: judgement
+        type: Optional<String>
+        summary: >-
+          What this step decides that no command could, in one line. Present on every `llm`
+          step; a `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).
+    invariants:
+      # Every `llm` step the loader admits carries its judgement (the `judgement-missing` outcome).
+      - any:
+          - kind != "llm"
+          - defined(judgement)
+    lifecycle:
+      # A loaded map is immutable: a run pins its digest (cursor.rs `DriverCursor::map_digest`).
+      initial: Declared
+      states: [Declared]
+      terminal: [Declared]
+
+  # One driven run, as its cursor records it (cursor.rs `DriverCursor`): only the two counts this
+  # story adds.
+  - name: aep.drive.Run
+    naming:
+      summary: A driven run and the counts it keeps of its map's llm steps.
+    identity:
+      name: run
+      type: aep.drive.RunId
+    fields:
+      - name: map
+        type: aep.drive.StepMapId
+        summary: The step map driving the run (`DriverCursor::map`).
+      # change (story:llm-step-declares-judgement): new in the cursor
+      # (`DriverCursor::llm_steps_declared`, written by run.rs `sync_llm_counts`).
+      - name: llm_steps_declared
+        type: Integer
+        summary: >-
+          How many `llm` steps the map declares, over every state (map.rs
+          `StepMap::llm_steps_declared`).
+      # change (story:llm-step-declares-judgement): new in the cursor
+      # (`DriverCursor::llm_steps_run`, written by run.rs `sync_llm_counts`).
+      - name: llm_steps_run
+        type: Integer
+        summary: >-
+          How many `llm` step attempts the run has begun, over its whole life, resumes included:
+          the sum of the cursor's `attempts` at every `llm` step of the map. A step retried once
+          is two, as `steps run` counts it.
+    lifecycle:
+      # The run's status (running, completed, blocked, …) is not modelled here.
+      initial: Started
+      states: [Started]
+      terminal: [Started]
+
+actors:
+  # Whoever runs `aep` in the repository; the CLI knows no caller beyond the process.
+  - name: aep.drive.Operator
+    may:
+      - aep.drive.DeclareStep
+      - aep.drive.StartRun
+      - aep.drive.RunLlmStep
+      - aep.drive.ShowStatus
+
+errors:
+  # change (story:llm-step-declares-judgement): both new. A map with a refused step does not load,
+  # and every refusal of the map accumulates with the others (AGENTS.md invariant
+  # *Validation accumulates*).
+  - name: aep.drive.JudgementMissing
+    summary: >-
+      An `llm` step without a `judgement:` key. The refusal's code is `missing_declaration` and
+      its path is the step's, `driver-steps[<map>].states.<state>.steps[<index>].judgement`
+      (map.rs `validate_step`; story acceptance 1).
+    fields: []
+  - name: aep.drive.JudgementBlank
+    summary: >-
+      An `llm` step whose `judgement:` is empty or whitespace only. The refusal's code is
+      `empty_declaration` at the same path (map.rs `validate_step`).
+    fields: []
+  - name: aep.drive.RunNotFound
+    summary: >-
+      `--run` names a run with no cursor in the store's runs directory (drive.rs `status`,
+      `RunDirectory::read_cursor`).
+    fields:
+      - name: run
+        type: aep.drive.RunId
+
+events:
+  # aep publishes no events. These are the facts the changing outcomes produce, declared because
+  # ESS requires one per outcome that changes a record; no component publishes them.
+  - name: aep.drive.StepDeclared
+    fields:
+      - name: path
+        type: aep.drive.StepPath
+      - name: kind
+        type: aep.drive.StepKind
+  - name: aep.drive.RunStarted
+    fields:
+      - name: run
+        type: aep.drive.RunId
+      - name: llm_steps_declared
+        type: Integer
+  - name: aep.drive.LlmStepBegun
+    fields:
+      - name: run
+        type: aep.drive.RunId
+
+commands:
+  # Loading one step of a step map (map.rs `StepMap::try_from` and `validate_step`), as every
+  # `aep drive` verb that reads a map does before anything runs.
+  #
+  # change (story:llm-step-declares-judgement): an `llm` step is refused without a judgement.
+  - name: aep.drive.DeclareStep
+    naming:
+      wire: driver-steps-load-step
+      display: aep drive run --map
+      summary: Admit one step of a step map, refusing an llm step that says no judgement.
+    input:
+      - name: path
+        type: aep.drive.StepPath
+      - name: map
+        type: aep.drive.StepMapId
+      - name: kind
+        type: aep.drive.StepKind
+      - name: judgement
+        type: Optional<String>
+    outcomes:
+      - name: judgement-missing
+        when:
+          all:
+            - kind == "llm"
+            - not defined(judgement)
+        error: aep.drive.JudgementMissing
+      - name: declared
+        when:
+          any:
+            - kind != "llm"
+            - judgement.utf8_bytes >= 1
+        creates: aep.drive.Step
+        instance: path
+        sets:
+          map: input.map
+          kind: input.kind
+          judgement: input.judgement
+        emits: [aep.drive.StepDeclared]
+        payload:
+          aep.drive.StepDeclared:
+            path: input.path
+            kind: input.kind
+      # What is left is an `llm` step whose judgement is empty.
+      # ESS-LIMIT: a judgement of only whitespace is refused too, and ESS 0.59.0 has no predicate
+      # for it (no trimmed form of a String, as at aep.review.RecordReview `prose-only-blank`), so
+      # `declared` above admits one. Pinned by
+      # `an_llm_step_with_a_blank_judgement_is_refused_at_its_path` (aep-driver-spec map tests).
+      - name: judgement-blank
+        error: aep.drive.JudgementBlank
+
+  # `aep drive run` allocating a run (run.rs `fresh_cursor`, then `sync_llm_counts`).
+  - name: aep.drive.StartRun
+    naming:
+      wire: drive-run-start
+      display: aep drive run
+      summary: Start a run, recording how many llm steps its map declares.
+    input:
+      - name: run
+        type: aep.drive.RunId
+      - name: map
+        type: aep.drive.StepMapId
+      # ESS-LIMIT: the count is over the map's steps (aep.drive.LlmStepsDeclared publishes it per
+      # map), and ESS 0.59.0 has no value source that reads a view or counts related rows in
+      # `sets:` (`{related:}` is refused, synthesize.md), so the command takes the count. Pinned
+      # by `both_shipped_maps_validate_and_say_why_each_llm_step_needs_a_model` (aep-cli
+      # flow tests) and `a_run_counts_the_llm_steps_its_map_declares_and_the_ones_it_ran`
+      # (aep-driver driving).
+      - name: llm_steps_declared
+        type: Integer
+    outcomes:
+      - name: started
+        creates: aep.drive.Run
+        instance: run
+        sets:
+          map: input.map
+          llm_steps_declared: input.llm_steps_declared
+          llm_steps_run: 0
+        emits: [aep.drive.RunStarted]
+        payload:
+          aep.drive.RunStarted:
+            run: input.run
+            llm_steps_declared: input.llm_steps_declared
+
+  # The driver beginning one attempt at an `llm` step (run.rs `Session::begin_attempt`, which
+  # persists the cursor before the model is called).
+  - name: aep.drive.RunLlmStep
+    naming:
+      wire: drive-llm-step-begin
+      display: aep drive run
+      summary: Count one more llm step attempt against the run.
+    input:
+      - name: run
+        type: aep.drive.RunId
+    outcomes:
+      - name: no-such-run
+        unknown_instance: true
+        error: aep.drive.RunNotFound
+      - name: counted
+        updates: aep.drive.Run
+        instance: run
+        sets:
+          llm_steps_run: {increment: 1}
+        emits: [aep.drive.LlmStepBegun]
+        payload:
+          aep.drive.LlmStepBegun:
+            run: input.run
+
+  # `aep drive status --run <run>` (drive.rs `status`, `print_cursor`): prints
+  # `llm steps  <declared> declared, <run> run`. `aep drive run` and `aep drive resume` print the
+  # same line from the run's report (drive.rs `finish_with_command`, run.rs `RunReport`).
+  # ESS-LIMIT: a response field cannot declare which row field answers it (ESS binds a value per
+  # outcome only in an event payload); both are the run's own fields, and are pinned by
+  # `status_prints_the_llm_steps_a_run_declared_and_ran` (aep-cli drive_cli).
+  - name: aep.drive.ShowStatus
+    naming:
+      wire: drive-status
+      display: aep drive status
+      summary: Report a run, with the llm steps its map declares and the ones it ran.
+    input:
+      - name: run
+        type: aep.drive.RunId
+    response:
+      - name: llm_steps_declared
+        type: Integer
+      - name: llm_steps_run
+        type: Integer
+    # A `--run` with no cursor is refused (drive.rs `status`, `RunDirectory::read_cursor`), and
+    # ESS 0.59.0 admits `unknown_instance:` only beside a `moves:`, `updates:` or `deletes:`
+    # branch (ESS-COMMAND-012), so this read declares no not-found answer.
+    outcomes:
+      - name: reported
+        preserves: aep.drive.Run
+        returns: true
+        instance: run
+
+views:
+  # Structural: every invariant needs a view holding every state, and synthesis observes records
+  # only through a view.
+  - name: aep.drive.Steps
+    source: aep.drive.Step
+    consistency: read_your_writes
+    fields:
+      - name: path
+        type: aep.drive.StepPath
+      - name: state
+        type: aep.drive.Step.State
+      - name: map
+        type: aep.drive.StepMapId
+      - name: kind
+        type: aep.drive.StepKind
+      - name: judgement
+        type: Optional<String>
+
+  # change (story:llm-step-declares-judgement): the per-map count `aep drive` prints as
+  # `llm steps  <n> declared` (map.rs `StepMap::llm_steps_declared`). Every step is grouped and
+  # only the `llm` ones are counted, so a map whose steps are all commands answers 0.
+  - name: aep.drive.LlmStepsDeclared
+    source: aep.drive.Step
+    consistency: read_your_writes
+    group_by: [map]
+    fields:
+      - name: map
+        type: aep.drive.StepMapId
+      - name: llm_steps
+        type: Integer
+        aggregate: {count: {}, where: kind == "llm"}
+
+  - name: aep.drive.Runs
+    source: aep.drive.Run
+    consistency: read_your_writes
+    fields:
+      - name: run
+        type: aep.drive.RunId
+      - name: state
+        type: aep.drive.Run.State
+      - name: map
+        type: aep.drive.StepMapId
+      - name: llm_steps_declared
+        type: Integer
+      - name: llm_steps_run
+        type: Integer

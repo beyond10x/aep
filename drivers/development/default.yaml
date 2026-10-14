@@ -57,6 +57,9 @@ states:
       - kind: llm
         harness: b10x
         description: Read the task and record what is being asked for, unedited.
+        judgement: >-
+          What a task written in prose is asking for is interpretation: no command parses intent
+          out of prose.
         skills: [planning]
         # **No `context:` any more, because the planning skill arrives as a skill.** The plugin is
         # supplied at the driver boundary through `--plugin-dir` or `AEP_DRIVE_PLUGIN_DIR`; AEP
@@ -88,6 +91,9 @@ states:
       - kind: llm
         harness: b10x
         description: State the required behaviour as a specification artifact.
+        judgement: >-
+          Which behaviour the request requires, and how to state it so it can be checked, is a
+          choice no command derives from prose.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
@@ -111,6 +117,9 @@ states:
       - kind: llm
         harness: b10x
         description: Break the specification into units that can each be verified alone.
+        judgement: >-
+          Where to cut the work so that each unit can be verified alone is a design decision no
+          command makes.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
@@ -133,6 +142,9 @@ states:
       - kind: llm
         harness: b10x
         description: Write the tests before there is an implementation to shape them around.
+        judgement: >-
+          Which cases would decide the unit before any code exists is a judgement about what could
+          go wrong; a command runs checks, it does not choose them.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
@@ -185,6 +197,9 @@ states:
       - kind: llm
         harness: b10x
         description: Make the smallest change that satisfies the unit and its verifiers.
+        judgement: >-
+          Writing the change is authorship; the commands after this step decide whether it works,
+          and none of them writes it.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to
@@ -315,6 +330,9 @@ states:
       - kind: llm
         harness: b10x
         description: Try to break what the previous state just declared working.
+        judgement: >-
+          Finding the input nobody thought of is invention; a command reruns the checks that exist
+          and cannot imagine new ones.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
         # nobody thought of has an answer rather than a default. The planning store is denied to

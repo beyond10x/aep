@@ -189,6 +189,7 @@ states:
     steps:
       - kind: llm
         prompt: write the code
+        judgement: what the code should say is authorship, which no command performs
       - kind: command
         run: [git, diff]
         retries: 1
@@ -956,6 +957,49 @@ fn a_run_over_two_states_advances_and_the_report_names_both_moves() {
         "every way out is named, back-edge included, and what the *target* state requires on entry \
          comes with it: the suite has not run at this point, so neither guard holds"
     );
+}
+
+/// story:llm-step-declares-judgement, acceptance 3: a run's report carries how many `llm` steps its
+/// map declares and how many it ran, and the persisted cursor carries the same two counts, which
+/// is what `aep drive status` reads.
+///
+/// The `llm` step errors once and is retried, so the two counts differ: one declared, two run. A
+/// count of steps rather than of attempts would say one, and a count of every step would say four.
+#[test]
+fn a_run_counts_the_llm_steps_its_map_declares_and_the_ones_it_ran() {
+    let root = scratch("llm-counts");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(MAP);
+    let run = run_directory(&root);
+    let mut fake = Fake::new(&[
+        Act::Crash("the model call errored"),
+        Act::Done,
+        Act::Diff,
+        Act::Tests { failed: 0 },
+    ]);
+
+    let report = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut fake,
+        &DriverOptions::default(),
+    )
+    .expect("the run finishes");
+
+    assert_eq!(report.status(), RunStatus::Completed);
+    assert_eq!(report.steps_run, 4, "every attempt of every kind");
+    assert_eq!(report.llm_steps_declared, 1, "MAP declares one llm step");
+    assert_eq!(
+        report.llm_steps_run, 2,
+        "the llm step ran twice: once that errored, once that finished"
+    );
+    let cursor = run.read_cursor().expect("the cursor is on disk");
+    assert_eq!(cursor.llm_steps_declared, Some(1));
+    assert_eq!(cursor.llm_steps_run, Some(2));
 }
 
 /// The seam that was missing until 2026-08-22: a decision taken while a step runs is the engine's
