@@ -320,8 +320,9 @@ pub struct DriverCursor {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llm_steps_declared: Option<u32>,
     /// How many attempts the run has begun at its map's `llm` steps, retries and resumes
-    /// included: the sum of [`Self::attempts`] at those steps. `None` as for
-    /// [`Self::llm_steps_declared`].
+    /// included, one per attempt the driver begins. An unresolved attempt retried with
+    /// `--retry-in-flight` keeps its attempt number, so it is counted here and not in
+    /// [`Self::attempts`]. `None` as for [`Self::llm_steps_declared`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub llm_steps_run: Option<u32>,
 }

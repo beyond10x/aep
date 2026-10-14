@@ -106,7 +106,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "pattern": "\\S"
         },
         "subject": {
           "description": "What the evidence is about.",
@@ -167,8 +168,10 @@
           "description": "The paths this rule is about, as globs relative to the working tree.",
           "type": "array",
           "items": {
-            "type": "string"
-          }
+            "type": "string",
+            "pattern": "\\S"
+          },
+          "minItems": 1
         },
         "write": {
           "description": "What writing is allowed on them.",
@@ -200,7 +203,7 @@
             "null"
           ],
           "format": "uint32",
-          "minimum": 0.0
+          "minimum": 1.0
         }
       },
       "additionalProperties": false
@@ -224,7 +227,7 @@
                 "null"
               ],
               "format": "uint32",
-              "minimum": 0.0
+              "minimum": 1.0
             },
             "depends_on": {
               "description": "The outside thing this step needs, if it needs one.",
@@ -232,7 +235,8 @@
               "type": [
                 "string",
                 "null"
-              ]
+              ],
+              "pattern": "\\S"
             },
             "description": {
               "description": "What this step is for, in one line.",
@@ -274,7 +278,8 @@
               "type": "array",
               "items": {
                 "type": "string"
-              }
+              },
+              "minItems": 1
             }
           },
           "additionalProperties": false
@@ -293,7 +298,8 @@
               "default": [],
               "type": "array",
               "items": {
-                "type": "string"
+                "type": "string",
+                "pattern": "\\S"
               }
             },
             "description": {
@@ -315,7 +321,7 @@
             "judgement": {
               "description": "What this step decides that no command could, in one line.\n\nRead as optional so a step without one reaches validation and is refused there with its path, accumulating with every other problem in the map, rather than failing the whole document as a deserialization error would. The published schema requires it.",
               "type": "string",
-              "minLength": 1
+              "pattern": "\\S"
             },
             "kind": {
               "type": "string",
@@ -325,7 +331,8 @@
             },
             "prompt": {
               "description": "What the model is asked to do.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             },
             "scope": {
               "description": "Where this step may write, in order. First match wins.",
@@ -369,7 +376,8 @@
             },
             "prompt": {
               "description": "What the person is being asked for.",
-              "type": "string"
+              "type": "string",
+              "pattern": "\\S"
             }
           },
           "additionalProperties": false
