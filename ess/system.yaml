@@ -9,10 +9,14 @@ summary: >-
   deriving the store's `planning_scope`; and how `aep plan artifact new` records a `review-result`
   with a `findings` block or a prose-only reason, and how `aep plan artifact validate` places one
   without a block once the project file sets `findings_required_since`; and how
-  `aep plan artifact evidence --from <report/2> --suite <suite>` admits a suite by what it is.
+  `aep plan artifact evidence --from <report/2> --suite <suite>` admits a suite by what it is; and
+  the per-task spend record, declared ahead of the evidence kind that will write it; and how an
+  `aep.driver-steps/1` map refuses an `llm` step that does not say why it needs a model, and the
+  `llm` steps a driven run counts as declared and run.
   Retrofitted from the code; every declaration cites it.
 
 domains:
   - aep.plan
   - aep.review
   - aep.evidence
+  - aep.drive

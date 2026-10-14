@@ -9,6 +9,25 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Changed
+
+- Every `kind: llm` step of an `aep.driver-steps/1` map carries `judgement:`, one line saying what
+  the step decides that no command could. A map with an `llm` step without one is refused at load
+  with `missing_declaration` at `driver-steps[<map>].states.<state>.steps[<index>].judgement` (a
+  blank one with `empty_declaration`), and the published `driver-steps` schema requires the key.
+  Both shipped maps under `drivers/development/` declare it on all six of their `llm` steps.
+- The published `driver-steps` schema refuses the blank, empty or zero values the loader refuses:
+  a whitespace-only `judgement`, `prompt`, `context` entry, scope path, `depends_on` or evidence
+  `record`, an empty `run` or scope `paths` list, and a `visit_budget` or `circuit_breaker` of 0.
+  A whitespace-only `run` is still refused only at load.
+
+### Added
+
+- `aep drive run`, `aep drive resume` and `aep drive status` print
+  `llm steps  <declared> declared, <run> run`: how many `llm` steps the run's map declares and how
+  many attempts the run has made at them, retries and resumes included. The run's cursor and its
+  report carry both counts; a cursor written by an earlier build prints them as unknown.
+
 ## [0.71.3] — 2026-10-13
 
 ### Fixed

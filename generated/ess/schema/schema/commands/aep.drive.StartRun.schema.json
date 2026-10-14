@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep drive run input",
+  "description": "Start a run, recording how many llm steps its map declares.",
+  "x-ess-name": "aep.drive.StartRun",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "run": {
+      "$ref": "#/$defs/aep.drive.RunId"
+    },
+    "map": {
+      "$ref": "#/$defs/aep.drive.StepMapId"
+    },
+    "llm_steps_declared": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "run",
+    "map",
+    "llm_steps_declared"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:03862ad88b571e3fcb0fb270b522849f1bfa33e607c26bdfcb3b3cbcdb95193d",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "x-ess-name": "aep.drive.RunId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.drive.StepMapId": {
+      "title": "StepMapId",
+      "x-ess-name": "aep.drive.StepMapId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

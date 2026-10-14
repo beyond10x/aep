@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact evidence --kind task_spend input",
+  "description": "Record what one source says one task spent, each unstated figure absent.",
+  "x-ess-name": "aep.evidence.RecordSpend",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "id": {
+      "$ref": "#/$defs/aep.evidence.ArtifactId"
+    },
+    "record": {
+      "$ref": "#/$defs/aep.evidence.RecordName"
+    },
+    "source": {
+      "$ref": "#/$defs/aep.evidence.SpendSource"
+    },
+    "source_digest": {
+      "$ref": "#/$defs/aep.evidence.InputDigest"
+    },
+    "model_calls": {
+      "type": "integer"
+    },
+    "input_tokens": {
+      "type": "integer"
+    },
+    "output_tokens": {
+      "type": "integer"
+    },
+    "cache_read_tokens": {
+      "type": "integer"
+    },
+    "cache_write_tokens": {
+      "type": "integer"
+    },
+    "thinking_tokens": {
+      "type": "integer"
+    },
+    "cost_micro_usd": {
+      "type": "integer"
+    },
+    "wall_time_ms": {
+      "type": "integer"
+    },
+    "llm_steps_declared": {
+      "type": "integer"
+    },
+    "llm_steps_run": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "id",
+    "record",
+    "source"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:cfd893b84bfc6fa0b1b17e62b2898ea8b97871d952d4b67c5e69887ce40bd635",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "x-ess-name": "aep.evidence.ArtifactId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.InputDigest": {
+      "title": "InputDigest",
+      "x-ess-name": "aep.evidence.InputDigest",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "x-ess-name": "aep.evidence.RecordName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.SpendSource": {
+      "title": "SpendSource",
+      "x-ess-name": "aep.evidence.SpendSource",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "transcript",
+        "run_manifest",
+        "driven_run"
+      ]
+    }
+  }
+}

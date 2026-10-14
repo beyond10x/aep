@@ -132,6 +132,7 @@ states:
     steps:
       - kind: llm
         prompt: write the code
+        judgement: what the code should say is authorship, which no command performs
       - kind: command
         run: [cargo, test]
         evidence:

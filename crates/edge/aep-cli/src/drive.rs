@@ -921,6 +921,18 @@ pub fn status(args: &StatusArgs) -> Result<ExitCode> {
 }
 
 
+/// The `llm steps` line: how many `llm` steps the run's map declares, and how many attempts the
+/// run has made at them.
+///
+/// A cursor written before the counts existed has neither, and the line says so rather than
+/// printing a zero nobody observed.
+pub fn llm_steps_line(declared: Option<u32>, run: Option<u32>) -> String {
+    match (declared, run) {
+        (Some(declared), Some(run)) => format!("llm steps  {declared} declared, {run} run"),
+        _ => "llm steps  unknown declared, unknown run (the cursor predates the count)".to_owned(),
+    }
+}
+
 /// Prints a cursor, which is what `status` is for.
 pub fn print_cursor(cursor: &DriverCursor) {
     outln!("run        {}", cursor.run);
@@ -931,6 +943,10 @@ pub fn print_cursor(cursor: &DriverCursor) {
     outln!("state      {} (step {})", cursor.state, cursor.step);
     outln!("status     {}", cursor.status);
     outln!("iterations {}", cursor.iterations);
+    outln!(
+        "{}",
+        llm_steps_line(cursor.llm_steps_declared, cursor.llm_steps_run)
+    );
     for (state, visits) in &cursor.visits {
         outln!("visits     {state}: {visits}");
     }
@@ -1033,6 +1049,10 @@ fn finish_with_command(
         "steps      {} run, {} submitted",
         report.steps_run,
         report.evidence_submitted
+    );
+    outln!(
+        "{}",
+        llm_steps_line(Some(report.llm_steps_declared), Some(report.llm_steps_run))
     );
     for (from, to) in &report.transitions {
         outln!("moved      {from} -> {to}");

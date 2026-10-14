@@ -313,6 +313,18 @@ pub struct DriverCursor {
     /// Every `operator` step of this run that was answered, and by whom.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub answers: Vec<OperatorAnswer>,
+    /// How many `llm` steps the run's map declares.
+    ///
+    /// `None` only in a cursor written before the count existed, which says it does not know
+    /// rather than zero; the driver fills it in on its next write, from the map the digest pins.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm_steps_declared: Option<u32>,
+    /// How many attempts the run has begun at its map's `llm` steps, retries and resumes
+    /// included, one per attempt the driver begins. An unresolved attempt retried with
+    /// `--retry-in-flight` keeps its attempt number, so it is counted here and not in
+    /// [`Self::attempts`]. `None` as for [`Self::llm_steps_declared`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm_steps_run: Option<u32>,
 }
 
 impl DriverCursor {
@@ -443,6 +455,8 @@ mod tests {
             took_lock_from: None,
             owed: None,
             answers: Vec::new(),
+            llm_steps_declared: None,
+            llm_steps_run: None,
         }
     }
 

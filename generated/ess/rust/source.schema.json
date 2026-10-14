@@ -1,5 +1,105 @@
 {
   "$defs": {
+    "aep.drive.LlmStepBegun": {
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "$ref": "#/$defs/aep.drive.RunId"
+        }
+      },
+      "required": [
+        "run"
+      ],
+      "title": "LlmStepBegun",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.drive.LlmStepBegun"
+    },
+    "aep.drive.Run.State": {
+      "enum": [
+        "Started"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.Run.State"
+    },
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.drive.RunId"
+    },
+    "aep.drive.RunStarted": {
+      "additionalProperties": false,
+      "properties": {
+        "llm_steps_declared": {
+          "type": "integer"
+        },
+        "run": {
+          "$ref": "#/$defs/aep.drive.RunId"
+        }
+      },
+      "required": [
+        "run",
+        "llm_steps_declared"
+      ],
+      "title": "RunStarted",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.drive.RunStarted"
+    },
+    "aep.drive.Step.State": {
+      "enum": [
+        "Declared"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.Step.State"
+    },
+    "aep.drive.StepDeclared": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/aep.drive.StepKind"
+        },
+        "path": {
+          "$ref": "#/$defs/aep.drive.StepPath"
+        }
+      },
+      "required": [
+        "path",
+        "kind"
+      ],
+      "title": "StepDeclared",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.drive.StepDeclared"
+    },
+    "aep.drive.StepKind": {
+      "enum": [
+        "command",
+        "llm",
+        "operator"
+      ],
+      "title": "StepKind",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.StepKind"
+    },
+    "aep.drive.StepMapId": {
+      "title": "StepMapId",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.drive.StepMapId"
+    },
+    "aep.drive.StepPath": {
+      "title": "StepPath",
+      "type": "string",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.drive.StepPath"
+    },
     "aep.evidence.ArtifactId": {
       "title": "ArtifactId",
       "type": "string",
@@ -84,6 +184,49 @@
       "type": "string",
       "x-ess-kind": "newtype",
       "x-ess-name": "aep.evidence.RecordName"
+    },
+    "aep.evidence.SpendRecord.State": {
+      "enum": [
+        "Recorded"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.SpendRecord.State"
+    },
+    "aep.evidence.SpendRecorded": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/aep.evidence.ArtifactId"
+        },
+        "record": {
+          "$ref": "#/$defs/aep.evidence.RecordName"
+        },
+        "source": {
+          "$ref": "#/$defs/aep.evidence.SpendSource"
+        }
+      },
+      "required": [
+        "record",
+        "artifact",
+        "source"
+      ],
+      "title": "SpendRecorded",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.evidence.SpendRecorded"
+    },
+    "aep.evidence.SpendSource": {
+      "enum": [
+        "transcript",
+        "run_manifest",
+        "driven_run"
+      ],
+      "title": "SpendSource",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.SpendSource"
     },
     "aep.evidence.SuiteKind": {
       "enum": [
@@ -377,8 +520,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:56723a66d1518868d6384d46fe2374adf1b9003cf4904d4ad2b174c4a4a448ac",
-    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:15ecf8908705898d79448b48b97e1fbdd0d72affcc99f3d2b1f3d9900df96ea9",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
     "specification_version": "v1",
     "system": "aep"
   }

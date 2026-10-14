@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.StepMapId",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:7111e8ca0d58c7dae170a7df17b45d29bf26ffcd9de46ecacfc7951e86cd6432",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.StepMapId": {
+      "title": "StepMapId",
+      "x-ess-name": "aep.drive.StepMapId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

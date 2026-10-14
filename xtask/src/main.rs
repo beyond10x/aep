@@ -15,6 +15,7 @@ use clap::{Parser, Subcommand};
 
 mod ess;
 mod planning_stores;
+mod release_cut;
 mod release_pins;
 
 /// The index of a generated directory, written from the same list the directory is.
@@ -69,8 +70,12 @@ enum Command {
     Claims,
     /// Report whether the newest release was cut completely: version, changelog heading, pushed
     /// tag, GitHub Release, and a gate record in the planning store. Reaches the network, so it
-    /// is not a gate step.
-    Release,
+    /// is not a gate step. With a step, perform that step of cutting a release instead.
+    Release {
+        /// The release step to perform; without one, check the newest release.
+        #[command(subcommand)]
+        step: Option<ReleaseStep>,
+    },
     /// Validate the ESS specification under `ess/` and write its projections under
     /// `generated/ess/`.
     Ess {
@@ -81,6 +86,74 @@ enum Command {
         #[arg(long)]
         root: Option<PathBuf>,
     },
+}
+
+/// The steps of cutting a release (`AGENTS.md` § *Releases and commits*) that change this
+/// repository. Push, pull request and merge stay the bot route's.
+#[derive(Debug, Subcommand)]
+enum ReleaseStep {
+    /// Set the workspace version and date the Unreleased changelog section.
+    Prepare {
+        /// The bare version to release, above the newest tag.
+        version: String,
+        /// The release date, `YYYY-MM-DD`.
+        #[arg(long)]
+        date: String,
+    },
+    /// Create the annotated release tag at `HEAD` through the bot.
+    Tag,
+    /// Commit the `cargo xtask status` output and move the tag to that commit.
+    Pin,
+    /// Record the tag's `Release` workflow run in the planning store.
+    Record,
+}
+
+/// Runs one release step, or the completeness check without one.
+fn release_step(root: &Path, step: Option<ReleaseStep>) -> Result<()> {
+    match step {
+        None => release_check(root),
+        Some(ReleaseStep::Prepare { version, date }) => release_cut::prepare(root, &version, &date),
+        Some(ReleaseStep::Tag) => release_cut::tag(root, &release_cut::GitWriter::bot()),
+        Some(ReleaseStep::Pin) => {
+            release_cut::pin(root, &release_cut::GitWriter::bot(), &RepositoryStatus)
+        }
+        Some(ReleaseStep::Record) => release_cut::record(
+            root,
+            &release_cut::GhForge,
+            &release_cut::AepCli::from_env(),
+        ),
+    }
+}
+
+/// Writes (or, with `check`, verifies) every region `cargo xtask status` derives.
+///
+/// Both surfaces of one derivation, under one verb. Two verbs is how one of them stops being run,
+/// and the surface nobody re-runs is the one strangers read first.
+fn derived_status(root: &Path, check: bool) -> Result<()> {
+    authoritative_gate_contract(root)?;
+    generated_status_region_inventory(root)?;
+    status(root, check)?;
+    agents_gate_steps(root, check)?;
+    website_currency_from_tags(root, check)?;
+    release_pins_from_tags(root, check)?;
+    planning_stores_page(root, check)
+}
+
+/// The derivation `cargo xtask release pin` folds into the release.
+struct RepositoryStatus;
+
+impl release_cut::StatusOutput for RepositoryStatus {
+    fn paths(&self) -> Vec<String> {
+        STATUS_REGION_FILES
+            .iter()
+            .chain(release_pins::RELEASE_PIN_FILES)
+            .map(|path| (*path).to_owned())
+            .collect()
+    }
+
+    fn write(&self, root: &Path) -> Result<()> {
+        derived_status(root, false)
+    }
 }
 
 /// A release's notes: the tag's own `CHANGELOG.md` section, reflowed so GitHub does not break it
@@ -287,20 +360,9 @@ fn main() -> Result<()> {
         }
         Command::Schema { check } => schema(&workspace_root(), check),
         Command::Fmt { check } => fmt(check),
-        // Both surfaces of one derivation, under one verb. Two verbs is how one of them stops
-        // being run, and the surface nobody re-runs is the one strangers read first.
-        Command::Status { check } => {
-            let root = workspace_root();
-            authoritative_gate_contract(&root)?;
-            generated_status_region_inventory(&root)?;
-            status(&root, check)?;
-            agents_gate_steps(&root, check)?;
-            website_currency_from_tags(&root, check)?;
-            release_pins_from_tags(&root, check)?;
-            planning_stores_page(&root, check)
-        }
+        Command::Status { check } => derived_status(&workspace_root(), check),
         Command::Version => version_check(&workspace_root()),
-        Command::Release => release_check(&workspace_root()),
+        Command::Release { step } => release_step(&workspace_root(), step),
         Command::Deps => deps(&workspace_root()),
         // Both run, so a red gate names every defect at once rather than one per attempt.
         Command::Guards => {
@@ -473,6 +535,16 @@ fn tag_is_on_main(root: &Path, commit: &str) -> (bool, String) {
     }
 }
 
+/// Whether the planning store holds the release record of `version` at `commit`
+/// (`release_cut::is_release_record`). Any other `test_result` that mentions the commit, such as
+/// a story's gate record on the release branch head, does not count.
+fn release_recorded(root: &Path, version: &str, commit: &str) -> bool {
+    planning_records(root).iter().any(|text| {
+        serde_json::from_str::<serde_json::Value>(text)
+            .is_ok_and(|record| release_cut::is_release_record(&record, version, commit))
+    })
+}
+
 fn release_check(root: &Path) -> Result<()> {
     let tag = newest_release_tag(root)?;
     let version = workspace_version(root)?;
@@ -500,9 +572,7 @@ fn release_check(root: &Path) -> Result<()> {
         .output()
         .is_ok_and(|output| output.status.success());
     let short = &commit[..commit.len().min(7)];
-    let gated = planning_records(root).iter().any(|line| {
-        line.contains("\"test_result\"") && (line.contains(&commit) || line.contains(short))
-    });
+    let gated = release_recorded(root, &tag, &commit);
 
     let (on_main, main_detail) = tag_is_on_main(root, &commit);
 
@@ -529,7 +599,7 @@ fn release_check(root: &Path) -> Result<()> {
             format!("gh release view {tag}"),
         ),
         (
-            "planning store holds a test_result naming the tag's commit",
+            "planning store holds the release record of the tag's commit",
             gated,
             format!("planning store, commit {short}"),
         ),
@@ -2645,7 +2715,7 @@ source = "git+https://github.com/beyond10x/entity-runtime?tag=0.8.0#6aa3c59"
 
     /// A scratch directory that is removed on drop. Under this repository's `target/`, as the
     /// tag-reachability test does, rather than the system temporary directory.
-    mod tempdir {
+    pub(crate) mod tempdir {
         use std::path::{Path, PathBuf};
         use std::sync::atomic::{AtomicUsize, Ordering};
 

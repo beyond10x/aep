@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Run",
+  "description": "A driven run and the counts it keeps of its map's llm steps.",
+  "x-ess-name": "aep.drive.Run",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "run": {
+      "$ref": "#/$defs/aep.drive.RunId"
+    },
+    "map": {
+      "$ref": "#/$defs/aep.drive.StepMapId",
+      "description": "The step map driving the run (`DriverCursor::map`)."
+    },
+    "llm_steps_declared": {
+      "description": "How many `llm` steps the map declares, over every state (map.rs `StepMap::llm_steps_declared`).",
+      "type": "integer"
+    },
+    "llm_steps_run": {
+      "description": "How many `llm` step attempts the run has begun, over its whole life, resumes included: one per `aep.drive.RunLlmStep`. A step retried once is two, as `steps run` counts it, and an unresolved attempt retried with `--retry-in-flight` is a second attempt although it keeps its attempt number. A cursor written before the count existed starts from the sum of its `attempts` at every `llm` step of the map.",
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.drive.Run.State"
+    }
+  },
+  "required": [
+    "run",
+    "map",
+    "llm_steps_declared",
+    "llm_steps_run",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:821e3f5b479623030d208346ac9e1d300347ade0e922f69451434b47b08614b2",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.Run.State": {
+      "title": "State",
+      "x-ess-name": "aep.drive.Run.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Started"
+      ]
+    },
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "x-ess-name": "aep.drive.RunId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.drive.StepMapId": {
+      "title": "StepMapId",
+      "x-ess-name": "aep.drive.StepMapId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Step",
+  "description": "One validated step of an aep.driver-steps/1 map.",
+  "x-ess-name": "aep.drive.Step",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "path": {
+      "$ref": "#/$defs/aep.drive.StepPath"
+    },
+    "map": {
+      "$ref": "#/$defs/aep.drive.StepMapId",
+      "description": "The map the step belongs to."
+    },
+    "kind": {
+      "$ref": "#/$defs/aep.drive.StepKind",
+      "description": "What sort of step it is."
+    },
+    "judgement": {
+      "description": "What this step decides that no command could, in one line. Present on every `llm` step; a `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).",
+      "type": "string"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.drive.Step.State"
+    }
+  },
+  "required": [
+    "path",
+    "map",
+    "kind",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:f894b888292b0c1d178471d2f811ddbd019e0e24f348264b0d73e67309420744",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.Step.State": {
+      "title": "State",
+      "x-ess-name": "aep.drive.Step.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Declared"
+      ]
+    },
+    "aep.drive.StepKind": {
+      "title": "StepKind",
+      "x-ess-name": "aep.drive.StepKind",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "command",
+        "llm",
+        "operator"
+      ]
+    },
+    "aep.drive.StepMapId": {
+      "title": "StepMapId",
+      "x-ess-name": "aep.drive.StepMapId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.drive.StepPath": {
+      "title": "StepPath",
+      "x-ess-name": "aep.drive.StepPath",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

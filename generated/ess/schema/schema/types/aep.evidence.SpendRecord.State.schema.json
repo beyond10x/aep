@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.evidence.SpendRecord.State",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:9fb6bd8f2c7f9e2a62668a32968829dd86a45e1a4164507496a2abdf3ae5b908",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.SpendRecord.State": {
+      "title": "State",
+      "x-ess-name": "aep.evidence.SpendRecord.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Recorded"
+      ]
+    }
+  }
+}

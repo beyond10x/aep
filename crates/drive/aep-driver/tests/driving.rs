@@ -189,6 +189,7 @@ states:
     steps:
       - kind: llm
         prompt: write the code
+        judgement: what the code should say is authorship, which no command performs
       - kind: command
         run: [git, diff]
         retries: 1
@@ -958,6 +959,49 @@ fn a_run_over_two_states_advances_and_the_report_names_both_moves() {
     );
 }
 
+/// story:llm-step-declares-judgement, acceptance 3: a run's report carries how many `llm` steps its
+/// map declares and how many it ran, and the persisted cursor carries the same two counts, which
+/// is what `aep drive status` reads.
+///
+/// The `llm` step errors once and is retried, so the two counts differ: one declared, two run. A
+/// count of steps rather than of attempts would say one, and a count of every step would say four.
+#[test]
+fn a_run_counts_the_llm_steps_its_map_declares_and_the_ones_it_ran() {
+    let root = scratch("llm-counts");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(MAP);
+    let run = run_directory(&root);
+    let mut fake = Fake::new(&[
+        Act::Crash("the model call errored"),
+        Act::Done,
+        Act::Diff,
+        Act::Tests { failed: 0 },
+    ]);
+
+    let report = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut fake,
+        &DriverOptions::default(),
+    )
+    .expect("the run finishes");
+
+    assert_eq!(report.status(), RunStatus::Completed);
+    assert_eq!(report.steps_run, 4, "every attempt of every kind");
+    assert_eq!(report.llm_steps_declared, 1, "MAP declares one llm step");
+    assert_eq!(
+        report.llm_steps_run, 2,
+        "the llm step ran twice: once that errored, once that finished"
+    );
+    let cursor = run.read_cursor().expect("the cursor is on disk");
+    assert_eq!(cursor.llm_steps_declared, Some(1));
+    assert_eq!(cursor.llm_steps_run, Some(2));
+}
+
 /// The seam that was missing until 2026-08-22: a decision taken while a step runs is the engine's
 /// too, not only the harness's.
 ///
@@ -1596,5 +1640,78 @@ fn an_open_circuit_survives_resume_and_prevents_another_dispatch() {
             .any(|note| note.contains("was not attempted")),
         "the resume records both skips: {:?}",
         report.notes
+    );
+}
+
+/// Adversarial, story:llm-step-declares-judgement: a model call the operator re-runs with
+/// `--retry-in-flight` after a crash is a second attempt at the `llm` step, and the count says so.
+///
+/// The CHANGELOG and `website/docs/reference/documents.md` promise the attempts "retries and
+/// resumes included", and `ess/domains/drive.yaml` counts one `aep.drive.RunLlmStep` per attempt
+/// the driver begins. `begin_attempt` reuses the in-flight attempt number without recording an
+/// attempt, and `sync_llm_counts` derives the count from `attempts_at`, so the model runs twice and
+/// the count says once.
+///
+/// The crash is a panic inside the harness after the pre-dispatch marker is durable, which is the
+/// state a killed process leaves.
+#[test]
+fn an_llm_attempt_retried_in_flight_after_a_crash_counts_as_a_second_run() {
+    let root = scratch("llm-counts-in-flight");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(MAP);
+    let run = run_directory(&root);
+    let mut crashing = Fake::new(&[]);
+    let crashed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        drive(
+            &engine,
+            &task(),
+            &store,
+            &map,
+            &run,
+            &mut crashing,
+            &DriverOptions::default(),
+        )
+    }));
+    assert!(crashed.is_err(), "the harness died inside the model call");
+    assert_eq!(crashing.asked.len(), 1, "the llm step was dispatched once");
+
+    let cursor = run
+        .read_cursor()
+        .expect("the pre-dispatch cursor is on disk");
+    let in_flight = cursor.in_flight.clone().expect("the attempt is unresolved");
+    assert_eq!(
+        (in_flight.state.to_string(), in_flight.step),
+        ("implement".to_owned(), 0)
+    );
+    assert_eq!(
+        cursor.llm_steps_run,
+        Some(1),
+        "the first model call is counted"
+    );
+
+    let mut retried = Fake::new(&[Act::Done, Act::Diff, Act::Tests { failed: 0 }]);
+    let report = resume(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut retried,
+        &DriverOptions {
+            in_flight_resolution: Some(InFlightResolution::Retry(in_flight.id.clone())),
+            ..DriverOptions::default()
+        },
+    )
+    .expect("the exact attempt is explicitly retried");
+    assert_eq!(report.status(), RunStatus::Completed);
+    assert_eq!(
+        (retried.asked[0].state.as_str(), retried.asked[0].index),
+        ("implement", 0),
+        "the model was called again for the llm step"
+    );
+    assert_eq!(
+        report.llm_steps_run, 2,
+        "the llm step's model ran twice, once before the crash and once on the retry"
     );
 }

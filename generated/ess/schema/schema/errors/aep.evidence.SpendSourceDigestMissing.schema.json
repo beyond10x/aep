@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpendSourceDigestMissing payload",
+  "description": "A spend record names no source digest. Nothing is written.",
+  "x-ess-name": "aep.evidence.SpendSourceDigestMissing",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:40eeabe6dc872abece85cf7c1022a4e358af46fbc09a4fd95a5317faf8e0ebe0",
+    "regenerate": "ess generate"
+  }
+}

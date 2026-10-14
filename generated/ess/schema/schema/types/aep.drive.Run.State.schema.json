@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.Run.State",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:a7f336d314adffb5c2ecc152d56e393100281236a3735fb844119d849a06b58a",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.Run.State": {
+      "title": "State",
+      "x-ess-name": "aep.drive.Run.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Started"
+      ]
+    }
+  }
+}

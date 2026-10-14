@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep drive run input",
+  "description": "Count one more llm step attempt against the run.",
+  "x-ess-name": "aep.drive.RunLlmStep",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "run": {
+      "$ref": "#/$defs/aep.drive.RunId"
+    }
+  },
+  "required": [
+    "run"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:e04a53c2434f2078008a008b047a09ec8eda3bd7382075cd91de495f9d41264f",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "x-ess-name": "aep.drive.RunId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

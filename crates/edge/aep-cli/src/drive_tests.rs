@@ -71,6 +71,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         aep_schema::parse::step_map(
             "format: aep.driver-steps/1\nid: test/b10x\nworkflow: test/linear/1\n\
              states:\n  implement:\n    steps:\n      - kind: llm\n        prompt: do it\n\
+             \x20       judgement: what to write is authorship, which no command performs\n\
              \x20       harness: b10x\n",
             None,
         )
@@ -726,6 +727,21 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             absent.contains("no `aep` on that `PATH` at all"),
             "and says that is what it found rather than quoting a version it does not have: \
              {absent}"
+        );
+    }
+
+    /// story:llm-step-declares-judgement, acceptance 3: the line `status` and a finished run print.
+    /// A cursor written before the counts existed says it does not know, never zero (invariant
+    /// *Unknown differs from false*).
+    #[test]
+    fn the_llm_steps_line_says_both_counts_and_unknown_for_an_older_cursor() {
+        assert_eq!(
+            llm_steps_line(Some(6), Some(2)),
+            "llm steps  6 declared, 2 run"
+        );
+        assert_eq!(
+            llm_steps_line(None, None),
+            "llm steps  unknown declared, unknown run (the cursor predates the count)"
         );
     }
 }

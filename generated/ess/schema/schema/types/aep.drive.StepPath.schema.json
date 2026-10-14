@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.StepPath",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:736d95f469d026dd1e73bf8d97bfe0c09f098f3c59cb22abf9dc3c0068042c12",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.StepPath": {
+      "title": "StepPath",
+      "x-ess-name": "aep.drive.StepPath",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LlmStepBegun payload",
+  "x-ess-name": "aep.drive.LlmStepBegun",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "run": {
+      "$ref": "#/$defs/aep.drive.RunId"
+    }
+  },
+  "required": [
+    "run"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "7c948655ece997dbcc9628b131e729996296f466ec671269fdc8f5674dde7829",
+    "contract_digest": "slice-sha256/2:0b64dc61b883ba4f8e8cd495b0709f72b70763e15335b044e6f9918a3ad1e7f1",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.RunId": {
+      "title": "RunId",
+      "x-ess-name": "aep.drive.RunId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}
