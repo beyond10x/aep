@@ -85,6 +85,49 @@
       "x-ess-kind": "newtype",
       "x-ess-name": "aep.evidence.RecordName"
     },
+    "aep.evidence.SpendRecord.State": {
+      "enum": [
+        "Recorded"
+      ],
+      "title": "State",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.SpendRecord.State"
+    },
+    "aep.evidence.SpendRecorded": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact": {
+          "$ref": "#/$defs/aep.evidence.ArtifactId"
+        },
+        "record": {
+          "$ref": "#/$defs/aep.evidence.RecordName"
+        },
+        "source": {
+          "$ref": "#/$defs/aep.evidence.SpendSource"
+        }
+      },
+      "required": [
+        "record",
+        "artifact",
+        "source"
+      ],
+      "title": "SpendRecorded",
+      "type": "object",
+      "x-ess-kind": "event-payload",
+      "x-ess-name": "aep.evidence.SpendRecorded"
+    },
+    "aep.evidence.SpendSource": {
+      "enum": [
+        "transcript",
+        "run_manifest",
+        "driven_run"
+      ],
+      "title": "SpendSource",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.SpendSource"
+    },
     "aep.evidence.SuiteKind": {
       "enum": [
         "count_stage",
@@ -377,8 +420,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:56723a66d1518868d6384d46fe2374adf1b9003cf4904d4ad2b174c4a4a448ac",
-    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
+    "contract_digest": "slice-sha256/2:94b754ac0dc2f158d1d43d74b2cce5a2ad9140b6894b788913730afc9834a923",
+    "source_digest": "d5eca32701921c49c335671168d1c629f0f510168f83c9c40ccc14619a6fc500",
     "specification_version": "v1",
     "system": "aep"
   }

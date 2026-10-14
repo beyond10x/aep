@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpendRecord",
+  "description": "The model calls, tokens, cost, wall time and llm steps one source attributes to one task.",
+  "x-ess-name": "aep.evidence.SpendRecord",
+  "x-ess-kind": "entity",
+  "type": "object",
+  "properties": {
+    "record": {
+      "$ref": "#/$defs/aep.evidence.RecordName"
+    },
+    "artifact": {
+      "$ref": "#/$defs/aep.evidence.ArtifactId",
+      "description": "The artifact the spend is attributed to."
+    },
+    "source": {
+      "$ref": "#/$defs/aep.evidence.SpendSource",
+      "description": "The one source every figure of this record is read from."
+    },
+    "source_digest": {
+      "$ref": "#/$defs/aep.evidence.InputDigest",
+      "description": "`sha256:` and the SHA-256 of the source's bytes as read, as aep.evidence.InputDigest says."
+    },
+    "model_calls": {
+      "description": "Distinct API requests the transcript records (`Census::api_requests`, `api_request_count` in ir.rs). Absent when the source records none.",
+      "type": "integer"
+    },
+    "input_tokens": {
+      "description": "Uncached input tokens (`RunUsage::input_tokens`).",
+      "type": "integer"
+    },
+    "output_tokens": {
+      "description": "Output tokens (`RunUsage::output_tokens`).",
+      "type": "integer"
+    },
+    "cache_read_tokens": {
+      "description": "Tokens read from the cache (`RunUsage::cache_read_input_tokens`).",
+      "type": "integer"
+    },
+    "cache_write_tokens": {
+      "description": "Tokens written to the cache (`RunUsage::cache_creation_input_tokens`).",
+      "type": "integer"
+    },
+    "thinking_tokens": {
+      "description": "Billed thinking tokens the API reported (`RunUsage::thinking_tokens`).",
+      "type": "integer"
+    },
+    "cost_micro_usd": {
+      "description": "What the task cost, in millionths of a US dollar, as the transcript (`RunOutcome::total_cost_usd`) or the run manifest (`cost_micro_usd`) states it.",
+      "type": "integer"
+    },
+    "wall_time_ms": {
+      "description": "Wall-clock duration in milliseconds (`RunOutcome::duration_ms`, the manifest's `wall_time_ms`).",
+      "type": "integer"
+    },
+    "llm_steps_declared": {
+      "description": "For a driven run, how many llm steps its step map declares; absent for any other source.",
+      "type": "integer"
+    },
+    "llm_steps_run": {
+      "description": "For a driven run, how many llm steps it ran; absent for any other source.",
+      "type": "integer"
+    },
+    "state": {
+      "$ref": "#/$defs/aep.evidence.SpendRecord.State"
+    }
+  },
+  "required": [
+    "record",
+    "artifact",
+    "source",
+    "source_digest",
+    "state"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "d5eca32701921c49c335671168d1c629f0f510168f83c9c40ccc14619a6fc500",
+    "contract_digest": "slice-sha256/2:961947044df1506e0898515596f36d8c1044714322fa79810dc9a199c120ad05",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "x-ess-name": "aep.evidence.ArtifactId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.InputDigest": {
+      "title": "InputDigest",
+      "x-ess-name": "aep.evidence.InputDigest",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "x-ess-name": "aep.evidence.RecordName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.SpendRecord.State": {
+      "title": "State",
+      "x-ess-name": "aep.evidence.SpendRecord.State",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "Recorded"
+      ]
+    },
+    "aep.evidence.SpendSource": {
+      "title": "SpendSource",
+      "x-ess-name": "aep.evidence.SpendSource",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "transcript",
+        "run_manifest",
+        "driven_run"
+      ]
+    }
+  }
+}

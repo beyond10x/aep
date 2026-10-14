@@ -37,8 +37,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "6628903d8b47679b0bab5405293621bd5e4b3e73e26965997e0950b76985522d",
-    "contract_digest": "slice-sha256/2:143a270c32a7d728ece5125092bba7a4400679501cd860e24e3a05a38d0a3328",
+    "source_digest": "d5eca32701921c49c335671168d1c629f0f510168f83c9c40ccc14619a6fc500",
+    "contract_digest": "slice-sha256/2:9450bf001855b9b51b7bac3fafa4bb386be6f1dc69c22134fa77279b31d1aa65",
     "regenerate": "ess generate"
   },
   "$defs": {

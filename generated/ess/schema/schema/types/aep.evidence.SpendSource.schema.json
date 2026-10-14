@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.evidence.SpendSource",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "d5eca32701921c49c335671168d1c629f0f510168f83c9c40ccc14619a6fc500",
+    "contract_digest": "slice-sha256/2:3f84e20cdb4f34f7b0df2ee4ac4753f28d30ed1b3e0d05b77bc38dfbbd63cdaa",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.SpendSource": {
+      "title": "SpendSource",
+      "x-ess-name": "aep.evidence.SpendSource",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "transcript",
+        "run_manifest",
+        "driven_run"
+      ]
+    }
+  }
+}

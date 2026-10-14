@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpendRecorded payload",
+  "x-ess-name": "aep.evidence.SpendRecorded",
+  "x-ess-kind": "event-payload",
+  "type": "object",
+  "properties": {
+    "record": {
+      "$ref": "#/$defs/aep.evidence.RecordName"
+    },
+    "artifact": {
+      "$ref": "#/$defs/aep.evidence.ArtifactId"
+    },
+    "source": {
+      "$ref": "#/$defs/aep.evidence.SpendSource"
+    }
+  },
+  "required": [
+    "record",
+    "artifact",
+    "source"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "d5eca32701921c49c335671168d1c629f0f510168f83c9c40ccc14619a6fc500",
+    "contract_digest": "slice-sha256/2:8a20ecca533dfbebbebde6ea8508bfc3f697c0dd2207f402f2608f6f9afe816e",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.ArtifactId": {
+      "title": "ArtifactId",
+      "x-ess-name": "aep.evidence.ArtifactId",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.RecordName": {
+      "title": "RecordName",
+      "x-ess-name": "aep.evidence.RecordName",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    },
+    "aep.evidence.SpendSource": {
+      "title": "SpendSource",
+      "x-ess-name": "aep.evidence.SpendSource",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "transcript",
+        "run_manifest",
+        "driven_run"
+      ]
+    }
+  }
+}

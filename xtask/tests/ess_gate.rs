@@ -1,8 +1,8 @@
 //! The gate on `ess/`, the ESS specification of the `aep plan reverse init` and
 //! `aep plan store migrate git` surface and of the review-result findings rule
 //! (`aep plan artifact new` and `validate`) and of how `aep plan artifact evidence --from
-//! <report/2> --suite <suite>` admits a suite, and on the projections committed under
-//! `generated/ess/`.
+//! <report/2> --suite <suite>` admits a suite and of the per-task spend record, and on the
+//! projections committed under `generated/ess/`.
 //!
 //! * `cargo xtask ess --check` holds: the specification validates under its pinned release
 //!   (`--strict-requires`), compiles, and every committed projection equals a fresh one. Two
@@ -32,12 +32,13 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 20 scenarios and 68 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 22 scenarios and 68 refusals.
 ///
 /// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, the `aep.review.ReviewResult`
-/// invariant after each of its three recording outcomes, and the nine outcomes of
-/// `aep.evidence.RecordFromReport`.
+/// invariant after each of its three recording outcomes, the nine outcomes of
+/// `aep.evidence.RecordFromReport`, and the two outcomes of `aep.evidence.RecordSpend`
+/// (`source-digest-missing` and `recorded`, story:task-spend-is-modelled), which add no refusal.
 ///
 /// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (54) both commands read two row sets
 /// ("a scenario arranges the rows of one selector per command in this cut"), and neither entity
@@ -51,7 +52,7 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (20, 68);
+const SYNTHESIZED: (u64, u64) = (22, 68);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {

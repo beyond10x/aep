@@ -9,7 +9,8 @@ summary: >-
   deriving the store's `planning_scope`; and how `aep plan artifact new` records a `review-result`
   with a `findings` block or a prose-only reason, and how `aep plan artifact validate` places one
   without a block once the project file sets `findings_required_since`; and how
-  `aep plan artifact evidence --from <report/2> --suite <suite>` admits a suite by what it is.
+  `aep plan artifact evidence --from <report/2> --suite <suite>` admits a suite by what it is; and
+  the per-task spend record, declared ahead of the evidence kind that will write it.
   Retrofitted from the code; every declaration cites it.
 
 domains:
