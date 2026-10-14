@@ -2,15 +2,16 @@
 format: aep.planning-md/3
 id: story:task-spend-is-modelled
 kind: story
-status: active
+status: implemented
 title: The per-task spend record is modelled in ESS
 relations:
 - decomposes: epic:deterministic-delivery-workflows
 - serves: vision:O3
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-14T07:23:46Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"review_outcome":1}}}
 - {from: "proposed", to: "active", at: "2026-10-14T07:23:46Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "active", to: "implemented", at: "2026-10-14T18:52:09Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 # Story: The per-task spend record is modelled in ESS
 

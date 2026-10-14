@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-14T18:52:09Z",
+  "actor": "human:timo",
+  "artifact": "story:release-cutting-commands",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave/detflow-1 merged in https://github.com/beyond10x/aep/pull/118, released in 0.72.0 (tag commit 491103a53); task check exit 0, 2327 passed",
+    "reference": "https://github.com/beyond10x/aep/pull/118"
+  }
+}

@@ -2,15 +2,16 @@
 format: aep.planning-md/3
 id: story:llm-step-declares-judgement
 kind: story
-status: active
+status: implemented
 title: Every model-backed step says why it needs judgement
 relations:
 - decomposes: epic:deterministic-delivery-workflows
 - serves: vision:O3
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-14T07:23:46Z", actor: "human:timo", revision: 3, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-10-14T07:23:46Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "active", to: "implemented", at: "2026-10-14T18:52:09Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1,"review_outcome":3}}}
 ---
 # Story: Every model-backed step says why it needs judgement
 
