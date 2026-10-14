@@ -2,15 +2,16 @@
 format: aep.planning-md/3
 id: story:evidence-records-relative-inputs
 kind: story
-status: active
+status: implemented
 title: Evidence records keep no absolute local path, and a record that does not count says why
 relations:
 - serves: vision:O2
 - informed_by: story:evidence-admits-generated-runner-profile
-revision: 3
+revision: 4
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-13T20:13:50Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-10-13T20:13:50Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-10-14T00:45:54Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"test_result":1}}}
 ---
 # Story: Evidence records keep no absolute local path, and a record that does not count says why
 
