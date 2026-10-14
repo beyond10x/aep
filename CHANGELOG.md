@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.72.1] — 2026-10-14
+
 ### Fixed
 
 - A store whose `protocols:` pins a protocol tree older than 0.72.0 validates again. 0.72.0 applied
