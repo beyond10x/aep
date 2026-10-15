@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.73.0] — 2026-10-15
+
 ### Added
 
 - A `kind: command` step may declare `expect: failure`: a nonzero exit is then the passing
