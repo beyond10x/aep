@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-15T02:18:24Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-records-task-spend",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:detflow2-spend-adversary-pass-1",
+    "review": "review-result:detflow2-spend-adversary-pass-1",
+    "outcome": "fixed"
+  }
+}

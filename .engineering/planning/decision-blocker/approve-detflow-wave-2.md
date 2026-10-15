@@ -7,7 +7,7 @@ title: The second deterministic delivery wave waits for approval
 relations:
 - blocks: story:command-step-expects-failure
 - blocks: story:evidence-records-task-spend
-revision: 2
+revision: 3
 transitions:
 - {from: "open", to: "cleared", at: "2026-10-14T19:07:08Z", actor: "human:timo", revision: 2}
 ---
@@ -52,3 +52,21 @@ measures ("tokens", read as the source states them) and keeps unknown apart from
 
 Approved as proposed: two units in one wave, adversary passes alongside, pull request on green CI,
 then a minor release.
+
+## Decided after the adversary passes
+
+The adversary passes turned up two questions the stories did not settle. Both were decided inside
+the approved design and are fixed in their units:
+
+- `total_tokens` has one rule for every source: the sum of input, output, cache read and cache
+  write tokens, the four figures `aep eval run` totals into a run manifest's `tokens`, stated only
+  when all four are known. Thinking tokens stay their own figure and are not added, because a
+  provider's output count may already include them. This replaces the five-figure sum decided
+  above: with it, one run recorded from its transcript and from its manifest gave two totals
+  (116650 against 116546).
+- Under `expect: failure`, an exit status of 126 or 127 (the shell could not execute, or did not
+  find, the command) is no verdict, as a missing executable already is when the step spawns the
+  program itself; a typo in `--input` must not produce passing evidence for a bug nobody
+  reproduced. Every other nonzero exit, 128 and above included, stays a reproduction: a crash
+  reproduced through a shell exits that way, and it cannot be told apart from a signal the shell
+  reports. A process killed by a signal directly is still no verdict.

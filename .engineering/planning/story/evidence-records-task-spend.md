@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:evidence-records-task-spend
 kind: story
-status: active
+status: implemented
 title: Evidence records a task's model calls, tokens and cost
 relations:
 - decomposes: epic:deterministic-delivery-workflows
@@ -20,10 +20,11 @@ scope:
   path: ess/domains/evidence.yaml
 - confidence: cited
   path: schemas/generated/driver-steps.schema.json
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-14T19:07:13Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":2}}}
 - {from: "proposed", to: "active", at: "2026-10-14T19:07:13Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":2}}}
+- {from: "active", to: "implemented", at: "2026-10-15T02:18:31Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":3}}}
 ---
 # Story: Evidence records a task's model calls, tokens and cost
 

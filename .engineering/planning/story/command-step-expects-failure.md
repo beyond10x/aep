@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:command-step-expects-failure
 kind: story
-status: active
+status: implemented
 title: A command step can expect failure, and steps can take inputs and hand on output
 relations:
 - decomposes: epic:deterministic-delivery-workflows
@@ -19,10 +19,11 @@ scope:
   path: ess/domains/drive.yaml
 - confidence: cited
   path: schemas/generated/driver-steps.schema.json
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-14T19:07:13Z", actor: "human:timo", revision: 6}
 - {from: "proposed", to: "active", at: "2026-10-14T19:07:13Z", actor: "human:timo", revision: 7}
+- {from: "active", to: "implemented", at: "2026-10-15T02:18:31Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 # Story: A command step can expect failure, and steps can take inputs and hand on output
 

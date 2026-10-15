@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-15T02:18:15Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-records-task-spend",
+  "kind": "story",
+  "revision": 8,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave detflow-2 head 870a25919: clippy -D warnings and cargo test --no-fail-fast for aep-domain aep-driver-spec aep-driver aep-cli xtask, 1363 passed 0 failed; ess synthesis 52 scenarios 68 refusals"
+  }
+}
