@@ -94,6 +94,51 @@ types:
       - git_common_directory   # the directory holding the Git common directory named `.git`
       - engineering_directory  # the directory holding `.engineering/`, outside any Git repository
 
+  # change (story:spend-against-baseline): the five figures of an aep.evidence.SpendRecord a
+  # project may hold a baseline and a target for, in the order `aep plan artifact spend` prints
+  # them (project.rs `SpendFigure`, named as `SpendFigures` names them in
+  # crates/govern/aep-domain/src/evidence.rs). Any other figure name under `spend.<kind>` refuses
+  # the project file naming it; that name is outside this enum, so it is pinned by
+  # `an_unknown_figure_name_is_refused_naming_it` (aep-cli `artifact_spend`) rather than declared.
+  - name: aep.plan.SpendFigure
+    kind: enum
+    variants:
+      - model_calls
+      - total_tokens
+      - cost_micro_usd
+      - wall_time_ms
+      - llm_steps_run
+
+  # change (story:spend-against-baseline): one `spend.<kind>.<figure>` entry of the project file,
+  # `{ baseline, target }`, both required non-negative integers (project.rs `SpendBound`). The
+  # target is what the project aims for and the baseline what it measured, so a target not
+  # strictly below its baseline is no target (aep.plan.ReadSpendBound refuses it).
+  - name: aep.plan.SpendBound
+    kind: struct
+    fields:
+      - name: baseline
+        type: Integer
+        summary: The median a person copied from `aep plan artifact spend --baseline <n>`.
+      - name: target
+        type: Integer
+        summary: The median the project aims for, strictly below the baseline.
+    invariants:
+      - target >= 0
+      - target < baseline
+
+  # change (story:spend-against-baseline): the same entry as the project file writes it, before
+  # aep.plan.ReadSpendBound holds it to aep.plan.SpendBound (`RawSpendBound` in project.rs).
+  - name: aep.plan.SpendBoundWritten
+    kind: struct
+    fields:
+      - name: baseline
+        type: Integer
+      - name: target
+        type: Integer
+    invariants:
+      - baseline >= 0
+      - target >= 0
+
 # The scope is held to the PlanningScope rule before it is written: store_command.rs:126-139
 # (`fitted`) refuses a value that does not fit (the `flag-unfit` and `derived-unfit` outcomes).
 conversions:
@@ -297,6 +342,19 @@ entities:
           is refused naming the key, never read as absent: pinned by
           `a_findings_required_since_written_empty_or_null_is_refused_naming_the_key`
           (aep-domain).
+      # change (story:spend-against-baseline): an optional key beside `findings_required_since`
+      # in `RawProjectConfig`, read on load as that key is: by task kind (an artifact kind such as
+      # `story`), then figure. Absent, `aep plan artifact spend` prints `none` for both values and
+      # `undeclared` for the standing. Each entry is held to aep.plan.SpendBound on load
+      # (aep.plan.ReadSpendBound), so every command that reads the project file refuses one that
+      # does not hold, `aep plan artifact validate` included.
+      - name: spend
+        type: Map<String, Map<String, aep.plan.SpendBound>>
+        summary: >-
+          The baseline and target per task kind and figure that `aep plan artifact spend` reports
+          each median against. The verb never writes it: a person copies the medians in. Written
+          with no value, or with a kind holding no figure, it is refused rather than read as
+          absent.
       # change (story:migration-writes-each-move-once): what `aep plan store migrate git` reads
       # of an `aep.project/5` store to repair it (migrate_git.rs `repair`, `repeated_in`).
       - name: repeated_transitions
@@ -354,6 +412,7 @@ actors:
     may:
       - aep.plan.ReverseInit
       - aep.plan.MigrateGit
+      - aep.plan.ReadSpendBound
 
 errors:
   - name: aep.plan.RootUnreadable
@@ -400,6 +459,22 @@ errors:
       No `--planning-scope`, and the Git repository has neither an `origin` remote nor a common
       directory named `.git`; the refusal names `--planning-scope`.
     fields: []
+  # change (story:spend-against-baseline).
+  - name: aep.plan.SpendTargetNotBelowBaseline
+    summary: >-
+      A `spend.<kind>.<figure>` entry whose target is not strictly below its baseline
+      (project.rs `spend_bounds`); the refusal names the kind, the figure and both values, at
+      `project.spend.<kind>.<figure>`, beside every other defect of the file. Nothing reads the
+      project file past it.
+    fields:
+      - name: kind
+        type: String
+      - name: figure
+        type: aep.plan.SpendFigure
+      - name: baseline
+        type: Integer
+      - name: target
+        type: Integer
 
 events:
   # aep publishes no events. Each is the fact a success outcome produces, declared because ESS
@@ -1189,6 +1264,49 @@ commands:
                 entity: aep.plan.Repository
                 where: engineering == input.engineering
                 field: journal_repeated_moves
+
+  # change (story:spend-against-baseline): how every reader of the project file holds one
+  # `spend.<kind>.<figure>` entry (project.rs `spend_bounds`, called from
+  # `ProjectConfig::try_from`), so `aep plan artifact validate`, `aep plan artifact spend` and
+  # every verb that opens the plan through the project file refuse it alike, exit 1. The entry is
+  # read as written, before it is an aep.plan.SpendBound, so a bound that does not hold is
+  # representable here and refused rather than unrepresentable.
+  #
+  # Not modelled here: an entry missing `baseline` or `target`
+  # (`a_spend_entry_missing_a_value_is_refused_naming_it`, aep-domain project tests) or holding a
+  # value that is not a non-negative integer, such as -1, 12.5 or "12"
+  # (`a_spend_value_that_is_not_a_non_negative_integer_is_refused_naming_it`, same tests), which
+  # the reader refuses naming the kind, the figure and the value; `spend` or a kind written with no
+  # value (`a_spend_key_or_kind_written_empty_is_refused_naming_it`, same tests); and a figure name
+  # outside aep.plan.SpendFigure (`an_unknown_figure_name_is_refused_naming_it`, aep-cli
+  # `artifact_spend`).
+  - name: aep.plan.ReadSpendBound
+    naming:
+      wire: project-spend-bound
+      display: aep plan artifact validate
+      summary: Hold one `spend.<kind>.<figure>` entry of the project file to its bound.
+    input:
+      - name: kind
+        type: String
+      - name: figure
+        type: aep.plan.SpendFigure
+      - name: written
+        type: aep.plan.SpendBoundWritten
+    outcomes:
+      # Pinned by `a_target_not_below_its_baseline_is_refused_by_validate_naming_kind_figure_and_values`
+      # (aep-cli `artifact_spend`) and the aep-domain project tests.
+      - name: target-not-below-baseline
+        when: written.target >= written.baseline
+        error: aep.plan.SpendTargetNotBelowBaseline
+        payload:
+          aep.plan.SpendTargetNotBelowBaseline:
+            kind: input.kind
+            figure: input.figure
+            baseline: input.written.baseline
+            target: input.written.target
+      # The entry holds and is kept; reading the project file writes nothing.
+      - name: read
+        accepts: nothing
 
 views:
   # Structural, not reads aep has: every invariant needs a view holding every state, and

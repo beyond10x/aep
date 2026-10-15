@@ -160,6 +160,15 @@ impl CivilDate {
             ));
         }
         let number = |part: &str, what: &'static str| -> Result<i64, ParseError> {
+            // `i64::from_str` takes a leading `+` or `-`, so `2026-+1-+2` would read as
+            // 2026-01-02; the form is digits only.
+            if !part.bytes().all(|byte| byte.is_ascii_digit()) {
+                return Err(ParseError::reference(
+                    "date",
+                    value,
+                    format!("the {what} is not written in digits"),
+                ));
+            }
             part.parse::<i64>().map_err(|_| {
                 ParseError::reference("date", value, format!("the {what} is not a number"))
             })
@@ -807,6 +816,18 @@ mod tests {
     fn a_date_without_zero_padding_is_refused_rather_than_guessed() {
         let error = CivilDate::parse("2026-8-30").expect_err("the form is fixed");
         assert!(error.to_string().contains("zero-padded"), "{error}");
+    }
+
+    #[test]
+    fn a_date_with_a_signed_part_is_refused_rather_than_read_as_a_number() {
+        for written in ["+026-01-01", "2026-+1-+2", "2026-01-+1"] {
+            let error = CivilDate::parse(written).expect_err("the form is digits only");
+            assert!(
+                error.to_string().contains("not written in digits"),
+                "{written}: {error}"
+            );
+            assert!(error.to_string().contains(written), "{written}: {error}");
+        }
     }
 
     /// Gap register `:45`. The parser accepts every spelling the schema's pattern describes.

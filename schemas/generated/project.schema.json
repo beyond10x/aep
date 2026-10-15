@@ -100,6 +100,33 @@
         "null"
       ]
     },
+    "spend": {
+      "description": "A baseline and a target per task kind and figure, `spend.<kind>.<figure>.{baseline,target}`. Each figure is one of `model_calls`, `total_tokens`, `cost_micro_usd`, `wall_time_ms` and `llm_steps_run`; both values are required and the target is strictly below the baseline. Written with no value (empty, `~` or `null`), or a kind written with no figure, it is refused rather than read as absent.",
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "cost_micro_usd": {
+            "$ref": "#/definitions/RawSpendBound"
+          },
+          "llm_steps_run": {
+            "$ref": "#/definitions/RawSpendBound"
+          },
+          "model_calls": {
+            "$ref": "#/definitions/RawSpendBound"
+          },
+          "total_tokens": {
+            "$ref": "#/definitions/RawSpendBound"
+          },
+          "wall_time_ms": {
+            "$ref": "#/definitions/RawSpendBound"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "state": {
       "description": "Where execution state is kept.",
       "default": null,
@@ -171,6 +198,27 @@
         "url": {
           "description": "A libpq connection string or URL.",
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawSpendBound": {
+      "description": "A `spend.<kind>.<figure>` entry: the median measured and the median aimed for, both non-negative integers, the target strictly below the baseline.",
+      "type": "object",
+      "required": [
+        "baseline",
+        "target"
+      ],
+      "properties": {
+        "baseline": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "target": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false

@@ -119,6 +119,48 @@ types:
       - run_manifest  # an `eval.run-manifest/1` (`RawRunManifest`, eval.rs)
       - driven_run    # a driven run's report, the `cursor.json` it persists (`DriverCursor`, crates/drive/aep-driver-spec/src/cursor.rs): the llm steps its step map declares and the ones it ran
 
+  # change (story:spend-against-baseline): where one median stands against the target the project
+  # declares for its kind and figure, as `aep plan artifact spend` prints it in the `standing`
+  # column (planning/spend.rs `standing`).
+  - name: aep.evidence.SpendStanding
+    kind: enum
+    variants:
+      - under       # the median is below the target
+      - at          # the median equals the target
+      - over        # the median is above the target
+      - unknown     # no artifact of the kind states the figure, whether or not a target is declared
+      - undeclared  # the median is known and the project declares no target for the kind and figure
+
+  # change (story:spend-against-baseline): one row `aep plan artifact spend` prints, per task kind
+  # and aep.plan.SpendFigure (planning/spend.rs `SpendRow`).
+  - name: aep.evidence.SpendRow
+    kind: struct
+    fields:
+      - name: kind
+        type: String
+        summary: The kind of the artifacts the row is over, as their `task_spend` records name it.
+      - name: figure
+        type: aep.plan.SpendFigure
+      - name: tasks
+        type: Integer
+        summary: Artifacts of the kind with a `task_spend` record, each counted once.
+      - name: skipped
+        type: Integer
+        summary: Of those, the artifacts whose figure is unknown; they take no part in the median.
+      - name: median
+        type: Optional<Integer>
+        summary: The lower median over the others; absent, printed `unknown`, when none states it.
+      - name: baseline
+        type: Optional<Integer>
+        summary: The project file's `spend.<kind>.<figure>.baseline`; absent, printed `none`.
+      - name: target
+        type: Optional<Integer>
+        summary: The project file's `spend.<kind>.<figure>.target`; absent, printed `none`.
+      - name: standing
+        type: aep.evidence.SpendStanding
+    invariants:
+      - skipped <= tasks
+
 entities:
   # One evidence record in the planning store: an immutable file under `.engineering/evidence/`,
   # written once by `evidence` (AGENTS.md *Planning store*). Only the facts this admission writes.
@@ -274,6 +316,7 @@ actors:
     may:
       - aep.evidence.RecordFromReport
       - aep.evidence.RecordSpend
+      - aep.evidence.ReportSpend
 
 errors:
   # change (story:evidence-admits-ordinary-ess-suites): on 0.71.0 an ordinary major from /6 on was
@@ -349,6 +392,15 @@ errors:
       recognises (a transcript with no terminal record and no request), or a terminal record's
       `total_cost_usd` is neither a number nor `null` (`SpendSourceUnreadable`,
       planning/task_spend.rs `read_spend`); the refusal names the file. Nothing is written.
+    fields: []
+  # change (story:spend-against-baseline): a `--since` nobody can read as a day would otherwise
+  # cut the records at some other instant, or at none, and print a table that answers another
+  # question.
+  - name: aep.evidence.SpendSinceNotADate
+    summary: >-
+      `aep plan artifact spend --since <date>` with a value that is not a calendar date written
+      `YYYY-MM-DD`; the refusal names the value, and no table is printed (planning/spend.rs
+      `report`).
     fields: []
 
 events:
@@ -694,6 +746,69 @@ commands:
             record: input.record
             artifact: input.id
             source: input.source
+
+  # change (story:spend-against-baseline): `aep plan artifact spend [--kind <k>] [--since <date>]
+  # [--baseline <n>]` (planning.rs `ArtifactCommand::Spend`, planning/spend.rs `report`). A read:
+  # it writes nothing, the project file included, and reads no clock. Rows are one per task kind
+  # (the kind of the artifact a `task_spend` record names) and aep.plan.SpendFigure, kinds in name
+  # order and figures in the enum's order; baseline and target come from the project file's
+  # `spend` (aep.plan.Project), and the standing compares the median with the target.
+  #
+  # ESS-LIMIT: each row's figures are folded from the aep.evidence.SpendRecords rows of the store,
+  # and ESS 0.60.0 cannot express that fold. An artifact's figure is a sum over its records, one
+  # per `source_input`, each the latest of the records sharing it by `at` (at equal `at`, the
+  # evidence id that sorts last), and unknown when any of those records leaves it absent; a
+  # row's median is the lower middle of the known values sorted ascending; and `--baseline <n>`
+  # takes the first `n` artifacts of each kind by their earliest record's `at`, then id. An ESS
+  # 0.60.0 aggregate view measures one grouping of one source (`count`, `count_distinct`, `sum`,
+  # `min`, `max`, `avg`): it has no median, no ordered prefix of groups, and no second fold over
+  # the groups of a first (records to artifacts, artifacts to a row), and a command's response
+  # cannot read a view. So the rows are the response, as computed, and the rule stays in Rust:
+  # planning/spend.rs
+  # `artifact_figures` (the per-`source_input` latest and the sum), `lower_median` (the median)
+  # and `report` (the rows, the filters and the standing). Pinned by
+  # `story_model_calls_row_reports_tasks_median_baseline_target_and_standing`,
+  # `standing_follows_the_target_and_is_undeclared_without_one`,
+  # `baseline_takes_the_median_over_the_first_n_tasks_of_each_kind`,
+  # `records_sharing_a_source_input_count_once_by_latest_at`,
+  # `kind_and_since_filter_rows_and_records` and `two_runs_over_one_store_print_identical_bytes`
+  # (aep-cli `artifact_spend`), and the planning/spend.rs unit tests.
+  - name: aep.evidence.ReportSpend
+    naming:
+      wire: artifact-spend
+      display: aep plan artifact spend
+      summary: Report spend per task kind and figure against the project's baseline and target.
+    input:
+      - name: kind
+        type: Optional<String>
+        summary: "`--kind <k>`: only rows of that task kind."
+      - name: since
+        type: Optional<String>
+        summary: "`--since <date>`: only records whose `at` is at or after 00:00 UTC of that day."
+      # ESS-LIMIT: whether `--since` is a calendar date is a parse of the text, and ESS 0.60.0 has
+      # no calendar-date scalar or pattern predicate (as at aep.plan.UtcDate), so the command
+      # takes the answer as a Boolean. The parse is `CivilDate::parse` (aep-domain time.rs).
+      # Pinned by `a_since_that_is_not_a_calendar_date_is_refused_naming_it_and_prints_no_table`
+      # (aep-cli `artifact_spend`).
+      - name: since_is_date
+        type: Boolean
+      - name: baseline
+        type: Optional<Integer>
+        summary: "`--baseline <n>`: each median over the first `n` artifacts of each kind."
+    response:
+      - name: rows
+        type: List<aep.evidence.SpendRow>
+    outcomes:
+      # Decided before the store is opened, so a date nobody can read is refused as a date and
+      # never reported as an empty table.
+      - name: since-not-a-date
+        when:
+          all:
+            - defined(since)
+            - since_is_date == false
+        error: aep.evidence.SpendSinceNotADate
+      - name: reported
+        accepts: nothing
 
 views:
   # Structural: synthesis observes records only through a view.
