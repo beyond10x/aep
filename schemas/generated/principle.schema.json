@@ -398,6 +398,7 @@
         "ess_conformance_v2",
         "ess_conformance_coverage_v1",
         "trace_conformance",
+        "task_spend",
         "test_execution",
         "source_diff",
         "artifact_evidence",

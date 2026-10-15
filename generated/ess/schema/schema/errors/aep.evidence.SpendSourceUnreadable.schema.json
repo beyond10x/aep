@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpendSourceUnreadable payload",
+  "description": "The source is no `eval.run-manifest/1`, driven run cursor or transcript a reader recognises (a transcript with no terminal record and no request), or a terminal record's `total_cost_usd` is neither a number nor `null` (`SpendSourceUnreadable`, planning/task_spend.rs `read_spend`); the refusal names the file. Nothing is written.",
+  "x-ess-name": "aep.evidence.SpendSourceUnreadable",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "830d14292093701e8cb951f18b89be6b3e1da4b76ec6619f5bf970b376267915",
+    "contract_digest": "slice-sha256/2:b2dcb36875ff5eb8a6cb6c0c9778afbee3adf903d1e208f83d6d49c97d94d56f",
+    "regenerate": "ess generate"
+  }
+}

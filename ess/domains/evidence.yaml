@@ -8,9 +8,10 @@ summary: >-
   and how the record names its inputs: by a path relative to the repository root, or by file name
   for an input outside it, each beside its digest. And the per-task spend record: the model calls,
   tokens, cost, wall time and llm steps one source attributes to one artifact, each figure absent
-  when the source does not state it. Declared for story:evidence-admits-ordinary-ess-suites,
-  story:evidence-admits-generated-runner-profile, story:evidence-records-relative-inputs and
-  story:task-spend-is-modelled.
+  when the source does not state it, and the source named by its path from the repository root.
+  Declared for story:evidence-admits-ordinary-ess-suites,
+  story:evidence-admits-generated-runner-profile, story:evidence-records-relative-inputs,
+  story:task-spend-is-modelled and story:evidence-records-task-spend.
 
 # Paths are relative to the repository root. `planning.rs` is crates/edge/aep-cli/src/planning.rs,
 # `counts.rs`, `count_suite.rs`, `coverage.rs` and `ordinary_suite.rs` are under
@@ -36,9 +37,16 @@ summary: >-
 # model call, a token or a cost: `RunOutcome`, `RunUsage` and `ModelUsage` hold them per
 # transcript (crates/observe/trace-domain/src/ir.rs), `Census::api_requests` the calls, and
 # `eval.run-manifest/1` per eval run (`RawRunManifest` in crates/edge/aep-cli/src/eval.rs:
-# `cost_micro_usd`, `tokens`, `wall_time_ms`). The evidence kind, how each source is read into
-# the figures, and the CLI that writes the record are story:evidence-records-task-spend; until
-# then no code writes this record.
+# `cost_micro_usd`, `tokens`, `wall_time_ms`).
+#
+# change (story:evidence-records-task-spend): the record is written by
+# `aep plan artifact evidence <id> --kind task_spend --from <file>` (planning.rs
+# `record_evidence`, `planning/task_spend.rs` `read_spend`) as one `task_spend` evidence file
+# whose source is the record's JSON. Two additions: `total_tokens`, the one total an
+# `eval.run-manifest/1` states (its `tokens`), which no split figure could hold; and
+# `source_input`, the source's path from the repository root. Unlike a report or a suite
+# (aep.evidence.InputForm `file_name`), a spend source outside the root is refused, not named by
+# its file name: the record is about this repository's work and names where in it the source is.
 
 types:
   # read from: the artifact id `evidence <id>` names (planning.rs `record_evidence`, `artifact_id`).
@@ -109,7 +117,7 @@ types:
     variants:
       - transcript    # a harness transcript: its terminal record (`RunOutcome`, `RunUsage`, ir.rs) and its requests (`Census::api_requests`, ir.rs)
       - run_manifest  # an `eval.run-manifest/1` (`RawRunManifest`, eval.rs)
-      - driven_run    # a driven run's report: the llm steps its step map declares (`StepKind::Llm`, crates/drive/aep-driver-spec/src/map.rs) and the ones it ran
+      - driven_run    # a driven run's report, the `cursor.json` it persists (`DriverCursor`, crates/drive/aep-driver-spec/src/cursor.rs): the llm steps its step map declares and the ones it ran
 
 entities:
   # One evidence record in the planning store: an immutable file under `.engineering/evidence/`,
@@ -177,6 +185,13 @@ entities:
   # in `RunOutcome`, `RunUsage` and `RawRunManifest`. Integers throughout; a cost a transcript
   # states in US dollars (`total_cost_usd`, `ModelUsage::cost_usd`) is recorded in micro-USD, the
   # unit `eval.run-manifest/1` already writes (`cost_micro_usd`).
+  #
+  # change (story:evidence-records-task-spend): a transcript's token, cost and wall-time figures
+  # are folded per session (planning/task_spend.rs `transcript_figures`, eval.rs
+  # `every_session`): within one session the largest of its terminal records, which restate
+  # running counters, and across sessions their sum. A figure is absent for the task when any
+  # session states none, when a session never reaches a terminal record, or when the sum
+  # overflows: a sum over some of the sessions understates the task by the ones left out.
   - name: aep.evidence.SpendRecord
     naming:
       summary: The model calls, tokens, cost, wall time and llm steps one source attributes to one task.
@@ -193,6 +208,13 @@ entities:
       - name: source_digest
         type: aep.evidence.InputDigest
         summary: "`sha256:` and the SHA-256 of the source's bytes as read, as aep.evidence.InputDigest says."
+      # change (story:evidence-records-task-spend): new.
+      - name: source_input
+        type: String
+        summary: >-
+          The source, named as aep.evidence.InputForm `repository_relative` after every link in
+          its path and in the root's is resolved, so it names the file whose bytes were read;
+          never a file name alone and never an absolute path.
       - name: model_calls
         type: Optional<Integer>
         summary: >-
@@ -213,6 +235,17 @@ entities:
       - name: thinking_tokens
         type: Optional<Integer>
         summary: Billed thinking tokens the API reported (`RunUsage::thinking_tokens`).
+      # change (story:evidence-records-task-spend): new. A manifest states one total and no split,
+      # so its split figures stay absent and this holds its `tokens`. One rule for every source,
+      # the one `aep eval run` writes a manifest's `tokens` by (eval.rs `TOKEN_KEYS`): thinking
+      # tokens are not added, since an API's output count may already hold them.
+      - name: total_tokens
+        type: Optional<Integer>
+        summary: >-
+          The total the source states (an `eval.run-manifest/1`'s `tokens`), or, for a transcript
+          or a driven run, the sum of input, output, cache read and cache write tokens when all
+          four are known and the sum fits; otherwise absent. Thinking tokens are their own figure
+          and are not part of it.
       - name: cost_micro_usd
         type: Optional<Integer>
         summary: >-
@@ -297,6 +330,25 @@ errors:
   - name: aep.evidence.SpendSourceDigestMissing
     summary: >-
       A spend record names no source digest. Nothing is written.
+    fields: []
+  # change (story:evidence-records-task-spend): a spend source outside the repository root would
+  # be named by an absolute local path or by a bare file name nobody could find again.
+  - name: aep.evidence.SpendSourceOutsideRepository
+    summary: >-
+      The source lies outside the repository root once every link in its path and in the root's
+      is resolved, a directory link out of the repository and a `..` after one included
+      (`SpendSourceOutsideRepository`, planning/recorded_input.rs `repository_relative`); the
+      refusal names the path as given. Nothing is written.
+    fields: []
+  # change (story:evidence-records-task-spend): a file no spend reader recognises, or one stating
+  # a figure no reader can convert, would otherwise be recorded as a spend of unknown figures:
+  # unreadable is not unstated.
+  - name: aep.evidence.SpendSourceUnreadable
+    summary: >-
+      The source is no `eval.run-manifest/1`, driven run cursor or transcript a reader
+      recognises (a transcript with no terminal record and no request), or a terminal record's
+      `total_cost_usd` is neither a number nor `null` (`SpendSourceUnreadable`,
+      planning/task_spend.rs `read_spend`); the refusal names the file. Nothing is written.
     fields: []
 
 events:
@@ -549,6 +601,28 @@ commands:
       # is declared and refused, not left unrepresentable.
       - name: source_digest
         type: Optional<aep.evidence.InputDigest>
+      # change (story:evidence-records-task-spend): how the source is named.
+      # ESS-LIMIT: as on aep.evidence.RecordFromReport, which form a path takes is decided by
+      # comparing its components with the repository root's, after resolving links in both, and
+      # ESS 0.59.0 has no operator over the parts of a path or the filesystem, so the command
+      # takes the form. The decision is planning/recorded_input.rs `repository_relative`'s.
+      # Pinned by `a_spend_source_outside_the_repository_is_refused_naming_it`,
+      # `a_source_reached_through_a_link_to_outside_the_repository_is_refused` and
+      # `a_dot_dot_after_a_link_names_the_file_the_record_read` (aep-cli `evidence_task_spend`
+      # and `evidence_task_spend_adversary`).
+      - name: source_input_form
+        type: aep.evidence.InputForm
+      - name: source_input
+        type: String
+      # change (story:evidence-records-task-spend): whether a reader recognises the source and
+      # can convert every figure it states.
+      # ESS-LIMIT: recognising a transcript, a manifest or a cursor is parsing a file, and
+      # ESS 0.59.0 has no operator over a file's bytes, so the command takes the answer as a
+      # Boolean. The decision is planning/task_spend.rs `figures_of`'s. Pinned by
+      # `a_cost_written_as_text_is_refused_not_recorded_unknown` and
+      # `a_json_file_that_is_no_spend_source_is_refused` (aep-cli `evidence_task_spend_adversary`).
+      - name: source_readable
+        type: Boolean
       - name: model_calls
         type: Optional<Integer>
       - name: input_tokens
@@ -561,6 +635,14 @@ commands:
         type: Optional<Integer>
       - name: thinking_tokens
         type: Optional<Integer>
+      # change (story:evidence-records-task-spend): new.
+      # ESS-LIMIT: the total is read from the manifest or summed from the four split figures
+      # other than thinking tokens, and ESS 0.59.0 has no arithmetic over Optional inputs, so the
+      # command takes the total as read. The rule is `SpendFigures::with_split_total` (aep-domain
+      # evidence.rs), pinned by its unit tests and by the aep-cli `evidence_task_spend` tests and
+      # `a_transcript_total_equals_the_total_its_run_manifest_states`.
+      - name: total_tokens
+        type: Optional<Integer>
       - name: cost_micro_usd
         type: Optional<Integer>
       - name: wall_time_ms
@@ -570,9 +652,21 @@ commands:
       - name: llm_steps_run
         type: Optional<Integer>
     outcomes:
+      # change (story:evidence-records-task-spend): the source is named before it is read, so a
+      # source outside the root is refused whatever it holds.
+      - name: source-outside-repository
+        when: source_input_form != "repository_relative"
+        error: aep.evidence.SpendSourceOutsideRepository
+      # change (story:evidence-records-task-spend): `--kind task_spend` with no `--from` names no
+      # file, so no digest (planning.rs `record_evidence`). Pinned by
+      # `task_spend_without_a_source_file_is_refused_and_writes_nothing`.
       - name: source-digest-missing
         when: missing(source_digest)
         error: aep.evidence.SpendSourceDigestMissing
+      # change (story:evidence-records-task-spend): unreadable is not unstated.
+      - name: source-unreadable
+        when: source_readable == false
+        error: aep.evidence.SpendSourceUnreadable
       # An absent figure is written absent: each `sets:` entry reads an Optional input, so the
       # record never gains a zero the source did not state.
       - name: recorded
@@ -582,12 +676,14 @@ commands:
           artifact: input.id
           source: input.source
           source_digest: input.source_digest
+          source_input: input.source_input
           model_calls: input.model_calls
           input_tokens: input.input_tokens
           output_tokens: input.output_tokens
           cache_read_tokens: input.cache_read_tokens
           cache_write_tokens: input.cache_write_tokens
           thinking_tokens: input.thinking_tokens
+          total_tokens: input.total_tokens
           cost_micro_usd: input.cost_micro_usd
           wall_time_ms: input.wall_time_ms
           llm_steps_declared: input.llm_steps_declared
@@ -643,6 +739,8 @@ views:
         type: aep.evidence.SpendSource
       - name: source_digest
         type: aep.evidence.InputDigest
+      - name: source_input
+        type: String
       - name: model_calls
         type: Optional<Integer>
       - name: input_tokens
@@ -654,6 +752,8 @@ views:
       - name: cache_write_tokens
         type: Optional<Integer>
       - name: thinking_tokens
+        type: Optional<Integer>
+      - name: total_tokens
         type: Optional<Integer>
       - name: cost_micro_usd
         type: Optional<Integer>
