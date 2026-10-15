@@ -8,7 +8,12 @@ summary: >-
   0.72.0 is one, and a pinned tree can never gain the key); and the counts a driven run keeps of its map's
   `llm` steps, declared and run, which `aep drive run`, `aep drive resume` and
   `aep drive status --run <run>` print and the run's report carries. Declared for
-  story:llm-step-declares-judgement.
+  story:llm-step-declares-judgement. A `command` step's `expect:`, which inverts the verdict its
+  exit status carries, and its `output:` file; the named inputs a run is given
+  (`aep drive run --input <name>=<value>`) and every `{input.<name>}` a step names, refused before
+  any step runs when the run was not given it, and the `--input` pairs refused before a run is
+  allocated (a malformed name, a name given twice, a value naming a placeholder or making a
+  context entry blank or a glob). Declared for story:command-step-expects-failure.
 
 # Paths are relative to the repository root. `map.rs` and `cursor.rs` are under
 # crates/drive/aep-driver-spec/src/, `run.rs` is crates/drive/aep-driver/src/run.rs and `drive.rs`
@@ -17,12 +22,11 @@ summary: >-
 #
 # Not modelled here: the rest of a step map (its workflow pin, a format string other than the two
 # this build reads, which `StepMap::try_from` refuses with `unsupported_format_version` before
-# any step is admitted, visit budgets, the
-# `command` step's evidence mapping, placeholders and circuit breaker, the `llm` step's context,
-# scope, skills and harness, the `operator` step's prompt), the two-phase cross-validation against
-# the workflow and the protocol (`StepMap::cross_validate`, `StepMap::check_run`), and every other
-# fact of a run's cursor (state, visits, attempts per step, in-flight attempt, owed answers). Each
-# is unchanged by this story.
+# any step is admitted, visit budgets, the `command` step's evidence mapping, circuit breaker and
+# placeholders other than `{input.<name>}`, the `llm` step's scope, skills and harness, the
+# `operator` step's prompt), the two-phase cross-validation against the workflow and the protocol
+# (`StepMap::cross_validate`, `StepMap::check_run`), and every other fact of a run's cursor (state,
+# visits, attempts per step, in-flight attempt, owed answers). Each is unchanged by these stories.
 
 types:
   # read from: a step map's `id`, such as `development/default` (map.rs `StepMapId`).
@@ -61,6 +65,41 @@ types:
       - llm       # asks a model, with a tool set the protocol derived
       - operator  # stops and hands the run to a person
 
+  # change (story:command-step-expects-failure): read from a `command` step's `expect:` (map.rs
+  # `RawCommandStep::expect`, `Expect`). Absent is `success`, which is every map written before.
+  - name: aep.drive.Expectation
+    kind: enum
+    variants:
+      - success  # exit 0 is a passing verdict, any other exit a failing one
+      - failure  # any exit but 0 is a passing verdict, and exit 0 a failing one: nothing reproduced
+
+  # change (story:command-step-expects-failure): the name of a run input, as
+  # `aep drive run --input <name>=<value>` gives it and `{input.<name>}` names it (map.rs
+  # `placeholders_in`, drive.rs `parse_input`): a lowercase letter, then lowercase letters,
+  # digits, `_` and `-` (map.rs `valid_input_name`).
+  #
+  # ESS-LIMIT: `alphabet:` states the characters a name may hold, and ESS 0.59.0 has no
+  # position-dependent character class (no pattern predicate, predicates.md "Text shapes without
+  # patterns"), so "the first is a lowercase letter" is not stated; nor is "not empty". A name
+  # outside the rule never reaches this type: `aep drive run` refuses it as it reads `--input`
+  # (aep.drive.StartRun `input-name-malformed`). Pinned by
+  # `an_input_is_a_name_a_map_can_write_and_is_given_once`
+  # (aep-cli drive tests).
+  - name: aep.drive.InputName
+    kind: newtype
+    of: String
+    alphabet: "abcdefghijklmnopqrstuvwxyz0123456789_-"
+
+  # change (story:command-step-expects-failure): one `--input <name>=<value>` (drive.rs
+  # `RunArgs::input`, `Launch::inputs`, run.rs `DriverOptions::inputs`).
+  - name: aep.drive.RunInput
+    kind: struct
+    fields:
+      - name: name
+        type: aep.drive.InputName
+      - name: value
+        type: String
+
 entities:
   # One step of a step map, as the loader admitted it (map.rs `Step`). A step map is a document in
   # the repository; nothing writes one through `aep`.
@@ -92,6 +131,28 @@ entities:
           What this step decides that no command could, in one line. Present on every `llm`
           step of a `v2` map, and on an `llm` step of a `v1` map when its author wrote one; a
           `command` or `operator` step has no such key (`deny_unknown_fields` refuses it).
+      # change (story:command-step-expects-failure): new on a `command` step (map.rs
+      # `RawCommandStep::expect`, `CommandStep::expect`, `CommandStep::verdict`).
+      - name: expect
+        type: aep.drive.Expectation
+        summary: >-
+          Which exit status is the passing verdict. A step that does not write the key holds
+          `success`, and behaves, and digests, exactly as before the key existed. Every `llm` and
+          `operator` step holds `success`: neither has the key (`deny_unknown_fields` refuses it,
+          as for `judgement` on a `command` step).
+      # change (story:command-step-expects-failure): new on a `command` step (map.rs
+      # `RawCommandStep::output`, drive.rs `run_command`).
+      - name: output
+        type: Optional<String>
+        summary: >-
+          A file name in the run directory the step's standard output is written to, so a later
+          step names it as `{run_directory}/<file>`. An `llm` or `operator` step has no such key.
+      # change (story:command-step-expects-failure): every `{input.<name>}` the step's `run`
+      # words, its evidence `record:` path or its `context` entries name (map.rs
+      # `Step::inputs_named`).
+      - name: inputs_named
+        type: List<aep.drive.InputName>
+        summary: The run inputs the step names, each once, in the order it names them.
     invariants:
       # Every `llm` step of a `v2` map the loader admits carries its judgement (the
       # `judgement-missing` outcome). A `v1` map adopted no such rule.
@@ -135,6 +196,14 @@ entities:
           and an unresolved attempt retried with `--retry-in-flight` is a second attempt although
           it keeps its attempt number. A cursor written before the count existed starts from the
           sum of its `attempts` at every `llm` step of the map.
+      # change (story:command-step-expects-failure): new in the run's launch record
+      # (drive.rs `Launch::inputs`, handed to run.rs as `DriverOptions::inputs`), so a resume
+      # expands the values the run was started with.
+      - name: inputs
+        type: List<aep.drive.RunInput>
+        summary: >-
+          The `--input <name>=<value>` pairs the run was started with, by name; a resume reads
+          them back rather than taking new ones.
     lifecycle:
       # The run's status (running, completed, blocked, …) is not modelled here.
       initial: Started
@@ -146,8 +215,10 @@ actors:
   - name: aep.drive.Operator
     may:
       - aep.drive.DeclareStep
+      - aep.drive.DeclareOutput
       - aep.drive.StartRun
       - aep.drive.RunLlmStep
+      - aep.drive.ReadCommandExit
       - aep.drive.ShowStatus
 
 errors:
@@ -165,6 +236,74 @@ errors:
       An `llm` step whose `judgement:` is empty or whitespace only, in a map of either format
       version. The refusal's code is `empty_declaration` at the same path (map.rs
       `validate_step`).
+    fields: []
+  # change (story:command-step-expects-failure): the four below are new.
+  - name: aep.drive.ExpectationReadsRecord
+    summary: >-
+      A `command` step with `expect: failure` whose evidence names `record:`. The verdict is then
+      the document the verifier wrote and no exit status is read, so there is nothing to invert.
+      The refusal's code is `unsupported_construct` at `<step>.expect` (map.rs `validate_step`).
+    fields: []
+  - name: aep.drive.OutputNotAFileName
+    summary: >-
+      A `command` step whose `output:` is blank, holds a path separator or a NUL byte, starts with
+      `.`, is a name the run directory already uses for its own records in any ASCII case (map.rs
+      `CommandStep::RESERVED_OUTPUTS`; a darwin release target's file system ignores case), or
+      has the form of a step's log, `<text>-<digits>-<digits>.log` in any ASCII case (drive.rs
+      `run_command` writes `<state>-<index>-<attempt>.log`). The refusal's code is
+      `empty_declaration` for a blank one and `unsupported_construct` otherwise, at
+      `<step>.output` (map.rs `validated_output`).
+    fields: []
+  - name: aep.drive.InputMissing
+    summary: >-
+      A step names `{input.<name>}` and the run was not given `--input <name>=<value>`. Refused
+      before a run id is allocated and again before the driver runs any step, with code
+      `undeclared_reference` at the step's path and a message naming the placeholder (map.rs
+      `StepMap::check_inputs`, drive.rs `start_with_host`, run.rs `Session::check_map`).
+    fields: []
+  # change (story:command-step-expects-failure): the three below are new, refused as the run
+  # reads its `--input` pairs and its map, before a run id is allocated.
+  - name: aep.drive.InputNameMalformed
+    summary: >-
+      An `--input` argument that is not `<name>=<value>`, or whose name is not a lowercase letter
+      followed by lowercase letters, digits, `_` and `-`: the name `{input.<name>}` could never
+      name (drive.rs `parse_input`, the parser of `RunArgs::input`).
+    fields: []
+  - name: aep.drive.InputRepeated
+    summary: >-
+      The same `--input <name>` given twice. A run has one value for each input, and the last
+      one is not allowed to win silently (drive.rs `run_inputs`).
+    fields: []
+  - name: aep.drive.InputNamesAPlaceholder
+    summary: >-
+      An `--input` value holding a placeholder (`{task}`, `{run_directory}`, `{input.<name>}`,
+      any `{` word `}` of the placeholder shape). A value is filled in as text and never read
+      again for placeholders, so one that names any is refused rather than left to look like
+      one. The refusal's code is `unsupported_construct` at `driver-steps[<map>].inputs.<name>`
+      (map.rs `StepMap::check_inputs`).
+    fields: []
+  - name: aep.drive.InputMakesContextUnfit
+    summary: >-
+      An `--input` value that, filled into an `llm` step's context entry, leaves the entry blank
+      or a glob, which the loader refuses when a map writes it. The refusal's code is
+      `empty_declaration` at the step's `context` (map.rs `StepMap::check_inputs`,
+      `context_entry_defect`).
+    fields: []
+  - name: aep.drive.NoVerdict
+    summary: >-
+      The command was killed by a signal and has no exit status. Whatever the step expects, a
+      process that did not finish observed nothing, and nothing is submitted (D5's `Unknown`;
+      drive.rs `run_command`).
+    fields: []
+  # change (story:command-step-expects-failure): new.
+  - name: aep.drive.CommandNotExecuted
+    summary: >-
+      A step expecting failure whose command exited 126 or 127: the status a shell gives when it
+      could not execute the command or did not find it. Nothing was reproduced or refuted, as for
+      a program the driver could not spawn itself, so nothing is submitted and the reason names
+      the status (map.rs `CommandStep::verdict`, drive.rs `command_verdict`). Any other nonzero
+      exit, 128 and above included, is still a reproduction: a crash reproduced through a shell
+      exits that way, and cannot be told apart from a signal the shell reports.
     fields: []
   - name: aep.drive.RunNotFound
     summary: >-
@@ -217,6 +356,20 @@ commands:
         type: aep.drive.StepKind
       - name: judgement
         type: Optional<String>
+      # change (story:command-step-expects-failure): the four inputs below are new.
+      # The step's `expect:`, read as `success` when the document does not write it (map.rs
+      # `CommandStep::expect`). Every `llm` and `operator` step is `success`: writing the key on
+      # one does not parse, so no outcome here receives it.
+      - name: expect
+        type: aep.drive.Expectation
+      # Checked on its own by aep.drive.DeclareOutput before the step is admitted.
+      - name: output
+        type: Optional<String>
+      # Whether the step's evidence names `record:` (map.rs `EvidenceMapping::record`).
+      - name: reads_record
+        type: Boolean
+      - name: inputs_named
+        type: List<aep.drive.InputName>
     outcomes:
       - name: judgement-missing
         when:
@@ -225,6 +378,13 @@ commands:
             - format == "v2"
             - not defined(judgement)
         error: aep.drive.JudgementMissing
+      # change (story:command-step-expects-failure): new.
+      - name: expected-failure-reads-a-record
+        when:
+          all:
+            - expect == failure
+            - reads_record
+        error: aep.drive.ExpectationReadsRecord
       # An `llm` step whose judgement is written and empty, in a map of either format version.
       # ESS-LIMIT: a judgement of only whitespace is refused too, and ESS 0.59.0 has no predicate
       # for it (no trimmed form of a String, as at aep.review.RecordReview `prose-only-blank`), so
@@ -248,11 +408,73 @@ commands:
           format: input.format
           kind: input.kind
           judgement: input.judgement
+          expect: input.expect
+          output: input.output
+          inputs_named: input.inputs_named
         emits: [aep.drive.StepDeclared]
         payload:
           aep.drive.StepDeclared:
             path: input.path
             kind: input.kind
+
+
+  # change (story:command-step-expects-failure): new. The loader checking a `command` step's
+  # `output:` when it writes one (map.rs `validated_output`, called from `validate_step` with the
+  # step's other checks, so a bad output accumulates with every other refusal of the map).
+  #
+  # ESS-LIMIT: its own command rather than a refusal of aep.drive.DeclareStep, because a guard
+  # over an absent `Optional<String>` is unknown in ESS 0.59.0 and the default `judgement-blank`
+  # branch there could then not be decided; here the text is present by construction. An output of
+  # only whitespace is refused too, and ESS 0.59.0 has no trimmed form of a String (as at
+  # `judgement-blank`), so `kept` admits one. Pinned by
+  # `an_output_that_is_not_a_file_name_of_its_own_is_refused_at_its_path` (aep-driver-spec map
+  # tests).
+  #
+  # change (story:command-step-expects-failure): a reserved name is refused in any ASCII case,
+  # and a name holding a NUL byte is refused, both at load (the adversary's
+  # `an_output_naming_a_run_record_in_another_case_is_refused`,
+  # `an_output_holding_a_nul_byte_is_refused_at_load`). A name of a step log's form,
+  # `<text>-<digits>-<digits>.log` in any ASCII case, is refused too.
+  # ESS-LIMIT: ESS 0.59.0 has no position-dependent character class (no pattern predicate), so the
+  # step-log form is not stated below, and `ends_with: ".log"` would refuse more than the loader
+  # does (`notes.log` is kept). Pinned by `an_output_named_like_a_step_log_is_refused` (the
+  # adversary's) and `an_output_named_like_a_log_but_not_a_step_log_is_kept` (aep-driver-spec).
+  - name: aep.drive.DeclareOutput
+    naming:
+      wire: driver-steps-load-output
+      display: aep drive run --map
+      summary: Admit a command step's output file name, refusing one that is not a name of its own.
+    input:
+      - name: path
+        type: aep.drive.StepPath
+      - name: output
+        type: String
+    outcomes:
+      - name: not-a-file-name
+        when:
+          any:
+            - output.utf8_bytes == 0
+            - output: {contains: "/"}
+            - output: {contains: "\\"}
+            - output: {contains: "\0"}
+            - output: {starts_with: "."}
+            - output:
+                in_ignore_case:
+                  - cursor.json
+                  - cursor.writing
+                  - snapshot.json
+                  - snapshot.writing
+                  - state.json
+                  - state.writing
+                  - launch.json
+                  - launch.json.next
+                  - commands.jsonl
+                  - generations
+                  - transcripts
+        error: aep.drive.OutputNotAFileName
+      - name: kept
+        preserves: aep.drive.Step
+        instance: path
 
   # `aep drive run` allocating a run (run.rs `fresh_cursor`, then `sync_llm_counts`).
   - name: aep.drive.StartRun
@@ -273,7 +495,73 @@ commands:
       # (aep-driver driving).
       - name: llm_steps_declared
         type: Integer
+      # change (story:command-step-expects-failure): the run's `--input` pairs, and the inputs its
+      # map's steps name.
+      - name: inputs
+        type: List<aep.drive.RunInput>
+      # ESS-LIMIT: the names are over the map's steps (aep.drive.Step `inputs_named`), and ESS
+      # 0.59.0 reads no other entity's list in a command guard but through `when_related:`, whose
+      # row-set form selects rows and cannot range over a field of each, so the command takes the
+      # union. Pinned by `a_placeholder_naming_an_input_the_run_was_not_given_is_refused_before_any_step`
+      # (aep-driver driving) and
+      # `a_run_naming_an_input_it_was_not_given_is_refused_before_a_run_is_allocated` (aep-cli
+      # drive_cli).
+      - name: inputs_named
+        type: List<aep.drive.InputName>
+      # change (story:command-step-expects-failure): the four inputs below are new.
+      # ESS-LIMIT: each is a fact about the `--input` arguments or about a value filled into the
+      # map that ESS 0.59.0 cannot compute from `inputs`, so the command takes it, as for
+      # `inputs_named` above. A malformed name has no aep.drive.InputName to be one, and
+      # "matches the name rule" needs a position-dependent class (see aep.drive.InputName). Two
+      # elements of one list with the same name cannot be told apart from one element read twice
+      # by a nested quantifier. "Names a placeholder" is a `{` word `}` of a shape no text
+      # operator states, and "a context entry becomes blank or a glob" is over the map's entries
+      # with the value filled in. Pinned by `an_input_is_a_name_a_map_can_write_and_is_given_once`
+      # (aep-cli drive tests), `an_input_value_that_names_a_placeholder_is_refused` and the adversary's
+      # `an_input_value_that_makes_a_context_entry_a_glob_or_blank_is_refused` (aep-driver-spec).
+      #
+      # The `--input` arguments whose name is malformed, as typed (drive.rs `parse_input`).
+      - name: malformed_names
+        type: List<String>
+      # The names given by more than one `--input` (drive.rs `run_inputs`).
+      - name: repeated_names
+        type: List<aep.drive.InputName>
+      # The names whose value holds a placeholder (map.rs `StepMap::check_inputs`).
+      - name: placeholder_valued
+        type: List<aep.drive.InputName>
+      # The names whose value leaves an `llm` step's context entry blank or a glob once filled in
+      # (map.rs `StepMap::check_inputs`).
+      - name: context_unfit
+        type: List<aep.drive.InputName>
     outcomes:
+      # change (story:command-step-expects-failure): the four below are new. Refused in this
+      # order: the arguments are read before the map is consulted. `check_inputs` accumulates its
+      # three refusals with each other; a first-match outcome names one of them.
+      - name: input-name-malformed
+        when: malformed_names.count > 0
+        error: aep.drive.InputNameMalformed
+      - name: input-repeated
+        when: repeated_names.count > 0
+        error: aep.drive.InputRepeated
+      - name: input-names-a-placeholder
+        when: placeholder_valued.count > 0
+        error: aep.drive.InputNamesAPlaceholder
+      - name: input-makes-context-unfit
+        when: context_unfit.count > 0
+        error: aep.drive.InputMakesContextUnfit
+      # change (story:command-step-expects-failure): new. A run names an input nobody gave it.
+      - name: input-missing
+        when:
+          exists:
+            in: inputs_named
+            as: named
+            that:
+              not:
+                exists:
+                  in: inputs
+                  as: given
+                  that: given.name == named
+        error: aep.drive.InputMissing
       - name: started
         creates: aep.drive.Run
         instance: run
@@ -281,6 +569,7 @@ commands:
           map: input.map
           llm_steps_declared: input.llm_steps_declared
           llm_steps_run: 0
+          inputs: input.inputs
         emits: [aep.drive.RunStarted]
         payload:
           aep.drive.RunStarted:
@@ -310,6 +599,81 @@ commands:
         payload:
           aep.drive.LlmStepBegun:
             run: input.run
+
+  # change (story:command-step-expects-failure): new. The driver reading a `command` step's exit
+  # status against what the step expects (map.rs `CommandStep::verdict`, read by drive.rs
+  # `run_command`), before it mints the step's evidence from the verdict. A step whose evidence
+  # names `record:` reads no exit status and is not this command.
+  #
+  # ESS-LIMIT: the response cannot declare which value each outcome answers (ESS binds a value per
+  # outcome only in an event payload, as at aep.drive.ShowStatus). `passed` is true in `passed`
+  # and `reproduced` and false in `failed` and `nothing-reproduced`; `reason` is `nothing
+  # reproduced` in `nothing-reproduced` and absent otherwise. Pinned by
+  # `an_expected_failure_that_exits_nonzero_submits_passing_evidence`,
+  # `an_expected_failure_that_exits_zero_submits_failing_evidence_saying_nothing_reproduced` and
+  # `a_command_step_without_expect_reads_its_exit_status_as_before` (aep-cli drive tests).
+  - name: aep.drive.ReadCommandExit
+    naming:
+      wire: drive-command-exit
+      display: aep drive run
+      summary: Read a command step's exit status as a verdict, inverted when it expects failure.
+    input:
+      - name: path
+        type: aep.drive.StepPath
+      # The step's own `expect:`, `success` when the step does not write it.
+      - name: expect
+        type: aep.drive.Expectation
+      # Absent when a signal killed the process.
+      - name: exit_code
+        type: Optional<Integer>
+    response:
+      - name: passed
+        type: Boolean
+      - name: reason
+        type: Optional<String>
+    outcomes:
+      - name: killed
+        when: not defined(exit_code)
+        error: aep.drive.NoVerdict
+      # change (story:command-step-expects-failure): new. A shell's "could not execute" (126) and
+      # "not found" (127) are no reproduction. Under `expect: success` they stay a failing verdict,
+      # as every exit but 0 was before the key existed. Pinned by
+      # `a_step_expecting_failure_reads_126_and_127_as_no_verdict` (aep-driver-spec map tests) and
+      # the adversary's `adversary_an_expected_failure_whose_command_was_not_found_is_no_reproduction`
+      # (aep-cli drive tests).
+      - name: not-executed
+        when:
+          all:
+            - expect == failure
+            - any:
+                - exit_code == 126
+                - exit_code == 127
+        error: aep.drive.CommandNotExecuted
+      - name: reproduced
+        when:
+          all:
+            - expect == failure
+            - exit_code != 0
+        preserves: aep.drive.Step
+        returns: true
+        instance: path
+      - name: nothing-reproduced
+        when:
+          all:
+            - expect == failure
+            - exit_code == 0
+        preserves: aep.drive.Step
+        returns: true
+        instance: path
+      - name: passed
+        when: exit_code == 0
+        preserves: aep.drive.Step
+        returns: true
+        instance: path
+      - name: failed
+        preserves: aep.drive.Step
+        returns: true
+        instance: path
 
   # `aep drive status --run <run>` (drive.rs `status`, `print_cursor`): prints
   # `llm steps  <declared> declared, <run> run`. `aep drive run` and `aep drive resume` print the
@@ -358,6 +722,12 @@ views:
         type: aep.drive.StepKind
       - name: judgement
         type: Optional<String>
+      - name: expect
+        type: aep.drive.Expectation
+      - name: output
+        type: Optional<String>
+      - name: inputs_named
+        type: List<aep.drive.InputName>
 
   # change (story:llm-step-declares-judgement): the per-map count `aep drive` prints as
   # `llm steps  <n> declared` (map.rs `StepMap::llm_steps_declared`). Every step is grouped and
@@ -387,3 +757,5 @@ views:
         type: Integer
       - name: llm_steps_run
         type: Integer
+      - name: inputs
+        type: List<aep.drive.RunInput>

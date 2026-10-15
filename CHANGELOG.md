@@ -9,6 +9,50 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- A `kind: command` step may declare `expect: failure`: a nonzero exit is then the passing
+  verdict, and an exit of `0` submits failing evidence whose reason, `nothing reproduced`, is
+  printed as a note of the run. A process killed by a signal is still no verdict, and so is an
+  exit of `126` or `127` (a shell could not execute the command, or did not find it), with a
+  reason naming the status; any other nonzero exit, `128` and above included, is a reproduction.
+  `expect: failure` beside an evidence `record:` is refused at `<step>.expect` with
+  `unsupported_construct`. A step without `expect` behaves, and digests, as before.
+- `aep drive run --input <name>=<value>` (repeatable) gives a run named inputs, which a step names
+  as `{input.<name>}` in its `run` words, its evidence `record:` path and an `llm` step's
+  `context`. A run whose map names an input it was not given is refused before a run id is
+  allocated, with `undeclared_reference` at the step naming the placeholder; a resume uses the
+  inputs recorded in the run's `launch.json`. A value is filled in as text and never read again
+  for placeholders, so two values cannot spell one between them; a value that names a
+  placeholder, or that leaves an `llm` step's context entry blank or a glob, is refused before a
+  run id is allocated.
+- A command step may declare `output: <file>`: its standard output is written to
+  `{run_directory}/<file>`. An `llm` step's `context` may name `{run_directory}/<file>`, and the
+  session is handed that file. An output name that is blank, holds a path separator or a NUL
+  byte, starts with `.`, is one of the run directory's own records in any ASCII case, or has the
+  form of a step's log, `<state>-<index>-<attempt>.log`, is refused at `<step>.output`.
+- The ESS specification (`ess/domains/drive.yaml`) models `expect`, `output`, run inputs, and
+  reading a command's exit status against its expectation.
+- `aep plan artifact evidence <id> --kind task_spend --from <file>` records what one source says a
+  task spent, as a `task_spend` evidence record: model calls, the five token figures (input,
+  output, cache read, cache write, thinking), a token total, cost in micro-USD, wall time, and
+  for a driven run the llm steps declared and run. The file is a transcript (Claude Code
+  `stream-json` or `metaharness.event/1`), an `eval.run-manifest/1` (its `tokens`,
+  `cost_micro_usd` and `wall_time_ms`) or a driven run's `cursor.json`. The token total has one
+  rule for every source, the one a run manifest's `tokens` follows: input, output, cache read and
+  cache write tokens, stated only when all four are known; thinking tokens are not added. Several
+  terminal records of one session are charged once, as `aep eval run` charges them; across
+  sessions a figure is stated only when every session states it and the sum fits, so a session
+  that states no cost, or never reaches its terminal record, leaves the task's figure unknown. A
+  figure the source does not state is left out of the record and printed `unknown`, never `0`.
+  The record keeps the source's `sha256:` digest and its path from the repository root with
+  links resolved; a source outside the repository, a directory link out of it included, is
+  refused with `SpendSourceOutsideRepository`, naming the path. A file no reader recognises as a
+  transcript, manifest or cursor, or a `total_cost_usd` that is neither a number nor `null`, is
+  refused with `SpendSourceUnreadable`, naming the file; `--kind task_spend` without `--from` is
+  refused with `SpendSourceDigestMissing`. Each refusal writes nothing. `--at` may name when it
+  was observed.
+
 ## [0.72.1] — 2026-10-14
 
 ### Fixed

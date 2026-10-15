@@ -72,7 +72,8 @@ use aep_engine::execution::Execution;
 use aep_engine::policy::effective_policy;
 use aep_engine::resolve::resolve;
 use aep_engine::{
-    Clock, CompletionExplanation, Engine, ProtocolEngine, ProtocolError, Snapshot, TransitionResult,
+    Clock, CompletionExplanation, Engine, EvidenceSubmission, ProtocolEngine, ProtocolError,
+    Snapshot, TransitionResult,
 };
 use sha2::{Digest, Sha256};
 
@@ -183,6 +184,14 @@ pub struct DriverOptions {
     pub stolen_lock: Option<StolenLock>,
     /// Explicit resolution for the attempt a crashed invocation left in flight.
     pub in_flight_resolution: Option<InFlightResolution>,
+    /// The run's named inputs, `aep drive run --input <name>=<value>`, by name.
+    ///
+    /// What `{input.<name>}` is filled in with, in a `command` step's words and `record:` path
+    /// and in an `llm` step's context, before the step is handed to its executor. Every name the
+    /// map's steps write is checked against these before the first step runs
+    /// ([`StepMap::check_inputs`]), so a run that was not given one stops before it has done
+    /// anything. A resume is handed the inputs its launch recorded.
+    pub inputs: BTreeMap<String, String>,
 }
 
 impl Default for DriverOptions {
@@ -195,6 +204,7 @@ impl Default for DriverOptions {
             task_document: None,
             stolen_lock: None,
             in_flight_resolution: None,
+            inputs: BTreeMap::new(),
         }
     }
 }
@@ -908,9 +918,14 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
     /// validation: a loader that guessed would let a map validate and then fail at the transition
     /// that needed the evidence — the most expensive possible moment, halfway through a run that
     /// has already spent a token budget.
+    ///
+    /// The run's inputs are checked here too, for the same reason: an `{input.<name>}` the run was
+    /// not given would otherwise be found by the step that names it, after every step before it
+    /// had run and been paid for.
     fn check_map(&self, execution: &Execution) -> Result<(), DriveError> {
         let plan = execution.plan();
-        let errors = self.map.check_run(&plan.protocol, &plan.workflow);
+        let mut errors = self.map.check_run(&plan.protocol, &plan.workflow);
+        errors.extend(self.map.check_inputs(&self.options.inputs));
         if errors.is_empty() {
             Ok(())
         } else {
@@ -1011,10 +1026,13 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
 
         match outcome {
             StepOutcome::Observed(submission) => {
-                self.engine.submit_evidence(execution, *submission)?;
-                tally.progress.evidence_submitted += 1;
-                cursor.step += 1;
-                tally.streak.clear();
+                self.submit(execution, cursor, tally, *submission)?;
+            }
+            StepOutcome::Explained { submission, reason } => {
+                tally.progress.notes.push(format!(
+                    "attempt {attempt} at step {index} of `{state}` ({label}): {reason}"
+                ));
+                self.submit(execution, cursor, tally, *submission)?;
             }
             StepOutcome::Nothing => {
                 cursor.step += 1;
@@ -1072,6 +1090,21 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
         }
         Ok(None)
+    }
+
+    /// Submits a step's verdict and moves past the step: the run's one way evidence enters.
+    fn submit(
+        &self,
+        execution: &mut Execution,
+        cursor: &mut DriverCursor,
+        tally: &mut Tally,
+        submission: EvidenceSubmission,
+    ) -> Result<(), DriveError> {
+        self.engine.submit_evidence(execution, submission)?;
+        tally.progress.evidence_submitted += 1;
+        cursor.step += 1;
+        tally.streak.clear();
+        Ok(())
     }
 
     /// Stops immediately when the executor refused a paid effect before launch.
@@ -1258,16 +1291,33 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             reaching: &reaching,
             preceding_llm,
         };
+        // A step's `{input.<name>}` are filled in here, once, so every executor is handed the
+        // values and none has to be told the run's inputs; `check_map` refused a run missing one
+        // before any step ran, so the refusal arm below is a defect's, not a run's.
+        let inputs = &self.options.inputs;
         match &steps[index] {
-            Step::Command(command) => executors.run_command(command, &context),
+            Step::Command(command) => match command.with_inputs(inputs) {
+                Ok(filled) => executors.run_command(&filled, &context),
+                Err(reason) => StepOutcome::NoVerdict { reason },
+            },
             // Only the `llm` step is lent the engine, and the asymmetry is the point: a `command`
             // step is the driver's own invocation of a program the map names, decided before the
             // run started by the pre-flight scan, while an `llm` step's calls are a model's and are
             // decided one at a time while it runs.
+            //
+            // Its context is resolved here, `{run_directory}` included, because a context entry is
+            // a file the session is handed: the run directory is where an earlier command step's
+            // `output:` is kept, and an executor reading the entry as written would look for a
+            // file named `{run_directory}/…`.
             Step::Llm(llm) => {
+                let run_directory = self.directory.path().display().to_string();
+                let resolved = match llm.with_context_resolved(&run_directory, inputs) {
+                    Ok(resolved) => resolved,
+                    Err(reason) => return StepOutcome::NoVerdict { reason },
+                };
                 let mut authorize =
                     |request: &ActionRequest| self.engine.authorize(execution, request);
-                executors.run_llm(llm, &context, &mut authorize)
+                executors.run_llm(&resolved, &context, &mut authorize)
             }
             Step::Operator(operator) => executors.run_operator(operator, &context),
         }

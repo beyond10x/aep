@@ -79,7 +79,7 @@ use clap::Args;
 
 use aep_domain::ids::StateId;
 use aep_domain::workflow::Workflow;
-use aep_driver_spec::map::{ScopeRule, Step, StepMap, StepMapId};
+use aep_driver_spec::map::{ScopeRule, Step, StepMap, StepMapId, Word};
 use aep_render::Layout;
 
 /// The inputs of one projection.
@@ -586,8 +586,8 @@ fn scope_words(scope: &[ScopeRule]) -> Vec<String> {
         .collect()
 }
 
-fn quoted(values: &[String]) -> Vec<String> {
-    values.iter().map(|value| quote(value)).collect()
+fn quoted(values: &[Word]) -> Vec<String> {
+    values.iter().map(|value| quote(value.as_str())).collect()
 }
 
 /// YAML-safe, and nothing clever: a summary is one line of prose.

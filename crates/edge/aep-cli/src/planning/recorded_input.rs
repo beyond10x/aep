@@ -8,9 +8,11 @@
 //! the input. The rule is `aep.evidence.InputForm` and `aep.evidence.InputPathNotPortable` in
 //! `ess/domains/evidence.yaml`.
 //!
-//! Both paths are made absolute against the working directory and normalized by their components
-//! alone. Nothing here resolves a link: `canonicalize` would turn a root reached through a
-//! symlink into its target and could put that target's directories into the name.
+//! For a report or a suite both paths are made absolute against the working directory and
+//! normalized by their components alone. Nothing there resolves a link: `canonicalize` would turn
+//! a root reached through a symlink into its target and could put that target's directories into
+//! a file name. A spend source, which must lie inside the repository, is the exception
+//! ([`repository_relative`]): it and the root are both resolved, so neither side keeps a link.
 
 use anyhow::{bail, Context, Result};
 use sha2::{Digest as _, Sha256};
@@ -71,9 +73,87 @@ impl RecordedInput {
 /// `InputPathNotPortable` when the name would be empty, absolute or carry a `.` or `..`
 /// component; the working directory cannot be read to make a relative path absolute.
 pub(crate) fn recorded_input(root: &Path, path: &Path, bytes: &[u8]) -> Result<RecordedInput> {
+    let (name, form) = name_and_form(root, path)?;
+    if !form.admits(&name) {
+        bail!(
+            "InputPathNotPortable: {} would be recorded as `{name}`, which is not a {} name: \
+             neither a path relative to the repository root {} nor a file name; nothing was \
+             recorded",
+            path.display(),
+            form.wire(),
+            lexically_absolute(root)?.display()
+        );
+    }
+    Ok(RecordedInput {
+        name,
+        digest: sha256(bytes),
+    })
+}
+
+/// A file inside the repository, found by resolving every link on the way to it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Contained {
+    /// Its path from the repository root, `/`-separated, in the `repository_relative` form.
+    pub(crate) name: String,
+    /// The resolved path, which is the one to read: the bytes digested are the bytes named.
+    pub(crate) path: PathBuf,
+}
+
+/// `path`'s name from the repository at `root`, or [`None`] when it is not one: the file lies
+/// outside the root, or is the root itself.
+///
+/// The `repository_relative` form alone, for a record that names nothing outside the repository
+/// (`aep.evidence.SpendSourceOutsideRepository`). Unlike [`recorded_input`], both paths are
+/// resolved through the filesystem, links included, before they are compared: the lexical
+/// reading would admit a directory link out of the repository, and would read `link/..` as the
+/// root where the operating system reads the link target's parent, so the record would name one
+/// file beside the digest of another. A path that does not resolve is refused as outside when it
+/// lies outside the root as written, and is otherwise a file that cannot be read.
+///
+/// # Errors
+///
+/// The root cannot be resolved; a path inside the root as written cannot be resolved; the
+/// working directory cannot be read to make a relative path absolute.
+pub(crate) fn repository_relative(root: &Path, path: &Path) -> Result<Option<Contained>> {
+    let resolved = match std::fs::canonicalize(path) {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            let (_, form) = name_and_form(root, path)?;
+            if form == InputForm::RepositoryRelative {
+                return Err(error).with_context(|| format!("reading {}", path.display()));
+            }
+            return Ok(None);
+        }
+    };
+    let root = std::fs::canonicalize(root)
+        .with_context(|| format!("resolving the repository root {}", root.display()))?;
+    let Ok(relative) = resolved.strip_prefix(&root) else {
+        return Ok(None);
+    };
+    let mut parts = Vec::new();
+    for component in relative.components() {
+        let Component::Normal(part) = component else {
+            return Ok(None);
+        };
+        let Some(part) = part.to_str() else {
+            return Ok(None);
+        };
+        parts.push(part);
+    }
+    let name = parts.join("/");
+    Ok(InputForm::RepositoryRelative
+        .admits(&name)
+        .then_some(Contained {
+            name,
+            path: resolved,
+        }))
+}
+
+/// The name `path` would be recorded under from `root`, and the form that name takes.
+fn name_and_form(root: &Path, path: &Path) -> Result<(String, InputForm)> {
     let root = lexically_absolute(root)?;
     let absolute = lexically_absolute(path)?;
-    let (name, form) = match absolute.strip_prefix(&root) {
+    Ok(match absolute.strip_prefix(&root) {
         Ok(relative) if relative.components().next().is_some() => (
             relative
                 .components()
@@ -89,20 +169,6 @@ pub(crate) fn recorded_input(root: &Path, path: &Path, bytes: &[u8]) -> Result<R
                 .unwrap_or_default(),
             InputForm::FileName,
         ),
-    };
-    if !form.admits(&name) {
-        bail!(
-            "InputPathNotPortable: {} would be recorded as `{name}`, which is not a {} name: \
-             neither a path relative to the repository root {} nor a file name; nothing was \
-             recorded",
-            path.display(),
-            form.wire(),
-            root.display()
-        );
-    }
-    Ok(RecordedInput {
-        name,
-        digest: sha256(bytes),
     })
 }
 
@@ -142,7 +208,7 @@ fn lexically_absolute(path: &Path) -> Result<PathBuf> {
 }
 
 /// `sha256:` and the lowercase hex of the SHA-256 of `bytes`.
-fn sha256(bytes: &[u8]) -> String {
+pub(crate) fn sha256(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .fold("sha256:".to_owned(), |mut text, byte| {

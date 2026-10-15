@@ -10,10 +10,12 @@ summary: >-
   with a `findings` block or a prose-only reason, and how `aep plan artifact validate` places one
   without a block once the project file sets `findings_required_since`; and how
   `aep plan artifact evidence --from <report/2> --suite <suite>` admits a suite by what it is; and
-  the per-task spend record, declared ahead of the evidence kind that will write it; and how an
+  the per-task spend record `aep plan artifact evidence --kind task_spend --from <file>` writes
+  from a transcript, a run manifest or a driven run's cursor; and how an
   `aep.driver-steps/2` map refuses an `llm` step that does not say why it needs a model (an
   `aep.driver-steps/1` map, as every protocol tree before 0.72.0 writes, admits one), and the
-  `llm` steps a driven run counts as declared and run.
+  `llm` steps a driven run counts as declared and run; and a `command` step's `expect: failure`
+  and `output:` file, and the named inputs `aep drive run --input` gives a run.
   Retrofitted from the code; every declaration cites it.
 
 domains:

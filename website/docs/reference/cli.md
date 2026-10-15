@@ -65,6 +65,7 @@ is missing here fails the build.
 | `aep plan artifact evidence <id> --kind <kind> --source <source> [--ref <reference>] [--at <instant>]` | records one observation about the artifact as an [evidence file](./evidence-file.md) |
 | `aep plan artifact evidence <id> --kind review_outcome --review <review-result-id> --outcome no-op\|fixed\|escalated` | records what became of a review, on the reviewed artifact |
 | `aep plan artifact evidence <id> --from <report> [--suite <suite.json> \| --suite-input <input.json>] [--ref …]` | reads kind, source and completion time out of an ESS conformance report (`ess-conformance-report/1`, or `/2` with its exact suite or suite input); refuses a report of no scenarios |
+| `aep plan artifact evidence <id> --kind task_spend --from <file> [--ref …] [--at <instant>]` | records what a transcript, an `eval.run-manifest/1` or a driven run's `cursor.json` says the task spent — model calls, five token figures and their total (thinking tokens not added, as in a run manifest's `tokens`), cost, wall time, llm steps declared and run — printing `unknown` for a figure it does not state; the source must lie inside the repository once links are resolved, must be a file a reader recognises, and is named by its path and digest |
 
 ### Read
 
@@ -150,7 +151,7 @@ names `metaharness aep drive`, which runs model sessions over the same governor.
 
 | Command | Does |
 |---|---|
-| `aep drive run [--map <file-or-id>] [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap] [--budget-usd <usd> --assume-usd-per-run <usd>]` | starts a run of the project's task, allocating an id such as `AUTH-142/3`; exits `0` when it completes or stops for an operator |
+| `aep drive run [--map <file-or-id>] [--input <name>=<value>]… [--pause-on-approval] [--approver agent:<name>] [--max-iterations 25] [--take-lock] [--allow-evidence-gap] [--budget-usd <usd> --assume-usd-per-run <usd>]` | starts a run of the project's task, allocating an id such as `AUTH-142/3`; exits `0` when it completes or stops for an operator. Each `--input` fills `{input.<name>}` in the map's steps; a run naming one it was not given is refused before an id is allocated, and a resume uses the inputs the run started with |
 | `aep drive status [--run <id>]` | what the last run, or the named one, is doing, and who holds the lock |
 | `aep drive resume <run> [--pause-on-approval] [--approver …] [--max-iterations 25] [--budget-usd <usd>] [--take-lock] [--retry-in-flight <attempt> \| --record-in-flight-no-verdict]` | continues a stopped run; a budget may only narrow. The two in-flight flags resolve an outside attempt whose result is uncertain |
 | `aep drive transition [--run <id>]` | answers one `transition` hook document from a native loop on standard input: exit `0` proceeds, `2` refuses with a reason; writes nothing |

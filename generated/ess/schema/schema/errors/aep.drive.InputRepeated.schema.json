@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InputRepeated payload",
+  "description": "The same `--input <name>` given twice. A run has one value for each input, and the last one is not allowed to win silently (drive.rs `run_inputs`).",
+  "x-ess-name": "aep.drive.InputRepeated",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:390e42142840ba6d735e2a92fc74259f2d59d021a638ad7ec64a42c0dbadf8d8",
+    "regenerate": "ess generate"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InputNameMalformed payload",
+  "description": "An `--input` argument that is not `<name>=<value>`, or whose name is not a lowercase letter followed by lowercase letters, digits, `_` and `-`: the name `{input.<name>}` could never name (drive.rs `parse_input`, the parser of `RunArgs::input`).",
+  "x-ess-name": "aep.drive.InputNameMalformed",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:81ab539da972549aa932f4f6f80096b42f0636729a57b9c98dc67bd0268dab12",
+    "regenerate": "ess generate"
+  }
+}

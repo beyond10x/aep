@@ -1,5 +1,22 @@
 {
   "$defs": {
+    "aep.drive.Expectation": {
+      "enum": [
+        "success",
+        "failure"
+      ],
+      "title": "Expectation",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.drive.Expectation"
+    },
+    "aep.drive.InputName": {
+      "title": "InputName",
+      "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-",
+      "x-ess-kind": "newtype",
+      "x-ess-name": "aep.drive.InputName"
+    },
     "aep.drive.LlmStepBegun": {
       "additionalProperties": false,
       "properties": {
@@ -29,6 +46,25 @@
       "type": "string",
       "x-ess-kind": "newtype",
       "x-ess-name": "aep.drive.RunId"
+    },
+    "aep.drive.RunInput": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/aep.drive.InputName"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "title": "RunInput",
+      "type": "object",
+      "x-ess-kind": "struct",
+      "x-ess-name": "aep.drive.RunInput"
     },
     "aep.drive.RunStarted": {
       "additionalProperties": false,
@@ -530,8 +566,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:30d36c601ecf71ac393d46129e01929f5444edf6f85082dcb26525f71bea4a05",
-    "source_digest": "50fc07b65a27cec5bb80f858be2ffb20fb9c0870a2c7eff9235d4a5adb765080",
+    "contract_digest": "slice-sha256/2:dfb2c7d582256341a1e1f78bb0a9631b5e23e20e359d280a292e246ea9d88acc",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
     "specification_version": "v1",
     "system": "aep"
   }

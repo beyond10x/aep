@@ -171,7 +171,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             suite: None,
             subject: None,
             tool: None,
-            record: Some("{run_directory}/trace-implement.yaml".to_owned()),
+            record: Some(Word::parse("{run_directory}/trace-implement.yaml")),
         };
         let tools = config(&[Capability::RepositoryRead]);
         let state: StateId = "implement".parse().expect("a state id");
@@ -196,7 +196,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         };
 
         let outcome = read_record(
-            mapping.record.as_deref().expect("a declared record"),
+            mapping.record.as_ref().expect("a declared record"),
             &mapping,
             "aep observe trace evidence",
             &context,
@@ -327,7 +327,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             suite: None,
             subject: None,
             tool: None,
-            record: Some("{run_directory}/approval.yaml".to_owned()),
+            record: Some(Word::parse("{run_directory}/approval.yaml")),
         };
         let tools = config(&[Capability::RepositoryRead]);
         let state: StateId = "review".parse().expect("a state id");
@@ -348,7 +348,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         };
 
         let outcome = read_record(
-            mapping.record.as_deref().expect("a declared record"),
+            mapping.record.as_ref().expect("a declared record"),
             &mapping,
             "cat approval.yaml",
             &context,
@@ -383,7 +383,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             suite: None,
             subject: None,
             tool: None,
-            record: Some("{run_directory}/specification.yaml".to_owned()),
+            record: Some(Word::parse("{run_directory}/specification.yaml")),
         };
         let tools = config(&[Capability::RepositoryRead]);
         let state: StateId = "adversarial_verify".parse().expect("a state id");
@@ -404,7 +404,7 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
         };
         let read = || {
             read_record(
-                mapping.record.as_deref().expect("a declared record"),
+                mapping.record.as_ref().expect("a declared record"),
                 &mapping,
                 "aep observe specification evidence",
                 &context,
@@ -743,5 +743,333 @@ fn config(capabilities: &[Capability]) -> ToolConfig {
             llm_steps_line(None, None),
             "llm steps  unknown declared, unknown run (the cursor predates the count)"
         );
+    }
+
+    // --- story:command-step-expects-failure -------------------------------------------------
+
+    /// The one command step of a one-step map, as the loader admits it.
+    fn command_step(step: &str) -> CommandStep {
+        let map = aep_schema::parse::step_map(
+            &format!(
+                "format: aep.driver-steps/1\nid: test/expect\nworkflow: test/linear/1\n\
+                 states:\n  implement:\n    steps:\n      - kind: command\n{step}"
+            ),
+            None,
+        )
+        .expect("the map validates");
+        let Some(Step::Command(command)) = map.states.values().next().and_then(|s| s.steps.first())
+        else {
+            panic!("the only step is a command");
+        };
+        command.clone()
+    }
+
+    /// A reproducing command whose evidence is a unit suite, expecting failure.
+    fn reproducer() -> CommandStep {
+        command_step(
+            "        run: [cargo, test, repro]\n        expect: failure\n        evidence:\n\
+             \x20         kind: test_result\n          verifier: test-runner\n          suite: unit\n",
+        )
+    }
+
+    /// The test result a step outcome submits, and the reason it gives, if any.
+    fn submitted(outcome: StepOutcome) -> (TestResult, Option<String>) {
+        let (submission, reason) = match outcome {
+            StepOutcome::Observed(submission) => (submission, None),
+            StepOutcome::Explained { submission, reason } => (submission, Some(reason)),
+            other => panic!("a verdict is submitted: {other:?}"),
+        };
+        let Evidence::TestResult(result) = submission.evidence else {
+            panic!("the step mints a test result: {:?}", submission.evidence);
+        };
+        (result, reason)
+    }
+
+    /// story:command-step-expects-failure, acceptance 1.
+    #[test]
+    fn an_expected_failure_that_exits_nonzero_submits_passing_evidence() {
+        let (result, reason) = submitted(command_verdict(&reproducer(), 1, "cargo test repro"));
+        assert_eq!((result.passed, result.failed), (1, 0), "{result:?}");
+        assert_eq!(reason, None, "a reproduction needs no explaining");
+    }
+
+    /// story:command-step-expects-failure, acceptance 2.
+    #[test]
+    fn an_expected_failure_that_exits_zero_submits_failing_evidence_saying_nothing_reproduced() {
+        let (result, reason) = submitted(command_verdict(&reproducer(), 0, "cargo test repro"));
+        assert_eq!((result.passed, result.failed), (0, 1), "{result:?}");
+        let reason = reason.expect("the failing verdict says why");
+        assert!(
+            reason.ends_with("nothing reproduced") && reason.contains("cargo test repro"),
+            "{reason}"
+        );
+
+        // With no evidence to mint, a reproduction that did not happen is still not a pass.
+        let bare = command_step("        run: [sh, -c, repro]\n        expect: failure\n");
+        assert!(matches!(command_verdict(&bare, 3, "sh -c repro"), StepOutcome::Nothing));
+        let StepOutcome::NoVerdict { reason } = command_verdict(&bare, 0, "sh -c repro") else {
+            panic!("exit 0 of a step expecting failure is not a pass");
+        };
+        assert!(reason.ends_with("nothing reproduced"), "{reason}");
+    }
+
+    /// story:command-step-expects-failure, acceptance 3: a step that does not write `expect`
+    /// reads its exit status exactly as before — the same outcome kinds, and the same sentence.
+    #[test]
+    fn a_command_step_without_expect_reads_its_exit_status_as_before() {
+        let suite = command_step(
+            "        run: [cargo, test]\n        evidence:\n          kind: test_result\n\
+             \x20         verifier: test-runner\n          suite: unit\n",
+        );
+        let (passed, reason) = submitted(command_verdict(&suite, 0, "cargo test"));
+        assert_eq!((passed.passed, passed.failed, reason), (1, 0, None));
+        let (failed, reason) = submitted(command_verdict(&suite, 101, "cargo test"));
+        assert_eq!((failed.passed, failed.failed, reason), (0, 1, None));
+
+        let bare = command_step("        run: [sh, -c, x]\n");
+        assert!(matches!(command_verdict(&bare, 0, "sh -c x"), StepOutcome::Nothing));
+        let StepOutcome::NoVerdict { reason } = command_verdict(&bare, 2, "sh -c x") else {
+            panic!("a nonzero exit with no evidence observed nothing");
+        };
+        assert_eq!(
+            reason,
+            "`sh -c x` exited 2 and declares no evidence, so nothing was observed"
+        );
+    }
+
+    /// story:command-step-expects-failure, acceptance 6, first half: what the program printed is
+    /// kept at `{run_directory}/<output>`, and only what it printed on standard output.
+    #[test]
+    fn a_command_step_keeps_what_it_printed_under_its_output_name() {
+        let directory = scratch("kept-output");
+        let step = command_step(
+            "        run: [sh, -c, 'printf collected; printf noise >&2; exit 1']\n\
+             \x20       expect: failure\n        output: collected.txt\n",
+        );
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let empty: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            execution: driven_execution(),
+            task: &task,
+            task_document: None,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: &directory,
+            requirements: &empty,
+            reaching: &empty,
+            preceding_llm: None,
+        };
+        let mut executors = CliExecutors {
+            working_directory: directory.clone(),
+            run_directory: directory.clone(),
+            approver: None,
+            protocol_binary: None,
+            llm: Box::new(NoModelExecutor),
+        };
+
+        let outcome = executors.run_command(&step, &context);
+        assert!(
+            matches!(outcome, StepOutcome::Nothing),
+            "the expected failure happened, so the step passed: {outcome:?}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(directory.join("collected.txt")).expect("the output is kept"),
+            "collected"
+        );
+    }
+
+    /// `--input` takes `<name>=<value>` with a name a map can write, and a name given twice is
+    /// refused rather than silently overwritten.
+    #[test]
+    fn an_input_is_a_name_a_map_can_write_and_is_given_once() {
+        use clap::Parser as _;
+        let parsed = RunProbe::try_parse_from([
+            "probe",
+            "--input",
+            "repro=cargo test -p x it_fails",
+            "--input",
+            "version=",
+        ])
+        .expect("two inputs parse");
+        assert_eq!(
+            parsed.run.input,
+            [
+                ("repro".to_owned(), "cargo test -p x it_fails".to_owned()),
+                ("version".to_owned(), String::new()),
+            ]
+        );
+        for refused in ["repro", "Repro=x", "1x=y", "a.b=c"] {
+            assert!(
+                RunProbe::try_parse_from(["probe", "--input", refused]).is_err(),
+                "`--input {refused}` must be refused"
+            );
+        }
+        let twice = run_inputs(&[
+            ("v".to_owned(), "1".to_owned()),
+            ("v".to_owned(), "2".to_owned()),
+        ])
+        .expect_err("a name given twice");
+        assert!(twice.to_string().contains("--input v"), "{twice}");
+    }
+
+    // --- adversary: story:command-step-expects-failure -----------------------------------------
+
+    /// A map of one command step, loaded, beside that step.
+    fn adversary_map(run: &str) -> (StepMap, CommandStep) {
+        let map = aep_schema::parse::step_map(
+            &format!(
+                "format: aep.driver-steps/1\nid: test/expect\nworkflow: test/linear/1\n\
+                 states:\n  implement:\n    steps:\n      - kind: command\n        run: {run}\n"
+            ),
+            None,
+        )
+        .expect("the map validates");
+        let Some(Step::Command(command)) = map.states.values().next().and_then(|s| s.steps.first())
+        else {
+            panic!("the only step is a command");
+        };
+        let command = command.clone();
+        (map, command)
+    }
+
+    /// `{input.<name>}` is filled in and then [`expand`] reads the filled word again for
+    /// `{task}`, `{run_directory}` and `{transcript}`. `check_inputs` refuses a *value* that names
+    /// a placeholder, but two values that each name nothing can spell one between them, and the
+    /// second pass expands it: the step is handed the task document's path, which the map never
+    /// named. "An input value is never read again for placeholders" (`CommandStep::with_inputs`)
+    /// does not hold.
+    #[test]
+    fn adversary_two_input_values_that_together_spell_a_placeholder_stay_text() {
+        let directory = scratch("adversary-spelled-placeholder");
+        let task_document = directory.join("task.md");
+        let (map, command) = adversary_map("[echo, '{input.a}{input.b}']");
+        let given: std::collections::BTreeMap<String, String> = [
+            ("a".to_owned(), "{".to_owned()),
+            ("b".to_owned(), "task}".to_owned()),
+        ]
+        .into();
+        assert!(
+            map.check_inputs(&given).is_empty(),
+            "neither value names a placeholder on its own, so the run is admitted"
+        );
+        let filled = command.with_inputs(&given).expect("both inputs are given");
+        assert_eq!(filled.run[1], "{task}", "the values are filled in as text");
+
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let empty: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            execution: driven_execution(),
+            task: &task,
+            task_document: Some(&task_document),
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: &directory,
+            requirements: &empty,
+            reaching: &empty,
+            preceding_llm: None,
+        };
+        assert_eq!(
+            expand(&filled.run[1], &context),
+            Ok("{task}".to_owned()),
+            "what the operator typed reaches the program as typed, never as the task document"
+        );
+    }
+
+    /// A value with an unbalanced `{` swallows a placeholder the map itself wrote later in the
+    /// same word: [`expand`] reads the filled word, finds `{` … `}` spanning the value and the
+    /// map's `{run_directory}`, decides that is no placeholder, and spawns the program with the
+    /// literal characters `{run_directory}` — the outcome `run_command`'s own comment says
+    /// expansion exists to prevent.
+    #[test]
+    fn adversary_an_input_value_with_an_open_brace_does_not_hide_the_run_directory() {
+        let directory = scratch("adversary-open-brace");
+        let (map, command) = adversary_map("[sh, -c, '{input.repro} > {run_directory}/out.txt']");
+        let given: std::collections::BTreeMap<String, String> =
+            [("repro".to_owned(), "printf '{'".to_owned())].into();
+        assert!(map.check_inputs(&given).is_empty(), "the value names nothing");
+        let filled = command.with_inputs(&given).expect("the input is given");
+
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let empty: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            execution: driven_execution(),
+            task: &task,
+            task_document: None,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: &directory,
+            requirements: &empty,
+            reaching: &empty,
+            preceding_llm: None,
+        };
+        let word = expand(&filled.run[2], &context).expect("the map's placeholders expand");
+        assert_eq!(
+            word,
+            format!("printf '{{' > {}/out.txt", directory.display()),
+            "the map's own `{{run_directory}}` is expanded whatever the value holds"
+        );
+    }
+
+    /// With `expect: failure`, the natural spelling of a reproduction is `sh -c '{input.repro}'`
+    /// (this unit's own `drive_cli` fixture is one). A reproducing command that does not exist —
+    /// a typo in `--input repro=…` — makes `sh` exit 127, and that is read as *reproduced*:
+    /// passing evidence for a bug nobody reproduced. Spawned directly, the same missing program is
+    /// `NoVerdict` ("a missing executable is not a failing suite"); inverted through a shell it
+    /// becomes the pass.
+    #[test]
+    fn adversary_an_expected_failure_whose_command_was_not_found_is_no_reproduction() {
+        let directory = scratch("adversary-not-found");
+        let step = command_step(
+            "        run: [sh, -c, 'no-such-reproducer-adversary-7f3a']\n\
+             \x20       expect: failure\n        evidence:\n\
+             \x20         kind: test_result\n          verifier: test-runner\n          suite: unit\n",
+        );
+        let tools = config(&[Capability::RepositoryRead]);
+        let state: StateId = "implement".parse().expect("a state id");
+        let empty: Vec<String> = Vec::new();
+        let task = driven_task();
+        let context = StepContext {
+            execution: driven_execution(),
+            task: &task,
+            task_document: None,
+            state: &state,
+            index: 0,
+            attempt: 1,
+            tools: &tools,
+            run_directory: &directory,
+            requirements: &empty,
+            reaching: &empty,
+            preceding_llm: None,
+        };
+        let mut executors = CliExecutors {
+            working_directory: directory.clone(),
+            run_directory: directory.clone(),
+            approver: None,
+            protocol_binary: None,
+            llm: Box::new(NoModelExecutor),
+        };
+
+        let outcome = executors.run_command(&step, &context);
+        if let StepOutcome::Observed(submission) = &outcome {
+            if let Evidence::TestResult(result) = &submission.evidence {
+                assert!(
+                    result.passed == 0,
+                    "a command that was not found reproduced nothing, yet it submitted a \
+                     passing record: {result:?}"
+                );
+            }
+        }
     }
 }

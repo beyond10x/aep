@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.drive.RunInput",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:c3f00ec8f36f36a10a0a10835bade2580058881ca1a281c52c9a86277c7b7571",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.InputName": {
+      "title": "InputName",
+      "x-ess-name": "aep.drive.InputName",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-"
+    },
+    "aep.drive.RunInput": {
+      "title": "RunInput",
+      "x-ess-name": "aep.drive.RunInput",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/aep.drive.InputName"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

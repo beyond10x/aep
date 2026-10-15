@@ -281,10 +281,72 @@ pub struct ScopeRule {
     pub write: WriteScope,
 }
 
-/// Checks a step's declared context list.
+/// What is wrong with one context entry as the session would be handed it, if anything.
 ///
 /// A blank entry names no file, and a glob is refused by name rather than expanded: a step map is
-/// pinned, so a glob is a promise about what a directory will contain later.
+/// pinned, so a glob is a promise about what a directory will contain later. One rule for an entry
+/// the map wrote ([`validated_context`]) and for one an input was filled into
+/// ([`StepMap::check_inputs`]), so a value cannot hand a session what the loader refuses.
+fn context_entry_defect(entry: &str) -> Option<String> {
+    let trimmed = entry.trim();
+    if trimmed.is_empty() {
+        return Some("a blank context entry names no file".to_owned());
+    }
+    if trimmed.contains('*') || trimmed.contains('?') {
+        return Some(format!(
+            "`{trimmed}` is a glob, and context is a list of files: a step map is pinned, so a \
+             glob is a promise about what a directory will hold later. Name the files."
+        ));
+    }
+    None
+}
+
+/// Refuses, at `at`, every context entry that the run's inputs make blank or a glob.
+///
+/// Only an entry naming an input is read: the loader has already checked the others, and an
+/// entry naming an input the run was not given is refused as missing beside this. The entry is
+/// read with its inputs filled and `{run_directory}` as written, which is neither blank nor a glob.
+fn check_filled_context(
+    context: &[String],
+    given: &BTreeMap<String, String>,
+    at: &str,
+    errors: &mut ValidationErrors,
+) {
+    for entry in context {
+        let names: Vec<&str> = placeholders_in(entry)
+            .into_iter()
+            .filter_map(input_named_by)
+            .collect();
+        if names.is_empty() || !names.iter().all(|name| given.contains_key(*name)) {
+            continue;
+        }
+        let Ok(filled) = substitute(entry, |name| match input_named_by(name) {
+            Some(_) => input_value(name, given),
+            None => Ok(None),
+        }) else {
+            continue;
+        };
+        if let Some(defect) = context_entry_defect(&filled) {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::EmptyDeclaration,
+                    at.to_owned(),
+                    format!(
+                        "`{entry}` with {} filled in: {defect}",
+                        names
+                            .iter()
+                            .map(|name| format!("`--input {name}`"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                )
+                .with_hint("give the input a file name, which the session is handed as written"),
+            );
+        }
+    }
+}
+
+/// Checks a step's declared context list ([`context_entry_defect`], and its placeholders).
 fn validated_context(
     context: &[String],
     location: &str,
@@ -293,23 +355,32 @@ fn validated_context(
     let mut kept = Vec::new();
     for entry in context {
         let trimmed = entry.trim();
-        if trimmed.is_empty() {
+        if let Some(defect) = context_entry_defect(trimmed) {
             errors.push(ValidationError::new(
                 ValidationCode::EmptyDeclaration,
                 format!("{location}.context"),
-                "a blank context entry names no file",
+                defect,
             ));
             continue;
         }
-        if trimmed.contains('*') || trimmed.contains('?') {
-            errors.push(ValidationError::new(
-                ValidationCode::EmptyDeclaration,
-                format!("{location}.context"),
-                format!(
-                    "`{trimmed}` is a glob, and context is a list of files: a step map is pinned, \
-                     so a glob is a promise about what a directory will hold later. Name the files."
-                ),
-            ));
+        let unknown: Vec<&str> = placeholders_in(trimmed)
+            .into_iter()
+            .filter(|name| !LlmStep::PLACEHOLDERS.contains(name) && input_named_by(name).is_none())
+            .collect();
+        if !unknown.is_empty() {
+            for name in unknown {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::UndeclaredReference,
+                        format!("{location}.context"),
+                        format!("nothing in a context entry expands `{{{name}}}`"),
+                    )
+                    .with_hint(
+                        "a context entry may name `{run_directory}`, where an earlier command \
+                         step's `output:` is kept, and `{input.<name>}`",
+                    ),
+                );
+            }
             continue;
         }
         kept.push(trimmed.to_owned());
@@ -436,6 +507,283 @@ pub struct RawCommandStep {
     #[serde(default)]
     #[schemars(range(min = 1))]
     pub circuit_breaker: Option<u32>,
+    /// Which exit status is the passing verdict. `success` when the document is silent.
+    #[serde(default)]
+    pub expect: Option<Expect>,
+    /// A file name in the run directory the program's standard output is written to.
+    #[serde(default)]
+    #[schemars(regex(pattern = r"^[^./\\][^/\\]*$"))]
+    pub output: Option<String>,
+}
+
+/// Which exit status of a `command` step is the passing verdict.
+///
+/// `failure` is how a bug fix names its reproducing command: the command is expected to fail
+/// before the fix, so a nonzero exit is what *reproduced* means, and an exit of zero is a failing
+/// verdict whose reason is [`NOTHING_REPRODUCED`]. A process that did not finish is still no
+/// verdict at all, whatever the step expects.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum Expect {
+    /// Exit `0` is the pass, as every step before the key existed read it.
+    #[default]
+    Success,
+    /// Any exit but `0` is the pass; exit `0` reproduced nothing.
+    Failure,
+}
+
+impl Expect {
+    /// `true` for the default, which is not serialized, so a map that does not write the key
+    /// digests exactly as it did before the key existed.
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde's `skip_serializing_if` passes a reference
+    pub fn is_success(&self) -> bool {
+        *self == Self::Success
+    }
+}
+
+/// The reason a step expecting failure gives when its command exited `0`.
+pub const NOTHING_REPRODUCED: &str = "nothing reproduced";
+
+/// What a `command` step's exit status says, read against what the step expects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CommandVerdict {
+    /// Whether the verdict is a pass.
+    pub passed: bool,
+    /// Why the verdict is what it is, when the exit status alone does not say:
+    /// [`NOTHING_REPRODUCED`] for a step expecting failure whose command exited `0`.
+    pub reason: Option<&'static str>,
+}
+
+/// Whether `name` may name a run input: a lowercase letter, then lowercase letters, digits, `_`
+/// and `-`.
+///
+/// The same rule `{input.<name>}` is recognised by, so every input `--input` accepts is one a map
+/// can name, and a name a map writes outside it is ordinary text rather than a placeholder.
+pub fn valid_input_name(name: &str) -> bool {
+    name.starts_with(|c: char| c.is_ascii_lowercase())
+        && name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+}
+
+/// The prefix of a placeholder naming a run input, `{input.<name>}`.
+pub const INPUT_PLACEHOLDER: &str = "input.";
+
+/// The input a placeholder names, when it names one.
+pub fn input_named_by(placeholder: &str) -> Option<&str> {
+    placeholder.strip_prefix(INPUT_PLACEHOLDER)
+}
+
+/// Fills every placeholder of `word` in one pass, left to right.
+///
+/// One pass, so a value that was filled in is never read again for placeholders: a value is text.
+/// `value_of` answers a placeholder's name with its value, or with `Ok(None)` to leave it as it was
+/// written for a later reader, or with the reason it cannot be filled.
+pub fn substitute(
+    word: &str,
+    mut value_of: impl FnMut(&str) -> Result<Option<String>, String>,
+) -> Result<String, String> {
+    let mut filled = String::with_capacity(word.len());
+    let mut rest = word;
+    while let Some(open) = rest.find('{') {
+        let after = &rest[open + 1..];
+        let Some(close) = after.find('}') else {
+            break;
+        };
+        let name = &after[..close];
+        filled.push_str(&rest[..open]);
+        if let Some(Some(value)) = is_placeholder(name).then(|| value_of(name)).transpose()? {
+            filled.push_str(&value);
+        } else {
+            filled.push('{');
+            filled.push_str(name);
+            filled.push('}');
+        }
+        rest = &after[close + 1..];
+    }
+    filled.push_str(rest);
+    Ok(filled)
+}
+
+/// One word of a [`CommandStep`] — a `run:` word or the evidence `record:` path — read once into
+/// its text and its placeholders.
+///
+/// **Why the placeholders are kept apart rather than found again in the text each time.** A step's
+/// inputs are filled in when its run starts ([`CommandStep::with_inputs`]) and the rest of its
+/// placeholders when it is spawned. Were the second pass to read the text the first one produced,
+/// a value would be read again for placeholders: `--input a={` and `--input b=task}` would spell
+/// `{task}` between them and hand the step the task document's path, and a value with an
+/// unclosed `{` would swallow the map's own `{run_directory}` after it. Here a filled value is a
+/// text part, and only a part the map wrote can be a placeholder, so every pass fills the
+/// placeholders the map wrote and nothing else.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Word {
+    /// The word as it reads: each text part as it is and each placeholder as `{<name>}`.
+    text: String,
+    /// The word in order, text and placeholders.
+    parts: Vec<WordPart>,
+}
+
+/// One part of a [`Word`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum WordPart {
+    /// Text, which no pass reads for placeholders.
+    Text(String),
+    /// A placeholder the map wrote, by its name (`task`, `input.repro`).
+    Placeholder(String),
+}
+
+impl Word {
+    /// Reads a word as a map writes it, finding its placeholders as [`placeholders_in`] does.
+    pub fn parse(word: &str) -> Self {
+        let mut parts = Vec::new();
+        let mut text = String::new();
+        let mut rest = word;
+        while let Some(open) = rest.find('{') {
+            let after = &rest[open + 1..];
+            let Some(close) = after.find('}') else {
+                break;
+            };
+            let name = &after[..close];
+            text.push_str(&rest[..open]);
+            if is_placeholder(name) {
+                if !text.is_empty() {
+                    parts.push(WordPart::Text(std::mem::take(&mut text)));
+                }
+                parts.push(WordPart::Placeholder(name.to_owned()));
+            } else {
+                text.push('{');
+                text.push_str(name);
+                text.push('}');
+            }
+            rest = &after[close + 1..];
+        }
+        text.push_str(rest);
+        if !text.is_empty() {
+            parts.push(WordPart::Text(text));
+        }
+        Self::from_parts(parts)
+    }
+
+    fn from_parts(parts: Vec<WordPart>) -> Self {
+        let mut text = String::new();
+        for part in &parts {
+            match part {
+                WordPart::Text(value) => text.push_str(value),
+                WordPart::Placeholder(name) => {
+                    text.push('{');
+                    text.push_str(name);
+                    text.push('}');
+                }
+            }
+        }
+        Self { text, parts }
+    }
+
+    /// The word as it reads, with each placeholder not yet filled as `{<name>}`.
+    pub fn as_str(&self) -> &str {
+        &self.text
+    }
+
+    /// The placeholders the map wrote in this word and no pass has filled, in order.
+    pub fn placeholders(&self) -> impl Iterator<Item = &str> {
+        self.parts.iter().filter_map(|part| match part {
+            WordPart::Placeholder(name) => Some(name.as_str()),
+            WordPart::Text(_) => None,
+        })
+    }
+
+    /// This word with its placeholders filled in, in one pass.
+    ///
+    /// `value_of` answers a placeholder's name with its value, `Ok(None)` to leave it for a later
+    /// pass, or the reason it cannot be filled. A value becomes text, which no later pass reads
+    /// for placeholders.
+    ///
+    /// # Errors
+    ///
+    /// The first reason `value_of` gives.
+    pub fn fill(
+        &self,
+        mut value_of: impl FnMut(&str) -> Result<Option<String>, String>,
+    ) -> Result<Self, String> {
+        let mut parts = Vec::with_capacity(self.parts.len());
+        for part in &self.parts {
+            match part {
+                WordPart::Placeholder(name) => match value_of(name)? {
+                    Some(value) => parts.push(WordPart::Text(value)),
+                    None => parts.push(part.clone()),
+                },
+                WordPart::Text(_) => parts.push(part.clone()),
+            }
+        }
+        Ok(Self::from_parts(parts))
+    }
+}
+
+impl From<&str> for Word {
+    fn from(word: &str) -> Self {
+        Self::parse(word)
+    }
+}
+
+impl From<&Word> for Word {
+    fn from(word: &Word) -> Self {
+        word.clone()
+    }
+}
+
+impl fmt::Display for Word {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.text)
+    }
+}
+
+impl PartialEq<str> for Word {
+    fn eq(&self, other: &str) -> bool {
+        self.text == other
+    }
+}
+
+impl PartialEq<&str> for Word {
+    fn eq(&self, other: &&str) -> bool {
+        self.text == *other
+    }
+}
+
+impl PartialEq<String> for Word {
+    fn eq(&self, other: &String) -> bool {
+        self.text == *other
+    }
+}
+
+/// Serialized as the word reads, so a map digests exactly as it did when its words were strings.
+impl serde::Serialize for Word {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.text)
+    }
+}
+
+/// Whether the text between a `{` and the next `}` has the shape of a placeholder.
+///
+/// A word of `a-z` and `_`, or one such word, a `.` and a word an input name may be. Deliberately
+/// narrow, so `{}` and a jq program's `{a: .b}` stay text.
+fn is_placeholder(name: &str) -> bool {
+    let word =
+        |part: &str| !part.is_empty() && part.chars().all(|c| c.is_ascii_lowercase() || c == '_');
+    match name.split_once('.') {
+        None => word(name),
+        Some((head, tail)) => word(head) && valid_input_name(tail),
+    }
 }
 
 /// An `llm` step, as written.
@@ -582,13 +930,22 @@ impl Step {
         }
     }
 
+    /// The run inputs this step names, once each, in the order it first names them.
+    pub fn inputs_named(&self) -> Vec<String> {
+        match self {
+            Self::Command(step) => step.inputs_named(),
+            Self::Llm(step) => step.inputs_named(),
+            Self::Operator(_) => Vec::new(),
+        }
+    }
+
     /// One line naming the step, for a report.
     pub fn label(&self) -> String {
         match self {
             Self::Command(step) => step
                 .description
                 .clone()
-                .unwrap_or_else(|| step.run.join(" ")),
+                .unwrap_or_else(|| step.command_line()),
             Self::Llm(step) => step
                 .description
                 .clone()
@@ -604,8 +961,8 @@ impl Step {
 /// A validated `command` step.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct CommandStep {
-    /// The program and its arguments, never empty.
-    pub run: Vec<String>,
+    /// The program and its arguments, never empty, each read once into its placeholders.
+    pub run: Vec<Word>,
     /// What this step is for, in one line.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -635,9 +992,119 @@ pub struct CommandStep {
     /// and *we stopped looking*, and only the second is what an open circuit means.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub circuit_breaker: Option<u32>,
+    /// Which exit status is the passing verdict; see [`Self::verdict`].
+    ///
+    /// Not serialized when it is the default, so a map that does not write `expect:` digests as
+    /// it did before the key existed and a run pinned to that digest still resumes.
+    #[serde(skip_serializing_if = "Expect::is_success")]
+    pub expect: Expect,
+    /// A file name in the run directory the program's standard output is written to, so a later
+    /// step names it as `{run_directory}/<file>` — an `llm` step's context included.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
 }
 
 impl CommandStep {
+    /// The names the run directory already uses for its own records, which an `output:` would
+    /// overwrite. A name starting with `.` is refused besides these.
+    pub const RESERVED_OUTPUTS: &'static [&'static str] = &[
+        "cursor.json",
+        "cursor.writing",
+        "snapshot.json",
+        "snapshot.writing",
+        "state.json",
+        "state.writing",
+        "launch.json",
+        "launch.json.next",
+        "commands.jsonl",
+        "generations",
+        "transcripts",
+    ];
+
+    /// The names of a step's own log in the run directory, `<state>-<index>-<attempt>.log`, which
+    /// an `output:` would overwrite: any text, `-`, digits, `-`, digits and `.log`, in any ASCII
+    /// case. Narrower than every name ending in `.log`, so `notes.log` stays an output a map may
+    /// keep.
+    pub fn is_step_log_name(name: &str) -> bool {
+        let lowered = name.to_ascii_lowercase();
+        let Some(stem) = lowered.strip_suffix(".log") else {
+            return false;
+        };
+        let mut pieces = stem.rsplitn(3, '-');
+        let digits = |piece: Option<&str>| {
+            piece
+                .is_some_and(|piece| !piece.is_empty() && piece.bytes().all(|b| b.is_ascii_digit()))
+        };
+        digits(pieces.next())
+            && digits(pieces.next())
+            && pieces.next().is_some_and(|state| !state.is_empty())
+    }
+
+    /// What an exit status says about this step, read against [`Self::expect`].
+    ///
+    /// A process killed before it exited has no exit status and is no verdict at all; that is the
+    /// caller's to decide before it asks.
+    ///
+    /// # Errors
+    ///
+    /// No verdict, with the reason naming the status, when the step expects failure and the
+    /// command exited 126 or 127: a shell's "could not execute" and "not found". A reproduction
+    /// spelt `sh -c '<command>'` whose command is missing fails that way, and nothing was
+    /// reproduced, as for a program the driver could not spawn itself. Any other nonzero exit, 128
+    /// and above included, is still a reproduction: a crash reproduced through a shell exits that
+    /// way, and it cannot be told apart from a signal the shell reports. Under `expect: success`
+    /// both are a failing verdict, as every exit but 0 was before the key existed.
+    pub fn verdict(&self, exit_code: i32) -> Result<CommandVerdict, String> {
+        match (self.expect, exit_code) {
+            (Expect::Success, code) => Ok(CommandVerdict {
+                passed: code == 0,
+                reason: None,
+            }),
+            (Expect::Failure, 0) => Ok(CommandVerdict {
+                passed: false,
+                reason: Some(NOTHING_REPRODUCED),
+            }),
+            (Expect::Failure, code @ (126 | 127)) => Err(format!(
+                "exit status {code} is a shell's \"{}\", so the command was never run and \
+                 nothing was reproduced",
+                if code == 126 {
+                    "could not execute"
+                } else {
+                    "command not found"
+                }
+            )),
+            (Expect::Failure, _) => Ok(CommandVerdict {
+                passed: true,
+                reason: None,
+            }),
+        }
+    }
+
+    /// The run inputs this step names, once each, in the order it first names them.
+    pub fn inputs_named(&self) -> Vec<String> {
+        inputs_in(self.expandable().flat_map(Word::placeholders))
+    }
+
+    /// This step with every `{input.<name>}` filled in from `inputs`, in one pass.
+    ///
+    /// The other placeholders are left as written: where the run directory, the task document and
+    /// the preceding transcript are is the executor's to say. An input value becomes text of its
+    /// [`Word`], which no later pass reads for placeholders, and [`StepMap::check_inputs`] refuses
+    /// one that names any besides.
+    ///
+    /// # Errors
+    ///
+    /// The reason, naming the placeholder, when the step names an input `inputs` does not hold.
+    pub fn with_inputs(&self, inputs: &BTreeMap<String, String>) -> Result<Self, String> {
+        let fill = |word: &Word| word.fill(|name| input_value(name, inputs));
+        let mut filled = self.clone();
+        filled.run = self.run.iter().map(fill).collect::<Result<_, _>>()?;
+        if let Some(mapping) = filled.evidence.as_mut() {
+            mapping.record = mapping.record.as_ref().map(fill).transpose()?;
+        }
+        Ok(filled)
+    }
+
     /// The names a `{placeholder}` in [`Self::run`] or in `evidence.record` may have.
     ///
     /// Three, and all three are things only the run knows: where its directory is, which task
@@ -662,20 +1129,29 @@ impl CommandStep {
 
     /// The program, which a validated step always has.
     pub fn program(&self) -> &str {
-        self.run.first().map_or("", String::as_str)
+        self.run.first().map_or("", Word::as_str)
     }
 
     /// The arguments after the program.
-    pub fn arguments(&self) -> &[String] {
+    pub fn arguments(&self) -> &[Word] {
         self.run.get(1..).unwrap_or_default()
     }
 
+    /// The step's words as they read, joined by spaces, for a report.
+    pub fn command_line(&self) -> String {
+        self.run
+            .iter()
+            .map(Word::as_str)
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     /// Every word of this step that a placeholder may appear in.
-    pub fn expandable(&self) -> impl Iterator<Item = &str> {
-        self.run.iter().map(String::as_str).chain(
+    pub fn expandable(&self) -> impl Iterator<Item = &Word> {
+        self.run.iter().chain(
             self.evidence
                 .as_ref()
-                .and_then(|mapping| mapping.record.as_deref()),
+                .and_then(|mapping| mapping.record.as_ref()),
         )
     }
 }
@@ -684,9 +1160,9 @@ impl CommandStep {
 ///
 /// A placeholder is `{` then one or more of `a-z` and `_` then `}` — deliberately narrow, so that
 /// the argument `{}` that `find -exec` takes, and a jq program's `{a: .b}`, are ordinary text
-/// rather than a refusal. Anything that *does* match the shape is checked against
-/// [`CommandStep::PLACEHOLDERS`], so a misspelling is refused rather than passed to a program as
-/// literal braces.
+/// rather than a refusal — or such a word, a `.` and an input name, as `{input.repro}` is.
+/// Anything that *does* match the shape is checked against [`CommandStep::PLACEHOLDERS`] and the
+/// `input.` prefix, so a misspelling is refused rather than passed to a program as literal braces.
 pub fn placeholders_in(word: &str) -> Vec<&str> {
     let mut found = Vec::new();
     let mut rest = word;
@@ -696,12 +1172,35 @@ pub fn placeholders_in(word: &str) -> Vec<&str> {
             break;
         };
         let name = &after[..close];
-        if !name.is_empty() && name.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+        if is_placeholder(name) {
             found.push(name);
         }
         rest = &after[close + 1..];
     }
     found
+}
+
+/// Each run input `placeholders` name, once, in the order they first name it.
+fn inputs_in<'a>(placeholders: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let mut named: Vec<String> = Vec::new();
+    for name in placeholders.filter_map(input_named_by) {
+        if !named.iter().any(|seen| seen == name) {
+            named.push(name.to_owned());
+        }
+    }
+    named
+}
+
+/// The value `inputs` gives a placeholder naming a run input; `None` for any other placeholder.
+fn input_value(name: &str, inputs: &BTreeMap<String, String>) -> Result<Option<String>, String> {
+    let Some(input) = input_named_by(name) else {
+        return Ok(None);
+    };
+    inputs.get(input).cloned().map(Some).ok_or_else(|| {
+        format!(
+            "`{{{name}}}` names an input this run was not given; pass `--input {input}=<value>`"
+        )
+    })
 }
 
 /// A validated `llm` step.
@@ -743,6 +1242,44 @@ pub struct LlmStep {
 impl LlmStep {
     /// The harness a step runs under when the document does not say.
     pub const DEFAULT_HARNESS: &'static str = "claude-code";
+
+    /// The names a `{placeholder}` in [`Self::context`] may have, besides `{input.<name>}`.
+    ///
+    /// Only the run directory: a context entry is a file the session is given, and the run
+    /// directory is where an earlier `command` step's `output:` is kept. The task document and a
+    /// transcript are another session's or the run's own, and are not context.
+    pub const PLACEHOLDERS: &'static [&'static str] = &["run_directory"];
+
+    /// The run inputs this step's context names, once each, in the order it first names them.
+    pub fn inputs_named(&self) -> Vec<String> {
+        inputs_in(self.context.iter().flat_map(|entry| placeholders_in(entry)))
+    }
+
+    /// This step with its context entries' placeholders filled in, in one pass: `{run_directory}`
+    /// with `run_directory` and `{input.<name>}` with `inputs`.
+    ///
+    /// # Errors
+    ///
+    /// The reason, naming the placeholder, when the context names an input `inputs` does not
+    /// hold.
+    pub fn with_context_resolved(
+        &self,
+        run_directory: &str,
+        inputs: &BTreeMap<String, String>,
+    ) -> Result<Self, String> {
+        let mut resolved = self.clone();
+        resolved.context = self
+            .context
+            .iter()
+            .map(|entry| {
+                substitute(entry, |name| match name {
+                    "run_directory" => Ok(Some(run_directory.to_owned())),
+                    other => input_value(other, inputs),
+                })
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(resolved)
+    }
 }
 
 /// A validated `operator` step.
@@ -784,7 +1321,7 @@ pub struct EvidenceMapping {
     ///
     /// The path admits the same placeholders [`CommandStep::run`] does.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub record: Option<String>,
+    pub record: Option<Word>,
 }
 
 impl EvidenceMapping {
@@ -938,6 +1475,75 @@ impl StepMap {
                 Step::Llm(_) | Step::Operator(_) => None,
             })
             .collect()
+    }
+
+    /// Every run input any step of this map names.
+    pub fn inputs_named(&self) -> BTreeSet<String> {
+        self.states
+            .values()
+            .flat_map(|entry| entry.steps.iter())
+            .flat_map(Step::inputs_named)
+            .collect()
+    }
+
+    /// The map against the inputs a run was given, before any step runs.
+    ///
+    /// Three refusals, accumulated over every step: an `{input.<name>}` the run was not given, at
+    /// the step that names it with code `undeclared_reference`; a given value that would itself
+    /// read as a placeholder, with code `unsupported_construct` — a value is filled in as text, and
+    /// one that named `{task}` would hand a step a document the map never named; and a value that
+    /// leaves an `llm` step's context entry blank or a glob once filled in, at that step's
+    /// `context` with code `empty_declaration`, the refusal the loader gives the same entry when a
+    /// map writes it. An input given and never named is not refused: a release map and a bug-fix
+    /// map can share one launch line.
+    pub fn check_inputs(&self, given: &BTreeMap<String, String>) -> ValidationErrors {
+        let mut errors = ValidationErrors::new();
+        for (name, value) in given {
+            let named = placeholders_in(value);
+            if let Some(placeholder) = named.first() {
+                errors.push(ValidationError::new(
+                    ValidationCode::UnsupportedConstruct,
+                    format!("driver-steps[{}].inputs.{name}", self.id),
+                    format!(
+                        "the value of input `{name}` names `{{{placeholder}}}`, and an input's \
+                         value is filled in as text, never read again for placeholders"
+                    ),
+                ));
+            }
+        }
+        for (state, entry) in &self.states {
+            for (index, step) in entry.steps.iter().enumerate() {
+                let field = if matches!(step, Step::Llm(_)) {
+                    "context"
+                } else {
+                    "run"
+                };
+                for name in step.inputs_named() {
+                    if given.contains_key(&name) {
+                        continue;
+                    }
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::UndeclaredReference,
+                            format!(
+                                "driver-steps[{}].states.{state}.steps[{index}].{field}",
+                                self.id
+                            ),
+                            format!("`{{input.{name}}}` names an input this run was not given"),
+                        )
+                        .with_hint(format!("pass `--input {name}=<value>`")),
+                    );
+                }
+                if let Step::Llm(llm) = step {
+                    let at = format!(
+                        "driver-steps[{}].states.{state}.steps[{index}].context",
+                        self.id
+                    );
+                    check_filled_context(&llm.context, given, &at, &mut errors);
+                }
+            }
+        }
+        errors
     }
 
     /// The digest of this map's canonical JSON, which the cursor pins a run to.
@@ -1146,9 +1752,9 @@ impl TryFrom<RawStepMap> for StepMap {
                     Step::Llm(_) => preceded_by_llm = true,
                     Step::Command(command)
                         if !preceded_by_llm
-                            && command
-                                .expandable()
-                                .any(|word| placeholders_in(word).contains(&"transcript")) =>
+                            && command.expandable().any(|word| {
+                                word.placeholders().any(|name| name == "transcript")
+                            }) =>
                     {
                         errors.push(
                             ValidationError::new(
@@ -1239,6 +1845,128 @@ fn validate_circuit_breaker(
     usable
 }
 
+/// Checks a command step's `output:`: a file name of its own in the run directory.
+///
+/// `Err` when it was refused, `Ok(None)` when the step keeps no output. Refused at
+/// `<step>.output`: `empty_declaration` for a blank name, `unsupported_construct` for one holding
+/// a path separator or a NUL byte, one starting with `.` (which covers `.` and `..`), one of
+/// [`CommandStep::RESERVED_OUTPUTS`] in any ASCII case, and one of a step log's form
+/// ([`CommandStep::is_step_log_name`]).
+fn validated_output(
+    output: Option<String>,
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Result<Option<String>, ()> {
+    let Some(output) = output else {
+        return Ok(None);
+    };
+    let at = format!("{location}.output");
+    if output.trim().is_empty() {
+        errors.push(ValidationError::new(
+            ValidationCode::EmptyDeclaration,
+            at,
+            "an output with no name says nowhere to keep what the command printed",
+        ));
+        return Err(());
+    }
+    // Every name the driver could not write, or would write over something of the run's own, is
+    // refused here rather than when the step has already run: a kept output that cannot be
+    // written is a step retried to exhaustion, and one written over a record corrupts the run.
+    let why = if output.contains(['/', '\\']) {
+        Some("holds a path separator, and an output is a file name in the run directory")
+    } else if output.contains('\0') {
+        Some("holds a NUL byte, which no file name on any target can")
+    } else if output.starts_with('.') {
+        Some("starts with `.`, and an output is a visible file name in the run directory")
+    } else if CommandStep::RESERVED_OUTPUTS
+        .iter()
+        .any(|reserved| reserved.eq_ignore_ascii_case(&output))
+    {
+        // In any case: the darwin release targets run on file systems that ignore it, where
+        // `State.json` is the run's own `state.json`.
+        Some("is a name the run directory keeps its own records under, in some case")
+    } else if CommandStep::is_step_log_name(&output) {
+        Some(
+            "has the form `<state>-<index>-<attempt>.log`, the name the run directory keeps a \
+             step's own log under",
+        )
+    } else {
+        None
+    };
+    if let Some(why) = why {
+        errors.push(
+            ValidationError::new(
+                ValidationCode::UnsupportedConstruct,
+                at,
+                format!("`{}` {why}", output.escape_debug()),
+            )
+            .with_hint("name a file such as `collected.txt`; a later step reads it as `{run_directory}/collected.txt`"),
+        );
+        return Err(());
+    }
+    Ok(Some(output))
+}
+
+/// A command step's `expect:`, or `None` when it was refused.
+///
+/// `expect: failure` inverts an exit status, and a step whose verifier writes its own `record:`
+/// reads no exit status, so the pair is refused at `<step>.expect` with `unsupported_construct`.
+fn validated_expect(
+    command: &RawCommandStep,
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Option<Expect> {
+    let expect = command.expect.unwrap_or_default();
+    let reads_record = command
+        .evidence
+        .as_ref()
+        .is_some_and(|mapping| mapping.record.is_some());
+    if expect == Expect::Failure && reads_record {
+        errors.push(ValidationError::new(
+            ValidationCode::UnsupportedConstruct,
+            format!("{location}.expect"),
+            "`expect: failure` inverts an exit status, and a step whose verifier writes its own \
+             `record:` reads no exit status: its verdict is the document's",
+        ));
+        return None;
+    }
+    Some(expect)
+}
+
+/// Refuses every placeholder of a command step that nothing expands, returning whether there was
+/// none.
+fn placeholders_are_known(
+    step: &CommandStep,
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> bool {
+    let mut known = true;
+    for word in step.expandable() {
+        for name in word.placeholders() {
+            if CommandStep::PLACEHOLDERS.contains(&name) || input_named_by(name).is_some() {
+                continue;
+            }
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::UndeclaredReference,
+                    format!("{location}.run"),
+                    format!("nothing in a run expands `{{{name}}}`"),
+                )
+                .with_hint(format!(
+                    "a step may name: {}, and a run input as `{{input.<name>}}`",
+                    CommandStep::PLACEHOLDERS
+                        .iter()
+                        .map(|name| format!("{{{name}}}"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )),
+            );
+            known = false;
+        }
+    }
+    known
+}
+
 /// Validates one step, pushing what is wrong with it and returning it when nothing is.
 fn validate_step(
     raw: RawStep,
@@ -1260,42 +1988,26 @@ fn validate_step(
             if !validate_circuit_breaker(&command, location, errors) {
                 usable = false;
             }
+            let expect = validated_expect(&command, location, errors);
+            usable &= expect.is_some();
+            let output = validated_output(command.output, location, errors);
+            usable &= output.is_ok();
             let evidence = command.evidence.and_then(|mapping| {
                 let validated = validate_mapping(mapping, location, errors);
                 usable &= validated.is_some();
                 validated
             });
             let step = CommandStep {
-                run: command.run,
+                run: command.run.iter().map(|word| Word::parse(word)).collect(),
                 description: command.description,
                 evidence,
                 retries: command.retries.unwrap_or(DEFAULT_COMMAND_RETRIES),
                 depends_on: command.depends_on.clone(),
                 circuit_breaker: command.circuit_breaker,
+                expect: expect.unwrap_or_default(),
+                output: output.unwrap_or_default(),
             };
-            for word in step.expandable() {
-                for name in placeholders_in(word) {
-                    if CommandStep::PLACEHOLDERS.contains(&name) {
-                        continue;
-                    }
-                    errors.push(
-                        ValidationError::new(
-                            ValidationCode::UndeclaredReference,
-                            format!("{location}.run"),
-                            format!("nothing in a run expands `{{{name}}}`"),
-                        )
-                        .with_hint(format!(
-                            "a step may name: {}",
-                            CommandStep::PLACEHOLDERS
-                                .iter()
-                                .map(|name| format!("{{{name}}}"))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        )),
-                    );
-                    usable = false;
-                }
-            }
+            usable &= placeholders_are_known(&step, location, errors);
             usable.then_some(Step::Command(step))
         }
         RawStep::Llm(step) => validate_llm_step(step, location, format, errors),
@@ -1375,7 +2087,7 @@ fn validate_mapping(
             usable = false;
             None
         }
-        other => other,
+        other => other.as_deref().map(Word::parse),
     };
     let written = record.is_some();
     if !written && !EvidenceMapping::MINTABLE.contains(&raw.kind) {
@@ -1586,7 +2298,8 @@ mod tests {
                 .evidence
                 .as_ref()
                 .and_then(|mapping| mapping.record.clone())
-                .as_deref(),
+                .as_ref()
+                .map(Word::as_str),
             Some("{run_directory}/trace.yaml")
         );
 
@@ -2031,5 +2744,410 @@ mod tests {
             only_llm_step(r#","scope":[{"paths":[],"write":"denied"}]"#).is_err(),
             "a rule with no paths is about nothing"
         );
+    }
+
+    // --- expected failure, run inputs and kept output (story:command-step-expects-failure) ---
+
+    /// The one command step of `states`, which must load.
+    fn only_command(states: &str) -> CommandStep {
+        let map = read(&map_json("adp/default/1", states)).expect("valid");
+        let Some(Step::Command(command)) = map.states.values().next().and_then(|s| s.steps.first())
+        else {
+            panic!("the first step is a command");
+        };
+        command.clone()
+    }
+
+    /// Acceptance 1 and 2, decided where the driver reads them: a nonzero exit is the pass, and
+    /// exit 0 is a failing verdict whose reason is "nothing reproduced".
+    #[test]
+    fn a_step_expecting_failure_reads_its_exit_status_inverted() {
+        let command = only_command(
+            r#"{"implement":{"steps":[{"kind":"command","run":["cargo","test","repro"],
+                "expect":"failure",
+                "evidence":{"kind":"test_result","verifier":"test-runner","suite":"unit"}}]}}"#,
+        );
+        assert_eq!(command.expect, Expect::Failure);
+        assert_eq!(
+            command.verdict(1),
+            Ok(CommandVerdict {
+                passed: true,
+                reason: None
+            }),
+            "a reproduced failure is the pass"
+        );
+        assert_eq!(
+            command.verdict(0),
+            Ok(CommandVerdict {
+                passed: false,
+                reason: Some(NOTHING_REPRODUCED)
+            }),
+            "exit 0 reproduced nothing, and says so"
+        );
+        assert_eq!(NOTHING_REPRODUCED, "nothing reproduced");
+    }
+
+    /// A shell's "could not execute" (126) and "not found" (127) reproduce nothing: no verdict,
+    /// naming the status. Any other nonzero exit, 128 and above included, is still a reproduction,
+    /// and under `expect: success` 126 and 127 stay a failing verdict.
+    #[test]
+    fn a_step_expecting_failure_reads_126_and_127_as_no_verdict() {
+        let command = only_command(
+            r#"{"implement":{"steps":[{"kind":"command","run":["sh","-c","repro"],
+                "expect":"failure",
+                "evidence":{"kind":"test_result","verifier":"test-runner","suite":"unit"}}]}}"#,
+        );
+        for code in [126, 127] {
+            let reason = command
+                .verdict(code)
+                .expect_err("a command the shell never ran reproduced nothing");
+            assert!(
+                reason.contains(&format!("exit status {code}")),
+                "the reason names the status: {reason}"
+            );
+        }
+        for code in [1, 2, 101, 125, 128, 134, 139, 255] {
+            assert_eq!(
+                command.verdict(code),
+                Ok(CommandVerdict {
+                    passed: true,
+                    reason: None
+                }),
+                "exit {code} is a reproduction"
+            );
+        }
+        let plain = only_command(ONE_COMMAND);
+        for code in [126, 127] {
+            assert_eq!(
+                plain.verdict(code),
+                Ok(CommandVerdict {
+                    passed: false,
+                    reason: None
+                }),
+                "under `expect: success` exit {code} is a failing verdict, as before"
+            );
+        }
+    }
+
+    /// Acceptance 3: a step that does not write `expect` reads its exit status as before, and its
+    /// map digests as before — the key is not serialized, so a run pinned to an older map's digest
+    /// still resumes against it.
+    #[test]
+    fn a_step_without_expect_reads_and_digests_exactly_as_before() {
+        let plain = only_command(ONE_COMMAND);
+        assert_eq!(plain.expect, Expect::Success);
+        assert_eq!(
+            plain.verdict(0),
+            Ok(CommandVerdict {
+                passed: true,
+                reason: None
+            })
+        );
+        assert_eq!(
+            plain.verdict(2),
+            Ok(CommandVerdict {
+                passed: false,
+                reason: None
+            })
+        );
+
+        let explicit = r#"{"implement":{"steps":[
+            {"kind":"command","run":["cargo","test"],"expect":"success",
+             "evidence":{"kind":"test_result","verifier":"test-runner","suite":"unit"}}]}}"#;
+        let unwritten = read(&map_json("adp/default/1", ONE_COMMAND)).expect("valid");
+        let written = read(&map_json("adp/default/1", explicit)).expect("valid");
+        assert_eq!(unwritten.digest(), written.digest());
+        let serialized = serde_json::to_string(&unwritten).expect("a map serializes");
+        assert!(
+            !serialized.contains("expect") && !serialized.contains("output"),
+            "an unwritten key adds nothing to the canonical form: {serialized}"
+        );
+    }
+
+    /// `expect: failure` inverts an exit status; a step whose verifier writes the record reads no
+    /// exit status, so there is nothing to invert and the pair is refused at the key.
+    #[test]
+    fn an_expected_failure_whose_verifier_writes_the_record_is_refused_at_its_path() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"llm","prompt":"p","judgement":"j"},
+            {"kind":"command","run":["aep","observe","trace","evidence"],"expect":"failure",
+             "evidence":{"kind":"trace_conformance","verifier":"trace-checker",
+                         "record":"{run_directory}/trace.yaml"}}]}}"#;
+        let errors = read(&map_json("adp/default/1", states)).expect_err("refused");
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(
+            refusal.code,
+            ValidationCode::UnsupportedConstruct,
+            "{errors}"
+        );
+        assert_eq!(
+            refusal.location,
+            "driver-steps[development/default].states.implement.steps[1].expect"
+        );
+    }
+
+    /// `expect` and `output` are a command step's: an `llm` or `operator` step that writes one
+    /// does not parse.
+    #[test]
+    fn expect_and_output_belong_to_a_command_step_only() {
+        for fragment in [
+            r#"{"kind":"llm","prompt":"p","judgement":"j","expect":"failure"}"#,
+            r#"{"kind":"llm","prompt":"p","judgement":"j","output":"a.txt"}"#,
+            r#"{"kind":"operator","prompt":"p","expect":"success"}"#,
+            r#"{"kind":"operator","prompt":"p","output":"a.txt"}"#,
+        ] {
+            let outcome: Result<RawStep, _> = serde_json::from_str(fragment);
+            assert!(outcome.is_err(), "{fragment} must not parse");
+        }
+    }
+
+    /// A kept output is a file name of its own in the run directory: not blank, no separator, not
+    /// hidden, and none of the run's own records, which a step must never overwrite.
+    #[test]
+    fn an_output_that_is_not_a_file_name_of_its_own_is_refused_at_its_path() {
+        let kept = only_command(
+            r#"{"implement":{"steps":[{"kind":"command","run":["git","log"],"output":"collected.txt"}]}}"#,
+        );
+        assert_eq!(kept.output.as_deref(), Some("collected.txt"));
+
+        for (output, code) in [
+            ("", ValidationCode::EmptyDeclaration),
+            ("   ", ValidationCode::EmptyDeclaration),
+            ("logs/collected.txt", ValidationCode::UnsupportedConstruct),
+            ("..\\up", ValidationCode::UnsupportedConstruct),
+            ("..", ValidationCode::UnsupportedConstruct),
+            (".hidden", ValidationCode::UnsupportedConstruct),
+            ("cursor.json", ValidationCode::UnsupportedConstruct),
+            ("launch.json", ValidationCode::UnsupportedConstruct),
+            ("transcripts", ValidationCode::UnsupportedConstruct),
+        ] {
+            let states = format!(
+                r#"{{"implement":{{"steps":[{{"kind":"command","run":["git","log"],"output":{}}}]}}}}"#,
+                serde_json::to_string(output).expect("a string serializes")
+            );
+            let errors = read(&map_json("adp/default/1", &states)).expect_err("refused");
+            assert_eq!(errors.len(), 1, "`{output}`: {errors}");
+            let refusal = &errors.as_slice()[0];
+            assert_eq!(refusal.code, code, "`{output}`: {errors}");
+            assert_eq!(
+                refusal.location,
+                "driver-steps[development/default].states.implement.steps[0].output",
+                "`{output}`"
+            );
+        }
+        for reserved in CommandStep::RESERVED_OUTPUTS {
+            assert!(
+                !reserved.starts_with('.'),
+                "`{reserved}` is already refused as hidden; the list is for the visible names"
+            );
+        }
+    }
+
+    /// The step-log rule is the log writer's form, `<state>-<index>-<attempt>.log` in any ASCII
+    /// case, and no wider: a name merely ending in `.log` is an output a map may keep.
+    #[test]
+    fn an_output_named_like_a_log_but_not_a_step_log_is_kept() {
+        for refused in [
+            "implement-0-1.log",
+            "review-12-3.LOG",
+            "a-b-0-1.log",
+            "Implement-0-1.Log",
+        ] {
+            assert!(
+                CommandStep::is_step_log_name(refused),
+                "`{refused}` is a step log's name"
+            );
+        }
+        for kept in [
+            "notes.log",
+            "implement-0.log",
+            "implement-x-1.log",
+            "-0-1.log",
+            "0-1.log",
+            "implement-0-1.log.txt",
+        ] {
+            assert!(
+                !CommandStep::is_step_log_name(kept),
+                "`{kept}` is no step log's name"
+            );
+            let states = format!(
+                r#"{{"implement":{{"steps":[{{"kind":"command","run":["git","log"],"output":{}}}]}}}}"#,
+                serde_json::to_string(kept).expect("a string serializes")
+            );
+            read(&map_json("adp/default/1", &states))
+                .unwrap_or_else(|errors| panic!("`{kept}` is kept: {errors}"));
+        }
+    }
+
+    /// A word is read once: a value filled in is text, so two values cannot spell a placeholder
+    /// and an unclosed `{` in one cannot swallow a placeholder the map wrote after it.
+    #[test]
+    fn a_filled_value_is_never_read_again_for_placeholders() {
+        let word = Word::parse("{input.a}{input.b} > {run_directory}/x {} {a: .b}");
+        assert_eq!(
+            word.placeholders().collect::<Vec<_>>(),
+            ["input.a", "input.b", "run_directory"]
+        );
+        let given: BTreeMap<String, String> = [
+            ("a".to_owned(), "{".to_owned()),
+            ("b".to_owned(), "task}".to_owned()),
+        ]
+        .into();
+        let filled = word
+            .fill(|name| input_value(name, &given))
+            .expect("both given");
+        assert_eq!(filled, "{task} > {run_directory}/x {} {a: .b}");
+        assert_eq!(filled.placeholders().collect::<Vec<_>>(), ["run_directory"]);
+        let spawned = filled
+            .fill(|name| Ok((name == "run_directory").then(|| "/run".to_owned())))
+            .expect("the run directory is known");
+        assert_eq!(spawned, "{task} > /run/x {} {a: .b}");
+        assert_eq!(spawned.placeholders().count(), 0);
+    }
+
+    /// `{input.<name>}` is admitted in a command's words and record path and in an `llm` step's
+    /// context, beside `{run_directory}`, and the map says which inputs its steps name.
+    #[test]
+    fn a_step_may_name_run_inputs_and_the_map_lists_the_ones_it_names() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"command","run":["sh","-c","{input.repro}","{input.repro}"],
+             "output":"collected.txt"},
+            {"kind":"llm","prompt":"fix it","judgement":"what the fix is",
+             "context":["{run_directory}/collected.txt","notes/{input.release-version}.md"]}]}}"#;
+        let map = read(&map_json("adp/default/1", states)).expect("valid");
+        let steps = map.steps_for(&StateId::new("implement").expect("a state"));
+        assert_eq!(steps[0].inputs_named(), ["repro"], "each name once");
+        assert_eq!(steps[1].inputs_named(), ["release-version"]);
+        assert_eq!(
+            map.inputs_named().into_iter().collect::<Vec<_>>(),
+            ["release-version", "repro"]
+        );
+
+        // A context entry is a file the run is given, so only what names a file is expandable
+        // there: the transcript of another session and the task document are refused by name.
+        for placeholder in ["{transcript}", "{task}", "{input.Bad}x{nope}"] {
+            let errors =
+                only_llm_step(&format!(r#","context":["{placeholder}"]"#)).expect_err("refused");
+            assert!(
+                errors.contains(ValidationCode::UndeclaredReference),
+                "{placeholder}: {errors}"
+            );
+        }
+        // And a dotted placeholder other than an input is a misspelling, not text.
+        let errors = read(&map_json(
+            "adp/default/1",
+            r#"{"implement":{"steps":[{"kind":"command","run":["x","{inptu.repro}"]}]}}"#,
+        ))
+        .expect_err("refused");
+        assert!(
+            errors.contains(ValidationCode::UndeclaredReference),
+            "{errors}"
+        );
+    }
+
+    /// Acceptance 5, decided from the map and the run's inputs: a placeholder naming an input the
+    /// run was not given is refused, naming it, at the step that names it.
+    #[test]
+    fn an_input_the_run_was_not_given_is_refused_naming_it() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"command","run":["sh","-c","{input.repro}"]},
+            {"kind":"llm","prompt":"p","judgement":"j","context":["{input.notes}"]}]}}"#;
+        let map = read(&map_json("adp/default/1", states)).expect("valid");
+        let given: BTreeMap<String, String> = [("notes".to_owned(), "n.md".to_owned())].into();
+        let errors = map.check_inputs(&given);
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(refusal.code, ValidationCode::UndeclaredReference);
+        assert_eq!(
+            refusal.location,
+            "driver-steps[development/default].states.implement.steps[0].run"
+        );
+        assert!(
+            refusal.to_string().contains("{input.repro}"),
+            "the refusal names the placeholder: {refusal}"
+        );
+
+        let both: BTreeMap<String, String> = [
+            ("notes".to_owned(), "n.md".to_owned()),
+            ("repro".to_owned(), "cargo test".to_owned()),
+        ]
+        .into();
+        assert!(map.check_inputs(&both).is_empty());
+    }
+
+    /// An input's value is text: one that would itself be expanded as a placeholder is refused,
+    /// so a value can never name a file or a document the map did not.
+    #[test]
+    fn an_input_value_that_names_a_placeholder_is_refused() {
+        let map = read(&map_json(
+            "adp/default/1",
+            r#"{"implement":{"steps":[{"kind":"command","run":["echo","{input.v}"]}]}}"#,
+        ))
+        .expect("valid");
+        let given: BTreeMap<String, String> = [("v".to_owned(), "{task}".to_owned())].into();
+        let errors = map.check_inputs(&given);
+        assert!(
+            errors.contains(ValidationCode::UnsupportedConstruct),
+            "{errors}"
+        );
+        let braces: BTreeMap<String, String> = [("v".to_owned(), "{a: .b}".to_owned())].into();
+        assert!(
+            map.check_inputs(&braces).is_empty(),
+            "braces that name nothing are text, as in a step's own words"
+        );
+    }
+
+    /// The driver hands a step its inputs and run directory filled in, in one pass: a value is
+    /// never read a second time for placeholders.
+    #[test]
+    fn inputs_and_the_run_directory_are_filled_in_once() {
+        let states = r#"{"implement":{"steps":[
+            {"kind":"command","run":["sh","-c","{input.repro} --at {run_directory}"],
+             "evidence":{"kind":"trace_conformance","verifier":"trace-checker",
+                         "record":"{run_directory}/{input.repro}.yaml"}},
+            {"kind":"llm","prompt":"p","judgement":"j",
+             "context":["{run_directory}/collected.txt","{input.repro}"]}]}}"#;
+        let map = read(&map_json("adp/default/1", states)).expect("valid");
+        let steps = map.steps_for(&StateId::new("implement").expect("a state"));
+        let given: BTreeMap<String, String> = [("repro".to_owned(), "t".to_owned())].into();
+
+        let Step::Command(command) = &steps[0] else {
+            panic!("the first step is a command");
+        };
+        let filled = command.with_inputs(&given).expect("every input is given");
+        assert_eq!(filled.run[2], "t --at {run_directory}");
+        assert_eq!(
+            filled
+                .evidence
+                .and_then(|mapping| mapping.record)
+                .as_ref()
+                .map(Word::as_str),
+            Some("{run_directory}/t.yaml"),
+            "the run directory is the executor's to fill in for a command step"
+        );
+
+        let Step::Llm(llm) = &steps[1] else {
+            panic!("the second step is the llm step");
+        };
+        let resolved = llm
+            .with_context_resolved("/runs/T-1/1", &given)
+            .expect("every input is given");
+        assert_eq!(resolved.context, ["/runs/T-1/1/collected.txt", "t"]);
+
+        assert!(
+            command.with_inputs(&BTreeMap::new()).is_err(),
+            "an input nobody gave is not filled in with nothing"
+        );
+    }
+
+    #[test]
+    fn an_input_name_is_a_lowercase_word() {
+        for good in ["repro", "release-version", "v2", "a_b"] {
+            assert!(valid_input_name(good), "{good}");
+        }
+        for bad in ["", "Repro", "2v", "-a", "a.b", "a b", "a=b"] {
+            assert!(!valid_input_name(bad), "{bad}");
+        }
     }
 }

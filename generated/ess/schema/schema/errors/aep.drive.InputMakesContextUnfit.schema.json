@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InputMakesContextUnfit payload",
+  "description": "An `--input` value that, filled into an `llm` step's context entry, leaves the entry blank or a glob, which the loader refuses when a map writes it. The refusal's code is `empty_declaration` at the step's `context` (map.rs `StepMap::check_inputs`, `context_entry_defect`).",
+  "x-ess-name": "aep.drive.InputMakesContextUnfit",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:45dbeba36b0f002d5c140cbd36b8e59655dd3f225acdf2628c90d9efb8ec54da",
+    "regenerate": "ess generate"
+  }
+}

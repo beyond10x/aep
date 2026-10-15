@@ -14,27 +14,95 @@
     },
     "llm_steps_declared": {
       "type": "integer"
+    },
+    "inputs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.RunInput"
+      }
+    },
+    "inputs_named": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
+    },
+    "malformed_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "repeated_names": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
+    },
+    "placeholder_valued": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
+    },
+    "context_unfit": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
     }
   },
   "required": [
     "run",
     "map",
-    "llm_steps_declared"
+    "llm_steps_declared",
+    "inputs",
+    "inputs_named",
+    "malformed_names",
+    "repeated_names",
+    "placeholder_valued",
+    "context_unfit"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "50fc07b65a27cec5bb80f858be2ffb20fb9c0870a2c7eff9235d4a5adb765080",
-    "contract_digest": "slice-sha256/2:4c408b41ec3c249d99f5ccb5cdaf7f63dce863357fa2228267a02d9ca38bff46",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:025e34883edb482e29ec4f7758862c714a48d441ca2dd0fdc39eadeb6d965a6e",
     "regenerate": "ess generate"
   },
   "$defs": {
+    "aep.drive.InputName": {
+      "title": "InputName",
+      "x-ess-name": "aep.drive.InputName",
+      "x-ess-kind": "newtype",
+      "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-"
+    },
     "aep.drive.RunId": {
       "title": "RunId",
       "x-ess-name": "aep.drive.RunId",
       "x-ess-kind": "newtype",
       "type": "string"
+    },
+    "aep.drive.RunInput": {
+      "title": "RunInput",
+      "x-ess-name": "aep.drive.RunInput",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/aep.drive.InputName"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "additionalProperties": false
     },
     "aep.drive.StepMapId": {
       "title": "StepMapId",

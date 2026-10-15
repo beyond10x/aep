@@ -1,12 +1,12 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "50fc07b65a27cec5bb80f858be2ffb20fb9c0870a2c7eff9235d4a5adb765080",
+  "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:30d36c601ecf71ac393d46129e01929f5444edf6f85082dcb26525f71bea4a05",
-    "projection_digest": "4800e4abf1736e6256da7900d5767732d990beaaee8927a0de89be5af7e7472d"
+    "contract_digest": "slice-sha256/2:dfb2c7d582256341a1e1f78bb0a9631b5e23e20e359d280a292e246ea9d88acc",
+    "projection_digest": "212e10f611efc8bb24c72e82243d723c47648dd00cac5ee3f0a4bdfac8629b82"
   },
   "generator_version": "0.59.0",
   "target": "rust",
@@ -15,9 +15,12 @@
     "package": "aep-plan-ess"
   },
   "roots": [
+    "aep.drive.Expectation",
+    "aep.drive.InputName",
     "aep.drive.LlmStepBegun",
     "aep.drive.Run.State",
     "aep.drive.RunId",
+    "aep.drive.RunInput",
     "aep.drive.RunStarted",
     "aep.drive.Step.State",
     "aep.drive.StepDeclared",
@@ -56,9 +59,12 @@
     "aep.review.ReviewResult.State"
   ],
   "declarations": {
+    "aep.drive.Expectation": "AepDriveExpectation",
+    "aep.drive.InputName": "AepDriveInputName",
     "aep.drive.LlmStepBegun": "AepDriveLlmStepBegun",
     "aep.drive.Run.State": "AepDriveRunState",
     "aep.drive.RunId": "AepDriveRunId",
+    "aep.drive.RunInput": "AepDriveRunInput",
     "aep.drive.RunStarted": "AepDriveRunStarted",
     "aep.drive.Step.State": "AepDriveStepState",
     "aep.drive.StepDeclared": "AepDriveStepDeclared",
@@ -97,6 +103,36 @@
     "aep.review.ReviewResult.State": "AepReviewReviewResultState"
   },
   "annotations": [
+    {
+      "pointer": "/$defs/aep.drive.Expectation/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Expectation/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.Expectation/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.InputName/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.InputName/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.InputName/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
     {
       "pointer": "/$defs/aep.drive.LlmStepBegun/title",
       "rule": "title",
@@ -139,6 +175,21 @@
     },
     {
       "pointer": "/$defs/aep.drive.RunId/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunInput/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunInput/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.drive.RunInput/x-ess-name",
       "rule": "x-ess-name",
       "detail": "model identity and wire mapping retained in source.schema.json"
     },
@@ -714,6 +765,11 @@
     }
   ],
   "obligations": [
+    {
+      "pointer": "/$defs/aep.drive.InputName/x-ess-alphabet",
+      "rule": "model_alphabet",
+      "detail": "enforce the retained model alphabet: every character of the text is one of it; structural codecs do not check characters"
+    },
     {
       "pointer": "/$defs/aep.drive.RunStarted/properties/llm_steps_declared",
       "rule": "integer",

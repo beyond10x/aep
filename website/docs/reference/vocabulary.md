@@ -44,8 +44,12 @@ DM*.
 ```text
 test_result  static_analysis  contract_result  property_test_result  deployment_result
 metric_observation  health_observation  approval  diff  artifact  review  review_outcome
-verification  specification
+verification  specification  task_spend
 ```
+
+`task_spend` is what one transcript, run manifest or driven run's cursor says a task spent, written
+by `aep plan artifact evidence <id> --kind task_spend --from <file>`; a figure the source does not
+state is absent, never `0`.
 
 `review` is what somebody concluded about a piece of work; `review_outcome` is what became of that
 conclusion — `no-op`, `fixed` or `escalated`. They are separate kinds because they are separate

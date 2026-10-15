@@ -16,6 +16,7 @@
 //! | what happened | variant | what the loop does |
 //! |---|---|---|
 //! | a verifier produced a verdict — a suite ran, passing or failing | [`StepOutcome::Observed`] | submit it, and let the **engine** route |
+//! | a verdict read against what the step expects, with the reason — *nothing reproduced* | [`StepOutcome::Explained`] | submit it, note the reason, and let the engine route |
 //! | the step ran and there is nothing to submit — an `llm` step finished | [`StepOutcome::Nothing`] | advance to the next step |
 //! | nothing was observed — crash, timeout, OOM, missing binary, model error | [`StepOutcome::NoVerdict`] | submit **nothing**; retry within the step kind's budget |
 //! | a person is owed a question | [`StepOutcome::Paused`] | persist and stop; the snapshot is the queue |
@@ -161,6 +162,18 @@ pub enum StepOutcome {
     /// `False` and `True` are both this. Whether a failing verdict means *go round again* is the
     /// workflow's decision, taken by `transition()`, never the driver's.
     Observed(Box<EvidenceSubmission>),
+    /// A verifier produced a verdict that the step map read against an expectation, and the
+    /// reason that makes it the verdict it is: submit it, and put the reason in the run's report.
+    ///
+    /// A `command` step with `expect: failure` whose command exited `0` is the case: the record
+    /// submitted is a failing one, and nothing in a failing `TestResult` says *nothing
+    /// reproduced* — so the reason travels beside it rather than being lost.
+    Explained {
+        /// What is submitted, exactly as [`Self::Observed`] would submit it.
+        submission: Box<EvidenceSubmission>,
+        /// Why the verdict is what it is, for the run report.
+        reason: String,
+    },
     /// The step ran and there is nothing to submit — an `llm` step that finished.
     ///
     /// An agent's own statement never satisfies an independence requirement, so this is the only

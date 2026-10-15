@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep drive run response",
+  "description": "Read a command step's exit status as a verdict, inverted when it expects failure.",
+  "x-ess-name": "aep.drive.ReadCommandExit",
+  "x-ess-kind": "command-response",
+  "type": "object",
+  "properties": {
+    "passed": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "passed"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:0c10b841755358683cd772eb4095f02e8b85d6f07c07e9a20da78a1ed70ace20",
+    "regenerate": "ess generate"
+  }
+}
