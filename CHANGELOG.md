@@ -9,6 +9,25 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `drivers/releases/source.yaml` (`releases/source`, for `release/source/1`) cuts this
+  repository's release with `command` and `operator` steps only, in the order `AGENTS.md`
+  (Releases and commits) gives: `aep drive run --map releases/source --input version=<x.y.z>
+  --input date=<YYYY-MM-DD> --pause-on-approval`. Every step that changes Git state, a ref or the
+  planning store declares `retries: 0`; the full gate is the last step of `qualify`, so nothing is
+  pushed before it passes and a person grants `release-create`; opening and merging each pull
+  request is an `operator` step. Its four `verification` claims are read from records written by
+  `cargo xtask release check <claim>`, which a later release provides. A read-only command step
+  in `verify` mints the `diff` record `provenance-tracking` requires, from `git diff --stat`
+  between the previous tag and the new one.
+
+### Changed
+
+- The `release.source` profile no longer requires the `verify-after-action` principle; completion
+  still requires `verification.source-release.passed`. `release.progressive`,
+  `release.dependency-chain` and `incident.standard` keep the principle.
+
 ## [0.73.0] — 2026-10-15
 
 ### Added
