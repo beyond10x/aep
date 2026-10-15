@@ -21,12 +21,30 @@ belongs in the commit message or in `docs/design/`.
   `cargo xtask release check <claim>`, which a later release provides. A read-only command step
   in `verify` mints the `diff` record `provenance-tracking` requires, from `git diff --stat`
   between the previous tag and the new one.
+- `aep plan artifact spend [--kind <k>] [--since <YYYY-MM-DD>] [--baseline <n>]` prints, per task
+  kind and figure (`model_calls`, `total_tokens`, `cost_micro_usd`, `wall_time_ms`,
+  `llm_steps_run`), how many artifacts have a `task_spend` record, how many of them leave the
+  figure unknown, the lower median over the rest (`unknown` when none states it, never `0`), the
+  project's baseline and target (`none` when undeclared), and whether the median is `under`, `at`
+  or `over` the target. An artifact counts once: its records are summed, and of records sharing a
+  `source_input` only the latest by `at` counts. `--since` keeps records from 00:00 UTC of that day
+  and refuses a value that is not a calendar date; `--baseline <n>` takes each median over the
+  first `n` artifacts of each kind and refuses `0`. It writes nothing. `.engineering/project.yaml`
+  gains an optional `spend.<kind>.<figure>: { baseline, target }`; an unknown figure, a missing
+  value, a value that is not a non-negative integer or a target not strictly below its baseline
+  refuses the project file, naming the kind, the figure and the values, and `spend` or a kind
+  written with no value is refused naming it.
 
 ### Changed
 
 - The `release.source` profile no longer requires the `verify-after-action` principle; completion
   still requires `verification.source-release.passed`. `release.progressive`,
   `release.dependency-chain` and `incident.standard` keep the principle.
+
+### Fixed
+
+- A calendar date (`findings_required_since`, `--since`) written with a signed part, such as
+  `2026-+1-+2`, is refused as not written in digits instead of being read as `2026-01-02`.
 
 ## [0.73.0] — 2026-10-15
 

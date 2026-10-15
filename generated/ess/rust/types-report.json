@@ -1,12 +1,12 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+  "source_digest": "2f76cb69924b806411ad6840228b40a4b3c8d1f282b1d478d8f8ca95418afe50",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:dfb2c7d582256341a1e1f78bb0a9631b5e23e20e359d280a292e246ea9d88acc",
-    "projection_digest": "212e10f611efc8bb24c72e82243d723c47648dd00cac5ee3f0a4bdfac8629b82"
+    "contract_digest": "slice-sha256/2:17d0ce71c3fa9556c9fb895adbb2fd2a816bb344c75f87c59238a5404f3933a6",
+    "projection_digest": "7be09a56ce4812bb182671bcc2ef8a7b1c5a8d0ce53791e1f9ab2d52ea17c55a"
   },
   "generator_version": "0.60.0",
   "target": "rust",
@@ -38,7 +38,9 @@
     "aep.evidence.RecordName",
     "aep.evidence.SpendRecord.State",
     "aep.evidence.SpendRecorded",
+    "aep.evidence.SpendRow",
     "aep.evidence.SpendSource",
+    "aep.evidence.SpendStanding",
     "aep.evidence.SuiteKind",
     "aep.plan.EngineeringDirectory",
     "aep.plan.PlanningScope",
@@ -49,6 +51,9 @@
     "aep.plan.RepeatedTransitionsDropped",
     "aep.plan.Repository.State",
     "aep.plan.ScopeSource",
+    "aep.plan.SpendBound",
+    "aep.plan.SpendBoundWritten",
+    "aep.plan.SpendFigure",
     "aep.plan.SqliteStore",
     "aep.plan.Store",
     "aep.plan.StoreMigrated",
@@ -82,7 +87,9 @@
     "aep.evidence.RecordName": "AepEvidenceRecordName",
     "aep.evidence.SpendRecord.State": "AepEvidenceSpendRecordState",
     "aep.evidence.SpendRecorded": "AepEvidenceSpendRecorded",
+    "aep.evidence.SpendRow": "AepEvidenceSpendRow",
     "aep.evidence.SpendSource": "AepEvidenceSpendSource",
+    "aep.evidence.SpendStanding": "AepEvidenceSpendStanding",
     "aep.evidence.SuiteKind": "AepEvidenceSuiteKind",
     "aep.plan.EngineeringDirectory": "AepPlanEngineeringDirectory",
     "aep.plan.PlanningScope": "AepPlanPlanningScope",
@@ -93,6 +100,9 @@
     "aep.plan.RepeatedTransitionsDropped": "AepPlanRepeatedTransitionsDropped",
     "aep.plan.Repository.State": "AepPlanRepositoryState",
     "aep.plan.ScopeSource": "AepPlanScopeSource",
+    "aep.plan.SpendBound": "AepPlanSpendBound",
+    "aep.plan.SpendBoundWritten": "AepPlanSpendBoundWritten",
+    "aep.plan.SpendFigure": "AepPlanSpendFigure",
     "aep.plan.SqliteStore": "AepPlanSqliteStore",
     "aep.plan.Store": "AepPlanStore",
     "aep.plan.StoreMigrated": "AepPlanStoreMigrated",
@@ -449,6 +459,51 @@
       "detail": "model identity and wire mapping retained in source.schema.json"
     },
     {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/baseline/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/kind/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/median/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/skipped/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/target/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/tasks/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
       "pointer": "/$defs/aep.evidence.SpendSource/title",
       "rule": "title",
       "detail": "retained in source.schema.json; no decoder behavior inferred"
@@ -460,6 +515,21 @@
     },
     {
       "pointer": "/$defs/aep.evidence.SpendSource/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendStanding/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendStanding/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendStanding/x-ess-name",
       "rule": "x-ess-name",
       "detail": "model identity and wire mapping retained in source.schema.json"
     },
@@ -615,6 +685,61 @@
     },
     {
       "pointer": "/$defs/aep.plan.ScopeSource/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/properties/baseline/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/properties/target/description",
+      "rule": "description",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/x-ess-name",
+      "rule": "x-ess-name",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendFigure/title",
+      "rule": "title",
+      "detail": "retained in source.schema.json; no decoder behavior inferred"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendFigure/x-ess-kind",
+      "rule": "x-ess-kind",
+      "detail": "model identity and wire mapping retained in source.schema.json"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendFigure/x-ess-name",
       "rule": "x-ess-name",
       "detail": "model identity and wire mapping retained in source.schema.json"
     },
@@ -781,6 +906,61 @@
       "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
     },
     {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/baseline",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/baseline",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/median",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/median",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/skipped",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/skipped",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/target",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/target",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/tasks",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/properties/tasks",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.evidence.SpendRow/x-ess-invariants",
+      "rule": "model_invariants",
+      "detail": "enforce the retained model invariant statements; structural codecs do not evaluate predicates"
+    },
+    {
       "pointer": "/$defs/aep.plan.PlanningScope/x-ess-invariants",
       "rule": "model_invariants",
       "detail": "enforce the retained model invariant statements; structural codecs do not evaluate predicates"
@@ -794,6 +974,71 @@
       "pointer": "/$defs/aep.plan.RepeatedTransitionsDropped/properties/dropped",
       "rule": "rust_exact_numbers",
       "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/properties/baseline",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/properties/baseline",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/properties/target",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/properties/target",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/properties/target/minimum",
+      "rule": "minimum",
+      "detail": "validate this constraint against the source schema at runtime"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBound/x-ess-invariants",
+      "rule": "model_invariants",
+      "detail": "enforce the retained model invariant statements; structural codecs do not evaluate predicates"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/properties/baseline",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/properties/baseline",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/properties/baseline/minimum",
+      "rule": "minimum",
+      "detail": "validate this constraint against the source schema at runtime"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/properties/target",
+      "rule": "integer",
+      "detail": "serde_json::Number holds exact JSON numbers with the default `exact-numbers` feature and binary64 without it, and does not enforce integrality; validate the source constraint"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/properties/target",
+      "rule": "rust_exact_numbers",
+      "detail": "this value holds JSON numbers in serde_json; the generated crate's default-on `exact-numbers` feature enables serde_json/arbitrary_precision, and a consumer that turns default features off gets these numbers as binary64"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/properties/target/minimum",
+      "rule": "minimum",
+      "detail": "validate this constraint against the source schema at runtime"
+    },
+    {
+      "pointer": "/$defs/aep.plan.SpendBoundWritten/x-ess-invariants",
+      "rule": "model_invariants",
+      "detail": "enforce the retained model invariant statements; structural codecs do not evaluate predicates"
     },
     {
       "pointer": "/$defs/aep.plan.Store",

@@ -24,8 +24,9 @@ is missing here fails the build.
 - **Output.** Most commands take `--format text|yaml|json`, and `text` is the default. The exceptions
   are named in their rows. Show `text` to people and give JSON to programs.
 - **Exit codes.** `0` success, `1` refused or invalid. Report commands (`blocked`, `findings`,
-  `review-value`, `waves`, `eval matrix`) exit `0` whenever they produced their report. `waves` exits
-  `2` on a dependency cycle, and `observe trace check` exits `3` when the verdict is unknown.
+  `review-value`, `spend`, `waves`, `eval matrix`) exit `0` whenever they produced their report.
+  `waves` exits `2` on a dependency cycle, and `observe trace check` exits `3` when the verdict is
+  unknown.
 - **Errors accumulate.** A command reports every problem it found, each with a stable code, not
   just the first.
 - **Discovery.** Inside a project (a directory with `.engineering/project.yaml`, found upwards from
@@ -81,6 +82,7 @@ is missing here fails the build.
 | `aep plan artifact waves [--kind story] [--status …]` | which stories can be implemented at once, every collision, and every unassessed story. See [scope and waves](../concepts/waves.md) |
 | `aep plan artifact findings <id> [--from <review-result-id>] [--to <review-result-id>]` | `carried`, `new` and `resolved` between two reviews of an artifact |
 | `aep plan artifact review-value [--since <YYYY-MM-DD>]` | per reviewer: reviews, findings, outcomes and recorded cost; no score |
+| `aep plan artifact spend [--kind <k>] [--since <YYYY-MM-DD>] [--baseline <n>]` | per task kind and figure of the `task_spend` records: tasks, skipped (figure unknown), lower median (`unknown`, never `0`), the project's `spend.<kind>.<figure>` baseline and target (`none` when undeclared) and the standing `under`, `at`, `over`, `unknown` or `undeclared`. An artifact counts once; of its records sharing a `source_input` only the latest by `at` counts. `--baseline <n>` takes each median over the first `n` artifacts of each kind. Writes nothing |
 | `aep plan artifact validate [--strict] [--outcome-within <days>]` | every file, edge, status and transition list; exits `1` on a problem. Reports assertions, prose-only reviews and reviews with no outcome after `--outcome-within` days (default 14); `--strict` fails on those too. With `findings_required_since` set, a review with no `findings` block is a problem unless it was recorded `--prose-only`, a review carrying a block supersedes it, or the store recorded it (the commit that added it, in a Git-native store) before the date; a review the store cannot date (a shallow clone's boundary commit, a store outside Git) is undated and never before it; the exempt ones are listed with their standing and `--strict` does not refuse them |
 | `aep plan artifact kinds` | the kinds that can be created, marked planning or output |
 | `aep plan artifact relations` | the relation vocabulary |
