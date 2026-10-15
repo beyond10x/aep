@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-15T06:23:18Z",
+  "actor": "human:timo",
+  "artifact": "story:bugfix-workflow",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "round 4 design findings resolved in the revised body",
+    "review": "review-result:detflow-design-round-4",
+    "outcome": "fixed"
+  }
+}

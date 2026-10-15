@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-15T06:15:32Z",
+  "actor": "human:timo",
+  "artifact": "story:concurrent-command-steps",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "round 3 design findings resolved in the revised body; rechecked by critic round 4",
+    "review": "review-result:detflow-design-round-3",
+    "outcome": "fixed"
+  }
+}

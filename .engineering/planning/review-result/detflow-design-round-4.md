@@ -1,0 +1,38 @@
+---
+format: aep.planning-md/3
+id: review-result:detflow-design-round-4
+kind: review-result
+status: active
+title: 'Plan critic (design), round 4: deterministic delivery workflows'
+relations:
+- reviews: epic:deterministic-delivery-workflows
+- reviews: story:concurrent-command-steps
+- reviews: story:bugfix-workflow
+- reviews: story:release-step-map
+- reviews: story:spend-against-baseline
+revision: 1
+---
+needs-revision. Round 3's eight design findings are all fixed in the text. The concurrent story now makes a batch one cursor unit with llm and operator steps as barriers. The ESS scope is named, the repro rerun is gone in favour of `output: repro.txt`, and diagnose carries `concurrent: true` with the ordering edge recorded. The release acceptance no longer claims no local tag, and the table lists branch, commit, record branch and second PR. Spend kind is the artifact's kind (the evidence file's top-level `kind`, which I checked), and the scope paths are corrected. The graph has no cycle and no edge leaves the set except to implemented siblings. The new defects come from reading the revised text against shipped code. The release table cannot complete its verify state as written: after the release PR merges, nothing fetches `origin/main` or waits for the tag's Release run, and `cargo xtask release record` refuses on both. The concurrent story misplaces `next_step` and leaves attempt numbering and no-verdict budget exhaustion in a batch unstated. The bug-fix story names a workflow but no guards or evidence. The spend story sums records that can be cumulative snapshots of one source.
+
+What I read: 4 stories, review-result:detflow-design-round-3 and the other three round-3 results, plus `aep plan artifact relations` and `graph`. I walked 24 edges across the whole epic and its implemented siblings. Of the 7 acceptance reads of state a sibling produces (`{input.*}` and `output:` from command-step-expects-failure, `release-cutting-commands` steps, `task_spend` records, `llm_steps_declared`, `judgement`, `concurrent`), all 7 are recorded by a `depends_on` edge. Code read: cursor.rs, route.rs, run.rs, map.rs, executor.rs, aep-cli drive.rs, project.rs, evidence.rs, xtask release_cut.rs, ess/domains drive, evidence and plan.
+
+Could not establish:
+- Whether ESS 0.60.0 can express a pairwise check over two steps (`concurrent-output-shared`); I only know that no existing command in drive.yaml does.
+- Out of my lane (acceptance, not set shape): the barrier acceptance names no test file that can host a stub llm executor, since the real thread host is in aep-cli and `aep drive run` refuses llm steps.
+- Out of my lane (digest compatibility): no acceptance says a map without `concurrent` keeps its digest, as `expect` does with `skip_serializing_if`.
+- Pre-existing, outside the four: the body of story:evidence-records-task-spend (implemented) still lists a `Depends on story:concurrent-command-steps` that no edge records.
+
+```findings
+[
+{"file":".engineering/planning/story/release-step-map.md","line":41,"category":"design","severity":"blocker","verdict":"needs-revision","origin":"introduced","message":"the verify state branches the record branch from the local origin/main that inspect fetched before the release PR merged, so `cargo xtask release record` reads the old workspace version and refuses (tag not on origin/main, release_cut.rs record); add a bot fetch command step after the merge and before the branch switch"},
+{"file":".engineering/planning/story/release-step-map.md","line":42,"category":"design","severity":"blocker","verdict":"needs-revision","origin":"introduced","message":"no step waits for the tag's Release workflow run, and `cargo xtask release record` refuses while it is still running (release_cut.rs record) and retries cannot wait it out; add a read-only command step that blocks until the run concludes, or an operator step, ahead of record"},
+{"file":".engineering/planning/story/release-step-map.md","line":38,"category":"design","severity":"warning","verdict":"needs-revision","origin":"introduced","message":"the table gives no retries for its mutating command steps (branch switch, commits, push, PR open) and a command step retries twice by default on a nonzero exit with no evidence (DEFAULT_COMMAND_RETRIES = 2, map.rs:63), which would reopen a PR or re-push; state `retries: 0` for each step that writes outside the working tree"},
+{"file":".engineering/planning/story/release-step-map.md","line":107,"category":"design","severity":"warning","verdict":"needs-revision","origin":"undecided","message":"the four `verification` records that guard inspect, qualify, publish and verify have no producer in the set, and the Open Question leaves it to the operator, so the epic's Done When cannot be met by this set; add a story that writes them with a depends_on edge from this one, or state they are out of the epic"},
+{"file":".engineering/planning/story/concurrent-command-steps.md","line":100,"category":"design","severity":"warning","verdict":"needs-revision","origin":"introduced","message":"the scope names `next_step` under run.rs but it lives in crates/drive/aep-driver/src/route.rs:50 beside `steps_remaining`, both reading `cursor.step` as one index, so the batch pointer rule has no named home; add route.rs to Scope and say `next_step` returns the batch"},
+{"file":".engineering/planning/story/concurrent-command-steps.md","line":22,"category":"design","severity":"warning","verdict":"needs-revision","origin":"introduced","message":"`InFlightAttempt` holds one step and one attempt number (cursor.rs:255) but a batch holds one attempt counter per step and per-attempt log names; say which attempt numbers a `--retry-in-flight` rerun of the batch keeps and which it advances"},
+{"file":".engineering/planning/story/concurrent-command-steps.md","line":29,"category":"design","severity":"warning","verdict":"needs-revision","origin":"introduced","message":"a batch step that spends its retries with no verdict stops a serial run BudgetExhausted (run.rs Session::step), and the Outcome says only that failed steps do not cancel siblings; say the batch submits the verdicts the other steps produced in map order and then stops BudgetExhausted"},
+{"file":".engineering/planning/story/concurrent-command-steps.md","line":56,"category":"design","severity":"warning","verdict":"needs-revision","origin":"introduced","message":"`aep.drive.ConcurrentOutputShared` is a check over two steps of a state but aep.drive.DeclareStep admits one step, and the story names no command that carries the outcome `concurrent-output-shared`; name the command (as aep.drive.DeclareOutput carries not-a-file-name) and the ESS-LIMIT note for the pairwise comparison"},
+{"file":".engineering/planning/story/bugfix-workflow.md","line":18,"category":"design","severity":"warning","verdict":"needs-revision","origin":"introduced","message":"the Outcome names four states and one back-edge but not the `when:` guard of any transition or the evidence kind and suite each command step mints, so what an expect: failure reproduce submits for reproduce->diagnose and what verify's failing evidence is are undecided; list the guards and mappings"},
+{"file":".engineering/planning/story/spend-against-baseline.md","line":21,"category":"design","severity":"warning","verdict":"needs-revision","origin":"introduced","message":"summing an artifact's task_spend records double-counts when two records are snapshots of one cumulative source (a driven run's cursor or a manifest recorded twice, same source_input and a new digest); say records sharing a source_input count once, the latest by `at`, or say summing is intended and why"}
+]
+```
