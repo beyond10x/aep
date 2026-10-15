@@ -1737,12 +1737,17 @@ struct Reader {
 
 impl CommandStepExecutor for Reader {
     fn run_command(&mut self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome {
-        self.commands.push(step.run.clone());
+        self.commands.push(
+            step.run
+                .iter()
+                .map(|word| word.as_str().to_owned())
+                .collect(),
+        );
         // An `output:` is kept where the step map says it is, as `aep-cli`'s executor keeps it.
         if let Some(output) = &step.output {
             std::fs::write(
                 context.run_directory.join(output),
-                format!("collected by {}\n", step.run.join(" ")),
+                format!("collected by {}\n", step.command_line()),
             )
             .expect("the run directory is writable");
         }

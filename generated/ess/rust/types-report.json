@@ -1,12 +1,12 @@
 {
   "format": "ess-types-report/3",
-  "source_digest": "0539881fefdd7bdf8e28e371b4e21f100ada517473869f290eb6fefcf2bb135b",
+  "source_digest": "d8f2e29903e2887798efd86f43f59241628abffd9b94e056ebacbb0e35934128",
   "input": {
     "kind": "model",
     "system": "aep",
     "specification_version": "v1",
-    "contract_digest": "slice-sha256/2:9728a3bc300aeedcdd2ebe1bb12c9b110c72061191db15c661fb4ea9c8a2837e",
-    "projection_digest": "da7e4dc1191d1d1935f474bd85c87ce14cdd1663844061f9776760e2cc9a6312"
+    "contract_digest": "slice-sha256/2:2ac4b4ef73c943c84a2edc4e72e3a8268509b5689945e2cd1549ace5c5085780",
+    "projection_digest": "de1ee716391e2faa6dad720e4d419d7e462b0916004f6013dcc20a54a18fa176"
   },
   "generator_version": "0.59.0",
   "target": "rust",
@@ -765,6 +765,11 @@
     }
   ],
   "obligations": [
+    {
+      "pointer": "/$defs/aep.drive.InputName/x-ess-alphabet",
+      "rule": "model_alphabet",
+      "detail": "enforce the retained model alphabet: every character of the text is one of it; structural codecs do not check characters"
+    },
     {
       "pointer": "/$defs/aep.drive.RunStarted/properties/llm_steps_declared",
       "rule": "integer",

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CommandNotExecuted payload",
+  "description": "A step expecting failure whose command exited 126 or 127: the status a shell gives when it could not execute the command or did not find it. Nothing was reproduced or refuted, as for a program the driver could not spawn itself, so nothing is submitted and the reason names the status (map.rs `CommandStep::verdict`, drive.rs `command_verdict`). Any other nonzero exit, 128 and above included, is still a reproduction: a crash reproduced through a shell exits that way, and cannot be told apart from a signal the shell reports.",
+  "x-ess-name": "aep.drive.CommandNotExecuted",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "d8f2e29903e2887798efd86f43f59241628abffd9b94e056ebacbb0e35934128",
+    "contract_digest": "slice-sha256/2:53fa731de9f2bdcf81ab8b7b64f5d3d6d3bad8d611cd4deac39cbd45f9041609",
+    "regenerate": "ess generate"
+  }
+}

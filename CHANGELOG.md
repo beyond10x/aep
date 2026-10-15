@@ -13,18 +13,24 @@ belongs in the commit message or in `docs/design/`.
 
 - A `kind: command` step may declare `expect: failure`: a nonzero exit is then the passing
   verdict, and an exit of `0` submits failing evidence whose reason, `nothing reproduced`, is
-  printed as a note of the run. A process killed by a signal is still no verdict.
+  printed as a note of the run. A process killed by a signal is still no verdict, and so is an
+  exit of `126` or `127` (a shell could not execute the command, or did not find it), with a
+  reason naming the status; any other nonzero exit, `128` and above included, is a reproduction.
   `expect: failure` beside an evidence `record:` is refused at `<step>.expect` with
   `unsupported_construct`. A step without `expect` behaves, and digests, as before.
 - `aep drive run --input <name>=<value>` (repeatable) gives a run named inputs, which a step names
   as `{input.<name>}` in its `run` words, its evidence `record:` path and an `llm` step's
   `context`. A run whose map names an input it was not given is refused before a run id is
   allocated, with `undeclared_reference` at the step naming the placeholder; a resume uses the
-  inputs recorded in the run's `launch.json`.
+  inputs recorded in the run's `launch.json`. A value is filled in as text and never read again
+  for placeholders, so two values cannot spell one between them; a value that names a
+  placeholder, or that leaves an `llm` step's context entry blank or a glob, is refused before a
+  run id is allocated.
 - A command step may declare `output: <file>`: its standard output is written to
   `{run_directory}/<file>`. An `llm` step's `context` may name `{run_directory}/<file>`, and the
-  session is handed that file. An output name that is blank, holds a path separator, starts with
-  `.` or is one of the run directory's own records is refused at `<step>.output`.
+  session is handed that file. An output name that is blank, holds a path separator or a NUL
+  byte, starts with `.`, is one of the run directory's own records in any ASCII case, or has the
+  form of a step's log, `<state>-<index>-<attempt>.log`, is refused at `<step>.output`.
 - The ESS specification (`ess/domains/drive.yaml`) models `expect`, `output`, run inputs, and
   reading a command's exit status against its expectation.
 

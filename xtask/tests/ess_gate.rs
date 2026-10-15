@@ -34,16 +34,17 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 45 scenarios and 68 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 50 scenarios and 68 refusals.
 ///
 /// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, the `aep.review.ReviewResult`
 /// invariant after each of its three recording outcomes, the nine outcomes of
 /// `aep.evidence.RecordFromReport`, the two outcomes of `aep.evidence.RecordSpend`
-/// (`source-digest-missing` and `recorded`, story:task-spend-is-modelled), and 23 in `aep.drive`:
-/// the four outcomes of `aep.drive.DeclareStep`, both of `DeclareOutput`, the five of
-/// `ReadCommandExit`, the `aep.drive.Step` invariant after `declared`, `kept` and the four
-/// `ReadCommandExit` outcomes that keep the step, both outcomes of `StartRun` and of
+/// (`source-digest-missing` and `recorded`, story:task-spend-is-modelled), and 28 in `aep.drive`:
+/// the four outcomes of `aep.drive.DeclareStep`, both of `DeclareOutput`, the six of
+/// `ReadCommandExit` (`not-executed` among them), the `aep.drive.Step` invariant after `declared`,
+/// `kept` and the four `ReadCommandExit` outcomes that keep the step, the six outcomes of
+/// `StartRun` (four refusals of its inputs besides `input-missing` and `started`), both of
 /// `RunLlmStep`, `ShowStatus` and the `aep.drive.LlmStepsDeclared` aggregate
 /// (story:llm-step-declares-judgement, and story:command-step-expects-failure for `expect`,
 /// `output` and run inputs). Neither adds a refusal.
@@ -60,7 +61,7 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (45, 68);
+const SYNTHESIZED: (u64, u64) = (50, 68);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {
