@@ -259,6 +259,30 @@ pub trait LlmStepExecutor {
 pub trait CommandStepExecutor {
     /// Runs `step`, returning the verdict the program produced, or that it produced none.
     fn run_command(&mut self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome;
+
+    /// Runs the steps of one batch of a `concurrent: true` state, returning one outcome per job,
+    /// in the order the jobs were given.
+    ///
+    /// The jobs are independent: no two name the same `depends_on`, and no two write the same
+    /// `output:` (the loader refuses that). A host may therefore run them at once, and the CLI
+    /// host does, on scoped threads. The default runs them one after another, so a harness that
+    /// knows nothing of concurrency drives a concurrent map exactly as it drives a serial one.
+    /// Whatever the host does, the driver submits the outcomes in map order, so concurrency
+    /// stays here, at the edge, and the deterministic core stays sequential.
+    fn run_commands(&mut self, jobs: &[CommandJob<'_>]) -> Vec<StepOutcome> {
+        jobs.iter()
+            .map(|job| self.run_command(job.step, &job.context))
+            .collect()
+    }
+}
+
+/// One `command` step of a batch, with the context it runs in.
+#[derive(Debug)]
+pub struct CommandJob<'a> {
+    /// The step, its run inputs already filled in.
+    pub step: &'a CommandStep,
+    /// What the step is told about itself: its index and the attempt charged to it.
+    pub context: StepContext<'a>,
 }
 
 /// Hands an `operator` step to a person.

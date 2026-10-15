@@ -4,7 +4,8 @@
 //! <report/2> --suite <suite>` admits a suite and of the per-task spend record, and of the
 //! spend report against the project's baseline and target, and of the `llm` step judgement rule
 //! of a driver step map with the `llm` step counts of a driven run, and of a command step's
-//! `expect: failure`, `output:` and run inputs, and on the projections committed under
+//! `expect: failure`, `output:` and run inputs, and of a state's `concurrent:` opt-in with its
+//! shared-output refusal, and on the projections committed under
 //! `generated/ess/`.
 //!
 //! * `cargo xtask ess --check` holds: the specification validates under its pinned release
@@ -35,7 +36,7 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 56 scenarios and 71 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 59 scenarios and 71 refusals.
 ///
 /// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, the `aep.review.ReviewResult`
@@ -45,14 +46,15 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// `source-outside-repository` and `source-unreadable`, story:evidence-records-task-spend), both
 /// outcomes of `aep.evidence.ReportSpend` (`since-not-a-date` and `reported`) and both of
 /// `aep.plan.ReadSpendBound` (`target-not-below-baseline` and `read`,
-/// story:spend-against-baseline), and 28 in `aep.drive`: the four outcomes of
-/// `aep.drive.DeclareStep`, both of `DeclareOutput`, the six of `ReadCommandExit`
-/// (`not-executed` among them), the `aep.drive.Step` invariant after `declared`, `kept` and the
-/// four `ReadCommandExit` outcomes that keep the step, the six outcomes of `StartRun` (four
-/// refusals of its inputs besides `input-missing` and `started`), both of `RunLlmStep`,
-/// `ShowStatus` and the `aep.drive.LlmStepsDeclared` aggregate (story:llm-step-declares-judgement,
-/// and story:command-step-expects-failure for `expect`, `output` and run inputs). Neither adds a
-/// refusal.
+/// story:spend-against-baseline), and 31 in `aep.drive`: the four outcomes of
+/// `aep.drive.DeclareStep`, both of `DeclareOutput`, both of `DeclareConcurrentOutput`
+/// (`concurrent-output-shared` and `kept`, story:concurrent-command-steps), the six of
+/// `ReadCommandExit` (`not-executed` among them), the `aep.drive.Step` invariant after `declared`,
+/// both `kept` outcomes and the four `ReadCommandExit` outcomes that keep the step, the six
+/// outcomes of `StartRun` (four refusals of its inputs besides `input-missing` and `started`),
+/// both of `RunLlmStep`, `ShowStatus` and the `aep.drive.LlmStepsDeclared` aggregate
+/// (story:llm-step-declares-judgement, and story:command-step-expects-failure for `expect`,
+/// `output` and run inputs). None of the `aep.drive` scenarios adds a refusal.
 ///
 /// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (56) `ReverseInit` and `MigrateGit`
 /// both read two row sets ("a scenario arranges the rows of one selector per command in this
@@ -69,7 +71,7 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// need a review whose `created_before_opt_in` and `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (56, 71);
+const SYNTHESIZED: (u64, u64) = (59, 71);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {

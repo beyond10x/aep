@@ -34,6 +34,15 @@ belongs in the commit message or in `docs/design/`.
   value, a value that is not a non-negative integer or a target not strictly below its baseline
   refuses the project file, naming the kind, the figure and the values, and `spend` or a kind
   written with no value is refused naming it.
+- A step map state may declare `concurrent: true`: each run of consecutive `command` steps in it
+  runs at once, and its results are submitted in map order once every step has ended. An `llm` or
+  `operator` step is a barrier between batches; steps naming the same `depends_on` still run one
+  after another; retries are spent inside the batch, and a failed step cancels none of its
+  siblings. A step is charged its attempt when it is put to run, after the circuit breaker is
+  read, and a batch has one in-flight marker, so `aep drive resume --retry-in-flight <id>` reruns
+  the batch under the attempts already charged; a resume after a batch stopped runs only the steps
+  whose verdicts were not yet submitted. Two command steps of one concurrent state writing the same `output:` are refused at
+  load with `unsupported_construct`. A state without the key runs, and digests, as before.
 
 ### Changed
 

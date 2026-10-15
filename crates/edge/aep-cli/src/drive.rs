@@ -57,7 +57,7 @@ use aep_domain::time::{ObservedAt, Timestamp};
 use aep_domain::verification::Verifier;
 use aep_driver::coverage::CoverageReport;
 use aep_driver::executor::{
-    CommandStepExecutor, LlmStepExecutor, OperatorStepExecutor, StepAuthorizer, StepContext,
+    CommandJob, CommandStepExecutor, LlmStepExecutor, OperatorStepExecutor, StepAuthorizer, StepContext,
     StepOutcome,
 };
 use aep_driver::lock::{Liveness, LockState};
@@ -1743,7 +1743,18 @@ pub fn resolve_program(written: &str) -> Resolved {
 }
 
 
-impl CliExecutors {
+/// What a `command` step needs of the CLI host: where to run it, where the run keeps its files and
+/// which `aep` to spawn.
+///
+/// Borrowed out of [`CliExecutors`] so the steps of a batch can share it across threads: the host's
+/// model executor is neither `Sync` nor needed by a command.
+struct CommandHost<'a> {
+    working_directory: &'a Path,
+    run_directory: &'a Path,
+    protocol_binary: Option<&'a Path>,
+}
+
+impl CommandHost<'_> {
     /// Appends this attempt's line to the run's record of which binary answered.
     ///
     /// Best-effort, for [`Launch::write`]'s reason: a run that walks and cannot write down which
@@ -1764,14 +1775,16 @@ impl CliExecutors {
         let path = self.run_directory.join(COMMANDS_FILE);
         if let Ok(mut file) = fs::OpenOptions::new().create(true).append(true).open(path) {
             use std::io::Write as _;
-            let _ = writeln!(file, "{line}");
+            // One write of the whole line: the steps of a batch append at once, and an appended
+            // line written in pieces could interleave with another step's.
+            let _ = file.write_all(format!("{line}\n").as_bytes());
         }
     }
-}
 
 
-impl CommandStepExecutor for CliExecutors {
-    fn run_command(&mut self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome {
+
+    /// Runs one attempt at a `command` step: spawns it, keeps its log and output, reads its verdict.
+    fn run(&self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome {
         // Expanded before anything is spawned, and a placeholder that cannot be filled is D5's
         // `Unknown`: a command line carrying the literal characters `{transcript}` would run, fail
         // to open that file and be recorded as a verdict about the subject.
@@ -1792,7 +1805,7 @@ impl CommandStepExecutor for CliExecutors {
         // as whoever typed `aep drive run`.
         let outcome = Process::new(&resolved.program)
             .args(&words[1..])
-            .current_dir(&self.working_directory)
+            .current_dir(self.working_directory)
             .envs(session_env(context.execution))
             .stdin(Stdio::null())
             .output();
@@ -1859,6 +1872,48 @@ impl CommandStepExecutor for CliExecutors {
         }
 
         command_verdict(step, code, &rendered)
+    }
+}
+
+
+impl CliExecutors {
+    /// The part of this host a `command` step uses.
+    fn commands(&self) -> CommandHost<'_> {
+        CommandHost {
+            working_directory: &self.working_directory,
+            run_directory: &self.run_directory,
+            protocol_binary: self.protocol_binary.as_deref(),
+        }
+    }
+}
+
+
+impl CommandStepExecutor for CliExecutors {
+    fn run_command(&mut self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome {
+        self.commands().run(step, context)
+    }
+
+    /// Runs the batch's steps at once, one scoped thread each, and answers in the jobs' order.
+    ///
+    /// Each step writes only its own log (`<state>-<index>-<attempt>.log`), its own `output:` (the
+    /// loader refuses two steps of one concurrent state sharing one) and a whole line of
+    /// `commands.jsonl`. A thread that panicked is a step with no verdict, never a lost batch.
+    fn run_commands(&mut self, jobs: &[CommandJob<'_>]) -> Vec<StepOutcome> {
+        let host = self.commands();
+        std::thread::scope(|scope| {
+            let running: Vec<_> = jobs
+                .iter()
+                .map(|job| scope.spawn(|| host.run(job.step, &job.context)))
+                .collect();
+            running
+                .into_iter()
+                .map(|thread| {
+                    thread.join().unwrap_or_else(|_| StepOutcome::NoVerdict {
+                        reason: "the thread running the step panicked".to_owned(),
+                    })
+                })
+                .collect()
+        })
     }
 }
 

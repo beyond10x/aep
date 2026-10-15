@@ -221,6 +221,13 @@ pub struct RawStateSteps {
     #[serde(default)]
     #[schemars(range(min = 1))]
     pub visit_budget: Option<u32>,
+    /// Whether the state's consecutive `command` steps run at once.
+    ///
+    /// Each maximal run of consecutive `command` steps is then one batch: its steps run at once,
+    /// and their results are submitted in map order once every one of them has ended. An `llm` or
+    /// `operator` step is a barrier between batches. Absent is `false`: one step at a time.
+    #[serde(default)]
+    pub concurrent: bool,
     /// The steps, in the order the author wants them run.
     #[serde(default)]
     pub steps: Vec<RawStep>,
@@ -1345,8 +1352,20 @@ impl EvidenceMapping {
 pub struct StateSteps {
     /// How many times this state may be entered before the run stops.
     pub visit_budget: u32,
+    /// Whether the state's consecutive `command` steps run at once ([`StepMap::batch_at`]).
+    ///
+    /// Not serialized when `false`, so a map that does not write the key digests exactly as it
+    /// did before the key existed, and a run started by an earlier build still resumes.
+    #[serde(skip_serializing_if = "is_false")]
+    pub concurrent: bool,
     /// The steps, in the order the author wrote them.
     pub steps: Vec<Step>,
+}
+
+/// `serde`'s `skip_serializing_if` for a `bool` that is only written when set.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// A step-map format version this build reads.
@@ -1445,6 +1464,30 @@ impl StepMap {
         self.states
             .get(state)
             .map_or(&[], |entry| entry.steps.as_slice())
+    }
+
+    /// The steps that run together starting at `index` of `state`: the batch, as a range of
+    /// indices into [`Self::steps_for`].
+    ///
+    /// In a `concurrent: true` state, a `command` step at `index` runs with every consecutive
+    /// `command` step after it, up to the next `llm` or `operator` step or the end of the list. In
+    /// any other case the batch is the one step at `index`, and past the end of the list it is
+    /// empty. From `index` rather than from the batch's own start, because the cursor's pointer is
+    /// where a run is, and a batch is what remains of the run of commands from there.
+    pub fn batch_at(&self, state: &StateId, index: usize) -> std::ops::Range<usize> {
+        let steps = self.steps_for(state);
+        if index >= steps.len() {
+            return index..index;
+        }
+        let concurrent = self.states.get(state).is_some_and(|entry| entry.concurrent);
+        if !concurrent || !matches!(steps[index], Step::Command(_)) {
+            return index..index + 1;
+        }
+        let end = steps[index..]
+            .iter()
+            .position(|step| !matches!(step, Step::Command(_)))
+            .map_or(steps.len(), |offset| index + offset);
+        index..end
     }
 
     /// How many times `state` may be entered before the run stops.
@@ -1731,6 +1774,9 @@ impl TryFrom<RawStepMap> for StepMap {
                 ));
             }
             let mut steps = Vec::with_capacity(entry.steps.len());
+            // Where each admitted step was written, so a refusal about two of them names their own
+            // paths even when a step between them was refused.
+            let mut written_at = Vec::with_capacity(entry.steps.len());
             for (index, step) in entry.steps.into_iter().enumerate() {
                 if let Some(step) = validate_step(
                     step,
@@ -1739,6 +1785,7 @@ impl TryFrom<RawStepMap> for StepMap {
                     &mut errors,
                 ) {
                     steps.push(step);
+                    written_at.push(index);
                 }
             }
             // `{transcript}` is the transcript of the `llm` step this step follows, so a state
@@ -1775,11 +1822,15 @@ impl TryFrom<RawStepMap> for StepMap {
                     _ => {}
                 }
             }
+            if entry.concurrent {
+                refuse_shared_outputs(&steps, &written_at, &location, &mut errors);
+            }
 
             states.insert(
                 state,
                 StateSteps {
                     visit_budget: entry.visit_budget.unwrap_or(DEFAULT_VISIT_BUDGET),
+                    concurrent: entry.concurrent,
                     steps,
                 },
             );
@@ -1843,6 +1894,53 @@ fn validate_circuit_breaker(
         usable = false;
     }
     usable
+}
+
+/// Refuses two `command` steps of one `concurrent: true` state that write the same `output:`.
+///
+/// Run at once they would race for one file in the run directory; one after another the later
+/// write wins, deterministically, so a serial state is never asked. Compared in any ASCII case,
+/// as [`validated_output`] compares a reserved name: on a file system that ignores case, two
+/// spellings are one file. Refused at the later step's `output` with `unsupported_construct`,
+/// naming both steps (ESS `aep.drive.DeclareConcurrentOutput`, `concurrent-output-shared`).
+fn refuse_shared_outputs(
+    steps: &[Step],
+    written_at: &[usize],
+    location: &str,
+    errors: &mut ValidationErrors,
+) {
+    let mut first_writer: Vec<(&str, usize)> = Vec::new();
+    for (step, &index) in steps.iter().zip(written_at) {
+        let Step::Command(CommandStep {
+            output: Some(output),
+            ..
+        }) = step
+        else {
+            continue;
+        };
+        let earlier = first_writer
+            .iter()
+            .find(|(name, _)| name.eq_ignore_ascii_case(output))
+            .map(|&(_, at)| at);
+        match earlier {
+            Some(at) => errors.push(
+                ValidationError::new(
+                    ValidationCode::UnsupportedConstruct,
+                    format!("{location}.steps[{index}].output"),
+                    format!(
+                        "`{location}.steps[{at}]` and `{location}.steps[{index}]` both write \
+                         `{}`, and in a `concurrent` state they would race for that one file",
+                        output.escape_debug()
+                    ),
+                )
+                .with_hint(
+                    "give each step an output of its own, or drop `concurrent` so the later \
+                     write wins",
+                ),
+            ),
+            None => first_writer.push((output, index)),
+        }
+    }
 }
 
 /// Checks a command step's `output:`: a file name of its own in the run directory.
@@ -3149,5 +3247,109 @@ mod tests {
         for bad in ["", "Repro", "2v", "-a", "a.b", "a b", "a=b"] {
             assert!(!valid_input_name(bad), "{bad}");
         }
+    }
+
+    /// Two command steps writing `a.txt`, in a state that opts into concurrency or not.
+    fn shared_output_states(concurrent: &str) -> String {
+        format!(
+            r#"{{"diagnose":{{{concurrent}"steps":[
+                {{"kind":"command","run":["sh","-c","echo one"],"output":"a.txt"}},
+                {{"kind":"command","run":["sh","-c","echo two"],"output":"a.txt"}}]}}}}"#
+        )
+    }
+
+    /// ESS `aep.drive.DeclareConcurrentOutput`: the pairwise comparison that fills `shared_with`
+    /// is the loader's, and this pins it.
+    #[test]
+    fn a_concurrent_state_refuses_two_command_steps_writing_one_output() {
+        let errors = read(&map_json(
+            "adp/default/1",
+            &shared_output_states(r#""concurrent":true,"#),
+        ))
+        .expect_err("two steps of one batch would race for one file");
+        assert_eq!(errors.len(), 1, "{errors}");
+        let refusal = &errors.as_slice()[0];
+        assert_eq!(
+            refusal.code,
+            ValidationCode::UnsupportedConstruct,
+            "{errors}"
+        );
+        assert_eq!(
+            refusal.location,
+            "driver-steps[development/default].states.diagnose.steps[1].output"
+        );
+        for path in [
+            "driver-steps[development/default].states.diagnose.steps[0]",
+            "driver-steps[development/default].states.diagnose.steps[1]",
+        ] {
+            assert!(
+                refusal.message.contains(path),
+                "the refusal names `{path}`: {}",
+                refusal.message
+            );
+        }
+
+        let serial = read(&map_json("adp/default/1", &shared_output_states("")))
+            .expect("one step after another, the later write wins deterministically");
+        assert!(!serial.states[&StateId::new("diagnose").unwrap()].concurrent);
+    }
+
+    #[test]
+    fn a_concurrent_state_batches_its_consecutive_command_steps_between_barriers() {
+        let states = r#"{"diagnose":{"concurrent":true,"steps":[
+            {"kind":"command","run":["a"]},
+            {"kind":"command","run":["b"]},
+            {"kind":"operator","prompt":"look"},
+            {"kind":"command","run":["c"]},
+            {"kind":"command","run":["d"]},
+            {"kind":"command","run":["e"]}]},
+            "verify":{"steps":[
+            {"kind":"command","run":["a"]},
+            {"kind":"command","run":["b"]}]}}"#;
+        let map = read(&map_json("adp/default/1", states)).expect("valid");
+        let diagnose = StateId::new("diagnose").unwrap();
+        let verify = StateId::new("verify").unwrap();
+        assert!(map.states[&diagnose].concurrent);
+        assert_eq!(map.batch_at(&diagnose, 0), 0..2);
+        assert_eq!(
+            map.batch_at(&diagnose, 2),
+            2..3,
+            "an operator step is a barrier"
+        );
+        assert_eq!(map.batch_at(&diagnose, 3), 3..6);
+        assert_eq!(
+            map.batch_at(&diagnose, 4),
+            4..6,
+            "from the cursor to the batch's end"
+        );
+        assert_eq!(
+            map.batch_at(&verify, 0),
+            0..1,
+            "a state without the key runs serially"
+        );
+        assert_eq!(
+            map.batch_at(&diagnose, 6),
+            6..6,
+            "past the end there is nothing"
+        );
+    }
+
+    #[test]
+    fn a_state_without_concurrent_digests_exactly_as_before() {
+        let unwritten = read(&map_json("adp/default/1", ONE_COMMAND)).expect("valid");
+        let written_false = r#"{"implement":{"concurrent":false,"steps":[
+            {"kind":"command","run":["cargo","test"],
+             "evidence":{"kind":"test_result","verifier":"test-runner","suite":"unit"}}]}}"#;
+        let written_true = written_false.replace("false", "true");
+        let explicit = read(&map_json("adp/default/1", written_false)).expect("valid");
+        let opted = read(&map_json("adp/default/1", &written_true)).expect("valid");
+        assert_eq!(unwritten.digest(), explicit.digest());
+        assert_ne!(
+            unwritten.digest(),
+            opted.digest(),
+            "a run that started serial must not resume concurrent"
+        );
+        let serialized = serde_json::to_string(&unwritten).expect("a map serializes");
+        assert!(!serialized.contains("concurrent"), "{serialized}");
     }
 }
