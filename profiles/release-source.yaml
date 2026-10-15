@@ -7,11 +7,13 @@ summary: >-
 protocol: aop/1
 workflow: release/source
 
+# No `verify-after-action`: it asks for a service's health and its recovery, and a source release
+# changes no running service. What verifies a source release is `verification.source-release`,
+# which completion requires below.
 principles:
   - provenance-tracking
   - contract-testing
   - approval-gates
-  - verify-after-action
 
 capabilities:
   allow:
