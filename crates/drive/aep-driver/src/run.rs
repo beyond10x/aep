@@ -49,7 +49,7 @@
 //! moves leaves the previous pair current. Top-level copies remain for older tooling and are never
 //! read while the pointer exists.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -61,12 +61,13 @@ use aep_domain::artifact::ArtifactGraph;
 use aep_domain::entity::ActorRef;
 use aep_domain::error::ValidationErrors;
 use aep_domain::evidence::{ApprovalDecision, Evidence};
-use aep_domain::ids::{StateId, TaskId};
+use aep_domain::ids::{ExecutionId, StateId, TaskId};
 use aep_domain::task::Task;
 use aep_driver_spec::cursor::{
     DriverCursor, InFlightAttempt, OperatorAnswer, OwedAnswer, RunId, RunStatus, StolenLock,
 };
-use aep_driver_spec::map::{Step, StepMap};
+use aep_driver_spec::map::{CommandStep, Step, StepMap};
+use aep_driver_spec::tool::ToolConfig;
 use aep_engine::evaluate::{Evaluation, Requirement};
 use aep_engine::execution::Execution;
 use aep_engine::policy::effective_policy;
@@ -78,7 +79,7 @@ use aep_engine::{
 use sha2::{Digest, Sha256};
 
 use crate::attest::{self, Admission};
-use crate::executor::{StepAttempt, StepContext, StepExecutors, StepOutcome};
+use crate::executor::{CommandJob, StepAttempt, StepContext, StepExecutors, StepOutcome};
 use crate::route::{next_step, NextStep};
 use crate::tool::tool_config;
 
@@ -689,6 +690,67 @@ struct Tally {
     retry_in_flight: Option<InFlightAttempt>,
 }
 
+/// What every step of one state is told alike: its tools, what must hold, and what is owed on the
+/// way out.
+struct Frame {
+    tools: ToolConfig,
+    requirements: Vec<String>,
+    reaching: Vec<String>,
+}
+
+impl Frame {
+    fn of(execution: &Execution, evaluation: &Evaluation) -> Self {
+        // Per state, not per run: `effective_policy` grants the state's capabilities on top of the
+        // plan's, so the tools that exist in `implement` are not the tools that exist in `review`.
+        let tools = tool_config(&effective_policy(execution));
+        let requirements: Vec<String> = evaluation
+            .requirements
+            .iter()
+            .map(Requirement::line)
+            .collect();
+        // What guards the way *out*, which is a different question from what must hold here and
+        // was never asked before: `Evaluation::requirements` is the in-state list, and the outgoing
+        // guard lives on `Evaluation::transitions`. Unmet lines only — `unmet()` is empty for a
+        // permitted transition — and lines the in-state list already carries are dropped, because
+        // an obligation owed here is evaluated against every outgoing transition as well.
+        let reaching: Vec<String> = evaluation
+            .transitions
+            .iter()
+            .flat_map(|transition| {
+                let to = transition.to.clone();
+                transition
+                    .unmet()
+                    .into_iter()
+                    .map(move |line| (to.clone(), line))
+            })
+            .filter(|(_, line)| !requirements.contains(line))
+            .map(|(to, line)| format!("-> {to}: {line}"))
+            .collect();
+        Self {
+            tools,
+            requirements,
+            reaching,
+        }
+    }
+}
+
+/// Why a batch stopped the run once its other steps' verdicts were in.
+enum Stop {
+    /// A step spent its retry budget with no verdict.
+    Exhausted,
+    /// The executor refused a paid effect.
+    Spend(String),
+    /// A step paused for a person.
+    Paused(String),
+}
+
+/// Keeps the stop at the earliest step in map order: where a serial run would have stopped first.
+fn stop_earliest(stop: &mut Option<(usize, Stop)>, index: usize, why: Stop) {
+    if stop.as_ref().is_none_or(|(at, _)| index < *at) {
+        *stop = Some((index, why));
+    }
+}
+
 /// Consecutive attempts at one step that produced no verdict.
 ///
 /// Separate from the cursor's attempt count, and the difference is D5's *"spent, not reset"* read
@@ -818,18 +880,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             // operator had no way to see why from the flag they passed (F-W4.2-4).
             here += 1;
             if here > self.options.max_iterations {
-                tally.progress.notes.push(format!(
-                    "this call stopped after {} iteration(s), which is `max_iterations`; the run \
-                     has spent {} in total and the state it was in is `{}`",
-                    self.options.max_iterations, cursor.iterations, cursor.state
-                ));
-                tally.progress.reasons.extend(evaluation.blocking_reasons());
-                return self.finish(
-                    cursor,
-                    &execution,
-                    RunStatus::BudgetExhausted,
-                    tally.progress,
-                );
+                return self.stop_at_call_budget(cursor, &execution, &evaluation, tally);
             }
 
             match next_step(self.map, &cursor) {
@@ -864,6 +915,19 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                         return Ok(report);
                     }
                 }
+                NextStep::Batch { first, last } => {
+                    if let Some(report) = self.batch(
+                        executors,
+                        &mut execution,
+                        &mut cursor,
+                        &evaluation,
+                        first,
+                        last,
+                        &mut tally,
+                    )? {
+                        return Ok(report);
+                    }
+                }
             }
 
             let taken = execution.snapshot();
@@ -871,6 +935,28 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             snapshot = Some(taken);
             carried = Some(cursor);
         }
+    }
+
+    /// Ends this call once it has spent `max_iterations`, naming the run's lifetime count beside it.
+    fn stop_at_call_budget(
+        &self,
+        cursor: DriverCursor,
+        execution: &Execution,
+        evaluation: &Evaluation,
+        mut tally: Tally,
+    ) -> Result<RunReport, DriveError> {
+        tally.progress.notes.push(format!(
+            "this call stopped after {} iteration(s), which is `max_iterations`; the run has \
+             spent {} in total and the state it was in is `{}`",
+            self.options.max_iterations, cursor.iterations, cursor.state
+        ));
+        tally.progress.reasons.extend(evaluation.blocking_reasons());
+        self.finish(
+            cursor,
+            execution,
+            RunStatus::BudgetExhausted,
+            tally.progress,
+        )
     }
 
     /// Refuses a silent replay, or applies the operator's explicit resolution once per invocation.
@@ -902,6 +988,8 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                     in_flight.id
                 ));
                 cursor.in_flight = None;
+                // A batch it covered starts afresh: its steps are charged anew.
+                cursor.batch_charged.clear();
                 self.directory.persist(&execution.snapshot(), cursor)
             }
             None => Err(DriveError::Refused(format!(
@@ -949,6 +1037,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                 tally.progress.transitions.push((from, to.clone()));
                 cursor.state = to.clone();
                 cursor.step = 0;
+                cursor.batch_ended.clear();
                 // Counted on **entry**, including re-entry over a back-edge: that is the cycle the
                 // visit budget exists to bound.
                 cursor.record_visit(&to);
@@ -1049,18 +1138,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
                 // A no-verdict is a failure *of the dependency* when the step named one, and that
                 // count is what the next step naming it reads.
                 if let Step::Command(command) = &self.map.steps_for(&state)[index] {
-                    if let Some(dependency) = command.depends_on.as_deref() {
-                        let failures = cursor.record_circuit_failure(dependency);
-                        if command
-                            .circuit_breaker
-                            .is_some_and(|threshold| failures >= threshold)
-                        {
-                            tally.progress.notes.push(format!(
-                                "`{dependency}` has now failed {failures} time(s); its circuit is \
-                                 open and later steps that need it will not be attempted"
-                            ));
-                        }
-                    }
+                    Self::count_dependency_failure(command, cursor, tally);
                 }
                 let spent = tally.streak.record(&state, index);
                 if spent > budget {
@@ -1211,6 +1289,337 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         )
     }
 
+    /// What one step is told about itself, over the state's [`Frame`].
+    fn context<'f>(
+        &'f self,
+        frame: &'f Frame,
+        execution: &'f ExecutionId,
+        state: &'f StateId,
+        index: usize,
+        attempt: u32,
+        cursor: &DriverCursor,
+    ) -> StepContext<'f> {
+        // The `llm` step this one follows, so a command step can be about the session before it.
+        // The nearest one and not the first: a state may run two, and a checker pointed at the
+        // wrong transcript reports on a session that was asked for something else.
+        let preceding_llm = self.map.steps_for(state)[..index]
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, step)| matches!(step, Step::Llm(_)))
+            .map(|(index, _)| StepAttempt {
+                index,
+                attempt: cursor.attempts_at(state, index),
+            })
+            // Zero attempts means the step was never run in this run or any it resumed from, so
+            // there is nothing it wrote to be about.
+            .filter(|preceding| preceding.attempt > 0);
+        StepContext {
+            task: self.task,
+            // Off the options rather than off the task: a validated `Task` carries no path, by
+            // the rule that document identity comes from content, so the document it was read from
+            // is the caller's to state.
+            task_document: self.options.task_document.as_deref(),
+            execution,
+            state,
+            index,
+            attempt,
+            tools: &frame.tools,
+            run_directory: self.directory.path(),
+            requirements: &frame.requirements,
+            reaching: &frame.reaching,
+            preceding_llm,
+        }
+    }
+
+    /// Runs the `command` steps `first..=last` of a `concurrent: true` state as one batch.
+    ///
+    /// What a serial run of the same steps would decide, with the waiting overlapped:
+    ///
+    /// * a step is charged its attempt when it is first put to run, after the circuit breaker is
+    ///   read, as a serial run charges it: a step an open circuit skips, or one left waiting on its
+    ///   lane behind a sibling that stopped the run, is charged nothing. The cursor persists one
+    ///   in-flight marker for the whole batch, named by its first step and the attempt of it most
+    ///   recently charged, with the steps it covers in `batch_charged`. A `--retry-in-flight` of it
+    ///   reruns every one of those with the attempt numbers already charged;
+    /// * steps naming the same `depends_on` form one lane and run one after another, in map
+    ///   order, so the circuit breaker reads the failure count a serial run would give it. Lanes
+    ///   run at once, one step of each per round, through
+    ///   [`CommandStepExecutor::run_commands`](crate::executor::CommandStepExecutor::run_commands);
+    /// * a retry is spent inside the batch and advances only its own step's attempt; a failing
+    ///   step cancels nothing;
+    /// * nothing is submitted until every step has ended, and then in map order, whatever order
+    ///   the host finished in. A step that spent its retries with no verdict still lets its
+    ///   siblings' verdicts in, and the run then stops `budget-exhausted` at that step, as a
+    ///   serial run stops there. The siblings after it that were submitted are kept in
+    ///   `batch_ended`, so a resume of the batch runs only the rest and submits nothing twice.
+    #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+    fn batch<X: StepExecutors>(
+        &self,
+        executors: &mut X,
+        execution: &mut Execution,
+        cursor: &mut DriverCursor,
+        evaluation: &Evaluation,
+        first: usize,
+        last: usize,
+        tally: &mut Tally,
+    ) -> Result<Option<RunReport>, DriveError> {
+        let state = cursor.state.clone();
+        let steps = self.map.steps_for(&state);
+        // Less the steps a batch stopped at `first` already submitted.
+        let commands: BTreeMap<usize, &CommandStep> = (first..=last)
+            .filter(|index| !cursor.batch_ended.contains(index))
+            .filter_map(|index| match &steps[index] {
+                Step::Command(command) => Some((index, command)),
+                _ => None,
+            })
+            .collect();
+
+        // One lane per dependency, and one per step that names none.
+        let mut lanes: Vec<VecDeque<usize>> = Vec::new();
+        let mut lane_of: BTreeMap<usize, usize> = BTreeMap::new();
+        let mut lane_of_dependency: BTreeMap<&str, usize> = BTreeMap::new();
+        for (&index, command) in &commands {
+            let lane = if let Some(dependency) = command.depends_on.as_deref() {
+                *lane_of_dependency.entry(dependency).or_insert_with(|| {
+                    lanes.push(VecDeque::new());
+                    lanes.len() - 1
+                })
+            } else {
+                lanes.push(VecDeque::new());
+                lanes.len() - 1
+            };
+            lanes[lane].push_back(index);
+            lane_of.insert(index, lane);
+        }
+
+        // A retry of an interrupted batch reruns the steps it had charged under the numbers they
+        // were charged: no counter advances (`begin_attempt` holds the same rule for one step).
+        // Without one, nothing is carried over from a batch whose marker was settled otherwise.
+        sync_llm_counts(self.map, cursor);
+        match tally.retry_in_flight.take() {
+            Some(in_flight) if in_flight.state == state && in_flight.step == first => {}
+            Some(in_flight) => {
+                return Err(DriveError::Refused(format!(
+                    "unresolved attempt `{}` points at step {} of `{}`, but the cursor routes to \
+                     the batch at step {first} of `{state}`",
+                    in_flight.id, in_flight.step, in_flight.state
+                )))
+            }
+            None => cursor.batch_charged.clear(),
+        }
+        let mut attempts: BTreeMap<usize, u32> = cursor
+            .batch_charged
+            .iter()
+            .filter(|index| commands.contains_key(index))
+            .map(|&index| (index, cursor.attempts_at(&state, index)))
+            .collect();
+
+        let frame = Frame::of(execution, evaluation);
+        let execution_id = execution.id().clone();
+        let inputs = &self.options.inputs;
+        let mut ended: BTreeMap<usize, StepOutcome> = BTreeMap::new();
+        let mut no_verdicts: BTreeMap<usize, u32> = BTreeMap::new();
+        // What a retry carries over runs once under its charged number; every later dispatch is a
+        // new attempt.
+        let mut dispatched: BTreeSet<usize> = BTreeSet::new();
+        let mut stop: Option<(usize, Stop)> = None;
+        loop {
+            // The next step of every lane, past the ones an open circuit skips. Read before each
+            // round, so a dependency that failed in this batch opens the circuit for the steps
+            // behind it, exactly as it would one step later in a serial run.
+            let mut round: Vec<usize> = Vec::new();
+            for lane in &mut lanes {
+                while let Some(&index) = lane.front() {
+                    let command = commands[&index];
+                    if let (Some(dependency), Some(threshold)) =
+                        (command.depends_on.as_deref(), command.circuit_breaker)
+                    {
+                        if cursor.circuit_is_open(dependency, threshold) {
+                            tally.progress.notes.push(format!(
+                                "step {index} of `{state}` ({}) was not attempted: `{dependency}` \
+                                 has failed {threshold} time(s) in this run and its circuit is \
+                                 open. Nothing was observed here, so nothing was recorded either",
+                                steps[index].label()
+                            ));
+                            lane.pop_front();
+                            continue;
+                        }
+                    }
+                    round.push(index);
+                    break;
+                }
+            }
+            if round.is_empty() {
+                break;
+            }
+            round.sort_unstable();
+
+            // Charged here, once the breaker has been read and the step is certain to run, and
+            // persisted with the marker before anything is dispatched. A step a retry carries over
+            // runs its first dispatch under the number it was charged; every other dispatch is a
+            // new attempt.
+            let mut charged = false;
+            for &index in &round {
+                let carried = dispatched.insert(index) && attempts.contains_key(&index);
+                if !carried {
+                    attempts.insert(index, cursor.record_attempt(&state, index));
+                    cursor.batch_charged.insert(index);
+                    charged = true;
+                }
+            }
+            if charged || cursor.in_flight.is_none() {
+                // Named by the batch's first step and the attempt of it now charged, so the id a
+                // `--retry-in-flight` names is the attempt that reruns.
+                let attempt = cursor.attempts_at(&state, first);
+                cursor.mark_in_flight(&state, first, attempt);
+                self.directory.persist(&execution.snapshot(), cursor)?;
+            }
+
+            let filled: Vec<Result<CommandStep, String>> = round
+                .iter()
+                .map(|index| commands[index].with_inputs(inputs))
+                .collect();
+            let mut jobs = Vec::new();
+            for (&index, step) in round.iter().zip(&filled) {
+                if let Ok(step) = step {
+                    jobs.push(CommandJob {
+                        step,
+                        context: self.context(
+                            &frame,
+                            &execution_id,
+                            &state,
+                            index,
+                            attempts[&index],
+                            cursor,
+                        ),
+                    });
+                }
+            }
+            let mut outcomes = executors.run_commands(&jobs).into_iter();
+            drop(jobs);
+            tally.progress.steps_run += u32::try_from(round.len()).unwrap_or(u32::MAX);
+
+            for (&index, step) in round.iter().zip(filled) {
+                let outcome = match step {
+                    Ok(_) => outcomes.next().unwrap_or_else(|| StepOutcome::NoVerdict {
+                        reason: "the host answered fewer steps than it was handed".to_owned(),
+                    }),
+                    Err(reason) => StepOutcome::NoVerdict { reason },
+                };
+                let lane = &mut lanes[lane_of[&index]];
+                let label = steps[index].label();
+                let attempt = attempts[&index];
+                match outcome {
+                    StepOutcome::NoVerdict { reason } => {
+                        tally.progress.notes.push(format!(
+                            "attempt {attempt} at step {index} of `{state}` ({label}) produced \
+                             no verdict: {reason}"
+                        ));
+                        Self::count_dependency_failure(commands[&index], cursor, tally);
+                        let spent = no_verdicts.entry(index).or_insert(0);
+                        *spent += 1;
+                        let budget = steps[index].retry_budget();
+                        if *spent > budget {
+                            tally.progress.notes.push(format!(
+                                "step {index} of `{state}` has spent its command retry budget \
+                                 of {budget}, and no evidence was submitted for any attempt"
+                            ));
+                            lane.clear();
+                            stop_earliest(&mut stop, index, Stop::Exhausted);
+                        }
+                    }
+                    StepOutcome::BudgetExhausted { reason } => {
+                        lane.clear();
+                        stop_earliest(&mut stop, index, Stop::Spend(reason));
+                    }
+                    StepOutcome::Paused { reason } => {
+                        lane.clear();
+                        stop_earliest(&mut stop, index, Stop::Paused(reason));
+                    }
+                    ended_with => {
+                        lane.pop_front();
+                        ended.insert(index, ended_with);
+                    }
+                }
+            }
+        }
+
+        // Every step has ended: submit in map order, whatever order the host finished in.
+        cursor.in_flight = None;
+        cursor.batch_charged.clear();
+        tally.streak.clear();
+        let submitted: Vec<usize> = ended.keys().copied().collect();
+        for (index, outcome) in ended {
+            match outcome {
+                StepOutcome::Observed(submission) => {
+                    self.engine.submit_evidence(execution, *submission)?;
+                    tally.progress.evidence_submitted += 1;
+                }
+                StepOutcome::Explained { submission, reason } => {
+                    tally.progress.notes.push(format!(
+                        "attempt {} at step {index} of `{state}` ({}): {reason}",
+                        attempts[&index],
+                        steps[index].label()
+                    ));
+                    self.engine.submit_evidence(execution, *submission)?;
+                    tally.progress.evidence_submitted += 1;
+                }
+                _ => {}
+            }
+        }
+
+        let Some((index, stop)) = stop else {
+            cursor.step = last + 1;
+            cursor.batch_ended.clear();
+            return Ok(None);
+        };
+        // Where a serial run would stand: at the step that stopped it, with the steps after it
+        // whose verdicts are in, so a resume of the batch neither reruns nor resubmits them.
+        cursor.step = index;
+        cursor.batch_ended.extend(submitted);
+        cursor.batch_ended.retain(|&ended| ended > index);
+        match stop {
+            Stop::Exhausted => {
+                tally.progress.reasons.extend(evaluation.blocking_reasons());
+                let progress = std::mem::take(&mut tally.progress);
+                self.finish(
+                    cursor.clone(),
+                    execution,
+                    RunStatus::BudgetExhausted,
+                    progress,
+                )
+                .map(Some)
+            }
+            Stop::Spend(reason) => self.stop_spend_budget(cursor, execution, tally, reason),
+            Stop::Paused(reason) => self
+                .pause(&reason, index, &steps[index], execution, cursor, tally)
+                .map(Some),
+        }
+    }
+
+    /// Counts a no-verdict against the dependency a command step names, noting when that opens
+    /// its circuit: the count the next step naming it reads.
+    fn count_dependency_failure(
+        command: &CommandStep,
+        cursor: &mut DriverCursor,
+        tally: &mut Tally,
+    ) {
+        let Some(dependency) = command.depends_on.as_deref() else {
+            return;
+        };
+        let failures = cursor.record_circuit_failure(dependency);
+        if command
+            .circuit_breaker
+            .is_some_and(|threshold| failures >= threshold)
+        {
+            tally.progress.notes.push(format!(
+                "`{dependency}` has now failed {failures} time(s); its circuit is open and later \
+                 steps that need it will not be attempted"
+            ));
+        }
+    }
+
     /// Builds the step's context and hands it to the executor for its kind.
     ///
     /// The execution is borrowed mutably for one reason: an `llm` step's tool calls are decided
@@ -1230,67 +1639,12 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
         // the cursor is the one place that knows which attempt every step of this state is on —
         // this one and the `llm` step below it.
         let attempt = cursor.attempts_at(state, index);
-        // Per state, not per run: `effective_policy` grants the state's capabilities on top of the
-        // plan's, so the tools that exist in `implement` are not the tools that exist in `review`.
-        let tools = tool_config(&effective_policy(execution));
-        let requirements: Vec<String> = evaluation
-            .requirements
-            .iter()
-            .map(Requirement::line)
-            .collect();
-        // What guards the way *out*, which is a different question from what must hold here and
-        // was never asked before: `Evaluation::requirements` is the in-state list, and the outgoing
-        // guard lives on `Evaluation::transitions`. Unmet lines only — `unmet()` is empty for a
-        // permitted transition — and lines the in-state list already carries are dropped, because
-        // an obligation owed here is evaluated against every outgoing transition as well.
-        let reaching: Vec<String> = evaluation
-            .transitions
-            .iter()
-            .flat_map(|transition| {
-                let to = transition.to.clone();
-                transition
-                    .unmet()
-                    .into_iter()
-                    .map(move |line| (to.clone(), line))
-            })
-            .filter(|(_, line)| !requirements.contains(line))
-            .map(|(to, line)| format!("-> {to}: {line}"))
-            .collect();
-        // The `llm` step this one follows, so a command step can be about the session before it.
-        // The nearest one and not the first: a state may run two, and a checker pointed at the
-        // wrong transcript reports on a session that was asked for something else.
+        let frame = Frame::of(execution, evaluation);
         let steps = self.map.steps_for(state);
-        let preceding_llm = steps[..index]
-            .iter()
-            .enumerate()
-            .rev()
-            .find(|(_, step)| matches!(step, Step::Llm(_)))
-            .map(|(index, _)| StepAttempt {
-                index,
-                attempt: cursor.attempts_at(state, index),
-            })
-            // Zero attempts means the step was never run in this run or any it resumed from, so
-            // there is nothing it wrote to be about.
-            .filter(|preceding| preceding.attempt > 0);
         // Cloned rather than borrowed off the execution: an `llm` step's authorizer takes the
         // execution mutably for the length of the step, and the context is alive across it.
         let execution_id = execution.id().clone();
-        let context = StepContext {
-            task: self.task,
-            // Off the options rather than off the task: a validated `Task` carries no path, by
-            // the rule that document identity comes from content, so the document it was read from
-            // is the caller's to state.
-            task_document: self.options.task_document.as_deref(),
-            execution: &execution_id,
-            state,
-            index,
-            attempt,
-            tools: &tools,
-            run_directory: self.directory.path(),
-            requirements: &requirements,
-            reaching: &reaching,
-            preceding_llm,
-        };
+        let context = self.context(&frame, &execution_id, state, index, attempt, cursor);
         // A step's `{input.<name>}` are filled in here, once, so every executor is handed the
         // values and none has to be told the run's inputs; `check_map` refused a run missing one
         // before any step ran, so the refusal arm below is a defect's, not a run's.
@@ -1580,6 +1934,8 @@ fn fresh_cursor(
         visits: BTreeMap::new(),
         attempts: BTreeMap::new(),
         in_flight: None,
+        batch_charged: std::collections::BTreeSet::new(),
+        batch_ended: std::collections::BTreeSet::new(),
         circuit_failures: BTreeMap::new(),
         iterations: 0,
         status: RunStatus::Running,

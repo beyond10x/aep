@@ -256,6 +256,11 @@
       "description": "One state's steps, as written.",
       "type": "object",
       "properties": {
+        "concurrent": {
+          "description": "Whether the state's consecutive `command` steps run at once.\n\nEach maximal run of consecutive `command` steps is then one batch: its steps run at once, and their results are submitted in map order once every one of them has ended. An `llm` or `operator` step is a barrier between batches. Absent is `false`: one step at a time.",
+          "default": false,
+          "type": "boolean"
+        },
         "steps": {
           "description": "The steps, in the order the author wants them run.",
           "type": "array",

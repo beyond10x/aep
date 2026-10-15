@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep drive run --map input",
+  "description": "Admit a concurrent command step's output, refusing one an earlier sibling writes.",
+  "x-ess-name": "aep.drive.DeclareConcurrentOutput",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "path": {
+      "$ref": "#/$defs/aep.drive.StepPath"
+    },
+    "output": {
+      "type": "string"
+    },
+    "shared_with": {
+      "$ref": "#/$defs/aep.drive.StepPath"
+    }
+  },
+  "required": [
+    "path",
+    "output"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "88308b0aedccfe0c12231a398e79508275e003bcf65be3b3a2ad9925f5f94172",
+    "contract_digest": "slice-sha256/2:9c5c213b2fc0d41ec6fd63394b608cf0675da3cd31f5e4cdd4a292b3d21713ad",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.drive.StepPath": {
+      "title": "StepPath",
+      "x-ess-name": "aep.drive.StepPath",
+      "x-ess-kind": "newtype",
+      "type": "string"
+    }
+  }
+}

@@ -13,7 +13,10 @@ summary: >-
   (`aep drive run --input <name>=<value>`) and every `{input.<name>}` a step names, refused before
   any step runs when the run was not given it, and the `--input` pairs refused before a run is
   allocated (a malformed name, a name given twice, a value naming a placeholder or making a
-  context entry blank or a glob). Declared for story:command-step-expects-failure.
+  context entry blank or a glob). Declared for story:command-step-expects-failure. A state's
+  `concurrent: true` opt-in, carried by each of its steps, under which its consecutive `command`
+  steps run at once, and the refusal of two command steps of one concurrent state that write the
+  same `output:`. Declared for story:concurrent-command-steps.
 
 # Paths are relative to the repository root. `map.rs` and `cursor.rs` are under
 # crates/drive/aep-driver-spec/src/, `run.rs` is crates/drive/aep-driver/src/run.rs and `drive.rs`
@@ -153,6 +156,15 @@ entities:
       - name: inputs_named
         type: List<aep.drive.InputName>
         summary: The run inputs the step names, each once, in the order it names them.
+      # change (story:concurrent-command-steps): new, read from the step's state (map.rs
+      # `RawStateSteps::concurrent`, `StateSteps::concurrent`). Absent is false, which is every
+      # map written before.
+      - name: concurrent
+        type: Boolean
+        summary: >-
+          Whether the step's state declares `concurrent: true`. In such a state each maximal run
+          of consecutive `command` steps is one batch whose steps run at once and whose results
+          are submitted in map order; an `llm` or `operator` step is a barrier between batches.
     invariants:
       # Every `llm` step of a `v2` map the loader admits carries its judgement (the
       # `judgement-missing` outcome). A `v1` map adopted no such rule.
@@ -216,6 +228,7 @@ actors:
     may:
       - aep.drive.DeclareStep
       - aep.drive.DeclareOutput
+      - aep.drive.DeclareConcurrentOutput
       - aep.drive.StartRun
       - aep.drive.RunLlmStep
       - aep.drive.ReadCommandExit
@@ -253,6 +266,16 @@ errors:
       `run_command` writes `<state>-<index>-<attempt>.log`). The refusal's code is
       `empty_declaration` for a blank one and `unsupported_construct` otherwise, at
       `<step>.output` (map.rs `validated_output`).
+    fields: []
+  # change (story:concurrent-command-steps): new.
+  - name: aep.drive.ConcurrentOutputShared
+    summary: >-
+      Two `command` steps of one `concurrent: true` state that write the same `output:`, compared
+      in any ASCII case as a reserved name is (a darwin release target's file system ignores
+      case). Run at once they would race for one file in the run directory, where a serial run
+      lets the later one win deterministically. The refusal's code is `unsupported_construct`
+      at the later step's `output`, and its message names both step paths (map.rs
+      `StepMap::try_from`).
     fields: []
   - name: aep.drive.InputMissing
     summary: >-
@@ -370,6 +393,10 @@ commands:
         type: Boolean
       - name: inputs_named
         type: List<aep.drive.InputName>
+      # change (story:concurrent-command-steps): the step's state's `concurrent:`, false when the
+      # state does not write it.
+      - name: concurrent
+        type: Boolean
     outcomes:
       - name: judgement-missing
         when:
@@ -411,6 +438,7 @@ commands:
           expect: input.expect
           output: input.output
           inputs_named: input.inputs_named
+          concurrent: input.concurrent
         emits: [aep.drive.StepDeclared]
         payload:
           aep.drive.StepDeclared:
@@ -472,6 +500,36 @@ commands:
                   - generations
                   - transcripts
         error: aep.drive.OutputNotAFileName
+      - name: kept
+        preserves: aep.drive.Step
+        instance: path
+
+  # change (story:concurrent-command-steps): new. The loader checking that a `command` step of a
+  # `concurrent: true` state writes an `output:` no earlier command step of that state writes
+  # (map.rs `StepMap::try_from`), so the steps of one batch never race for one file. A state
+  # without `concurrent` runs its steps one at a time, the later write wins, and this command is
+  # not asked.
+  #
+  # ESS-LIMIT: ESS 0.60.0 has no predicate comparing a value across two instances, so the
+  # pairwise comparison that fills `shared_with` (the earlier step of the same concurrent state
+  # naming the same output) is the loader's. Pinned by
+  # `a_concurrent_state_refuses_two_command_steps_writing_one_output` (aep-driver-spec map tests).
+  - name: aep.drive.DeclareConcurrentOutput
+    naming:
+      wire: driver-steps-load-concurrent-output
+      display: aep drive run --map
+      summary: Admit a concurrent command step's output, refusing one an earlier sibling writes.
+    input:
+      - name: path
+        type: aep.drive.StepPath
+      - name: output
+        type: String
+      - name: shared_with
+        type: Optional<aep.drive.StepPath>
+    outcomes:
+      - name: concurrent-output-shared
+        when: defined(shared_with)
+        error: aep.drive.ConcurrentOutputShared
       - name: kept
         preserves: aep.drive.Step
         instance: path
@@ -728,6 +786,8 @@ views:
         type: Optional<String>
       - name: inputs_named
         type: List<aep.drive.InputName>
+      - name: concurrent
+        type: Boolean
 
   # change (story:llm-step-declares-judgement): the per-map count `aep drive` prints as
   # `llm steps  <n> declared` (map.rs `StepMap::llm_steps_declared`). Every step is grouped and

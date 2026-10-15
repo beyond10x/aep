@@ -52,6 +52,8 @@ fn cursor(state: &str) -> DriverCursor {
         visits: BTreeMap::new(),
         attempts: BTreeMap::new(),
         in_flight: None,
+        batch_charged: std::collections::BTreeSet::new(),
+        batch_ended: std::collections::BTreeSet::new(),
         circuit_failures: BTreeMap::new(),
         iterations: 0,
         status: RunStatus::Running,
