@@ -50,8 +50,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "830d14292093701e8cb951f18b89be6b3e1da4b76ec6619f5bf970b376267915",
-    "contract_digest": "slice-sha256/2:19d1114e1010ee70c364f9c3ceb84b425c58072da6b83565801c29603e0b0313",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:80da8380f45dd719884c23aabd7698ca42e84692364c555a91b47222c4c0137d",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -69,7 +69,8 @@
       "title": "InputName",
       "x-ess-name": "aep.drive.InputName",
       "x-ess-kind": "newtype",
-      "type": "string"
+      "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-"
     },
     "aep.drive.StepKind": {
       "title": "StepKind",

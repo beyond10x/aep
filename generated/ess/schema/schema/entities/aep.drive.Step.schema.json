@@ -57,8 +57,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "830d14292093701e8cb951f18b89be6b3e1da4b76ec6619f5bf970b376267915",
-    "contract_digest": "slice-sha256/2:27ef64eb9bcc726b8975adac39aec6b966f7f727493aec1a5efc5470a1fb77e2",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:7f70f6fb2ea80276310cddea7a6be842493503828c3831d2bfcc1cf8e2ea0b1b",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -76,7 +76,8 @@
       "title": "InputName",
       "x-ess-name": "aep.drive.InputName",
       "x-ess-kind": "newtype",
-      "type": "string"
+      "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-"
     },
     "aep.drive.Step.State": {
       "title": "State",

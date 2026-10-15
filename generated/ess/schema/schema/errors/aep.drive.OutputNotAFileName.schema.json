@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "OutputNotAFileName payload",
-  "description": "A `command` step whose `output:` is blank, holds a path separator, starts with `.`, or is a name the run directory already uses for its own records (map.rs `CommandStep::RESERVED_OUTPUTS`). The refusal's code is `empty_declaration` for a blank one and `unsupported_construct` otherwise, at `<step>.output` (map.rs `validated_output`).",
+  "description": "A `command` step whose `output:` is blank, holds a path separator or a NUL byte, starts with `.`, is a name the run directory already uses for its own records in any ASCII case (map.rs `CommandStep::RESERVED_OUTPUTS`; a darwin release target's file system ignores case), or has the form of a step's log, `<text>-<digits>-<digits>.log` in any ASCII case (drive.rs `run_command` writes `<state>-<index>-<attempt>.log`). The refusal's code is `empty_declaration` for a blank one and `unsupported_construct` otherwise, at `<step>.output` (map.rs `validated_output`).",
   "x-ess-name": "aep.drive.OutputNotAFileName",
   "x-ess-kind": "error-payload",
   "type": "object",
@@ -9,8 +9,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "830d14292093701e8cb951f18b89be6b3e1da4b76ec6619f5bf970b376267915",
-    "contract_digest": "slice-sha256/2:53eaed9f2b77ae375e1c3f2b5922060cb4578c40d9bc3a8d21c821630364ecfb",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:8aee6385c3042b1c33e657dc9044525140f10f3f479bd5798ad615a49550da68",
     "regenerate": "ess generate"
   }
 }

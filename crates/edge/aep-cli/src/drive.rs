@@ -64,7 +64,7 @@ use aep_driver::lock::{Liveness, LockState};
 use aep_driver::run::{DriveError, DriverOptions, InFlightResolution, RunDirectory, RunReport};
 use aep_driver_spec::cursor::{DriverCursor, RunId, RunStatus, StolenLock};
 use aep_driver_spec::map::{
-    placeholders_in, CommandStep, EvidenceMapping, LlmStep, OperatorStep, ScopeRule, Step, StepMap,
+    CommandStep, EvidenceMapping, LlmStep, OperatorStep, ScopeRule, Step, StepMap, Word,
     WriteScope,
 };
 use aep_engine::engine::EvidenceSubmission;
@@ -133,9 +133,14 @@ pub fn transcript_path(run_directory: &Path, state: &StateId, index: usize, atte
 /// `DriveLocation::inputs` makes absolute: a `command` step is spawned with the project directory
 /// as its working directory, so a relative `--task` — resolved against whatever directory the
 /// operator typed it in — is a path the child would open somewhere else or not at all.
-pub fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
-    let mut expanded = word.to_owned();
-    for name in placeholders_in(word) {
+///
+/// Every placeholder is filled in one pass over the [`Word`] the map wrote, so a run input already
+/// filled in by `CommandStep::with_inputs` is text here and is never read for placeholders: two
+/// values cannot spell `{task}` between them, and a value with an unclosed `{` cannot hide the
+/// map's own `{run_directory}` after it.
+pub fn expand(word: impl Into<Word>, context: &StepContext<'_>) -> Result<String, String> {
+    let word = word.into();
+    let filled = word.fill(|name| {
         let value = match name {
             "run_directory" => context.run_directory.display().to_string(),
             "task" => {
@@ -167,9 +172,9 @@ pub fn expand(word: &str, context: &StepContext<'_>) -> Result<String, String> {
             }
             other => return Err(format!("nothing expands `{{{other}}}`")),
         };
-        expanded = expanded.replace(&format!("{{{name}}}"), &value);
-    }
-    Ok(expanded)
+        Ok(Some(value))
+    })?;
+    Ok(filled.as_str().to_owned())
 }
 
 
@@ -1863,9 +1868,21 @@ impl CommandStepExecutor for CliExecutors {
 /// The step's `expect:` decides which exit is the pass ([`CommandStep::verdict`]); everything
 /// after that is as it was. A step that expects failure and exited `0` submits a **failing**
 /// record — the reproduction a bug fix depends on did not happen, which is a verdict and not an
-/// absence — and the reason travels beside it into the run's report.
+/// absence — and the reason travels beside it into the run's report. One that expects failure and
+/// exited 126 or 127, a shell's "could not execute" and "not found", is no verdict at all.
 pub fn command_verdict(step: &CommandStep, code: i32, rendered: &str) -> StepOutcome {
-    let verdict = step.verdict(code);
+    // A shell that could not run the reproducing command observed nothing, as a program this
+    // process could not spawn observed nothing: no verdict, never a reproduction.
+    let verdict = match step.verdict(code) {
+        Ok(verdict) => verdict,
+        Err(reason) => {
+            return StepOutcome::NoVerdict {
+                reason: format!(
+                    "`{rendered}` exited {code}, and the step expects it to fail: {reason}"
+                ),
+            }
+        }
+    };
     let Some(mapping) = &step.evidence else {
         return match (verdict.passed, verdict.reason) {
             (true, _) => StepOutcome::Nothing,
@@ -2809,7 +2826,7 @@ pub fn observed_now() -> ObservedAt {
 ///   human's approval read out of a file; that record enters through a person and `aep govern
 ///   evaluate --evidence`, never here.
 pub fn read_record(
-    declared: &str,
+    declared: impl Into<Word>,
     mapping: &EvidenceMapping,
     command: &str,
     context: &StepContext<'_>,

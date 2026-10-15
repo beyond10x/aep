@@ -26,6 +26,30 @@
       "items": {
         "$ref": "#/$defs/aep.drive.InputName"
       }
+    },
+    "malformed_names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "repeated_names": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
+    },
+    "placeholder_valued": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
+    },
+    "context_unfit": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.drive.InputName"
+      }
     }
   },
   "required": [
@@ -33,14 +57,18 @@
     "map",
     "llm_steps_declared",
     "inputs",
-    "inputs_named"
+    "inputs_named",
+    "malformed_names",
+    "repeated_names",
+    "placeholder_valued",
+    "context_unfit"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "830d14292093701e8cb951f18b89be6b3e1da4b76ec6619f5bf970b376267915",
-    "contract_digest": "slice-sha256/2:1ef564fcc34f5dc353ab348258f4a8abb9655c3a5256934a37a75caf995ce85d",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:025e34883edb482e29ec4f7758862c714a48d441ca2dd0fdc39eadeb6d965a6e",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -48,7 +76,8 @@
       "title": "InputName",
       "x-ess-name": "aep.drive.InputName",
       "x-ess-kind": "newtype",
-      "type": "string"
+      "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-"
     },
     "aep.drive.RunId": {
       "title": "RunId",

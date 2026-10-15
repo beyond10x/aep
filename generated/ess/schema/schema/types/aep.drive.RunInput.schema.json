@@ -4,8 +4,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "830d14292093701e8cb951f18b89be6b3e1da4b76ec6619f5bf970b376267915",
-    "contract_digest": "slice-sha256/2:d971e7091ee61ff43064c2e07eef902ddd768f0ee17a733e1c687eaa0e60fa88",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:c3f00ec8f36f36a10a0a10835bade2580058881ca1a281c52c9a86277c7b7571",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -13,7 +13,8 @@
       "title": "InputName",
       "x-ess-name": "aep.drive.InputName",
       "x-ess-kind": "newtype",
-      "type": "string"
+      "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-"
     },
     "aep.drive.RunInput": {
       "title": "RunInput",

@@ -13,6 +13,7 @@
     "aep.drive.InputName": {
       "title": "InputName",
       "type": "string",
+      "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-",
       "x-ess-kind": "newtype",
       "x-ess-name": "aep.drive.InputName"
     },
@@ -565,8 +566,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:a24d3e702b53cfbbaae19432aa393cf3e979b67e10fe73426c067d80b70bb95a",
-    "source_digest": "830d14292093701e8cb951f18b89be6b3e1da4b76ec6619f5bf970b376267915",
+    "contract_digest": "slice-sha256/2:dfb2c7d582256341a1e1f78bb0a9631b5e23e20e359d280a292e246ea9d88acc",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
     "specification_version": "v1",
     "system": "aep"
   }

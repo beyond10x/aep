@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InputNamesAPlaceholder payload",
+  "description": "An `--input` value holding a placeholder (`{task}`, `{run_directory}`, `{input.<name>}`, any `{` word `}` of the placeholder shape). A value is filled in as text and never read again for placeholders, so one that names any is refused rather than left to look like one. The refusal's code is `unsupported_construct` at `driver-steps[<map>].inputs.<name>` (map.rs `StepMap::check_inputs`).",
+  "x-ess-name": "aep.drive.InputNamesAPlaceholder",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:04eb770078db7ff629eb18d388254d4d7c42f23dad8e9e8d076c8e1993dc35de",
+    "regenerate": "ess generate"
+  }
+}
