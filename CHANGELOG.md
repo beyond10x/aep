@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.74.0] — 2026-10-16
+
 ### Added
 
 - `drivers/releases/source.yaml` (`releases/source`, for `release/source/1`) cuts this
