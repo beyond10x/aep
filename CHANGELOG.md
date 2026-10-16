@@ -43,6 +43,17 @@ belongs in the commit message or in `docs/design/`.
   the batch under the attempts already charged; a resume after a batch stopped runs only the steps
   whose verdicts were not yet submitted. Two command steps of one concurrent state writing the same `output:` are refused at
   load with `unsupported_construct`. A state without the key runs, and digests, as before.
+- `workflows/bugfix/standard.yaml` (`bugfix/standard/1`: reproduce, diagnose, fix, verify, then
+  the terminal `fixed`, with `verify -> fix` on a failing `regression` or `gate` suite) and its
+  step map `drivers/bugfix/standard.yaml` (`bugfix/standard`). A run names its inputs with
+  `--input repro=<command> --input logs=<file> --input traces=<file> --input
+  artifact=<artifact id> --input gate=<command>`. `reproduce` runs the reproduction once with
+  `expect: failure`, keeping its output as `repro.txt`; one that exits 0 is a failing
+  `reproduction` record noted `nothing reproduced`, and the run stops `blocked` there. `diagnose`
+  (`concurrent: true`) collects `logs.txt`, `traces.txt` and `artifact.txt` (`aep plan artifact
+  show`) at once, then hands all four files to one `llm` step; `fix` is the other `llm` step;
+  `verify` reruns the reproduction as suite `regression` and the gate as suite `gate`. The
+  workflow is rendered as `generated/instructions/bugfix/standard.md`.
 
 ### Changed
 

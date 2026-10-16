@@ -603,9 +603,10 @@ fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
     let output = aep(&["govern", "validate", "--root", "."]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(
-        stdout(&output).contains("2 step map(s)"),
-        "both shipped maps load and cross-validate: `development/default` is the cargo one and \
-         `development/checks` runs the checks a story carries\n{}",
+        stdout(&output).contains("4 step map(s)"),
+        "every shipped map loads and cross-validates: `development/default` is the cargo one, \
+         `development/checks` runs the checks a story carries, `releases/source` cuts a release \
+         and `bugfix/standard` fixes a bug\n{}",
         stdout(&output)
     );
 
