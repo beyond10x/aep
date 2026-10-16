@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.SpendBoundWritten",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:29cc7cf4969c5d692cf1066993f1fa330a61c70ce5e5e993387bf51cf6c83364",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.SpendBoundWritten": {
+      "title": "SpendBoundWritten",
+      "x-ess-name": "aep.plan.SpendBoundWritten",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "baseline",
+        "target"
+      ],
+      "additionalProperties": false,
+      "x-ess-invariants": [
+        "baseline >= 0",
+        "target >= 0"
+      ]
+    }
+  }
+}

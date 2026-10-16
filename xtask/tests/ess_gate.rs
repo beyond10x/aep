@@ -1,10 +1,12 @@
 //! The gate on `ess/`, the ESS specification of the `aep plan reverse init` and
 //! `aep plan store migrate git` surface and of the review-result findings rule
 //! (`aep plan artifact new` and `validate`) and of how `aep plan artifact evidence --from
-//! <report/2> --suite <suite>` admits a suite and of the per-task spend record, and of the `llm`
-//! step judgement rule of a driver step map with the `llm` step counts of a driven run, and of a
-//! command step's `expect: failure`, `output:` and run inputs, and on the
-//! projections committed under `generated/ess/`.
+//! <report/2> --suite <suite>` admits a suite and of the per-task spend record, and of the
+//! spend report against the project's baseline and target, and of the `llm` step judgement rule
+//! of a driver step map with the `llm` step counts of a driven run, and of a command step's
+//! `expect: failure`, `output:` and run inputs, and of a state's `concurrent:` opt-in with its
+//! shared-output refusal, and on the projections committed under
+//! `generated/ess/`.
 //!
 //! * `cargo xtask ess --check` holds: the specification validates under its pinned release
 //!   (`--strict-requires`), compiles, and every committed projection equals a fresh one. Two
@@ -34,35 +36,42 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 52 scenarios and 68 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 59 scenarios and 71 refusals.
 ///
 /// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, the `aep.review.ReviewResult`
 /// invariant after each of its three recording outcomes, the nine outcomes of
 /// `aep.evidence.RecordFromReport`, the four outcomes of `aep.evidence.RecordSpend`
 /// (`source-digest-missing` and `recorded`, story:task-spend-is-modelled, and
-/// `source-outside-repository` and `source-unreadable`, story:evidence-records-task-spend), and 28
-/// in `aep.drive`: the four outcomes of `aep.drive.DeclareStep`, both of `DeclareOutput`, the six
-/// of `ReadCommandExit` (`not-executed` among them), the `aep.drive.Step` invariant after
-/// `declared`, `kept` and the four `ReadCommandExit` outcomes that keep the step, the six
+/// `source-outside-repository` and `source-unreadable`, story:evidence-records-task-spend), both
+/// outcomes of `aep.evidence.ReportSpend` (`since-not-a-date` and `reported`) and both of
+/// `aep.plan.ReadSpendBound` (`target-not-below-baseline` and `read`,
+/// story:spend-against-baseline), and 31 in `aep.drive`: the four outcomes of
+/// `aep.drive.DeclareStep`, both of `DeclareOutput`, both of `DeclareConcurrentOutput`
+/// (`concurrent-output-shared` and `kept`, story:concurrent-command-steps), the six of
+/// `ReadCommandExit` (`not-executed` among them), the `aep.drive.Step` invariant after `declared`,
+/// both `kept` outcomes and the four `ReadCommandExit` outcomes that keep the step, the six
 /// outcomes of `StartRun` (four refusals of its inputs besides `input-missing` and `started`),
 /// both of `RunLlmStep`, `ShowStatus` and the `aep.drive.LlmStepsDeclared` aggregate
 /// (story:llm-step-declares-judgement, and story:command-step-expects-failure for `expect`,
-/// `output` and run inputs). Neither adds a refusal.
+/// `output` and run inputs). None of the `aep.drive` scenarios adds a refusal.
 ///
-/// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (54) both commands read two row sets
-/// ("a scenario arranges the rows of one selector per command in this cut"), and neither entity
-/// has a creating command in aep (a repository is a directory, an `aep.project/1` file was written
-/// by an earlier build). Seven of them came with the repair of an `aep.project/5` store
+/// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (56) `ReverseInit` and `MigrateGit`
+/// both read two row sets ("a scenario arranges the rows of one selector per command in this
+/// cut"), and neither entity has a creating command in aep (a repository is a directory, an
+/// `aep.project/1` file was written by an earlier build). Seven of them came with the repair of an `aep.project/5` store
 /// (story:migration-writes-each-move-once): five `aep.plan.MigrateGit` outcomes in place of
 /// `nothing-to-migrate`, and the `aep.plan.Project` invariant after the three that keep or update
-/// the row. In `aep.review` (14): `findings-required` needs a project file that sets
-/// `findings_required_since`, which no declared command writes; every `ValidateFindings` outcome
-/// and the invariant after each one need a review whose `created_before_opt_in` and
-/// `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
+/// the row. Two are `ESS-SYNTH-013`: no view publishes `aep.plan.SpendBound` or
+/// `aep.plan.SpendBoundWritten`, whose invariants no scenario can then observe (the project's
+/// `spend` is a map, story:spend-against-baseline). In `aep.evidence` (1), the same for
+/// `aep.evidence.SpendRow`, which only the `ReportSpend` response carries. In `aep.review` (14):
+/// `findings-required` needs a project file that sets `findings_required_since`, which no
+/// declared command writes; every `ValidateFindings` outcome and the invariant after each one
+/// need a review whose `created_before_opt_in` and `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (52, 68);
+const SYNTHESIZED: (u64, u64) = (59, 71);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {

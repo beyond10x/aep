@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact validate input",
+  "description": "Hold one `spend.<kind>.<figure>` entry of the project file to its bound.",
+  "x-ess-name": "aep.plan.ReadSpendBound",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string"
+    },
+    "figure": {
+      "$ref": "#/$defs/aep.plan.SpendFigure"
+    },
+    "written": {
+      "$ref": "#/$defs/aep.plan.SpendBoundWritten"
+    }
+  },
+  "required": [
+    "kind",
+    "figure",
+    "written"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:ff094a2adf6d39b654c8adbbbcb01bd9926c3ef469fd62b590a80fd10a8d2669",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.SpendBoundWritten": {
+      "title": "SpendBoundWritten",
+      "x-ess-name": "aep.plan.SpendBoundWritten",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "target": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "baseline",
+        "target"
+      ],
+      "additionalProperties": false,
+      "x-ess-invariants": [
+        "baseline >= 0",
+        "target >= 0"
+      ]
+    },
+    "aep.plan.SpendFigure": {
+      "title": "SpendFigure",
+      "x-ess-name": "aep.plan.SpendFigure",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "model_calls",
+        "total_tokens",
+        "cost_micro_usd",
+        "wall_time_ms",
+        "llm_steps_run"
+      ]
+    }
+  }
+}

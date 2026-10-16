@@ -81,6 +81,18 @@
       "$ref": "#/$defs/aep.plan.UtcDate",
       "description": "A UTC date. With it set, whatever the date, `aep plan artifact new review-result` refuses a body with no `findings` block unless `--prose-only <reason>` says why; `aep plan artifact validate` reads the date, and counts as a problem a block-less review-result not created before the start of that date in UTC, an undated one included (see the aep.review domain). Written with no value (empty, `~` or `null`) it is refused naming the key, never read as absent: pinned by `a_findings_required_since_written_empty_or_null_is_refused_naming_the_key` (aep-domain)."
     },
+    "spend": {
+      "description": "The baseline and target per task kind and figure that `aep plan artifact spend` reports each median against. The verb never writes it: a person copies the medians in. Written with no value, or with a kind holding no figure, it is refused rather than read as absent.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "$ref": "#/$defs/aep.plan.SpendBound"
+        },
+        "x-ess-map-key": "String"
+      },
+      "x-ess-map-key": "String"
+    },
     "repeated_transitions": {
       "description": "How many transitions, over every document of the store, are identical in every field to the transition immediately before them in the same document, so that their rendered `transitions` lines are byte-identical. Only an `aep.project/5` store has transitions; `0` for an `aep.project/1` one. A transition that repeats an earlier one that is not immediately before it is not counted.",
       "type": "integer"
@@ -103,6 +115,7 @@
     "protocol",
     "profile",
     "providers",
+    "spend",
     "repeated_transitions",
     "engineering_clean",
     "planning_is_directory",
@@ -112,8 +125,8 @@
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
-    "contract_digest": "slice-sha256/2:fe285c87b4022549c1a22e73c35f3db7062948abdf95b3346ad018d09345e2a0",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:fea72d460078eea1b1fb1a94cbdf09ea5b9acaa3bed2a6cddfa46c0031c3d46b",
     "regenerate": "ess generate"
   },
   "$defs": {
@@ -164,6 +177,32 @@
       "x-ess-name": "aep.plan.ProjectRoot",
       "x-ess-kind": "newtype",
       "type": "string"
+    },
+    "aep.plan.SpendBound": {
+      "title": "SpendBound",
+      "x-ess-name": "aep.plan.SpendBound",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "description": "The median a person copied from `aep plan artifact spend --baseline <n>`.",
+          "type": "integer"
+        },
+        "target": {
+          "description": "The median the project aims for, strictly below the baseline.",
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "baseline",
+        "target"
+      ],
+      "additionalProperties": false,
+      "x-ess-invariants": [
+        "target >= 0",
+        "target < baseline"
+      ]
     },
     "aep.plan.SqliteStore": {
       "title": "SqliteStore",

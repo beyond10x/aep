@@ -207,7 +207,10 @@ policy is advanced (done for 412a2f2 and 938320e). To bring a branch up to date,
 branch from `origin/main` and replay its changes as a new bot commit (`git cherry-pick
 --no-commit`, then `b10x-gates bot -- commit`); the bot runs only commit, tag, push and fetch.
 
-Tags are bare semantic versions (`0.64.0`). A release:
+Tags are bare semantic versions (`0.64.0`). The step map `drivers/releases/source.yaml`
+(`releases/source`) drives the steps below with no model step, pausing at each person's step:
+`aep drive run --map releases/source --input version=<version> --input date=<date>
+--pause-on-approval`. A release:
 
 1. On a `release/<version>` branch from current `origin/main`:
    `cargo xtask release prepare <version> --date <date>` sets the workspace version in

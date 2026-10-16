@@ -1,4 +1,4 @@
----
+a value that is not a non-negative integer, or a target not below its baseline is refused, naming the kind, the figure and the values; `spend` or a kind written with no value (empty, `~`, `null`, `{}`) is refused naming it ---
 title: project.yaml
 sidebar_position: 2
 description: Every field of .engineering/project.yaml, the file that makes a repository an AEP project.
@@ -38,6 +38,7 @@ providers:                             # optional: link patterns for external re
 | `summary` | no | | one line for people; nothing reads it |
 | `providers` | no | | a URL pattern per external system, each containing `{key}`; a pattern without `{key}` is refused |
 | `findings_required_since` | no | | a calendar date, `YYYY-MM-DD`, read as starting at midnight UTC. Once it is set, whatever the date, `new` refuses a `review-result` without a `findings` block unless `--prose-only <reason>` says why; `validate` reads the date and counts such a review as a problem unless it predates the date, is superseded by a review carrying a block, or was recorded prose-only. A review the store cannot date (a shallow clone, a store outside Git) is undated, never before the date. See [Reviews](../concepts/reviews.md#requiring-a-findings-block). A value that is not a calendar date, or no value at all (empty, `~`, `null`), is refused naming the key |
+| `spend` | no | | a baseline and a target per task kind and figure, `spend.<kind>.<figure>: { baseline: <n>, target: <n> }`, that `aep plan artifact spend` reports each median against. A figure is `model_calls`, `total_tokens`, `cost_micro_usd`, `wall_time_ms` or `llm_steps_run`; both values are required non-negative integers and the target is strictly below the baseline. Any other figure, a missing value or a target not below its baseline is refused, naming the kind, the figure and the values |
 | `artifacts` | no | `artifacts.yaml` | the artifact manifest for [governed tasks](../concepts/governance.md) |
 | `task` | no | `task.yaml` | the task document `govern` and `drive` use when `--task` is absent |
 | `state` | no | `state.yaml` | where execution state is kept |

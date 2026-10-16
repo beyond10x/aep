@@ -1,0 +1,118 @@
+# The step map for `bugfix/standard`: commands wherever a command can decide, and a model only at
+# `diagnose` and `fix`.
+#
+# A run names its inputs:
+#
+#   --input repro=<the command that reproduces the bug>
+#   --input logs=<a log file>  --input traces=<a trace file>
+#   --input artifact=<the planning artifact id the bug is filed as>
+#   --input gate=<the package gate command>
+#
+# Three properties are worth reading before the steps:
+#
+#   * **The reproduction runs once before `verify`, at `reproduce`, and is expected to fail.** An
+#     exit of 0 there is a failing `reproduction` record with the reason *nothing reproduced*, the
+#     guard out of `reproduce` is false, and the run stops `blocked` before any model is called.
+#     Its output is kept as `repro.txt` for the diagnosis to read, so nothing reruns it to look.
+#   * **`diagnose` collects at once and reads in order.** The three reads are independent, so the
+#     state is `concurrent: true` and they run together; the `llm` step after them is a barrier and
+#     starts only once all three have finished. The reads declare no evidence: a read that succeeds
+#     has nothing to submit, and one that fails is no verdict, retried within its budget.
+#   * **`verify` runs the same reproduction, now expecting success, then the package gate.** Both
+#     are `test_result` records, `regression` and `gate`, and the workflow routes back to `fix` on
+#     either failing.
+format: aep.driver-steps/2
+id: bugfix/standard
+workflow: bugfix/standard/1
+title: Driving bugfix/standard
+
+states:
+  reproduce:
+    steps:
+      - kind: command
+        description: Run the reproducing command and keep what it printed; it is expected to fail.
+        run: [sh, -c, "{input.repro}"]
+        expect: failure
+        output: repro.txt
+        evidence:
+          kind: test_result
+          verifier: test-runner
+          suite: reproduction
+
+  diagnose:
+    concurrent: true
+    steps:
+      - kind: command
+        description: Collect the logs.
+        run: [cat, "{input.logs}"]
+        output: logs.txt
+      - kind: command
+        description: Collect the traces.
+        run: [cat, "{input.traces}"]
+        output: traces.txt
+      - kind: command
+        description: Collect the planning artifact the bug is filed as.
+        run: [aep, plan, artifact, show, "{input.artifact}"]
+        output: artifact.txt
+      # A barrier: it starts once every read above has finished, so its context exists.
+      - kind: llm
+        harness: b10x
+        description: Form a hypothesis for the failure from what was collected.
+        judgement: >-
+          Which line of the reproduction, the logs and the traces explains the failure is a
+          reading no command performs.
+        skills: [diagnosing]
+        context:
+          - "{run_directory}/repro.txt"
+          - "{run_directory}/logs.txt"
+          - "{run_directory}/traces.txt"
+          - "{run_directory}/artifact.txt"
+        scope:
+          - paths: ["**"]
+            write: denied
+        prompt: >-
+          Read the reproduction's output, the logs, the traces and the planning artifact you were
+          given. State one hypothesis for the failure, the evidence in them that supports it, and
+          the change that would test it. Change nothing.
+
+  fix:
+    steps:
+      - kind: llm
+        harness: b10x
+        description: Change the code so the reproduction no longer fails.
+        judgement: >-
+          What change removes the cause the diagnosis named, and nothing else, is a design
+          decision no command makes.
+        skills: [diagnosing]
+        # The planning store is denied to native file writers because `aep plan artifact` owns
+        # every mutation; the last rule is a catch-all so every path has an answer.
+        scope:
+          - paths: [".engineering/planning/**"]
+            write: denied
+          - paths: ["**"]
+            write: allowed
+        prompt: >-
+          Make the smallest change that removes the cause the diagnosis named. Do not weaken, skip
+          or delete the reproduction or any check: `verify` reruns the reproduction and the package
+          gate, and a failing one sends the work back here.
+
+  verify:
+    steps:
+      - kind: command
+        description: Run the reproducing command again; it now has to pass.
+        run: [sh, -c, "{input.repro}"]
+        evidence:
+          kind: test_result
+          verifier: test-runner
+          suite: regression
+      - kind: command
+        description: Run the package gate.
+        run: [sh, -c, "{input.gate}"]
+        evidence:
+          kind: test_result
+          verifier: test-runner
+          suite: gate
+
+  # Terminal. No steps, and none would run: the engine reports `Completed` on arrival.
+  fixed:
+    steps: []

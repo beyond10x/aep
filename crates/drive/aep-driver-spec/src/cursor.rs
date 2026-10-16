@@ -27,7 +27,7 @@
 //! needs is an equality check against what it recorded, and a validated reference that could
 //! deserialise would weaken a rule this crate holds elsewhere for no gain.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 
@@ -244,6 +244,10 @@ pub struct OperatorAnswer {
 ///
 /// The id is deterministic and is persisted before dispatch. A resume can therefore repeat the
 /// exact attempt only when an operator names this id, or record that the attempt has no verdict.
+///
+/// For a batch of a `concurrent: true` state, `step` and `attempt` are the batch's first step and
+/// the attempt of it most recently charged, and a retry reruns every step of the batch under the
+/// attempt numbers already charged ([`DriverCursor::batch_charged`]).
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct InFlightAttempt {
@@ -278,6 +282,9 @@ pub struct DriverCursor {
     /// Which state the run is in.
     pub state: StateId,
     /// Which step of that state's list runs next.
+    ///
+    /// In a `concurrent: true` state, the first step of the batch that runs next
+    /// (`StepMap::batch_at`): the pointer moves past a batch only when every step of it has ended.
     pub step: usize,
     /// How many times each state has been entered.
     pub visits: BTreeMap<StateId, u32>,
@@ -288,8 +295,29 @@ pub struct DriverCursor {
     /// count stays so *"green on the third try"* is in the record.
     pub attempts: BTreeMap<String, u32>,
     /// The attempt published before its outside effect was dispatched, until its outcome commits.
+    ///
+    /// One marker for a whole batch of a `concurrent: true` state, named by the batch's first
+    /// step and rewritten whenever that step's attempt advances; the steps it covers are
+    /// [`Self::batch_charged`].
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub in_flight: Option<InFlightAttempt>,
+    /// The steps of the batch at [`Self::step`] charged the attempt they now hold by the batch
+    /// that is [`Self::in_flight`], so a `--retry-in-flight` reruns each of them under that number
+    /// and charges only the steps that had not yet been put to run.
+    ///
+    /// A step is charged when it is first put to run, after the circuit breaker is read, as a
+    /// serial run charges it; empty outside a batch in flight, and a cursor without the key is a
+    /// run that never had one.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub batch_charged: BTreeSet<usize>,
+    /// The steps after [`Self::step`] of a batch that stopped there (a step spent its retries, or
+    /// a paid effect was refused) whose verdicts were already submitted.
+    ///
+    /// A batch submits its other steps' verdicts before it stops, so a resume of the batch runs
+    /// only the steps not listed here and never submits a verdict twice. Cleared when the batch
+    /// ends or the run leaves the state.
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub batch_ended: BTreeSet<usize>,
     /// Failure counts for named dependencies, persisted so a resume cannot reset an open circuit.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub circuit_failures: BTreeMap<String, u32>,
@@ -354,6 +382,20 @@ impl DriverCursor {
     /// Records an attempt as unresolved and returns the identity a retry must name.
     pub fn begin_attempt(&mut self, state: &StateId, step: usize) -> InFlightAttempt {
         let attempt = self.record_attempt(state, step);
+        self.mark_in_flight(state, step, attempt)
+    }
+
+    /// Publishes `attempt` at `state`/`step` as unresolved without charging it, returning the
+    /// identity a retry must name.
+    ///
+    /// For a batch, whose steps are charged one by one as they are put to run: the marker names
+    /// the batch's first step and the attempt of it most recently charged.
+    pub fn mark_in_flight(
+        &mut self,
+        state: &StateId,
+        step: usize,
+        attempt: u32,
+    ) -> InFlightAttempt {
         let in_flight = InFlightAttempt {
             id: format!("{}:{state}:{step}:{attempt}", self.run),
             state: state.clone(),
@@ -448,6 +490,8 @@ mod tests {
             visits: BTreeMap::new(),
             attempts: BTreeMap::new(),
             in_flight: None,
+            batch_charged: BTreeSet::new(),
+            batch_ended: BTreeSet::new(),
             circuit_failures: BTreeMap::new(),
             iterations: 0,
             status: RunStatus::Running,

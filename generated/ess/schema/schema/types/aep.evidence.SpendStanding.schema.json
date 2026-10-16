@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.evidence.SpendStanding",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:d31f04c8fb66239198dd021a3d426ac3e8d6cdb75da9b727103a428ce01d721c",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.SpendStanding": {
+      "title": "SpendStanding",
+      "x-ess-name": "aep.evidence.SpendStanding",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "under",
+        "at",
+        "over",
+        "unknown",
+        "undeclared"
+      ]
+    }
+  }
+}

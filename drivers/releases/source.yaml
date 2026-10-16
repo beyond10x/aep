@@ -1,0 +1,255 @@
+# The step map for `release/source`: this repository's own release, as `AGENTS.md` (Releases and
+# commits) orders it, with no model step.
+#
+# Every step is a `command` the driver runs or an `operator` step a person answers. A run takes two
+# inputs and pauses at each person's step:
+#
+#   aep drive run --map releases/source --input version=<x.y.z> --input date=<YYYY-MM-DD> \
+#     --pause-on-approval
+#
+# Three properties are worth reading before the steps:
+#
+#   * **`retries: 0` on every step that changes Git state, a ref or the planning store.** A retry
+#     is for a process that died before it produced a verdict, and a push or a commit that died
+#     part-way may already have happened: running it again would re-push or re-commit. The steps
+#     that only read keep the default.
+#   * **The gate is the last step of `qualify`.** The local tag exists before it because
+#     `version-check` needs one, and nothing reaches the remote until the gate has passed and a
+#     person has approved: a red gate is a failing `repository-gate` suite, the guard out of
+#     `qualify` refuses, and the run stops there.
+#   * **The driver issues no forge write.** Opening and merging each pull request is one `operator`
+#     step: a person-approved write through the bot route (`b10x-gates api … POST …/pulls`, then
+#     `PUT …/pulls/<n>/merge`). Every Git write is `b10x-gates bot -- <git command>`.
+#
+# The four `verification` claims the workflow guards on are written by `cargo xtask release check
+# <claim>` (`story:release-verification-claims`); a command step cannot mint a `verification`
+# record, so each claim-writer step reads the record that command writes through `record:`.
+format: aep.driver-steps/2
+id: releases/source
+workflow: release/source/1
+title: Cutting this repository's source release
+
+states:
+  inspect:
+    steps:
+      - kind: command
+        description: Fetch the default branch and the tags.
+        run: [b10x-gates, bot, --, fetch, origin, main, --tags]
+        retries: 0
+      - kind: command
+        description: Record that the candidate is cut from the current default branch.
+        run:
+          - cargo
+          - xtask
+          - release
+          - check
+          - release-on-default-branch
+          - --version
+          - "{input.version}"
+          - --out
+          - "{run_directory}/claim-release-on-default-branch.yaml"
+        evidence:
+          kind: verification
+          verifier: xtask
+          record: "{run_directory}/claim-release-on-default-branch.yaml"
+
+  qualify:
+    steps:
+      - kind: command
+        description: Cut the release branch from the default branch.
+        run: [git, switch, -c, "release/{input.version}", origin/main]
+        retries: 0
+      - kind: command
+        description: Set the workspace version and date the Unreleased changelog section.
+        run: [cargo, xtask, release, prepare, "{input.version}", --date, "{input.date}"]
+        retries: 0
+      - kind: command
+        description: Commit the release through the bot.
+        run:
+          - b10x-gates
+          - bot
+          - --
+          - commit
+          - -a
+          - -m
+          - "chore: release {input.version}"
+          - -m
+          - "Release {input.version}."
+        retries: 0
+      - kind: command
+        description: Create the annotated release tag locally, which the gate's version check needs.
+        run: [cargo, xtask, release, tag]
+        retries: 0
+      - kind: command
+        description: Commit the derived status and move the tag to that commit.
+        run: [cargo, xtask, release, pin]
+        retries: 0
+      - kind: command
+        description: Record that the version, changelog and tag inputs agree.
+        run:
+          - cargo
+          - xtask
+          - release
+          - check
+          - release-inputs
+          - --version
+          - "{input.version}"
+          - --date
+          - "{input.date}"
+          - --out
+          - "{run_directory}/claim-release-inputs.yaml"
+        evidence:
+          kind: verification
+          verifier: xtask
+          record: "{run_directory}/claim-release-inputs.yaml"
+      - kind: command
+        description: Build the aep the gate runs, from this tree.
+        run: [cargo, build, --release, -p, aep-cli]
+      # Last in `qualify`, so a red gate leaves nothing after it to run in this state.
+      - kind: command
+        description: The full repository gate, against this tree's aep.
+        run: [env, AEP_BIN=target/release/aep, task, check]
+        evidence:
+          kind: test_result
+          verifier: test-runner
+          suite: repository-gate
+
+  await_approval:
+    steps:
+      - kind: operator
+        description: Approve releasing this version at the tagged commit.
+        prompt: >-
+          Approve releasing the version this run was given (`--input version`) at the commit its
+          local tag names: record a granted `release-create` approval as yourself, then resume the
+          run. Nothing has reached the remote yet; leave the approval unrecorded to stop here.
+
+  publish:
+    steps:
+      - kind: command
+        description: Push the release branch and its tag through the bot.
+        run: [b10x-gates, bot, --, push, origin, "release/{input.version}", "{input.version}"]
+        retries: 0
+      - kind: operator
+        description: Open the release pull request and merge it with a merge commit.
+        prompt: >-
+          Open the release pull request for `release/<version>` through `b10x-gates api` (`POST
+          /repos/beyond10x/aep/pulls`) and, once its required checks are green, merge it through
+          `b10x-gates api` (`PUT /repos/beyond10x/aep/pulls/<n>/merge`) with a merge commit, never a
+          squash. If a fix lands on the branch first, move the tag to the branch head. Then resume
+          the run.
+      - kind: command
+        description: Record that the remote holds the tag at the branch head.
+        run:
+          - cargo
+          - xtask
+          - release
+          - check
+          - release-tag-pushed
+          - --version
+          - "{input.version}"
+          - --out
+          - "{run_directory}/claim-release-tag-pushed.yaml"
+        evidence:
+          kind: verification
+          verifier: xtask
+          record: "{run_directory}/claim-release-tag-pushed.yaml"
+
+  verify:
+    steps:
+      # After the merge: `record` refuses a tag that is not on `origin/main`.
+      - kind: command
+        description: Fetch the merged default branch and the tags.
+        run: [b10x-gates, bot, --, fetch, origin, main, --tags]
+        retries: 0
+      # Read-only, and nonzero when the run fails: `record` refuses a Release run that has not
+      # succeeded.
+      - kind: command
+        description: Wait for the tag's Release workflow run and fail if it fails.
+        run:
+          - sh
+          - -c
+          - >-
+            gh run watch --exit-status "$(gh run list --workflow release.yml --branch
+            {input.version} --limit 1 --json databaseId --jq ".[0].databaseId")"
+      # `provenance-tracking` owes one `diff` before `complete`: what this release changed since
+      # the tag before it, observed by git. Read-only, so it keeps the default retries.
+      - kind: command
+        description: Observe what the release changed since the previous tag.
+        run:
+          - sh
+          - -c
+          - >-
+            git --no-pager diff --stat "$(git describe --tags --abbrev=0 {input.version}^)"
+            {input.version}
+        evidence:
+          kind: diff
+          verifier: git
+      - kind: command
+        description: Cut the record branch from the merged default branch.
+        run: [git, switch, -c, "plan/release-{input.version}-record", origin/main]
+        retries: 0
+      - kind: command
+        description: Record the release in the planning store.
+        run: [cargo, xtask, release, record]
+        retries: 0
+      - kind: command
+        description: Commit the planning record through the bot.
+        run:
+          - b10x-gates
+          - bot
+          - --
+          - commit
+          - -a
+          - -m
+          - "plan: record the {input.version} release"
+          - -m
+          - "Release {input.version}."
+        retries: 0
+      - kind: command
+        description: Move the release pins, now that a commit after the release exists.
+        run: [cargo, xtask, status]
+        retries: 0
+      - kind: command
+        description: Commit the moved pins through the bot.
+        run:
+          - b10x-gates
+          - bot
+          - --
+          - commit
+          - -a
+          - -m
+          - "docs: move the release pins to {input.version}"
+          - -m
+          - "Release {input.version}."
+        retries: 0
+      - kind: command
+        description: Push the record branch through the bot.
+        run: [b10x-gates, bot, --, push, origin, "plan/release-{input.version}-record"]
+        retries: 0
+      - kind: operator
+        description: Open the record pull request and merge it with a merge commit.
+        prompt: >-
+          Open the record pull request for `plan/release-<version>-record` through `b10x-gates
+          api` (`POST /repos/beyond10x/aep/pulls`) and, once its required checks are green, merge
+          it through `b10x-gates api` (`PUT /repos/beyond10x/aep/pulls/<n>/merge`) with a merge
+          commit. Then resume the run.
+      - kind: command
+        description: Record that the release is complete, `cargo xtask release` printing 6/6 ok.
+        run:
+          - cargo
+          - xtask
+          - release
+          - check
+          - source-release
+          - --version
+          - "{input.version}"
+          - --out
+          - "{run_directory}/claim-source-release.yaml"
+        evidence:
+          kind: verification
+          verifier: xtask
+          record: "{run_directory}/claim-source-release.yaml"
+
+  # Terminal. No steps, and none would run: the engine reports `Completed` on arrival.
+  complete:
+    steps: []

@@ -14,6 +14,7 @@ aep govern workflow instruct --out generated/instructions
 ```
 
 * [`adp/default.md`](adp/default.md) — Standard development workflow (`adp/default/2`)
+* [`bugfix/standard.md`](bugfix/standard.md) — Standard bug fix (`bugfix/standard/1`)
 * [`incident/standard.md`](incident/standard.md) — Standard incident response (`incident/standard/1`)
 * [`migration/forward-only.md`](migration/forward-only.md) — Forward-only migration (`migration/forward-only/1`)
 * [`release/dependency-promotion.md`](release/dependency-promotion.md) — Dependency promotion (`release/dependency-promotion/1`)

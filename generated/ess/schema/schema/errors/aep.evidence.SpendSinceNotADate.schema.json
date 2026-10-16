@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpendSinceNotADate payload",
+  "description": "`aep plan artifact spend --since <date>` with a value that is not a calendar date written `YYYY-MM-DD`; the refusal names the value, and no table is printed (planning/spend.rs `report`).",
+  "x-ess-name": "aep.evidence.SpendSinceNotADate",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:a6f42c52e40672a5ba23edbaf37c39959674ee6d0e446a8b07df5851ddb37cb3",
+    "regenerate": "ess generate"
+  }
+}

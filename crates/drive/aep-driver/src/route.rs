@@ -27,6 +27,19 @@ pub enum NextStep {
         /// Which step of the current state.
         index: usize,
     },
+    /// Run the `command` steps `first..=last` of a `concurrent: true` state as one batch.
+    ///
+    /// For two steps or more ([`StepMap::batch_at`]), or for what is left of a batch that stopped
+    /// with steps after the pointer already submitted (`DriverCursor::batch_ended`), so that the
+    /// batch, and not a serial step, decides which of them still run; any other batch of one is
+    /// [`Self::Run`]. The cursor's pointer stays at `first` until every step of the batch has
+    /// ended.
+    Batch {
+        /// The first step of the batch, where the cursor points.
+        first: usize,
+        /// The last step of the batch.
+        last: usize,
+    },
     /// The state's steps are done: ask the engine to move.
     ///
     /// Also the answer for a state the map says nothing about. A workflow state whose transition is
@@ -55,13 +68,21 @@ pub fn next_step(map: &StepMap, cursor: &DriverCursor) -> NextStep {
             budget,
         };
     }
-    if cursor.step < map.steps_for(&cursor.state).len() {
-        return NextStep::Run { index: cursor.step };
+    let batch = map.batch_at(&cursor.state, cursor.step);
+    match batch.len() {
+        0 => NextStep::Transition,
+        1 if !cursor.batch_ended.contains(&cursor.step) => NextStep::Run { index: cursor.step },
+        _ => NextStep::Batch {
+            first: batch.start,
+            last: batch.end - 1,
+        },
     }
-    NextStep::Transition
 }
 
 /// How many steps of the current state have not run yet.
+///
+/// A batch in progress counts in full: the pointer moves past it only when all of its steps have
+/// ended.
 ///
 /// Saturating rather than wrapping: a cursor pointing past the end of a list is what a resume after
 /// a step map lost a step looks like, and the honest answer there is *none left*, not a number the

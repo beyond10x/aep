@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "#/$defs/aep.plan.SpendBound",
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:a443367d0852c2e4299319ab00ce29acb62e0fb103c2b63b6bc8b3432bf5d3a9",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.SpendBound": {
+      "title": "SpendBound",
+      "x-ess-name": "aep.plan.SpendBound",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "baseline": {
+          "description": "The median a person copied from `aep plan artifact spend --baseline <n>`.",
+          "type": "integer"
+        },
+        "target": {
+          "description": "The median the project aims for, strictly below the baseline.",
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "baseline",
+        "target"
+      ],
+      "additionalProperties": false,
+      "x-ess-invariants": [
+        "target >= 0",
+        "target < baseline"
+      ]
+    }
+  }
+}

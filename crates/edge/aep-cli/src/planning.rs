@@ -55,6 +55,8 @@ mod recorded_input;
 mod findings_standing;
 // What a `task_spend` record reads out of a transcript, a run manifest or a driven run's cursor.
 mod task_spend;
+// `aep plan artifact spend`: spend per task kind and figure against the project's baseline and target.
+mod spend;
 
 /// Where a new document's body is seeded from, relative to the document tree.
 const TEMPLATE_DIRECTORY: &str = "artifacts/templates";
@@ -183,6 +185,15 @@ impl StoreLocation {
     /// project whose own planning directory `--store` names. A `--store` anywhere else is a plan no
     /// project file governs, and requires nothing.
     pub(crate) fn findings_required_since(&self) -> Result<Option<aep_domain::time::CivilDate>> {
+        Ok(self
+            .project_config()?
+            .and_then(|config| config.findings_required_since))
+    }
+
+    /// The project file of the plan this location opens, validated, or `None` when no project
+    /// file governs it: the discovered project, or the project whose own planning directory
+    /// `--store` names (as [`Self::findings_required_since`] reads it).
+    pub(crate) fn project_config(&self) -> Result<Option<aep_domain::project::ProjectConfig>> {
         let engineering = if let Some(path) = &self.store {
             if project_plan_at(path)?.is_none() {
                 return Ok(None);
@@ -195,12 +206,10 @@ impl StoreLocation {
             let here = std::env::current_dir().context("reading the working directory")?;
             aep_project::project::discover(&here).map(|project| project.join(project_directory()))
         };
-        Ok(match engineering {
-            Some(engineering) => {
-                project_config(&engineering)?.and_then(|config| config.findings_required_since)
-            }
-            None => None,
-        })
+        match engineering {
+            Some(engineering) => project_config(&engineering),
+            None => Ok(None),
+        }
     }
 
     /// The document tree, from `--root`, the discovered project, or the historical `.` fallback.
@@ -1394,6 +1403,32 @@ pub(crate) enum ArtifactCommand {
         #[arg(long, value_name = "DATE")]
         since: Option<String>,
     },
+    /// Say what tasks spent, per task kind and figure, against the project's baseline and target.
+    ///
+    /// One row per task kind (the kind of the artifact a `task_spend` record names) and figure
+    /// (`model_calls`, `total_tokens`, `cost_micro_usd`, `wall_time_ms`, `llm_steps_run`): how many
+    /// artifacts have a record, how many of them leave the figure unknown, the lower median over
+    /// the rest, the `spend.<kind>.<figure>` baseline and target of `.engineering/project.yaml`, and
+    /// whether the median is `under`, `at` or `over` the target. An artifact counts once: its
+    /// records are summed, and of records sharing a `source_input` only the latest by `at` counts.
+    /// A median nobody stated prints `unknown`, never `0`.
+    ///
+    /// Writes nothing, the project file included, and reads no clock. Exits 0 with its report.
+    Spend {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// Only rows of this task kind, such as `story`.
+        #[arg(long, value_name = "KIND")]
+        kind: Option<String>,
+        /// Only records whose `at` is at or after 00:00 UTC of this day, `YYYY-MM-DD`.
+        #[arg(long, value_name = "DATE")]
+        since: Option<String>,
+        /// Each median over the first `n` artifacts of each kind, by their earliest record: the
+        /// baselines a person copies into the project file. At least 1; `0` is refused.
+        #[arg(long, value_name = "N")]
+        baseline: Option<usize>,
+    },
     /// Check the whole plan: every file, every edge, every status.
     ///
     /// Three classes of problem, accumulated into one list rather than reported one run at a time:
@@ -1748,6 +1783,12 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             to,
         } => findings_ledger(&store, &id, from.as_deref(), to.as_deref()),
         ArtifactCommand::ReviewValue { store, since } => review_value(&store, since.as_deref()),
+        ArtifactCommand::Spend {
+            store,
+            kind,
+            since,
+            baseline,
+        } => spend::report(&store, kind.as_deref(), since.as_deref(), baseline),
         ArtifactCommand::Kinds { store } => kinds(&store),
         ArtifactCommand::Relations { store } => relations(&store),
         ArtifactCommand::Lifecycle { store, kind } => lifecycle(&store, &kind),
@@ -1777,6 +1818,7 @@ fn artifact_mutation_location(command: &ArtifactCommand) -> Option<&StoreLocatio
         | ArtifactCommand::Explain { .. }
         | ArtifactCommand::Findings { .. }
         | ArtifactCommand::ReviewValue { .. }
+        | ArtifactCommand::Spend { .. }
         | ArtifactCommand::Kinds { .. }
         | ArtifactCommand::Relations { .. }
         | ArtifactCommand::Lifecycle { .. } => None,

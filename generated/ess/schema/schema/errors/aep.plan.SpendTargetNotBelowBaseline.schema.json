@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SpendTargetNotBelowBaseline payload",
+  "description": "A `spend.<kind>.<figure>` entry whose target is not strictly below its baseline (project.rs `spend_bounds`); the refusal names the kind, the figure and both values, at `project.spend.<kind>.<figure>`, beside every other defect of the file. Nothing reads the project file past it.",
+  "x-ess-name": "aep.plan.SpendTargetNotBelowBaseline",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string"
+    },
+    "figure": {
+      "$ref": "#/$defs/aep.plan.SpendFigure"
+    },
+    "baseline": {
+      "type": "integer"
+    },
+    "target": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "kind",
+    "figure",
+    "baseline",
+    "target"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:2dbeff6b6b2e4e7709394999fdc1300284de59c22c4e4bf8241e2bd83800d5e9",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.plan.SpendFigure": {
+      "title": "SpendFigure",
+      "x-ess-name": "aep.plan.SpendFigure",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "model_calls",
+        "total_tokens",
+        "cost_micro_usd",
+        "wall_time_ms",
+        "llm_steps_run"
+      ]
+    }
+  }
+}

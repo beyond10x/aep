@@ -603,9 +603,10 @@ fn the_committed_step_map_loads_and_is_refused_when_a_state_is_renamed() {
     let output = aep(&["govern", "validate", "--root", "."]);
     assert_eq!(code(&output), 0, "{}", stderr(&output));
     assert!(
-        stdout(&output).contains("2 step map(s)"),
-        "both shipped maps load and cross-validate: `development/default` is the cargo one and \
-         `development/checks` runs the checks a story carries\n{}",
+        stdout(&output).contains("4 step map(s)"),
+        "every shipped map loads and cross-validates: `development/default` is the cargo one, \
+         `development/checks` runs the checks a story carries, `releases/source` cuts a release \
+         and `bugfix/standard` fixes a bug\n{}",
         stdout(&output)
     );
 
@@ -2582,5 +2583,519 @@ fn an_input_fills_the_command_and_an_expected_failure_is_read_inverted() {
     assert!(
         text.contains("exited 0, and the step expects it to fail: nothing reproduced"),
         "the failing verdict says why:\n{text}"
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// story:concurrent-command-steps
+// ---------------------------------------------------------------------------------------------
+
+/// The document tree a concurrent fixture is governed by: one state that collects, and a way out
+/// once any suite has been recorded. Its own tree rather than this repository's, so a run that
+/// collected ends `completed` and exits 0 on nothing but its batch.
+const CONCURRENT_PROTOCOL: &str = "id: collect\nversion: 1\ntitle: Collect\n\
+    capabilities: [repository.read, tests.execute]\nevidence_kinds: [test_result]\n\
+    verifiers: [test-runner]\nartifact_kinds: []\nphases: [verification, completion]\n\
+    observables:\n  - 'tests.**'\n  - 'evidence.**'\n  - 'state.**'\n";
+
+const CONCURRENT_WORKFLOW: &str = "id: collect/diagnose\nversion: 1\ntitle: Diagnose\n\
+    initial: diagnose\nstates:\n  diagnose:\n    title: Diagnose\n    phases: [verification]\n\
+    \x20 complete:\n    title: Complete\n    terminal: true\n    phases: [completion]\n\
+    transitions:\n  - from: diagnose\n    to: complete\n    when: evidence.count.test_result >= 1\n";
+
+const CONCURRENT_PROFILE: &str = "id: collect.diagnose\ntitle: Collect and diagnose\n\
+    protocol: collect/1\nworkflow: collect/diagnose\ncapabilities:\n  allow: [repository.read, \
+    tests.execute]\ncompletion:\n  - evidence.count.test_result >= 1\n";
+
+/// One `command` step of the `diagnose` state, running `script` under `sh -c` and recording a
+/// `test_result` for `suite`, with `extra` keys before its evidence.
+fn sh_step(script: &str, suite: &str, extra: &str) -> String {
+    format!(
+        "      - kind: command\n        run: [sh, -c, {}]\n{extra}        evidence:\n          \
+         kind: test_result\n          verifier: test-runner\n          suite: {suite}\n",
+        serde_json::to_string(script).expect("a string serializes")
+    )
+}
+
+/// A project driven by its own document tree, whose `diagnose` state is `steps`.
+struct Collecting {
+    directory: PathBuf,
+}
+
+impl Collecting {
+    fn new(name: &str, concurrent: bool, steps: &str) -> Self {
+        let directory = std::env::temp_dir().join(format!("protocol-drive-concurrent-{name}"));
+        std::fs::remove_dir_all(&directory).ok();
+        let tree = directory.join("tree");
+        write(&tree.join("protocols/collect/1.yaml"), CONCURRENT_PROTOCOL);
+        write(
+            &tree.join("workflows/collect/diagnose.yaml"),
+            CONCURRENT_WORKFLOW,
+        );
+        write(&tree.join("profiles/collect.yaml"), CONCURRENT_PROFILE);
+        std::fs::create_dir_all(directory.join(".engineering/planning"))
+            .expect("the temporary tree is writable");
+        write(
+            &directory.join("task.yaml"),
+            "id: COLLECT-1\nkind: feature\nobjective: collect-state\nprotocol: collect/1\n\
+             profile: collect.diagnose\n",
+        );
+        write(
+            &directory.join("steps.yaml"),
+            &format!(
+                "format: aep.driver-steps/2\nid: fixture/collect\nworkflow: collect/diagnose/1\n\
+                 states:\n  diagnose:\n    concurrent: {concurrent}\n    steps:\n{steps}"
+            ),
+        );
+        Self { directory }
+    }
+
+    fn location(&self) -> Vec<String> {
+        vec![
+            "--project".to_owned(),
+            printable(&self.directory).to_owned(),
+            "--root".to_owned(),
+            printable(&self.directory.join("tree")).to_owned(),
+            "--task".to_owned(),
+            printable(&self.directory.join("task.yaml")).to_owned(),
+            "--map".to_owned(),
+            printable(&self.directory.join("steps.yaml")).to_owned(),
+        ]
+    }
+
+    /// `aep drive <verb>` against this project, with `extra` after its location.
+    fn drive(&self, verb: &[&str], extra: &[&str]) -> Output {
+        let mut args: Vec<String> = vec!["drive".to_owned()];
+        args.extend(verb.iter().map(ToString::to_string));
+        if verb == ["run"] {
+            args.extend(self.location());
+            // The fixture tree demands nothing beyond what its steps record; the flag only keeps
+            // the launch check's reading of that out of what these tests are about.
+            args.push("--allow-evidence-gap".to_owned());
+        } else {
+            args.extend([
+                "--project".to_owned(),
+                printable(&self.directory).to_owned(),
+            ]);
+        }
+        args.extend(extra.iter().map(ToString::to_string));
+        let borrowed: Vec<&str> = args.iter().map(String::as_str).collect();
+        aep(&borrowed)
+    }
+
+    /// The directory of run `COLLECT-1/1`.
+    fn run_directory(&self) -> PathBuf {
+        self.directory.join(".engineering/runs/COLLECT-1/1")
+    }
+
+    fn document(&self, name: &str) -> serde_json::Value {
+        let path = self.run_directory().join(name);
+        serde_json::from_str(
+            &std::fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("reading {}: {error}", path.display())),
+        )
+        .expect("a run document is JSON")
+    }
+
+    /// Every `test_result` the snapshot holds, as `<suite>:<pass|fail>`, in submission order.
+    fn submitted(&self) -> Vec<String> {
+        self.document("snapshot.json")["evidence"]
+            .as_array()
+            .expect("the snapshot lists its evidence")
+            .iter()
+            .filter_map(|recorded| {
+                let found = find_key(recorded, "suite")?;
+                let failed = find_key(recorded, "failed").and_then(serde_json::Value::as_u64);
+                Some(format!(
+                    "{}:{}",
+                    found.as_str().expect("a suite is a name"),
+                    if failed == Some(0) { "pass" } else { "fail" }
+                ))
+            })
+            .collect()
+    }
+
+    /// The step logs the run directory holds, by file name, sorted.
+    fn logs(&self) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(self.run_directory())
+            .expect("the run directory exists")
+            .map(|entry| {
+                entry
+                    .expect("an entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .filter(|name| {
+                std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|extension| extension == "log")
+            })
+            .collect();
+        names.sort();
+        names
+    }
+}
+
+/// The first value under `key`, anywhere below `value`.
+fn find_key<'a>(value: &'a serde_json::Value, key: &str) -> Option<&'a serde_json::Value> {
+    match value {
+        serde_json::Value::Object(map) => map
+            .get(key)
+            .or_else(|| map.values().find_map(|inner| find_key(inner, key))),
+        serde_json::Value::Array(items) => items.iter().find_map(|inner| find_key(inner, key)),
+        _ => None,
+    }
+}
+
+#[test]
+fn a_concurrent_state_runs_its_command_steps_at_once_and_submits_them_in_map_order() {
+    let steps = [
+        sh_step("sleep 3", "s3", ""),
+        sh_step("sleep 1", "s1", ""),
+        sh_step("sleep 2", "s2", ""),
+    ]
+    .concat();
+    let fixture = Collecting::new("timing", true, &steps);
+    let started = std::time::Instant::now();
+    let output = fixture.drive(&["run"], &[]);
+    let took = started.elapsed();
+    assert_eq!(code(&output), 0, "{}", said(&output));
+    assert!(
+        took < std::time::Duration::from_secs(4),
+        "three steps of 3, 1 and 2 seconds took {took:?}: they did not run at once"
+    );
+    assert_eq!(fixture.submitted(), ["s3:pass", "s1:pass", "s2:pass"]);
+    assert_eq!(
+        fixture.logs(),
+        ["diagnose-0-1.log", "diagnose-1-1.log", "diagnose-2-1.log"]
+    );
+}
+
+/// Strips from a snapshot what a run reads off the wall clock and the evidence ids, and nothing
+/// else: every `observed_at` and the engine's `produced_at` of an evidence record and `at` of an
+/// event (each a clock reading), and each evidence record's `id`, with every place that id is
+/// repeated (an event naming the record it submitted).
+fn without_minted(snapshot: &mut serde_json::Value) {
+    fn strip(value: &mut serde_json::Value, ids: &[String]) {
+        match value {
+            serde_json::Value::Object(map) => {
+                map.remove("observed_at");
+                map.values_mut().for_each(|inner| strip(inner, ids));
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(|inner| strip(inner, ids)),
+            serde_json::Value::String(text) if ids.contains(text) => {
+                "<evidence id>".clone_into(text);
+            }
+            _ => {}
+        }
+    }
+    let mut ids = Vec::new();
+    for recorded in snapshot["evidence"]
+        .as_array_mut()
+        .expect("the snapshot lists its evidence")
+    {
+        let record = recorded["record"]
+            .as_object_mut()
+            .expect("a recorded evidence holds its record");
+        let id = record.remove("id").expect("an evidence record has an id");
+        ids.push(id.as_str().expect("an evidence id is a string").to_owned());
+        record
+            .remove("produced_at")
+            .expect("an evidence record has the engine's clock reading");
+    }
+    for event in snapshot["events"]
+        .as_array_mut()
+        .expect("the snapshot lists its events")
+    {
+        event
+            .as_object_mut()
+            .expect("an event is an object")
+            .remove("at")
+            .expect("an event has the engine's clock reading");
+    }
+    strip(snapshot, &ids);
+}
+
+#[test]
+fn ten_concurrent_runs_record_the_same_snapshot_but_for_what_the_clock_mints() {
+    let steps = [
+        sh_step("sleep 0.3", "s3", ""),
+        sh_step("sleep 0.1", "s1", ""),
+        sh_step("sleep 0.2", "s2", ""),
+    ]
+    .concat();
+    let mut seen: Option<String> = None;
+    for round in 0..10 {
+        let fixture = Collecting::new(&format!("determinism-{round}"), true, &steps);
+        let output = fixture.drive(&["run"], &[]);
+        assert_eq!(code(&output), 0, "{}", said(&output));
+        let mut snapshot = fixture.document("snapshot.json");
+        without_minted(&mut snapshot);
+        let text = serde_json::to_string(&snapshot).expect("a snapshot serializes");
+        match &seen {
+            Some(first) => assert_eq!(&text, first, "round {round} differs"),
+            None => seen = Some(text),
+        }
+    }
+}
+
+#[test]
+fn a_driver_killed_mid_batch_submits_nothing_and_retries_the_batch_with_its_attempts() {
+    let steps = [
+        sh_step("sleep 1", "s0", ""),
+        sh_step(
+            "test -f killed || { touch killed; kill -9 $PPID; }",
+            "s1",
+            "",
+        ),
+    ]
+    .concat();
+    let fixture = Collecting::new("interrupted", true, &steps);
+    let output = fixture.drive(&["run"], &[]);
+    assert_eq!(
+        output.status.code(),
+        None,
+        "the driver was killed: {}",
+        said(&output)
+    );
+    assert!(
+        fixture.submitted().is_empty(),
+        "nothing of the batch is submitted"
+    );
+    let cursor = fixture.document("cursor.json");
+    assert_eq!(
+        cursor["in_flight"]["step"], 0,
+        "the batch is named by its first step: {cursor}"
+    );
+    let id = cursor["in_flight"]["id"]
+        .as_str()
+        .expect("the in-flight attempt has an id")
+        .to_owned();
+
+    let output = fixture.drive(
+        &["resume", "COLLECT-1/1"],
+        &["--retry-in-flight", &id, "--take-lock"],
+    );
+    assert_eq!(code(&output), 0, "{}", said(&output));
+    assert_eq!(
+        fixture.logs(),
+        ["diagnose-0-1.log", "diagnose-1-1.log"],
+        "the retry keeps the attempts already charged"
+    );
+    assert_eq!(fixture.submitted(), ["s0:pass", "s1:pass"]);
+}
+
+#[test]
+fn a_retry_inside_a_batch_advances_only_its_own_attempt() {
+    let steps = [
+        sh_step(
+            "test -f once || { touch once; kill -9 $$; }",
+            "s0",
+            "        retries: 1\n",
+        ),
+        sh_step("sleep 1", "s1", ""),
+    ]
+    .concat();
+    let fixture = Collecting::new("retried", true, &steps);
+    let output = fixture.drive(&["run"], &[]);
+    assert_eq!(code(&output), 0, "{}", said(&output));
+    assert_eq!(
+        fixture.logs(),
+        ["diagnose-0-1.log", "diagnose-0-2.log", "diagnose-1-1.log"]
+    );
+    assert_eq!(fixture.submitted(), ["s0:pass", "s1:pass"]);
+}
+
+#[test]
+fn a_batch_whose_step_spends_its_retries_submits_its_siblings_and_stops() {
+    let steps = [
+        sh_step("kill -9 $$", "s0", "        retries: 0\n"),
+        sh_step("exit 0", "s1", ""),
+    ]
+    .concat();
+    let fixture = Collecting::new("exhausted", true, &steps);
+    let output = fixture.drive(&["run"], &[]);
+    assert_eq!(code(&output), 1, "{}", said(&output));
+    assert_eq!(fixture.submitted(), ["s1:pass"]);
+    assert_eq!(
+        fixture.document("cursor.json")["status"],
+        "budget_exhausted"
+    );
+}
+
+#[test]
+fn steps_sharing_a_dependency_inside_a_batch_trip_the_breaker_as_a_serial_run_would() {
+    let store = "        depends_on: store\n        circuit_breaker: 1\n        retries: 1\n";
+    let steps = [
+        sh_step("kill -9 $$", "s0", store),
+        sh_step("kill -9 $$", "s1", store),
+        sh_step("sleep 1", "s2", ""),
+    ]
+    .concat();
+    let fixture = Collecting::new("breaker", true, &steps);
+    let output = fixture.drive(&["run"], &[]);
+    let text = said(&output);
+    assert_eq!(
+        fixture.logs(),
+        ["diagnose-0-1.log", "diagnose-2-1.log"],
+        "{text}"
+    );
+    assert!(
+        text.contains("was not attempted: `store` has failed 1 time(s)"),
+        "step 1 is skipped by the open circuit:\n{text}"
+    );
+    assert_eq!(fixture.submitted(), ["s2:pass"]);
+}
+
+#[test]
+fn an_operator_step_is_a_barrier_in_a_concurrent_state() {
+    let steps = [
+        sh_step("exit 0", "a", ""),
+        "      - kind: operator\n        prompt: look at what was collected\n".to_owned(),
+        sh_step("exit 0", "b", ""),
+    ]
+    .concat();
+    let fixture = Collecting::new("operator-barrier", true, &steps);
+    let output = fixture.drive(&["run"], &["--pause-on-approval"]);
+    assert_eq!(code(&output), 0, "{}", said(&output));
+    assert_eq!(
+        fixture.document("cursor.json")["status"],
+        "awaiting_operator"
+    );
+    assert_eq!(
+        fixture.logs(),
+        ["diagnose-0-1.log"],
+        "b waits for the person"
+    );
+}
+
+#[test]
+fn a_failing_step_in_a_batch_does_not_cancel_its_sibling() {
+    let steps = [sh_step("exit 1", "s0", ""), sh_step("exit 0", "s1", "")].concat();
+    let fixture = Collecting::new("no-cancel", true, &steps);
+    let output = fixture.drive(&["run"], &[]);
+    assert_eq!(
+        fixture.submitted(),
+        ["s0:fail", "s1:pass"],
+        "{}",
+        said(&output)
+    );
+}
+
+#[test]
+fn the_shipped_maps_declare_no_concurrent_state() {
+    for map in [
+        "drivers/development/default.yaml",
+        "drivers/development/checks.yaml",
+    ] {
+        let text = std::fs::read_to_string(root().join(map)).expect("a shipped map");
+        assert!(
+            !text.contains("concurrent"),
+            "{map} runs its steps one at a time"
+        );
+    }
+}
+
+/// A host whose `llm` step looks at the run directory instead of calling a model.
+mod stub_host {
+    use std::path::Path;
+    use std::sync::{Arc, Mutex};
+
+    use aep_cli::drive::{ExecutionHost, Inputs, Launch, PreparedExecution};
+    use aep_driver::executor::{LlmStepExecutor, StepAuthorizer, StepContext, StepOutcome};
+    use aep_driver_spec::map::LlmStep;
+
+    /// Which files existed when the `llm` step was launched.
+    pub type Seen = Arc<Mutex<Vec<(String, bool)>>>;
+
+    pub struct Looking {
+        pub seen: Seen,
+        pub files: Vec<String>,
+    }
+
+    impl ExecutionHost for Looking {
+        fn prepare(
+            &self,
+            _: &Inputs,
+            _: Option<&Launch>,
+            _: Option<&str>,
+            _: Option<&str>,
+        ) -> anyhow::Result<PreparedExecution> {
+            let seen = Arc::clone(&self.seen);
+            let files = self.files.clone();
+            Ok(PreparedExecution {
+                launch_fields: std::collections::BTreeMap::new(),
+                protocol_binary: None,
+                executor: Box::new(move |_, _| {
+                    Ok(Box::new(Executor { seen, files }) as Box<dyn LlmStepExecutor>)
+                }),
+            })
+        }
+    }
+
+    struct Executor {
+        seen: Seen,
+        files: Vec<String>,
+    }
+
+    impl LlmStepExecutor for Executor {
+        fn run_llm(
+            &mut self,
+            _: &LlmStep,
+            context: &StepContext<'_>,
+            _: StepAuthorizer<'_>,
+        ) -> StepOutcome {
+            let mut seen = self.seen.lock().expect("one step at a time");
+            for file in &self.files {
+                seen.push((
+                    file.clone(),
+                    Path::new(context.run_directory).join(file).exists(),
+                ));
+            }
+            StepOutcome::Nothing
+        }
+    }
+}
+
+#[test]
+fn an_llm_step_runs_after_every_command_before_it_and_before_any_after_it() {
+    use clap::Parser as _;
+
+    #[derive(clap::Parser)]
+    struct Run {
+        #[command(flatten)]
+        args: aep_cli::drive::RunArgs,
+    }
+
+    let output = |file: &str| format!("        output: {file}\n");
+    let steps = [
+        sh_step("sleep 1; echo a", "a", &output("a.txt")),
+        sh_step("echo b", "b", &output("b.txt")),
+        "      - kind: llm\n        prompt: read what was collected\n        judgement: which \
+         collected line matters is a reading no command performs\n"
+            .to_owned(),
+        sh_step("echo c", "c", &output("c.txt")),
+    ]
+    .concat();
+    let fixture = Collecting::new("llm-barrier", true, &steps);
+    let mut argv = vec!["run".to_owned()];
+    argv.extend(fixture.location());
+    argv.push("--allow-evidence-gap".to_owned());
+    let run = Run::try_parse_from(argv).expect("the arguments parse");
+    let host = stub_host::Looking {
+        seen: stub_host::Seen::default(),
+        files: vec!["a.txt".to_owned(), "b.txt".to_owned(), "c.txt".to_owned()],
+    };
+    aep_cli::drive::start_with_host(&run.args, &host).expect("the run reports");
+    let seen = host.seen.lock().expect("the run has ended").clone();
+    assert_eq!(
+        seen,
+        [
+            ("a.txt".to_owned(), true),
+            ("b.txt".to_owned(), true),
+            ("c.txt".to_owned(), false)
+        ],
+        "the llm step waits for the batch before it and runs before the one after it"
     );
 }

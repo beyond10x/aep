@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact spend response",
+  "description": "Report spend per task kind and figure against the project's baseline and target.",
+  "x-ess-name": "aep.evidence.ReportSpend",
+  "x-ess-kind": "command-response",
+  "type": "object",
+  "properties": {
+    "rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/aep.evidence.SpendRow"
+      }
+    }
+  },
+  "required": [
+    "rows"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:3f081a2f8223e83bca2d5628a9fd02e557f3e4cb2b856dd1e34bfa82f3e2187f",
+    "regenerate": "ess generate"
+  },
+  "$defs": {
+    "aep.evidence.SpendRow": {
+      "title": "SpendRow",
+      "x-ess-name": "aep.evidence.SpendRow",
+      "x-ess-kind": "struct",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "description": "The kind of the artifacts the row is over, as their `task_spend` records name it.",
+          "type": "string"
+        },
+        "figure": {
+          "$ref": "#/$defs/aep.plan.SpendFigure"
+        },
+        "tasks": {
+          "description": "Artifacts of the kind with a `task_spend` record, each counted once.",
+          "type": "integer"
+        },
+        "skipped": {
+          "description": "Of those, the artifacts whose figure is unknown; they take no part in the median.",
+          "type": "integer"
+        },
+        "median": {
+          "description": "The lower median over the others; absent, printed `unknown`, when none states it.",
+          "type": "integer"
+        },
+        "baseline": {
+          "description": "The project file's `spend.<kind>.<figure>.baseline`; absent, printed `none`.",
+          "type": "integer"
+        },
+        "target": {
+          "description": "The project file's `spend.<kind>.<figure>.target`; absent, printed `none`.",
+          "type": "integer"
+        },
+        "standing": {
+          "$ref": "#/$defs/aep.evidence.SpendStanding"
+        }
+      },
+      "required": [
+        "kind",
+        "figure",
+        "tasks",
+        "skipped",
+        "standing"
+      ],
+      "additionalProperties": false,
+      "x-ess-invariants": [
+        "skipped <= tasks"
+      ]
+    },
+    "aep.evidence.SpendStanding": {
+      "title": "SpendStanding",
+      "x-ess-name": "aep.evidence.SpendStanding",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "under",
+        "at",
+        "over",
+        "unknown",
+        "undeclared"
+      ]
+    },
+    "aep.plan.SpendFigure": {
+      "title": "SpendFigure",
+      "x-ess-name": "aep.plan.SpendFigure",
+      "x-ess-kind": "enum",
+      "type": "string",
+      "enum": [
+        "model_calls",
+        "total_tokens",
+        "cost_micro_usd",
+        "wall_time_ms",
+        "llm_steps_run"
+      ]
+    }
+  }
+}

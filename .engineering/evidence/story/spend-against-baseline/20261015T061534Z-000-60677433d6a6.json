@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-15T06:15:34Z",
+  "actor": "human:timo",
+  "artifact": "story:spend-against-baseline",
+  "kind": "story",
+  "revision": 3,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "round 3 scope findings resolved in the revised body; rechecked by critic round 4",
+    "review": "review-result:detflow-scope-round-3",
+    "outcome": "fixed"
+  }
+}

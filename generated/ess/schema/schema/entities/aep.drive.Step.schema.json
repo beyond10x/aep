@@ -40,6 +40,10 @@
         "$ref": "#/$defs/aep.drive.InputName"
       }
     },
+    "concurrent": {
+      "description": "Whether the step's state declares `concurrent: true`. In such a state each maximal run of consecutive `command` steps is one batch whose steps run at once and whose results are submitted in map order; an `llm` or `operator` step is a barrier between batches.",
+      "type": "boolean"
+    },
     "state": {
       "$ref": "#/$defs/aep.drive.Step.State"
     }
@@ -51,14 +55,15 @@
     "kind",
     "expect",
     "inputs_named",
+    "concurrent",
     "state"
   ],
   "additionalProperties": false,
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",
-    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
-    "contract_digest": "slice-sha256/2:7f70f6fb2ea80276310cddea7a6be842493503828c3831d2bfcc1cf8e2ea0b1b",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:9bf96ee89f90f0ab878a6802f775511e0df7d11f62da82b100acded5131c13bc",
     "regenerate": "ess generate"
   },
   "$defs": {

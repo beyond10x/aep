@@ -263,6 +263,55 @@
       "x-ess-kind": "event-payload",
       "x-ess-name": "aep.evidence.SpendRecorded"
     },
+    "aep.evidence.SpendRow": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline": {
+          "description": "The project file's `spend.<kind>.<figure>.baseline`; absent, printed `none`.",
+          "type": "integer"
+        },
+        "figure": {
+          "$ref": "#/$defs/aep.plan.SpendFigure"
+        },
+        "kind": {
+          "description": "The kind of the artifacts the row is over, as their `task_spend` records name it.",
+          "type": "string"
+        },
+        "median": {
+          "description": "The lower median over the others; absent, printed `unknown`, when none states it.",
+          "type": "integer"
+        },
+        "skipped": {
+          "description": "Of those, the artifacts whose figure is unknown; they take no part in the median.",
+          "type": "integer"
+        },
+        "standing": {
+          "$ref": "#/$defs/aep.evidence.SpendStanding"
+        },
+        "target": {
+          "description": "The project file's `spend.<kind>.<figure>.target`; absent, printed `none`.",
+          "type": "integer"
+        },
+        "tasks": {
+          "description": "Artifacts of the kind with a `task_spend` record, each counted once.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "figure",
+        "tasks",
+        "skipped",
+        "standing"
+      ],
+      "title": "SpendRow",
+      "type": "object",
+      "x-ess-invariants": [
+        "skipped <= tasks"
+      ],
+      "x-ess-kind": "struct",
+      "x-ess-name": "aep.evidence.SpendRow"
+    },
     "aep.evidence.SpendSource": {
       "enum": [
         "transcript",
@@ -273,6 +322,19 @@
       "type": "string",
       "x-ess-kind": "enum",
       "x-ess-name": "aep.evidence.SpendSource"
+    },
+    "aep.evidence.SpendStanding": {
+      "enum": [
+        "under",
+        "at",
+        "over",
+        "unknown",
+        "undeclared"
+      ],
+      "title": "SpendStanding",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.evidence.SpendStanding"
     },
     "aep.evidence.SuiteKind": {
       "enum": [
@@ -400,6 +462,70 @@
       "type": "string",
       "x-ess-kind": "enum",
       "x-ess-name": "aep.plan.ScopeSource"
+    },
+    "aep.plan.SpendBound": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline": {
+          "description": "The median a person copied from `aep plan artifact spend --baseline <n>`.",
+          "type": "integer"
+        },
+        "target": {
+          "description": "The median the project aims for, strictly below the baseline.",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "baseline",
+        "target"
+      ],
+      "title": "SpendBound",
+      "type": "object",
+      "x-ess-invariants": [
+        "target >= 0",
+        "target < baseline"
+      ],
+      "x-ess-kind": "struct",
+      "x-ess-name": "aep.plan.SpendBound"
+    },
+    "aep.plan.SpendBoundWritten": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "target": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "baseline",
+        "target"
+      ],
+      "title": "SpendBoundWritten",
+      "type": "object",
+      "x-ess-invariants": [
+        "baseline >= 0",
+        "target >= 0"
+      ],
+      "x-ess-kind": "struct",
+      "x-ess-name": "aep.plan.SpendBoundWritten"
+    },
+    "aep.plan.SpendFigure": {
+      "enum": [
+        "model_calls",
+        "total_tokens",
+        "cost_micro_usd",
+        "wall_time_ms",
+        "llm_steps_run"
+      ],
+      "title": "SpendFigure",
+      "type": "string",
+      "x-ess-kind": "enum",
+      "x-ess-name": "aep.plan.SpendFigure"
     },
     "aep.plan.SqliteStore": {
       "additionalProperties": false,
@@ -566,8 +692,8 @@
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "x-ess-provenance": {
-    "contract_digest": "slice-sha256/2:dfb2c7d582256341a1e1f78bb0a9631b5e23e20e359d280a292e246ea9d88acc",
-    "source_digest": "e418908b4d756a363f8c7d311d1cf04cf6797f17152b3b74a8b8cb0c756321ef",
+    "contract_digest": "slice-sha256/2:e3c3174455ed520c33edaa3996ed7cea41c47081c9b72ae3aca9e418e3c7d9ec",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
     "specification_version": "v1",
     "system": "aep"
   }

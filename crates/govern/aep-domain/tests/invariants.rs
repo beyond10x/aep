@@ -52,6 +52,7 @@ const DOCUMENT_TYPES: &[(&str, &str)] = &[
     ("RawMember", "Member"),
     ("RawGit", "StoreConfig"),
     ("RawSqlite", "StoreConfig"),
+    ("RawSpendBound", "SpendBound"),
     ("RawPostgres", "StoreConfig"),
 ];
 

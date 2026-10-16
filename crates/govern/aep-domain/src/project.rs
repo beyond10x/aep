@@ -387,10 +387,353 @@ pub struct ProjectConfig {
         serialize_with = "date_as_written"
     )]
     pub findings_required_since: Option<CivilDate>,
+    /// The baseline and target per task kind and figure that `aep plan artifact spend` reports
+    /// each median against: `spend.<kind>.<figure>.{baseline,target}`.
+    ///
+    /// ```yaml
+    /// spend:
+    ///   story:
+    ///     model_calls: { baseline: 12, target: 10 }
+    /// ```
+    ///
+    /// Written by a person, from the medians `--baseline <n>` prints; no verb writes it.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub spend: BTreeMap<String, BTreeMap<SpendFigure, SpendBound>>,
 }
 
 /// The project key that opts a store in to requiring a `findings` block on every review.
 pub const FINDINGS_REQUIRED_SINCE: &str = "findings_required_since";
+
+/// The project key holding a baseline and a target per task kind and figure.
+pub const SPEND: &str = "spend";
+
+/// A figure of a `task_spend` record a project may hold a baseline and a target for:
+/// `aep.plan.SpendFigure`. Ordered as `aep plan artifact spend` prints them.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum SpendFigure {
+    /// Distinct API requests.
+    ModelCalls,
+    /// The total tokens.
+    TotalTokens,
+    /// The cost, in millionths of a US dollar.
+    CostMicroUsd,
+    /// The wall-clock duration in milliseconds.
+    WallTimeMs,
+    /// The llm step attempts a driven run began.
+    LlmStepsRun,
+}
+
+impl SpendFigure {
+    /// Every figure, in the specification's order.
+    pub const ALL: [Self; 5] = [
+        Self::ModelCalls,
+        Self::TotalTokens,
+        Self::CostMicroUsd,
+        Self::WallTimeMs,
+        Self::LlmStepsRun,
+    ];
+
+    /// The figure's name, as the project file and a `task_spend` record write it.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ModelCalls => "model_calls",
+            Self::TotalTokens => "total_tokens",
+            Self::CostMicroUsd => "cost_micro_usd",
+            Self::WallTimeMs => "wall_time_ms",
+            Self::LlmStepsRun => "llm_steps_run",
+        }
+    }
+
+    /// The figure `name` spells, or `None` for any other name.
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|figure| figure.as_str() == name)
+    }
+
+    /// This figure of `figures`, `None` when the record does not state it.
+    #[must_use]
+    pub const fn of(self, figures: &crate::evidence::SpendFigures) -> Option<u64> {
+        match self {
+            Self::ModelCalls => figures.model_calls,
+            Self::TotalTokens => figures.total_tokens,
+            Self::CostMicroUsd => figures.cost_micro_usd,
+            Self::WallTimeMs => figures.wall_time_ms,
+            Self::LlmStepsRun => figures.llm_steps_run,
+        }
+    }
+}
+
+/// One `spend.<kind>.<figure>` entry: `aep.plan.SpendBound`. Only built by validation, which
+/// holds the target strictly below the baseline.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct SpendBound {
+    /// What the project measured: a median copied from `aep plan artifact spend --baseline <n>`.
+    pub baseline: u64,
+    /// What it aims for, strictly below the baseline.
+    pub target: u64,
+}
+
+/// A `spend.<kind>.<figure>` entry as written, before [`SpendBound`] holds it.
+///
+/// Each value is held as written, so `-1`, `12.5` or `"12"` reaches validation and is refused
+/// naming the kind, the figure and the value beside every other defect, rather than failing the
+/// whole parse. The published schema (its hand-written [`schemars::JsonSchema`]) states what is
+/// accepted: both values required, each a non-negative integer.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawSpendBound {
+    /// The median measured, a non-negative integer. Required.
+    #[serde(default)]
+    pub baseline: Option<serde_json::Value>,
+    /// The median aimed for, a non-negative integer strictly below `baseline`. Required.
+    #[serde(default)]
+    pub target: Option<serde_json::Value>,
+}
+
+impl schemars::JsonSchema for RawSpendBound {
+    fn schema_name() -> String {
+        "RawSpendBound".to_owned()
+    }
+
+    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::{InstanceType, Metadata, ObjectValidation, Schema, SchemaObject};
+        let integer = generator.subschema_for::<u64>();
+        SchemaObject {
+            metadata: Some(Box::new(Metadata {
+                description: Some(
+                    "A `spend.<kind>.<figure>` entry: the median measured and the median aimed \
+                     for, both non-negative integers, the target strictly below the baseline."
+                        .to_owned(),
+                ),
+                ..Metadata::default()
+            })),
+            instance_type: Some(InstanceType::Object.into()),
+            object: Some(Box::new(ObjectValidation {
+                properties: [("baseline", &integer), ("target", &integer)]
+                    .into_iter()
+                    .map(|(name, schema)| (name.to_owned(), schema.clone()))
+                    .collect(),
+                required: ["baseline", "target"].map(ToOwned::to_owned).into(),
+                additional_properties: Some(Box::new(Schema::Bool(false))),
+                ..ObjectValidation::default()
+            })),
+            ..SchemaObject::default()
+        }
+        .into()
+    }
+}
+
+/// The `spend` mapping as written: task kind, then figure name, then the entry. A kind written
+/// with no value is `None`, refused rather than read as declaring nothing.
+pub type RawSpend = BTreeMap<String, Option<BTreeMap<String, RawSpendBound>>>;
+
+/// The published schema of `spend`: at least one kind, each with at least one of the five
+/// figures and no other name. Inlined, so a reader of the project schema sees the closed set at
+/// `properties.spend`.
+struct SpendSchema;
+
+impl schemars::JsonSchema for SpendSchema {
+    fn is_referenceable() -> bool {
+        false
+    }
+
+    fn schema_name() -> String {
+        "Spend".to_owned()
+    }
+
+    fn json_schema(generator: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+        use schemars::schema::{InstanceType, ObjectValidation, Schema, SchemaObject};
+        let bound = generator.subschema_for::<RawSpendBound>();
+        let per_kind: Schema = SchemaObject {
+            instance_type: Some(InstanceType::Object.into()),
+            object: Some(Box::new(ObjectValidation {
+                properties: SpendFigure::ALL
+                    .into_iter()
+                    .map(|figure| (figure.as_str().to_owned(), bound.clone()))
+                    .collect(),
+                min_properties: Some(1),
+                additional_properties: Some(Box::new(Schema::Bool(false))),
+                ..ObjectValidation::default()
+            })),
+            ..SchemaObject::default()
+        }
+        .into();
+        SchemaObject {
+            instance_type: Some(InstanceType::Object.into()),
+            object: Some(Box::new(ObjectValidation {
+                min_properties: Some(1),
+                additional_properties: Some(Box::new(per_kind)),
+                ..ObjectValidation::default()
+            })),
+            ..SchemaObject::default()
+        }
+        .into()
+    }
+}
+
+/// Reads a present `spend` key whatever its value: written with no value (empty, `~` or `null`)
+/// it is an empty mapping, which [`spend_bounds`] refuses naming the key; absent, it stays `None`
+/// by `#[serde(default)]`.
+fn spend_even_when_null<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<RawSpend>, D::Error> {
+    <Option<RawSpend> as serde::Deserialize>::deserialize(deserializer)
+        .map(|value| Some(value.unwrap_or_default()))
+}
+
+/// A `spend` value as written, when it is a non-negative integer.
+fn spend_value(written: Option<&serde_json::Value>) -> Result<u64, Option<String>> {
+    match written {
+        None | Some(serde_json::Value::Null) => Err(None),
+        Some(value) => value.as_u64().ok_or_else(|| Some(value.to_string())),
+    }
+}
+
+/// Holds every `spend` entry to its bound (`aep.plan.ReadSpendBound`), reporting each defect
+/// beside the others at `project.spend.<kind>.<figure>`.
+#[allow(clippy::too_many_lines)] // One pass accumulates every defect of every entry.
+fn spend_bounds(
+    raw: Option<RawSpend>,
+    errors: &mut ValidationErrors,
+) -> BTreeMap<String, BTreeMap<SpendFigure, SpendBound>> {
+    let figures = SpendFigure::ALL.map(SpendFigure::as_str).join(", ");
+    let mut spend = BTreeMap::new();
+    let Some(raw) = raw else {
+        return spend;
+    };
+    if raw.is_empty() {
+        errors.push(
+            ValidationError::new(
+                ValidationCode::MissingDeclaration,
+                format!("project.{SPEND}"),
+                format!(
+                    "`{SPEND}` is written with no kind under it, so it declares nothing; it is \
+                     refused rather than read as absent"
+                ),
+            )
+            .with_hint(format!(
+                "write `{SPEND}.<kind>.<figure>: {{ baseline: 12, target: 10 }}`, or remove the \
+                 key"
+            )),
+        );
+        return spend;
+    }
+    for (kind, entries) in raw {
+        let entries = entries.unwrap_or_default();
+        if entries.is_empty() {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::MissingDeclaration,
+                    format!("project.{SPEND}.{kind}"),
+                    format!(
+                        "`{SPEND}.{kind}` (kind `{kind}`) is written with no figure under it, so \
+                         it declares nothing; it is refused rather than read as absent"
+                    ),
+                )
+                .with_hint(format!(
+                    "bound one of {figures}, or remove `{SPEND}.{kind}`"
+                )),
+            );
+            continue;
+        }
+        let mut bounds = BTreeMap::new();
+        for (name, written) in entries {
+            let at = format!("project.{SPEND}.{kind}.{name}");
+            let Some(figure) = SpendFigure::parse(&name) else {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::TypeMismatch,
+                        at,
+                        format!(
+                            "`{SPEND}.{kind}` (kind `{kind}`) names `{name}`, which is not a \
+                             figure: a figure is one of {figures}"
+                        ),
+                    )
+                    .with_hint("bound one of the figures a `task_spend` record states"),
+                );
+                continue;
+            };
+            let values = [
+                ("baseline", spend_value(written.baseline.as_ref())),
+                ("target", spend_value(written.target.as_ref())),
+            ];
+            for (key, value) in &values {
+                if let Err(Some(text)) = value {
+                    errors.push(
+                        ValidationError::new(
+                            ValidationCode::TypeMismatch,
+                            at.clone(),
+                            format!(
+                                "`{SPEND}.{kind}.{name}` (kind `{kind}`, figure `{name}`) has \
+                                 {key} `{text}`, which is not a non-negative integer"
+                            ),
+                        )
+                        .with_hint("write a whole number of the figure's unit, as `12`"),
+                    );
+                }
+            }
+            let missing: Vec<&str> = values
+                .iter()
+                .filter(|(_, value)| matches!(value, Err(None)))
+                .map(|(key, _)| *key)
+                .collect();
+            if !missing.is_empty() {
+                let stated: Vec<String> = values
+                    .iter()
+                    .filter_map(|(key, value)| {
+                        value.as_ref().ok().map(|value| format!("{key} {value}"))
+                    })
+                    .collect();
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::MissingDeclaration,
+                        at.clone(),
+                        format!(
+                            "`{SPEND}.{kind}.{name}` (kind `{kind}`, figure `{name}`) has no \
+                             `{}`{}",
+                            missing.join("` and no `"),
+                            if stated.is_empty() {
+                                String::new()
+                            } else {
+                                format!(" beside its {}", stated.join(" and "))
+                            }
+                        ),
+                    )
+                    .with_hint("write both, as `{ baseline: 12, target: 10 }`"),
+                );
+            }
+            let [(_, Ok(baseline)), (_, Ok(target))] = values else {
+                continue;
+            };
+            if target >= baseline {
+                errors.push(
+                    ValidationError::new(
+                        ValidationCode::ConflictingDeclaration,
+                        at,
+                        format!(
+                            "`{SPEND}.{kind}.{name}` (kind `{kind}`, figure `{name}`) has target \
+                             {target}, which is not below its baseline {baseline}"
+                        ),
+                    )
+                    .with_hint(
+                        "a target is a median the project aims for below the one it measured; \
+                         lower the target or raise the baseline",
+                    ),
+                );
+                continue;
+            }
+            bounds.insert(figure, SpendBound { baseline, target });
+        }
+        if !bounds.is_empty() {
+            spend.insert(kind, bounds);
+        }
+    }
+    spend
+}
 
 /// A date as the project file spells it, `YYYY-MM-DD`, rather than as its three numbers.
 #[allow(clippy::ref_option)] // `serialize_with` hands the field over by reference, as it is.
@@ -413,6 +756,15 @@ impl ProjectConfig {
     #[must_use]
     pub fn findings_required_from(&self) -> Option<Timestamp> {
         self.findings_required_since.map(CivilDate::to_timestamp)
+    }
+
+    /// The baseline and target the project declares for `figure` of artifacts of `kind`, or `None`.
+    #[must_use]
+    pub fn spend_bound(&self, kind: &str, figure: SpendFigure) -> Option<SpendBound> {
+        self.spend
+            .get(kind)
+            .and_then(|bounds| bounds.get(&figure))
+            .copied()
     }
 
     /// The URL for `reference`, when this project declares how to build one.
@@ -743,6 +1095,14 @@ pub struct RawProjectConfig {
     #[serde(default, deserialize_with = "written_even_when_null")]
     #[schemars(with = "String")]
     pub findings_required_since: Option<Written>,
+    /// A baseline and a target per task kind and figure, `spend.<kind>.<figure>.{baseline,target}`.
+    /// Each figure is one of `model_calls`, `total_tokens`, `cost_micro_usd`, `wall_time_ms` and
+    /// `llm_steps_run`; both values are required and the target is strictly below the baseline.
+    /// Written with no value (empty, `~` or `null`), or a kind written with no figure, it is
+    /// refused rather than read as absent.
+    #[serde(default, deserialize_with = "spend_even_when_null")]
+    #[schemars(with = "SpendSchema")]
+    pub spend: Option<RawSpend>,
 }
 
 /// A present key's value as written, keeping a key written with a null value apart from an absent
@@ -981,6 +1341,8 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             }
         });
 
+        let spend = spend_bounds(raw.spend, &mut errors);
+
         let config = Self {
             version,
             protocol: raw.protocol,
@@ -991,6 +1353,7 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
             store,
             providers,
             findings_required_since,
+            spend,
         };
         errors.into_result(config)
     }
@@ -1585,5 +1948,212 @@ artefacts: graph.yaml
         let absent = config(BASE).expect("the key is optional");
         assert_eq!(absent.findings_required_since, None);
         assert_eq!(absent.findings_required_from(), None);
+    }
+
+    /// `spend` is read by task kind, then figure, and each entry keeps both values
+    /// (`aep.plan.Project.spend`, story:spend-against-baseline). Absent, nothing is declared.
+    #[test]
+    fn a_spend_entry_is_read_by_kind_and_figure() {
+        let parsed = config(&format!(
+            "{BASE}spend:\n  story:\n    model_calls: {{ baseline: 12, target: 10 }}\n    \
+             cost_micro_usd: {{ baseline: 4200000, target: 3500000 }}\n"
+        ))
+        .expect("two entries whose targets are below their baselines are accepted");
+        assert_eq!(
+            parsed.spend_bound("story", SpendFigure::ModelCalls),
+            Some(SpendBound {
+                baseline: 12,
+                target: 10
+            })
+        );
+        assert_eq!(
+            parsed.spend_bound("story", SpendFigure::CostMicroUsd),
+            Some(SpendBound {
+                baseline: 4_200_000,
+                target: 3_500_000
+            })
+        );
+        assert_eq!(parsed.spend_bound("story", SpendFigure::WallTimeMs), None);
+        assert_eq!(parsed.spend_bound("task", SpendFigure::ModelCalls), None);
+        assert!(config(BASE).expect("the key is optional").spend.is_empty());
+    }
+
+    /// `aep.plan.ReadSpendBound/outcome/target-not-below-baseline`: the refusal names the kind,
+    /// the figure and both values, at the entry's own location.
+    #[test]
+    fn a_spend_target_not_below_its_baseline_is_refused_naming_kind_figure_and_values() {
+        for (baseline, target) in [(25, 25), (10, 12)] {
+            let errors = config(&format!(
+                "{BASE}spend:\n  story:\n    model_calls: {{ baseline: {baseline}, target: {target} }}\n"
+            ))
+            .expect_err("a target not strictly below its baseline is no target");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.spend.story.model_calls")
+                .unwrap_or_else(|| panic!("no refusal at the entry: {errors:?}"));
+            assert_eq!(error.code, ValidationCode::ConflictingDeclaration);
+            for named in [
+                "`story`".to_owned(),
+                "`model_calls`".to_owned(),
+                format!("target {target}"),
+                format!("baseline {baseline}"),
+            ] {
+                assert!(error.message.contains(&named), "{named}: {}", error.message);
+            }
+        }
+    }
+
+    /// A figure outside the five a project may bound is refused naming it, and the rest of the
+    /// file is still reported.
+    #[test]
+    fn an_unknown_spend_figure_is_refused_naming_it() {
+        let errors = config(&format!(
+            "{BASE}spend:\n  story:\n    tokens: {{ baseline: 25, target: 10 }}\n"
+        ))
+        .expect_err("`tokens` is not a figure");
+        let error = errors
+            .as_slice()
+            .iter()
+            .find(|error| error.location == "project.spend.story.tokens")
+            .unwrap_or_else(|| panic!("no refusal at the entry: {errors:?}"));
+        assert!(error.message.contains("`tokens`"), "{}", error.message);
+        assert!(error.message.contains("model_calls"), "{}", error.message);
+    }
+
+    /// An entry with one value is refused naming the kind, the figure and the value it lacks;
+    /// neither value is guessed.
+    #[test]
+    fn a_spend_entry_missing_a_value_is_refused_naming_it() {
+        for (written, missing) in [
+            ("{ baseline: 25 }", "target"),
+            ("{ target: 10 }", "baseline"),
+            ("{}", "baseline"),
+        ] {
+            let errors = config(&format!(
+                "{BASE}spend:\n  story:\n    model_calls: {written}\n"
+            ))
+            .expect_err("both values are required");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.spend.story.model_calls")
+                .unwrap_or_else(|| panic!("no refusal at the entry: {errors:?}"));
+            assert_eq!(error.code, ValidationCode::MissingDeclaration);
+            assert!(
+                error.message.contains(&format!("no `{missing}`")),
+                "{written}: {}",
+                error.message
+            );
+        }
+    }
+
+    /// A value that is not a non-negative integer is refused naming the kind, the figure, the key
+    /// and the value as written; it is neither truncated, parsed from text nor read as absent.
+    #[test]
+    fn a_spend_value_that_is_not_a_non_negative_integer_is_refused_naming_it() {
+        for (written, key, shown) in [
+            ("{ baseline: -1, target: 10 }", "baseline", "`-1`"),
+            ("{ baseline: 25, target: 12.5 }", "target", "`12.5`"),
+            ("{ baseline: \"12\", target: 10 }", "baseline", "`\"12\"`"),
+        ] {
+            let errors = config(&format!(
+                "{BASE}spend:\n  story:\n    model_calls: {written}\n"
+            ))
+            .expect_err("a value is a non-negative integer");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.spend.story.model_calls")
+                .unwrap_or_else(|| panic!("{written}: no refusal at the entry: {errors:?}"));
+            assert_eq!(error.code, ValidationCode::TypeMismatch, "{written}");
+            for named in [
+                "`story`",
+                "`model_calls`",
+                key,
+                shown,
+                "non-negative integer",
+            ] {
+                assert!(
+                    error.message.contains(named),
+                    "{written}: {named}: {}",
+                    error.message
+                );
+            }
+        }
+    }
+
+    /// `spend` written with no value, or with an empty mapping, declares nothing and is refused
+    /// naming the key, as `findings_required_since` written with no value is; so is a kind written
+    /// with no figure under it.
+    #[test]
+    fn a_spend_key_or_kind_written_empty_is_refused_naming_it() {
+        for written in ["spend:\n", "spend: ~\n", "spend: null\n", "spend: {}\n"] {
+            let errors = config(&format!("{BASE}{written}"))
+                .expect_err("an empty `spend` is refused, never read as absent");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.spend")
+                .unwrap_or_else(|| panic!("{written}: no refusal at the key: {errors:?}"));
+            assert_eq!(error.code, ValidationCode::MissingDeclaration, "{written}");
+            assert!(
+                error.message.contains("`spend`"),
+                "{written}: {}",
+                error.message
+            );
+        }
+        for written in ["spend:\n  story:\n", "spend:\n  story: {}\n"] {
+            let errors =
+                config(&format!("{BASE}{written}")).expect_err("a kind with no figure is refused");
+            let error = errors
+                .as_slice()
+                .iter()
+                .find(|error| error.location == "project.spend.story")
+                .unwrap_or_else(|| panic!("{written}: no refusal at the kind: {errors:?}"));
+            assert_eq!(error.code, ValidationCode::MissingDeclaration, "{written}");
+            assert!(
+                error.message.contains("`story`"),
+                "{written}: {}",
+                error.message
+            );
+        }
+    }
+
+    /// The five figures, in the order `aep plan artifact spend` prints them, each read from the
+    /// record figure of the same name.
+    #[test]
+    fn every_spend_figure_names_a_record_figure() {
+        let spelled: Vec<&str> = SpendFigure::ALL
+            .iter()
+            .map(|figure| figure.as_str())
+            .collect();
+        assert_eq!(
+            spelled,
+            [
+                "model_calls",
+                "total_tokens",
+                "cost_micro_usd",
+                "wall_time_ms",
+                "llm_steps_run"
+            ]
+        );
+        let figures = crate::evidence::SpendFigures {
+            model_calls: Some(1),
+            total_tokens: Some(2),
+            cost_micro_usd: Some(3),
+            wall_time_ms: Some(4),
+            llm_steps_run: Some(5),
+            ..crate::evidence::SpendFigures::default()
+        };
+        for figure in SpendFigure::ALL {
+            let named = figures
+                .named()
+                .into_iter()
+                .find(|(name, _)| *name == figure.as_str())
+                .map(|(_, value)| value);
+            assert_eq!(Some(figure.of(&figures)), named, "{}", figure.as_str());
+            assert_eq!(SpendFigure::parse(figure.as_str()), Some(figure));
+        }
     }
 }

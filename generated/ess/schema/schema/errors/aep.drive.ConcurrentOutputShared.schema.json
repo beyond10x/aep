@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ConcurrentOutputShared payload",
+  "description": "Two `command` steps of one `concurrent: true` state that write the same `output:`, compared in any ASCII case as a reserved name is (a darwin release target's file system ignores case). Run at once they would race for one file in the run directory, where a serial run lets the later one win deterministically. The refusal's code is `unsupported_construct` at the later step's `output`, and its message names both step paths (map.rs `StepMap::try_from`).",
+  "x-ess-name": "aep.drive.ConcurrentOutputShared",
+  "x-ess-kind": "error-payload",
+  "type": "object",
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:74d536569517e95873071946baf7f7cd368db8a3d6caa348aaa514aef70cccc4",
+    "regenerate": "ess generate"
+  }
+}

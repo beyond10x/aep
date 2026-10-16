@@ -366,6 +366,45 @@ is closed, so a misspelling is refused at load rather than handed to a program a
 and so is a `{transcript}` in a state with no `llm` step before it. `{}` and `{a: .b}` match nothing
 and stay ordinary text, because `find -exec` and `jq` write them.
 
+A state may declare `concurrent: true`. Each maximal run of consecutive `command` steps in it is
+then one batch: its steps run at once, and their results are submitted in map order once every
+one of them has ended. An `llm` or `operator` step is a barrier: it runs after every command step
+before it has ended, and the command steps after it form the next batch. Steps naming the same
+`depends_on` run one after another, in map order, inside their batch, so the circuit breaker reads
+the failure count a serial run would give it. A step's `retries` are spent inside its batch, and a
+failed step cancels none of its siblings; a step that spends its retries with no verdict still
+lets its siblings' verdicts in, and the run then stops `budget-exhausted` at that step; a resume
+runs the rest of the batch and never reruns a sibling already submitted. A step is charged its
+attempt when it is first put to run, after the circuit breaker is read, as a serial run charges
+it, and one in-flight marker, named by the batch's first step and its current attempt, stands for
+the whole batch: a driver interrupted mid-batch has submitted nothing, and `aep drive resume
+--retry-in-flight <id>` reruns every step it had charged under the attempt numbers already
+charged. Two command steps of one concurrent state that write the same `output:` (in any
+ASCII case) would race for one file, and are refused at load with `unsupported_construct` at the
+later step's `output`, naming both steps. A state without the key runs one step at a time, and its
+map digests as it did before the key existed.
+
+```yaml
+states:
+  diagnose:
+    concurrent: true
+    steps:
+      - kind: command            # these three run at once
+        run: [sh, -c, "journalctl -u app --since -1h"]
+        output: journal.txt
+      - kind: command
+        run: [sh, -c, "curl -s localhost:9090/trace"]
+        output: trace.txt
+      - kind: command
+        run: [aep, plan, artifact, list]
+        output: store.txt
+      - kind: llm                # runs once all three have ended
+        judgement: Which collected line explains the failure is a reading no command performs.
+        context: ["{run_directory}/journal.txt", "{run_directory}/trace.txt"]
+        prompt: >-
+          …
+```
+
 `{task}` exists because a map is written once and driven many times: a verb that binds to *this
 run's* task — `aep observe specification evidence --task {task}` is the one that ships — had no way to
 be told which document that was, and fell back to the task `project.yaml` names. It is absolute

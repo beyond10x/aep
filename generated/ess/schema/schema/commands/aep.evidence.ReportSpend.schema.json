@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "aep plan artifact spend input",
+  "description": "Report spend per task kind and figure against the project's baseline and target.",
+  "x-ess-name": "aep.evidence.ReportSpend",
+  "x-ess-kind": "command-input",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "description": "`--kind <k>`: only rows of that task kind.",
+      "type": "string"
+    },
+    "since": {
+      "description": "`--since <date>`: only records whose `at` is at or after 00:00 UTC of that day.",
+      "type": "string"
+    },
+    "since_is_date": {
+      "type": "boolean"
+    },
+    "baseline": {
+      "description": "`--baseline <n>`: each median over the first `n` artifacts of each kind.",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "since_is_date"
+  ],
+  "additionalProperties": false,
+  "x-ess-provenance": {
+    "system": "aep",
+    "specification_version": "v1",
+    "source_digest": "702c06259816c8c84f241731b1cd316d3ea60b5307c6d63719e459f4ef07b0ab",
+    "contract_digest": "slice-sha256/2:3f081a2f8223e83bca2d5628a9fd02e557f3e4cb2b856dd1e34bfa82f3e2187f",
+    "regenerate": "ess generate"
+  }
+}
