@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:spend-against-baseline
 kind: story
-status: active
+status: implemented
 title: Spend per task kind is reported against a baseline and a target
 relations:
 - decomposes: epic:deterministic-delivery-workflows
@@ -23,10 +23,11 @@ scope:
   path: ess/domains/plan.yaml
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-15T06:23:57Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":8}}}
 - {from: "proposed", to: "active", at: "2026-10-15T06:23:57Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":8}}}
+- {from: "active", to: "implemented", at: "2026-10-16T01:52:56Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1,"review_outcome":9}}}
 ---
 # Story: Spend per task kind is reported against a baseline and a target
 

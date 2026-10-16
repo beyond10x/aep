@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:bugfix-workflow
 kind: story
-status: active
+status: implemented
 title: A bug fix runs as a workflow with model calls only at diagnose and fix
 relations:
 - decomposes: epic:deterministic-delivery-workflows
@@ -21,10 +21,11 @@ scope:
   path: generated/instructions/bugfix/standard.md
 - confidence: cited
   path: workflows/bugfix/standard.yaml
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-15T06:23:58Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":9}}}
 - {from: "proposed", to: "active", at: "2026-10-15T06:23:58Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":9}}}
+- {from: "active", to: "implemented", at: "2026-10-16T01:52:58Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":9}}}
 ---
 # Story: A bug fix runs as a workflow with model calls only at diagnose and fix
 

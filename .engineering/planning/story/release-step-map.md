@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:release-step-map
 kind: story
-status: active
+status: implemented
 title: A release is cut by a step map with no model step
 relations:
 - decomposes: epic:deterministic-delivery-workflows
@@ -18,10 +18,11 @@ scope:
   path: generated/instructions/
 - confidence: cited
   path: workflows/releases/source.yaml
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-15T06:23:57Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":12}}}
 - {from: "proposed", to: "active", at: "2026-10-15T06:23:57Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":12}}}
+- {from: "active", to: "implemented", at: "2026-10-16T01:52:55Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":12}}}
 ---
 # Story: A release is cut by a step map with no model step
 

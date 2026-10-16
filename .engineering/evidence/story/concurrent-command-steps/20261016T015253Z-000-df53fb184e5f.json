@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-16T01:52:53Z",
+  "actor": "human:timo",
+  "artifact": "story:concurrent-command-steps",
+  "kind": "story",
+  "revision": 9,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave detflow-3 head fbc68c10a (crates as at 70cbc9ed3, aep-engine test count fixed): clippy -D warnings and cargo test --no-fail-fast for aep-domain aep-driver-spec aep-driver aep-engine aep-cli xtask, 1526 passed 0 failed; fmt, ess, schema, status, deps, guards, claims and plan checks exit 0; ess synthesis 59 scenarios 71 refusals",
+    "reference": "fbc68c10a2f9662a869a475311742cd34f09c25a"
+  }
+}
