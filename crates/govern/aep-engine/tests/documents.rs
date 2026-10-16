@@ -58,7 +58,7 @@ fn the_document_tree_loads_and_is_internally_consistent() {
         .into_iter()
         .collect(),
     );
-    assert_eq!(registry.workflows().count(), 6);
+    assert_eq!(registry.workflows().count(), 7);
     assert_eq!(
         registry
             .profiles()
