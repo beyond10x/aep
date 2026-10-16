@@ -1,0 +1,96 @@
+# A bug fix, as a state machine: reproduce it, diagnose it, fix it, and verify the fix against the
+# same reproduction.
+#
+# The order is the point. A fix written before the failure was reproduced fixes whatever the author
+# guessed the bug was, and a fix verified by anything other than the command that showed the bug
+# proves something else. So the reproduction is the first state, and its guard reads the
+# reproduction's own result: a command that was expected to fail and exited 0 reproduced nothing,
+# its record is a failing `reproduction` suite, and `reproduce` has no other edge — the run stops
+# there rather than diagnosing a bug nobody has observed.
+#
+# **Two states take a model, and only two.** Reading what was collected and forming a hypothesis
+# (`diagnose`) and writing the change (`fix`) are judgements; reproducing, collecting the logs and
+# traces, and verifying are commands. Neither model state mints evidence, so the edges out of them
+# are unguarded: what a hypothesis or a fix achieved is observed at `verify`, by the reproduction
+# and the package gate.
+#
+# The `verify → fix` back-edge is deliberate, for the reason `adp/default` gives for its own: a
+# workflow with no route back from a failing check leaves only weakening the check or declaring
+# victory.
+id: bugfix/standard
+version: 1
+title: Standard bug fix
+summary: >-
+  Reproduce, diagnose, fix and verify, with the reproduction deciding both where the work starts
+  and when it is done, and an explicit route back to the fix when verification fails.
+
+initial: reproduce
+
+states:
+  reproduce:
+    title: Reproduce
+    summary: >-
+      Run the reproducing command and watch it fail. A bug that cannot be reproduced cannot be
+      shown fixed.
+    phases: [verification-setup]
+
+  diagnose:
+    title: Diagnose
+    summary: >-
+      Collect the reproduction's output, the logs, the traces and the planning artifact, then form
+      a hypothesis from them.
+    phases: [planning]
+
+  fix:
+    title: Fix
+    summary: Change the code so the reproduction no longer fails.
+    phases: [implementation]
+
+  verify:
+    title: Verify
+    summary: >-
+      Run the reproduction again, now expecting it to pass, and then the package gate, because a
+      fix that silences the reproduction can still break something next to it.
+    phases: [verification]
+
+  fixed:
+    title: Fixed
+    terminal: true
+    summary: The reproduction passes and the package gate is green.
+    phases: [completion]
+
+transitions:
+  - from: reproduce
+    to: diagnose
+    description: >-
+      The failure was reproduced. A reproduction that exited 0 is a failing `reproduction` record,
+      and with no other edge out of this state the run stops here.
+    when: tests.reproduction.failed == 0
+
+  - from: diagnose
+    to: fix
+    description: >-
+      Collection mints no evidence and the hypothesis is a judgement, so nothing here is observed
+      to guard on.
+
+  - from: fix
+    to: verify
+    description: Whatever the fix achieved is observed at `verify`, not here.
+
+  - from: verify
+    to: fixed
+    description: The reproduction passes and the package gate is green.
+    when:
+      all:
+        - tests.regression.failed == 0
+        - tests.gate.failed == 0
+
+  - from: verify
+    to: fix
+    description: >-
+      The reproduction still fails or the gate is red, so the work goes back to the fix rather than
+      to a smaller check.
+    when:
+      any:
+        - tests.regression.failed > 0
+        - tests.gate.failed > 0
