@@ -463,7 +463,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
     let store = scratch("aep-plan-model-digest");
 
     for (kind, slug) in [
-        ("executable-system-specification", "acd-v3"),
+        ("executable-system-specification", "demo-v3"),
         ("story", "not-compiled"),
     ] {
         let created = aep(&[
@@ -484,14 +484,14 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
         "plan",
         "artifact",
         "set",
-        "executable-system-specification:acd-v3",
+        "executable-system-specification:demo-v3",
         "--model-digest",
         DIGEST,
         "--store",
         printable(&store),
     ]);
     assert_eq!(code(&written), 0, "{}", stderr(&written));
-    let text = std::fs::read_to_string(store.join("executable-system-specification/acd-v3.md"))
+    let text = std::fs::read_to_string(store.join("executable-system-specification/demo-v3.md"))
         .expect("readable");
     assert!(
         text.contains(&format!("model_digest: {DIGEST}")),
@@ -503,7 +503,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
         "plan",
         "artifact",
         "set",
-        "executable-system-specification:acd-v3",
+        "executable-system-specification:demo-v3",
         "--model-digest",
         DIGEST,
         "--store",
@@ -511,7 +511,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
     ]);
     assert_eq!(code(&again), 0, "{}", stderr(&again));
     assert_eq!(
-        std::fs::read_to_string(store.join("executable-system-specification/acd-v3.md"))
+        std::fs::read_to_string(store.join("executable-system-specification/demo-v3.md"))
             .expect("readable"),
         text,
         "a second write of the same digest changes no byte"
@@ -545,7 +545,7 @@ fn a_model_digest_is_written_on_a_specification_and_refused_by_name_on_a_story()
         "plan",
         "artifact",
         "set",
-        "executable-system-specification:acd-v3",
+        "executable-system-specification:demo-v3",
         "--model-digest",
         "billing/v3",
         "--store",
@@ -3384,7 +3384,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
         "set",
         "task:assertion-verification",
         "--ref",
-        "jira:DEV-630",
+        "jira:EX-1",
         "--ref",
         "zendesk:8812",
         "--store",
@@ -3396,7 +3396,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
 
     let text = std::fs::read_to_string(&document).expect("readable");
     assert!(text.contains("- provider: jira"), "{text}");
-    assert!(text.contains("reference: DEV-630"), "{text}");
+    assert!(text.contains("reference: EX-1"), "{text}");
     assert!(
         text.contains("reference: \'8812\'"),
         "the key stays text: {text}"
@@ -3410,7 +3410,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
         "set",
         "task:assertion-verification",
         "--ref",
-        "jira:DEV-630",
+        "jira:EX-1",
         "--store",
         at,
         "--root",
@@ -3428,7 +3428,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
         "artifact",
         "list",
         "--ref",
-        "jira:DEV-630",
+        "jira:EX-1",
         "--store",
         at,
         "--root",
@@ -3445,7 +3445,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
         "artifact",
         "list",
         "--ref",
-        "jira:DEV-999",
+        "jira:EX-2",
         "--store",
         at,
         "--root",
@@ -3461,7 +3461,7 @@ fn a_reference_reaches_the_file_and_a_query_finds_it() {
     // A key with no provider is refused rather than matching nothing, because an empty list reads
     // as *this ticket is not in the plan* and that is a different fact.
     let bare = aep(&[
-        "plan", "artifact", "list", "--ref", "DEV-630", "--store", at, "--root", tree,
+        "plan", "artifact", "list", "--ref", "EX-1", "--store", at, "--root", tree,
     ]);
     assert_ne!(code(&bare), 0, "{}", stdout(&bare));
     assert!(
@@ -6733,7 +6733,7 @@ fn a_reference_given_at_new_is_written_to_the_document() {
         "--title",
         "Demo",
         "--ref",
-        "jira:DEV-630",
+        "jira:EX-1",
         "--store",
         printable(&store),
     ]);
@@ -6741,7 +6741,7 @@ fn a_reference_given_at_new_is_written_to_the_document() {
 
     let text = std::fs::read_to_string(store.join("story/demo.md")).expect("readable");
     assert!(
-        text.contains("refs:") && text.contains("DEV-630"),
+        text.contains("refs:") && text.contains("EX-1"),
         "the reference did not arrive with the record: {text}"
     );
 
@@ -6751,7 +6751,7 @@ fn a_reference_given_at_new_is_written_to_the_document() {
         "artifact",
         "list",
         "--ref",
-        "jira:DEV-630",
+        "jira:EX-1",
         "--store",
         printable(&store),
     ]);

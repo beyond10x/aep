@@ -25,7 +25,7 @@ scope:
   path: protocols/aep/1.yaml
 - confidence: cited
   path: website/docs/reference/vocabulary.md
-revision: 12
+revision: 13
 ---
 # Story: The irreversible act in a corpus pipeline has no capability under it
 
@@ -89,9 +89,9 @@ this story is. And `production.write` is not in fact where it can stay: a profil
 production database, which is the opposite of least privilege and would trip the floor for a reason
 that has nothing to do with the thing being done.
 
-**What it costs an adopter to leave open, concretely.** Round 1's own incident is this one:
-*"resolved"* was told to a customer roughly **seven hours before** the contradicting verification
-landed. That ordering is now sayable as a lifecycle and still ungateable as an act — the claim can
+**What it costs an adopter to leave open, concretely.** Round 1's own failure mode is this one: an
+outbound *"resolved"* claim went out **before** the contradicting verification landed. That
+ordering is now sayable as a lifecycle and still ungateable as an act — the claim can
 reach `sent` with no approval anywhere in the profile, because nothing in the vocabulary names
 sending.
 

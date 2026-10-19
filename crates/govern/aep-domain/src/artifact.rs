@@ -1500,7 +1500,7 @@ pub enum FreshnessPolicy {
 /// system breaks it silently.
 ///
 /// **It is a reference, not an identity.** [`ArtifactId`] stays the name of the artifact; a key such
-/// as `DEV-630` is unique inside one tracker, changes when work moves between systems, and two
+/// as `EX-1` is unique inside one tracker, changes when work moves between systems, and two
 /// organisations can hold it for different things — the same reasoning
 /// [`EntityId`](crate::entity::EntityId) gives for refusing `AUTH-142` as identity.
 ///
@@ -1509,8 +1509,8 @@ pub enum FreshnessPolicy {
 /// ```yaml
 /// refs:
 ///   - provider: jira
-///     reference: DEV-630
-///   - jira:DEV-425          # the same thing, written short
+///     reference: EX-1
+///   - jira:EX-3          # the same thing, written short
 /// ```
 ///
 /// **No URL field.** A link is `provider` plus `reference` plus the base the organisation configures
@@ -1520,7 +1520,7 @@ pub enum FreshnessPolicy {
 pub struct ExternalRef {
     /// The system holding the record, such as `jira` or `zendesk`.
     pub provider: ProviderId,
-    /// Its key in that system, such as `DEV-630`.
+    /// Its key in that system, such as `EX-1`.
     pub reference: String,
 }
 
@@ -1537,7 +1537,7 @@ impl ExternalRef {
 
     /// Refuses a key that is empty or carries whitespace.
     ///
-    /// Deliberately nothing stricter. Tracker keys are `DEV-630`, `SUP#8812`, a Zendesk integer and
+    /// Deliberately nothing stricter. Tracker keys are `EX-1`, `SUP#8812`, a Zendesk integer and
     /// a UUID, and a pattern tight enough to describe Jira would refuse three of those. What is
     /// refused is what cannot be round-tripped or pasted into a URL.
     fn check(reference: &str) -> Result<(), ParseError> {
@@ -1558,7 +1558,7 @@ impl ExternalRef {
         Ok(())
     }
 
-    /// Parses the document form: `{provider: jira, reference: DEV-630}` or `jira:DEV-630`.
+    /// Parses the document form: `{provider: jira, reference: EX-1}` or `jira:EX-1`.
     pub fn from_node(node: &Node) -> Result<Self, ParseError> {
         match node {
             Node::Text(text) => Self::parse(text),
@@ -1567,7 +1567,7 @@ impl ExternalRef {
                     return Err(ParseError::shape(
                         "artifact.refs[]",
                         "a mapping with `provider` and `reference`, such as `{provider: jira, \
-                         reference: DEV-630}`",
+                         reference: EX-1}`",
                         "a mapping with no `provider`",
                     ));
                 };
@@ -1575,7 +1575,7 @@ impl ExternalRef {
                     return Err(ParseError::shape(
                         "artifact.refs[]",
                         "a mapping with `provider` and `reference`, such as `{provider: jira, \
-                         reference: DEV-630}`",
+                         reference: EX-1}`",
                         "a mapping with no `reference`",
                     ));
                 };
@@ -1597,7 +1597,7 @@ impl ExternalRef {
             return Err(ParseError::identifier(
                 "reference",
                 value,
-                "write it as `provider:reference`, such as `jira:DEV-630`".to_owned(),
+                "write it as `provider:reference`, such as `jira:EX-1`".to_owned(),
             ));
         };
         Self::new(ProviderId::new(provider)?, reference)
@@ -1659,7 +1659,7 @@ impl schemars::JsonSchema for ExternalRef {
                 .to_owned(),
         );
         schema.metadata().examples = vec![
-            serde_json::json!({ "provider": "jira", "reference": "DEV-630" }),
+            serde_json::json!({ "provider": "jira", "reference": "EX-1" }),
             serde_json::json!("zendesk:8812"),
         ];
         schema.into()

@@ -48,7 +48,7 @@ no executed compatibility test or implementation verdict.
 ## Resource and ownership record
 
 The reused AEP coordinator is
-~/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader,
+<tree>,
 branch wave/ess-conformance-counts, lease ess-review-counts-reader, source
 62ef3a73112143453319215b9aa31a6c9626ed5f. That source matched advertised AEP main at preflight.
 Only this task's new story, journal events and proposed binding were dirty. The primary is dirty
@@ -119,7 +119,7 @@ on all direct commits were verified as the organization bot. AEP's ten opening c
 ESS's layout target and required site-build passed. These checks cover the opening records and
 unchanged existing source; no new reader implementation has been tested.
 
-The manager created ~/.local/state/worktree/trees/b10x/aep/aep-ess-conformance-coverage
+The manager created <tree>
 at exact base4ecc1b63b53bbfcb31fd55f277e62643083375b1. Its branch is impl/ess-conformance-coverage,
 lease ess-review-coverage-implementation, build directory its target and scratch its
 target/ess-conformance-coverage. The root-written unit-brief.md and hash-verified accepted bindings
@@ -215,7 +215,7 @@ remain pending.
 
 Reserve the task-owned Website support id aep-coverage-website-verification at the exact
 Atlas-pinned runtime fc4571534765c098ed861bc326da4d3da0d1df63. Its planned worktree is
-~/.local/state/worktree/trees/b10x/website/aep-coverage-website-verification;
+<tree>;
 build and scratch are target/ess-conformance-coverage beneath it. Root owns this support
 checkout. The short explicit external TMPDIR ~/.cache/aep-cov-website-tmp is reserved
 for the Website gate's Unix-socket fixtures and is part of eventual exact-owned cleanup.

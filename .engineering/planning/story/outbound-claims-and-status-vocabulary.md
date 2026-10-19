@@ -22,7 +22,7 @@ scope:
   path: crates/govern/aep-engine
 - confidence: inferred
   path: crates/plan/aep-backend-markdown
-revision: 9
+revision: 10
 ---
 # Story: A claim that has left the building, and a rung for it to land on
 
@@ -39,8 +39,8 @@ because the adopter's ranking pairs them: D3 is the concept and B1 is the enum t
 either alone ships half a mechanism.
 
 **D3** — every evidence path in this protocol flows inward. Nothing models an assertion crossing the
-boundary outward. Their incident: *"resolved"* was told to a customer roughly **seven hours before**
-the contradicting verification landed, and the ordering *is* the finding. Two constructs already here
+boundary outward. The failure mode: an outbound *"resolved"* claim went out **before** the
+contradicting verification landed, and the ordering *is* the finding. Two constructs already here
 fit, which is why this is additive rather than a redesign: `cleared` is an approval gate — the last
 point at which a wrong claim can still be stopped — and an outbound communication is a
 `production.write`-shaped act against a human system, so the floor logic applies unchanged.

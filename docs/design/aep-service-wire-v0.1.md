@@ -282,7 +282,7 @@ registered client has moved or an explicit retirement decision says otherwise.
 - streaming subscriptions;
 - Jira ingestion;
 - definition-bundle activation and instance migration;
-- company-brain realms; and
+- realms for a predecessor knowledge store; and
 - tenant billing, provisioning and realm administration.
 
 Those concerns depend on this boundary but do not belong in its bytes.

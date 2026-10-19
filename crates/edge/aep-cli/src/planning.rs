@@ -1520,7 +1520,7 @@ pub(crate) struct NewArgs {
     #[arg(long = "tag")]
     tag: Vec<String>,
     /// A record of the same work elsewhere, written `<provider>:<reference>`, such as
-    /// `jira:DEV-630`.
+    /// `jira:EX-1`.
     ///
     /// Split at the **first** colon, so a key carrying one of its own survives.
     #[arg(long = "ref", value_name = "PROVIDER:REFERENCE")]
@@ -5675,7 +5675,7 @@ fn review_records(opened: &Opened) -> ReviewRecords {
 /// Every reference is tried as a path, and none is refused for its provider: a repository that
 /// files its runs under `run:` and one that files them under `eval:` are both saying the same thing,
 /// and a whitelist here would be this verb inventing a vocabulary the store does not have. A
-/// reference that is not a readable manifest simply is not one — a `jira:DEV-630` names no file and
+/// reference that is not a readable manifest simply is not one — a `jira:EX-1` names no file and
 /// costs nothing to try.
 fn cost_of(repository: &Path, stored: &aep_backend_markdown::StoredDocument) -> Option<u64> {
     let mut total: Option<u64> = None;
@@ -8307,7 +8307,7 @@ pub(crate) fn select(
         Some(value) => Some(parse_status(value)?),
         None => None,
     };
-    // Parsed once, and refused here rather than silently matching nothing: `--ref DEV-630` with no
+    // Parsed once, and refused here rather than silently matching nothing: `--ref EX-1` with no
     // provider is a filter that would quietly return an empty list, which reads as *this ticket is
     // not in the plan* and is a different fact.
     let reference = match reference {

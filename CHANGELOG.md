@@ -1626,7 +1626,7 @@ needs `0.48.0`; the tag is left in place rather than deleted.
 ### Added
 
 - Planning artifacts carry `refs:` — a record of the same work in a system AEP does not own, such as
-  `jira:DEV-630`. Written as a mapping (`{provider: jira, reference: DEV-630}`) and accepted as the
+  `jira:EX-1`. Written as a mapping (`{provider: jira, reference: EX-1}`) and accepted as the
   shorthand; `aep artifact new --ref`, `aep artifact set --ref/--unref` and
   `aep artifact list --ref <provider>:<key>` are the doors. A ticket id kept in a body paragraph is
   invisible to every verb that knows what an artifact is, which is what this closes.

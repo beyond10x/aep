@@ -2952,7 +2952,7 @@ story starts at draft
   implemented -> archived
   proposed -> draft, rejected, active
   rejected -> archived
-273 file(s) in /home/timo/.local/state/worktree/trees/b10x/aep/ess-conformance-v2-reader/.engineering/planning: 273 artifact(s)
+273 file(s) in <tree>/.engineering/planning: 273 artifact(s)
 53 document(s) predate the event log
 4 closed on an assertion:
   - story:guard-tests reached implemented on an assertion rather than a record — the evidence was claimed, not held

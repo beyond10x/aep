@@ -2835,7 +2835,7 @@ pub(crate) struct TicketsArgs {
     repository: PathBuf,
     /// The system the keys belong to, such as `jira`.
     ///
-    /// **Required, and not guessed.** `DEV-630` says which project inside a tracker and nothing at
+    /// **Required, and not guessed.** `EX-1` says which project inside a tracker and nothing at
     /// all about which tracker; a default here would put every key in the same system on the say-so
     /// of a shape, and the whole point of a reference is that it resolves.
     #[arg(long)]
@@ -2853,7 +2853,7 @@ pub(crate) struct TicketsArgs {
 struct Proposal {
     /// The artifact naming it.
     artifact: String,
-    /// The key, such as `DEV-630`.
+    /// The key, such as `EX-1`.
     key: String,
     /// Where in the artifact the key was read: `title`, `summary` or `body`.
     read_from: &'static str,
