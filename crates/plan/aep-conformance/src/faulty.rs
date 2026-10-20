@@ -320,7 +320,7 @@ mod tests {
                 suites.iter().any(|suite| suite.name == name),
                 "{fault:?} claims to be caught by `{name}`, which is not a registered suite"
             );
-            assert!(!fault.describe().is_empty());
+            assert_ne!(fault.describe(), "");
         }
     }
 

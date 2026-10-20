@@ -1357,7 +1357,7 @@ mod tests {
         let mut first = spec();
         let authored = first.digest.clone();
         let unknown = first.mark_advisory(&BTreeSet::from(["within-budget".to_owned()]));
-        assert!(unknown.is_empty());
+        assert_eq!(unknown, [] as [std::string::String; 0]);
         assert_eq!(
             first.expectations[1].severity,
             Severity::Advisory,

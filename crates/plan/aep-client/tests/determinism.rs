@@ -67,6 +67,12 @@ fn the_scan_detects_code_and_ignores_prose_and_substrings() {
         banned_uses("use std::collections::HashMap;"),
         vec![(1, "HashMap")]
     );
-    assert!(banned_uses("// HashMap is forbidden").is_empty());
-    assert!(banned_uses("let hashmap_like = DeterministicMap::new();").is_empty());
+    assert_eq!(
+        banned_uses("// HashMap is forbidden"),
+        [] as [(usize, &str); 0]
+    );
+    assert_eq!(
+        banned_uses("let hashmap_like = DeterministicMap::new();"),
+        [] as [(usize, &str); 0]
+    );
 }

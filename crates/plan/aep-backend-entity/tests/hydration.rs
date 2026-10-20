@@ -274,10 +274,12 @@ fn a_removed_relation_stays_removed_after_reopen() {
         .id
         .clone();
     block_on(first.execute(envelope(unrelate(&relation), 7))).expect("removed");
-    assert!(block_on(first.relations(&RelationQuery::default()))
-        .expect("answers")
-        .items
-        .is_empty());
+    assert_eq!(
+        block_on(first.relations(&RelationQuery::default()))
+            .expect("answers")
+            .items,
+        [] as [aep_contract::query::Relation; 0]
+    );
     drop(first);
 
     let second = open(&path);

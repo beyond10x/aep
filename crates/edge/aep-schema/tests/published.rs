@@ -167,7 +167,10 @@ fn coverage_schema_keeps_the_separate_original_input_carrier_closed() {
     let raw = serde_json::json!({"kind":"ess_conformance_coverage_v1","report_json":"original report","suite_input_json":"original input"});
     assert!(schema.is_valid(&raw));
     let value: aep_domain::Evidence = serde_json::from_value(raw.clone()).unwrap();
-    assert!(value.facts().is_empty());
+    assert_eq!(
+        value.facts(),
+        [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+    );
     for key in [
         "suite_json",
         "reading",

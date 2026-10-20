@@ -2750,7 +2750,7 @@ mod layout_tests {
                         root.join(member).join("Cargo.toml").is_file(),
                         "`{member}` is a member but has no manifest on disk"
                     );
-                    assert!(!name.is_empty());
+                    assert_ne!(name, "");
                 }
                 _ => findings.push(member.clone()),
             }

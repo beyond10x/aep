@@ -357,7 +357,7 @@ capabilities:
             .first()
             .expect("a capability withdrawal binds every workflow");
         assert_eq!(only.denied, vec!["secret.read".to_owned()]);
-        assert!(only.obligations.is_empty());
+        assert_eq!(only.obligations.len(), 0);
     }
 
     #[test]

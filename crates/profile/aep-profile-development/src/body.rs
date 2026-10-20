@@ -793,7 +793,7 @@ mod tests {
         let original = AcceptanceCriteria::new(reference_to(STORY_ID));
         let read = AcceptanceCriteria::from_node(&original.to_node()).expect("reads");
         assert_eq!(read, original);
-        assert!(read.criteria.is_empty());
+        assert_eq!(read.criteria, [] as [std::string::String; 0]);
     }
 
     #[test]

@@ -6,7 +6,10 @@ use aep_domain::Evidence;
 fn coverage_raw_transport_preserves_sources_without_projecting_admission() {
     let wire = r#"{"kind":"ess_conformance_coverage_v1","report_json":"original report bytes","suite_input_json":"original input bytes"}"#;
     let evidence: Evidence = serde_json::from_str(wire).expect("the separate raw carrier exists");
-    assert!(evidence.facts().is_empty());
+    assert_eq!(
+        evidence.facts(),
+        [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+    );
     assert!(evidence.spec_digest().is_none());
     assert!(evidence.summary().contains("unadmitted"));
     assert_eq!(serde_json::to_string(&evidence).unwrap(), wire);

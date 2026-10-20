@@ -194,7 +194,10 @@ fn typed_json_yaml_full_u64_and_raw_snapshot_readback_re_admit_original_bytes() 
             .unwrap();
         let wire = serde_json::to_string(&execution.snapshot()).unwrap();
         let raw: aep_engine::execution::Snapshot = serde_json::from_str(&wire).unwrap();
-        assert!(raw.evidence[0].record.facts().is_empty());
+        assert_eq!(
+            raw.evidence[0].record.facts(),
+            [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+        );
         assert!(raw.evidence[0].record.value.spec_digest().is_none());
         assert_eq!(
             raw.evidence[0]
@@ -892,7 +895,10 @@ fn envelope_forgery_alias_duplicates_and_rounded_times_cannot_admit() {
     verification.evidence.push(record(1));
     let raw: aep_domain::verification::VerificationResult =
         serde_json::from_str(&serde_json::to_string(&verification).unwrap()).unwrap();
-    assert!(raw.evidence[0].facts().is_empty());
+    assert_eq!(
+        raw.evidence[0].facts(),
+        [] as [(aep_domain::FactPath, aep_domain::FactValue); 0]
+    );
     assert!(raw.evidence[0].value.spec_digest().is_none());
 }
 
@@ -1064,7 +1070,7 @@ fn cross_record_fact_overwrites_and_event_claims_never_repair_qualification() {
     let mut event_only = execution.snapshot();
     event_only.evidence.clear();
     let restored = engine.restore(task(), graph(), event_only).unwrap();
-    assert!(restored.evidence().is_empty());
+    assert_eq!(restored.evidence(), []);
     assert_eq!(
         restored
             .facts()
