@@ -415,7 +415,7 @@
       "examples": [
         {
           "provider": "jira",
-          "reference": "DEV-630"
+          "reference": "EX-1"
         },
         "zendesk:8812"
       ]

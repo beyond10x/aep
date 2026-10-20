@@ -184,7 +184,7 @@ pub fn load_local_paths(root: &Path) -> Result<ProjectLocalPaths, LoadErrors> {
 /// Loads only a project's configuration, resolving nothing it names.
 ///
 /// The lightest of the three loaders. Use it for a question the configuration itself answers — how
-/// this project builds a link for `jira:DEV-630` — where loading the protocol tree would make a
+/// this project builds a link for `jira:EX-1` — where loading the protocol tree would make a
 /// listing depend on a network fetch it has no other reason to make.
 pub fn load_config(root: &Path) -> Result<ProjectConfig, LoadErrors> {
     read_config(root)

@@ -127,6 +127,6 @@ The full format, with an annotated example, is in [the artifact file](../referen
 
 ## External references
 
-`--ref <provider>:<key>` records the same work in another system, such as `jira:DEV-630`.
-`list --ref jira:DEV-630` finds it again. When `project.yaml` sets a URL pattern under `providers:`
+`--ref <provider>:<key>` records the same work in another system, such as `jira:EX-1`.
+`list --ref jira:EX-1` finds it again. When `project.yaml` sets a URL pattern under `providers:`
 (`jira: https://tracker.example/browse/{key}`), `show` prints the link beside the reference.

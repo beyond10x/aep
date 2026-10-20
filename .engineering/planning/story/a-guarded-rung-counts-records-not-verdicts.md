@@ -6,7 +6,7 @@ status: draft
 title: A guarded rung counts records, and cannot ask that one passed
 relations:
 - serves: vision:O2
-revision: 3
+revision: 4
 ---
 ## What was found
 
@@ -28,8 +28,8 @@ cannot ask that one of them *passed*.
 The observation, in `an adopting project`:
 
 ```console
-$ aep artifact move executable-system-specification:acd-v3 --to conforming
-executable-system-specification:acd-v3 moved validated -> conforming (revision 4)
+$ aep artifact move executable-system-specification:demo-v3 --to conforming
+executable-system-specification:demo-v3 moved validated -> conforming (revision 4)
 ```
 
 ## Why this is not covered by the principle

@@ -198,7 +198,7 @@ pub struct PlanningFrontmatter {
     pub owner: Option<String>,
     /// Free-form labels.
     pub tags: BTreeSet<String>,
-    /// Records of the same work in systems AEP does not own, such as `jira:DEV-630`.
+    /// Records of the same work in systems AEP does not own, such as `jira:EX-1`.
     ///
     /// **The join a body paragraph cannot carry.** A team adopting this already has a tracker, and
     /// a ticket id written into prose is invisible to `aep plan artifact list` and unchecked by
@@ -527,8 +527,8 @@ impl TryFrom<RawPlanningFrontmatter> for PlanningFrontmatter {
                         error.to_string(),
                     )
                     .with_hint(
-                        "a reference is `{provider: jira, reference: DEV-630}`, or the shorthand \
-                         `jira:DEV-630`",
+                        "a reference is `{provider: jira, reference: EX-1}`, or the shorthand \
+                         `jira:EX-1`",
                     ),
                 ),
             }
@@ -759,7 +759,7 @@ mod tests {
         // that happens to be exercised elsewhere.
         const DIGEST: &str = "8aee51b644a97580e2603ea3c9f57d22ca24d765643f2e0a4e0e6410dbfd1fef";
         let front = PlanningFrontmatter::try_from(raw(&format!(
-            "id: executable-system-specification:acd-v3\n\
+            "id: executable-system-specification:demo-v3\n\
              kind: executable-system-specification\n\
              status: draft\n\
              model_digest: {DIGEST}\n"
@@ -771,7 +771,7 @@ mod tests {
         );
         assert_eq!(
             front
-                .to_artifact("executable-system-specification/acd-v3.md")
+                .to_artifact("executable-system-specification/demo-v3.md")
                 .model_digest
                 .as_ref()
                 .map(SpecDigest::as_str),
@@ -820,7 +820,7 @@ mod tests {
         // mapping is what the file carries, so a document written by hand and one written by the
         // CLI are the same bytes after one write.
         let front = PlanningFrontmatter::try_from(raw(&format!(
-            "{MINIMAL}refs:\n  - jira:DEV-630\n  - provider: zendesk\n    reference: \"8812\"\n"
+            "{MINIMAL}refs:\n  - jira:EX-1\n  - provider: zendesk\n    reference: \"8812\"\n"
         )))
         .expect("both forms are accepted");
         assert_eq!(
@@ -829,7 +829,7 @@ mod tests {
                 .iter()
                 .map(ToString::to_string)
                 .collect::<Vec<_>>(),
-            vec!["jira:DEV-630".to_owned(), "zendesk:8812".to_owned()],
+            vec!["jira:EX-1".to_owned(), "zendesk:8812".to_owned()],
             "a set, so the order is the provider's and not the file's"
         );
         assert_eq!(
@@ -841,7 +841,7 @@ mod tests {
         let written = serde_yaml::to_string(&front).expect("the frontmatter renders");
         assert!(written.contains("provider: jira"), "{written}");
         assert!(
-            !written.contains("jira:DEV-630"),
+            !written.contains("jira:EX-1"),
             "the shorthand is an input form, not an output one: {written}"
         );
         let again = PlanningFrontmatter::try_from(raw(&written)).expect("the rendering re-reads");
@@ -859,7 +859,7 @@ mod tests {
         // twenty of these at once, and a validator that stopped at the first would be run twenty
         // times.
         let errors = PlanningFrontmatter::try_from(raw(&format!(
-            "{MINIMAL}refs:\n  - DEV-630\n  - jira:has a space\n  - provider: jira\n"
+            "{MINIMAL}refs:\n  - EX-1\n  - jira:has a space\n  - provider: jira\n"
         )))
         .expect_err(
             "a key with no provider, a key with whitespace and a mapping with no \
