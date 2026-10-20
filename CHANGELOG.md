@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.68.1] — 2026-10-20
+
 ### Changed
 
 - The example tracker reference in `--ref` help, refusal messages, the artifact manifest schema and
