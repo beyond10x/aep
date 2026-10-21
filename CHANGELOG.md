@@ -9,6 +9,8 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+## [0.75.0] — 2026-10-21
+
 ### Added
 
 - `aep plan artifact redact <id> --literal <text> --with <replacement> --reason <text>` replaces
