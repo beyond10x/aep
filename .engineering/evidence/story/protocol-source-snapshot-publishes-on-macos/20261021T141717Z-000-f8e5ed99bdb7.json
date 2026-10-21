@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T14:17:17Z",
+  "actor": "human:timo",
+  "artifact": "story:protocol-source-snapshot-publishes-on-macos",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "macos-15, commit 406f0d312 (fix bc2607d11): a_sealed_snapshot_is_published_with_a_read_only_root and a_published_snapshot_left_with_a_writable_root_is_sealed_when_found pass, aep-project 8 passed, pinned_tree_before_judgement 1 passed; Gate job green",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/39614060882/job/119270236474"
+  }
+}
