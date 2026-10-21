@@ -403,6 +403,7 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
     let (bare, destination) = git_cache_paths(source)?;
     if destination.exists() {
         verify_snapshot_once(&destination, source.revision())?;
+        seal_published_root(&destination);
         return Ok(destination);
     }
 
@@ -471,23 +472,14 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
         std::fs::remove_dir_all(&temporary).ok();
         return Err(error);
     }
-    if let Err(error) = publish_snapshot(&temporary, &destination) {
-        if destination.exists() {
-            std::fs::remove_dir_all(&temporary).ok();
-            verify_snapshot_once(&destination, source.revision())?;
-            return Ok(destination);
-        }
-        std::fs::remove_dir_all(&temporary).ok();
-        return Err(format!(
-            "publishing snapshot {}: {error}",
-            destination.display()
-        ));
-    }
+    publish_snapshot(&temporary, &destination)?;
     verify_snapshot_once(&destination, source.revision())?;
+    seal_published_root(&destination);
     Ok(destination)
 }
 
-/// Writes the manifest of a checked-out tree into it and makes every file and directory read-only.
+/// Writes the manifest of a checked-out tree into it and makes every file and every directory
+/// below the root read-only; [`publish_snapshot`] seals the root.
 fn seal_snapshot(tree: &Path, revision: &str) -> Result<(), String> {
     let manifest = snapshot_manifest(tree, revision, true)?;
     let path = tree.join(SNAPSHOT_MANIFEST);
@@ -495,12 +487,38 @@ fn seal_snapshot(tree: &Path, revision: &str) -> Result<(), String> {
         .map_err(|error| format!("serializing {}: {error}", path.display()))?;
     std::fs::write(&path, bytes).map_err(|error| format!("writing {}: {error}", path.display()))?;
     make_read_only(&path, false)?;
-    make_directories_read_only(tree)
+    make_subdirectories_read_only(tree)
 }
 
-/// Moves a sealed tree to its snapshot path, a sibling in the same directory.
-fn publish_snapshot(tree: &Path, destination: &Path) -> std::io::Result<()> {
-    std::fs::rename(tree, destination)
+/// Moves a sealed tree to its snapshot path, a sibling in the same directory, then seals its root.
+///
+/// The root is sealed after the rename because macOS refuses to rename a directory its caller
+/// cannot write (`EACCES`), even within one parent; Linux allows it. When another process
+/// published the same snapshot first, this tree is discarded and theirs is kept.
+fn publish_snapshot(tree: &Path, destination: &Path) -> Result<(), String> {
+    if let Err(error) = std::fs::rename(tree, destination) {
+        std::fs::remove_dir_all(tree).ok();
+        if destination.exists() {
+            return Ok(());
+        }
+        return Err(format!(
+            "publishing snapshot {}: {error}",
+            destination.display()
+        ));
+    }
+    make_read_only(destination, true)
+}
+
+/// Seals the root of a published snapshot that a process killed between [`publish_snapshot`]'s
+/// rename and its seal left writable.
+///
+/// Called only after the snapshot verified, so a refused command changes nothing. Best effort:
+/// verification, not the mode, decides whether a snapshot is used, and a cache another user owns
+/// cannot be changed.
+fn seal_published_root(snapshot: &Path) {
+    if std::fs::metadata(snapshot).is_ok_and(|metadata| !metadata.permissions().readonly()) {
+        make_read_only(snapshot, true).ok();
+    }
 }
 
 /// Bare object cache and source-and-revision snapshot paths containing no URL or credentials.
@@ -1078,6 +1096,12 @@ fn make_read_only(path: &Path, directory: bool) -> Result<(), String> {
 
 /// Seals directories from the leaves upwards after their files and manifest are complete.
 fn make_directories_read_only(directory: &Path) -> Result<(), String> {
+    make_subdirectories_read_only(directory)?;
+    make_read_only(directory, true)
+}
+
+/// [`make_directories_read_only`] for every directory below `directory`, leaving it writable.
+fn make_subdirectories_read_only(directory: &Path) -> Result<(), String> {
     let entries = std::fs::read_dir(directory).map_err(|error| {
         format!(
             "reading snapshot directory {}: {error}",
@@ -1092,7 +1116,7 @@ fn make_directories_read_only(directory: &Path) -> Result<(), String> {
             make_directories_read_only(&path)?;
         }
     }
-    make_read_only(directory, true)
+    Ok(())
 }
 
 /// Platform mode recorded in the manifest.
@@ -1888,6 +1912,35 @@ mod tests {
         assert_eq!(mode(&destination.join("profiles")), 0o555);
         assert_eq!(mode(&destination.join("protocol.yaml")), 0o444);
         verify_snapshot(&destination, &revision).expect("the published bytes match the manifest");
+        unseal(&parent);
+        std::fs::remove_dir_all(&parent).ok();
+    }
+
+    /// A process killed between the rename and the root's seal leaves the root writable; the next
+    /// resolve that finds the snapshot seals it before using it.
+    #[cfg(unix)]
+    #[test]
+    fn a_published_snapshot_left_with_a_writable_root_is_sealed_when_found() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let parent = std::env::temp_dir().join("aep-project-snapshot-reseal");
+        unseal(&parent);
+        std::fs::remove_dir_all(&parent).ok();
+        let revision = "f".repeat(40);
+        let tree = parent.join(format!(".{revision}.tmp"));
+        let destination = parent.join(&revision);
+        write(&tree.join("protocol.yaml"), "sealed\n");
+        seal_snapshot(&tree, &revision).expect("the checked-out tree seals");
+        std::fs::rename(&tree, &destination).expect("the rename half of a publish");
+
+        seal_published_root(&destination);
+
+        let mode = std::fs::metadata(&destination)
+            .expect("the snapshot is published")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o555, "the found snapshot's root is sealed");
         unseal(&parent);
         std::fs::remove_dir_all(&parent).ok();
     }
