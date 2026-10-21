@@ -11,6 +11,7 @@
       "x-ess-name": "aep.drive.Expectation"
     },
     "aep.drive.InputName": {
+      "pattern": "^[\\u002D0-9\\u005Fa-z]*$",
       "title": "InputName",
       "type": "string",
       "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-",

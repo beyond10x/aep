@@ -8,6 +8,10 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Fixed
+
+- A repository protocol source loads on macOS; publishing its snapshot failed with `Permission denied (os error 13)`.
+
 ## [0.75.0] - 2026-10-21
 
 ### Added

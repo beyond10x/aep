@@ -14,6 +14,7 @@
       "x-ess-name": "aep.drive.InputName",
       "x-ess-kind": "newtype",
       "type": "string",
+      "pattern": "^[\\u002D0-9\\u005Fa-z]*$",
       "x-ess-alphabet": "abcdefghijklmnopqrstuvwxyz0123456789_-"
     },
     "aep.drive.RunInput": {

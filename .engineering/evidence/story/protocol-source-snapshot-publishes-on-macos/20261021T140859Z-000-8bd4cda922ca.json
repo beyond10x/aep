@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T14:08:59Z",
+  "actor": "human:timo",
+  "artifact": "story:protocol-source-snapshot-publishes-on-macos",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "macos-15, commit 16f919e5a (before the fix): a_sealed_snapshot_is_published_with_a_read_only_root failed with os error 13; rename probe: a 0555 root fails with EACCES, a 0755 root renames, subdirectory mode irrelevant",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/39609821314/job/119255446850"
+  }
+}
