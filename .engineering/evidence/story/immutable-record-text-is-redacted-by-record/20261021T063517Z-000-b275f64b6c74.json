@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-21T06:35:17Z",
+  "actor": "human:timo",
+  "artifact": "story:immutable-record-text-is-redacted-by-record",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check on wave/redact (17 steps, exit 0, 2463 passed, 0 failed; postgres-check skipped locally)",
+    "reference": "40292252d"
+  }
+}

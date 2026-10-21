@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:immutable-record-text-is-redacted-by-record
 kind: story
-status: active
+status: implemented
 title: An immutable record's text changes only by a recorded redaction
 summary: aep plan artifact redact replaces a literal in an artifact's title and body and records its digest; validate admits a review-result that differs from its first version only by recorded redactions.
 owner: store
@@ -26,10 +26,11 @@ scope:
   path: ess/domains/evidence.yaml
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 10
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-21T00:53:03Z", actor: "human:timo", revision: 9}
 - {from: "proposed", to: "active", at: "2026-10-21T00:53:03Z", actor: "human:timo", revision: 10}
+- {from: "active", to: "implemented", at: "2026-10-21T06:35:18Z", actor: "human:timo", revision: 11, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 # Story: An immutable record's text changes only by a recorded redaction
 

@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-21T06:19:24Z",
+  "actor": "human:timo",
+  "artifact": "story:immutable-record-text-is-redacted-by-record",
+  "kind": "story",
+  "revision": 10,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "F1-F4 fixed in the unit before commit 0f18a5409 (aep-cli 799 executed, exit 0); J1-J3 accepted by the coordinator as the story's design",
+    "review": "review-result:redaction-unit-adversary-pass-1",
+    "outcome": "fixed"
+  }
+}
