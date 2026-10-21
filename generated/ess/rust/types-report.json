@@ -8,7 +8,7 @@
     "contract_digest": "slice-sha256/2:e3c3174455ed520c33edaa3996ed7cea41c47081c9b72ae3aca9e418e3c7d9ec",
     "projection_digest": "d1ed36705527715131c4a926abea5494959525f99b6dc4b544d6602d56c3b8f7"
   },
-  "generator_version": "0.60.0",
+  "generator_version": "0.62.0",
   "target": "rust",
   "configuration": {
     "language": "rust",
@@ -890,11 +890,6 @@
     }
   ],
   "obligations": [
-    {
-      "pointer": "/$defs/aep.drive.InputName/x-ess-alphabet",
-      "rule": "model_alphabet",
-      "detail": "enforce the retained model alphabet: every character of the text is one of it; structural codecs do not check characters"
-    },
     {
       "pointer": "/$defs/aep.drive.RunStarted/properties/llm_steps_declared",
       "rule": "integer",

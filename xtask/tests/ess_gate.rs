@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 /// The release `ess/ess-inputs.yaml` pins and `.github/workflows/ci.yml` installs.
-const PINNED: &str = "0.60.0";
+const PINNED: &str = "0.62.0";
 
 /// The marker of an open question, in two halves so this file does not carry it whole.
 const OPEN_QUESTION: &str = concat!("UNMAPPED", ":");
