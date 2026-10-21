@@ -105,3 +105,35 @@ jobs:
 
       - name: Run the repository gate
         run: task ${{ inputs.source_release && 'check-source' || 'check' }}
+
+  macos:
+    name: macOS protocol sources
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Probe directory renames
+        run: |
+          set -u
+          probe() {
+            name=$1; root_mode=$2; sub_mode=$3
+            dir="$RUNNER_TEMP/probe-$name"
+            mkdir -p "$dir/tree/sub"
+            chmod "$sub_mode" "$dir/tree/sub"
+            chmod "$root_mode" "$dir/tree"
+            if mv "$dir/tree" "$dir/published" 2>"$dir.err"; then echo "$name: ok"; else echo "$name: $(cat "$dir.err")"; fi
+          }
+          probe root555-sub555 555 555
+          probe root755-sub555 755 555
+          probe root555-sub755 555 755
+          probe root755-sub755 755 755
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+
+      - name: Test protocol-source snapshots
+        run: |
+          cargo test --locked -p aep-project --lib snapshot
+          cargo test --locked -p aep-cli --test pinned_tree_before_judgement

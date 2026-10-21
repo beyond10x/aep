@@ -465,21 +465,13 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
             ],
             "archiving the pinned commit into its snapshot",
         )?;
-        let manifest = snapshot_manifest(&temporary, source.revision(), true)?;
-        let path = temporary.join(SNAPSHOT_MANIFEST);
-        let bytes = serde_json::to_vec_pretty(&manifest)
-            .map_err(|error| format!("serializing {}: {error}", path.display()))?;
-        std::fs::write(&path, bytes)
-            .map_err(|error| format!("writing {}: {error}", path.display()))?;
-        make_read_only(&path, false)?;
-        make_directories_read_only(&temporary)?;
-        Ok::<(), String>(())
+        seal_snapshot(&temporary, source.revision())
     })();
     if let Err(error) = materialized {
         std::fs::remove_dir_all(&temporary).ok();
         return Err(error);
     }
-    if let Err(error) = std::fs::rename(&temporary, &destination) {
+    if let Err(error) = publish_snapshot(&temporary, &destination) {
         if destination.exists() {
             std::fs::remove_dir_all(&temporary).ok();
             verify_snapshot_once(&destination, source.revision())?;
@@ -493,6 +485,22 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
     }
     verify_snapshot_once(&destination, source.revision())?;
     Ok(destination)
+}
+
+/// Writes the manifest of a checked-out tree into it and makes every file and directory read-only.
+fn seal_snapshot(tree: &Path, revision: &str) -> Result<(), String> {
+    let manifest = snapshot_manifest(tree, revision, true)?;
+    let path = tree.join(SNAPSHOT_MANIFEST);
+    let bytes = serde_json::to_vec_pretty(&manifest)
+        .map_err(|error| format!("serializing {}: {error}", path.display()))?;
+    std::fs::write(&path, bytes).map_err(|error| format!("writing {}: {error}", path.display()))?;
+    make_read_only(&path, false)?;
+    make_directories_read_only(tree)
+}
+
+/// Moves a sealed tree to its snapshot path, a sibling in the same directory.
+fn publish_snapshot(tree: &Path, destination: &Path) -> std::io::Result<()> {
+    std::fs::rename(tree, destination)
 }
 
 /// Bare object cache and source-and-revision snapshot paths containing no URL or credentials.
@@ -1832,5 +1840,55 @@ mod tests {
             .expect_err("a symlink could escape the pinned tree");
         assert!(refusal.contains("symlink"), "{refusal}");
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// Gives every directory under `path` back its owner write bit, so a sealed tree can be removed.
+    #[cfg(unix)]
+    fn unseal(path: &Path) {
+        use std::os::unix::fs::PermissionsExt as _;
+        if !path.is_dir() {
+            return;
+        }
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).ok();
+        for entry in std::fs::read_dir(path).into_iter().flatten().flatten() {
+            unseal(&entry.path());
+        }
+    }
+
+    /// macOS refuses to rename a directory its caller cannot write, even within one parent; Linux
+    /// does not. Sealing the snapshot root before the rename failed every Git protocol source
+    /// there with `publishing snapshot …: Permission denied (os error 13)`.
+    #[cfg(unix)]
+    #[test]
+    fn a_sealed_snapshot_is_published_with_a_read_only_root() {
+        use std::os::unix::fs::PermissionsExt as _;
+
+        let parent = std::env::temp_dir().join("aep-project-snapshot-publish");
+        unseal(&parent);
+        std::fs::remove_dir_all(&parent).ok();
+        let revision = "e".repeat(40);
+        let tree = parent.join(format!(".{revision}.tmp"));
+        let destination = parent.join(&revision);
+        write(&tree.join("protocol.yaml"), "sealed\n");
+        write(&tree.join("profiles/standard.yaml"), "standard\n");
+
+        seal_snapshot(&tree, &revision).expect("the checked-out tree seals");
+        publish_snapshot(&tree, &destination)
+            .expect("a sealed tree moves to its snapshot path on every platform");
+
+        let mode = |path: &Path| {
+            std::fs::metadata(path)
+                .expect("the snapshot is published")
+                .permissions()
+                .mode()
+                & 0o777
+        };
+        assert!(!tree.exists(), "the temporary tree was moved, not copied");
+        assert_eq!(mode(&destination), 0o555, "the snapshot root is read-only");
+        assert_eq!(mode(&destination.join("profiles")), 0o555);
+        assert_eq!(mode(&destination.join("protocol.yaml")), 0o444);
+        verify_snapshot(&destination, &revision).expect("the published bytes match the manifest");
+        unseal(&parent);
+        std::fs::remove_dir_all(&parent).ok();
     }
 }
