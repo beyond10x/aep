@@ -24,7 +24,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 /// The release `ess/ess-inputs.yaml` pins and `.github/workflows/ci.yml` installs.
-const PINNED: &str = "0.62.0";
+const PINNED: &str = "0.67.0";
 
 /// The marker of an open question, in two halves so this file does not carry it whole.
 const OPEN_QUESTION: &str = concat!("UNMAPPED", ":");
@@ -36,9 +36,10 @@ const OPEN_QUESTIONS: &[&str] = &[
     "the file also gets `store: { git: {} }` (reverse.rs:1469-1470); ess 0.56.0",
 ];
 
-/// What `ess verify conform synthesize` makes of `ess/` today: 59 scenarios and 71 refusals.
+/// What `ess verify conform synthesize` makes of `ess/` today: 60 scenarios and 70 refusals.
 ///
-/// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit`, the seven outcomes of
+/// The scenarios are `aep.plan.ReverseInit/outcome/flag-unfit` and, since ess 0.67.0,
+/// `root-unreadable`, the seven outcomes of
 /// `aep.review.RecordReview` other than `findings-required`, the `aep.review.ReviewResult`
 /// invariant after each of its three recording outcomes, the nine outcomes of
 /// `aep.evidence.RecordFromReport`, the four outcomes of `aep.evidence.RecordSpend`
@@ -56,7 +57,7 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// (story:llm-step-declares-judgement, and story:command-step-expects-failure for `expect`,
 /// `output` and run inputs). None of the `aep.drive` scenarios adds a refusal.
 ///
-/// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (56) `ReverseInit` and `MigrateGit`
+/// Nearly all refusals are `ESS-SYNTH-001`. In `aep.plan` (55) `ReverseInit` and `MigrateGit`
 /// both read two row sets ("a scenario arranges the rows of one selector per command in this
 /// cut"), and neither entity has a creating command in aep (a repository is a directory, an
 /// `aep.project/1` file was written by an earlier build). Seven of them came with the repair of an `aep.project/5` store
@@ -71,7 +72,7 @@ const OPEN_QUESTIONS: &[&str] = &[
 /// need a review whose `created_before_opt_in` and `store_requires_findings` are arranged, and `RecordReview` leaves both to `validate`; and
 /// `aep.plan.UtcDate` is published by no view (`ESS-SYNTH-013`). A conformance run needs seeded
 /// rows and a target that drives the `aep` binary; neither exists yet.
-const SYNTHESIZED: (u64, u64) = (59, 71);
+const SYNTHESIZED: (u64, u64) = (60, 70);
 
 /// The tree under test, read at run time.
 fn repo_root() -> PathBuf {
