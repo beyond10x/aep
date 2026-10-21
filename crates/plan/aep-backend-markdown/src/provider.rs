@@ -203,8 +203,8 @@ impl MarkdownProvider {
     ///
     /// A `moved` change appends its [`Transition`](crate::journal::Transition) to the instance's
     /// `transitions` field — once: a transition already listed is not appended again, so completing
-    /// an interrupted batch cannot double it. An `evidence` change becomes an [`Entry`]; every other
-    /// change is the document write alone.
+    /// an interrupted batch cannot double it. An `evidence` or `redaction` change becomes an
+    /// [`Entry`]; every other change is the document write alone.
     fn effective(decision: &Decision) -> Result<(EntityInstance, Vec<Entry>), StoreError> {
         let mut instance = decision.instance.clone();
         let mut transitions: Vec<Transition> = match instance.fields.get(TRANSITIONS_FIELD) {
@@ -261,7 +261,9 @@ impl MarkdownProvider {
                         transitions.push(transition);
                     }
                 }
-                Change::Evidence { .. } => {
+                // A redaction's account is a file beside the observations, written with the
+                // rewritten document: the record is what lets the changed text validate.
+                Change::Evidence { .. } | Change::Redaction { .. } => {
                     let entry = crate::journal::entry_of(event).ok_or_else(|| {
                         StoreError::Backend(format!(
                             "an observation about `{}/{}` names no instant, actor or artifact, \

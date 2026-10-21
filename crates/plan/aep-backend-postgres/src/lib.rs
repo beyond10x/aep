@@ -281,6 +281,10 @@ fn command_dependencies(command: &Command) -> (BTreeSet<EntityId>, Option<Relati
             entities.insert(command.target.id.clone());
             None
         }
+        Command::RedactEntity(command) => {
+            entities.insert(command.target.id.clone());
+            None
+        }
         _ => None,
     };
     (entities, relation)

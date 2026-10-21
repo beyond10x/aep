@@ -83,6 +83,8 @@ pub enum CommandKind {
     MoveStatus,
     /// Record an observation about an artifact.
     RecordEvidence,
+    /// Replace a literal in an entity's text, with the record that says so.
+    RedactEntity,
 }
 
 impl CommandKind {
@@ -102,6 +104,7 @@ impl CommandKind {
         Self::AcceptAdr,
         Self::MoveStatus,
         Self::RecordEvidence,
+        Self::RedactEntity,
     ];
 
     /// The versioned name as it appears on the wire.
@@ -118,6 +121,7 @@ impl CommandKind {
             Self::AcceptAdr => "aep.adr.accept/v1",
             Self::MoveStatus => "aep.status.move/v1",
             Self::RecordEvidence => "aep.evidence.record/v1",
+            Self::RedactEntity => "aep.entity.redact/v1",
         }
     }
 
@@ -317,6 +321,111 @@ pub struct UpdateEntity {
     pub changes: BTreeMap<String, Node>,
 }
 
+/// Replacing a literal in an entity's text, with the record that says so.
+///
+/// # Why this is not `UpdateEntity`
+///
+/// An immutable record — a `review-result` above all — refuses `UpdateEntity`, and must: an edit
+/// after the fact is what makes a record worthless as evidence. But a record can hold a literal
+/// that must not stay in the repository (a customer's name), and the only edits on offer were a
+/// hand edit, which `validate` refuses, or leaving it. This command is the third: it changes the
+/// text and carries the account of the change — the digest of the folded literal, how many
+/// characters it spans, what replaced it, how often and why — so a reader can replay the change
+/// over the first version and see that nothing else moved. The literal itself travels nowhere.
+#[derive(
+    Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct RedactEntity {
+    /// The entity whose text changes.
+    pub target: EntityRef,
+    /// The text after the redaction, keyed by field: any of `title`, `summary` and `body`.
+    pub changes: BTreeMap<String, Node>,
+    /// The lowercase hex SHA-256 of the literal folded to lowercase.
+    pub literal_sha256: String,
+    /// How many characters the literal spans once folded to lowercase, which is the folded width
+    /// of every replaced window.
+    pub literal_chars: u64,
+    /// What each occurrence was replaced by.
+    pub replacement: String,
+    /// How many occurrences were replaced.
+    pub count: u64,
+    /// Why, as the redactor states it.
+    pub reason: String,
+}
+
+/// The fields [`RedactEntity`] may change.
+pub const REDACTABLE_FIELDS: &[&str] = &["title", "summary", "body"];
+
+impl RedactEntity {
+    /// The contradictions a redaction can carry without a backend: no text, no account, a field
+    /// that is not text, or a digest that is not one.
+    fn check(&self, errors: &mut ValidationErrors) {
+        let field = |name: &str| format!("command.redact-entity.{name}");
+        if self.changes.is_empty() || self.count == 0 {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::EmptyChange,
+                    field("changes"),
+                    "a redaction replaces at least one occurrence in at least one field",
+                )
+                .with_hint("a redaction that replaced nothing is a record of nothing"),
+            );
+        }
+        if let Some(other) = self
+            .changes
+            .keys()
+            .find(|key| !REDACTABLE_FIELDS.contains(&key.as_str()))
+        {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::TypeMismatch,
+                    field("changes"),
+                    format!("`{other}` is not a field a redaction changes"),
+                )
+                .with_hint(
+                    "a redaction changes the title, the summary and the body, and nothing else",
+                ),
+            );
+        }
+        let is_digest = self.literal_sha256.len() == 64
+            && self
+                .literal_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+        if !is_digest {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::TypeMismatch,
+                    field("literal_sha256"),
+                    "the literal's digest is 64 lowercase hex characters",
+                )
+                .with_hint("a digest nobody can compare is a record nobody can check"),
+            );
+        }
+        if self.literal_chars == 0 {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::RedactionInconsistent,
+                    field("literal_chars"),
+                    "a literal spans at least one character",
+                )
+                .with_hint("the width is what a replay matches windows by"),
+            );
+        }
+        if self.reason.trim().is_empty() {
+            errors.push(
+                ValidationError::new(
+                    ValidationCode::RedactionInconsistent,
+                    field("reason"),
+                    "a redaction says why",
+                )
+                .with_hint("a changed record with no stated reason reads as tampering"),
+            );
+        }
+    }
+}
+
 /// Recording a relation between two entities.
 #[derive(
     Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, schemars::JsonSchema,
@@ -456,6 +565,8 @@ pub enum Command {
     MoveStatus(MoveStatus),
     /// Record an observation about an artifact.
     RecordEvidence(RecordEvidence),
+    /// Replace a literal in an entity's text, with the record that says so.
+    RedactEntity(RedactEntity),
 }
 
 impl Command {
@@ -473,6 +584,7 @@ impl Command {
             Self::AcceptAdr(_) => CommandKind::AcceptAdr,
             Self::MoveStatus(_) => CommandKind::MoveStatus,
             Self::RecordEvidence(_) => CommandKind::RecordEvidence,
+            Self::RedactEntity(_) => CommandKind::RedactEntity,
         }
     }
 
@@ -490,7 +602,8 @@ impl Command {
             | Self::ArchiveEntity(ArchiveEntity { target, .. })
             | Self::SupersedeEntity(SupersedeEntity { target, .. })
             | Self::MoveStatus(MoveStatus { target, .. })
-            | Self::RecordEvidence(RecordEvidence { target, .. }) => Some(target.clone()),
+            | Self::RecordEvidence(RecordEvidence { target, .. })
+            | Self::RedactEntity(RedactEntity { target, .. }) => Some(target.clone()),
             Self::CreateRelation(CreateRelation { source, .. }) => Some(source.clone()),
             Self::SubmitDesignReview(SubmitDesignReview { design, .. })
             | Self::ApproveDesign(ApproveDesign { design, .. }) => Some(design.unversioned()),
@@ -515,7 +628,8 @@ impl Command {
             | Self::SupersedeEntity(_)
             // An observation is *about* an artifact and asserts nothing about its revision — the
             // whole point is that it can be recorded whenever it was made.
-            | Self::RecordEvidence(_) => None,
+            | Self::RecordEvidence(_)
+            | Self::RedactEntity(_) => None,
             // Stated here, unlike the domain commands below, because a ladder move names no
             // revision of its own to read one from — the caller is the only thing that knows which
             // revision it looked at.
@@ -546,7 +660,8 @@ impl Command {
             | Self::ApproveDesign(_)
             | Self::AcceptAdr(_)
             | Self::MoveStatus(_)
-            | Self::RecordEvidence(_) => true,
+            | Self::RecordEvidence(_)
+            | Self::RedactEntity(_) => true,
         }
     }
 
@@ -569,7 +684,8 @@ impl Command {
             | Self::ApproveDesign(_)
             | Self::AcceptAdr(_)
             | Self::MoveStatus(_)
-            | Self::RecordEvidence(_) => Capability::ArtifactWrite,
+            | Self::RecordEvidence(_)
+            | Self::RedactEntity(_) => Capability::ArtifactWrite,
         }
     }
 
@@ -585,6 +701,13 @@ impl Command {
             Self::RecordEvidence(RecordEvidence { target, kind, .. }) => {
                 format!("record {kind} about {target}")
             }
+            // The count and the replacement, never the literal: a summary lands in audit records.
+            Self::RedactEntity(RedactEntity {
+                target,
+                count,
+                replacement,
+                ..
+            }) => format!("redact {count} occurrence(s) in {target} as {replacement:?}"),
             Self::UpdateEntity(UpdateEntity { target, changes }) => format!(
                 "update {target} ({})",
                 changes
@@ -683,6 +806,7 @@ impl Command {
                     );
                 }
             }
+            Self::RedactEntity(redact) => redact.check(&mut errors),
             Self::CreateRelation(CreateRelation { source, target, .. }) => {
                 if source == target {
                     errors.push(
@@ -808,7 +932,21 @@ mod tests {
                 adr: reference("adr-passkeys-00001").at(revision(3)),
                 supersedes: Some(reference("adr-passwords-0001")),
             }),
+            redaction(),
         ]
+    }
+
+    /// A well-formed redaction of a four-character literal, three times, from a body.
+    fn redaction() -> Command {
+        Command::RedactEntity(RedactEntity {
+            target: reference("review-passkeys-0007"),
+            changes: BTreeMap::from([("body".to_owned(), Node::from("customer A approved it"))]),
+            literal_sha256: "a".repeat(64),
+            literal_chars: 4,
+            replacement: "customer A".to_owned(),
+            count: 3,
+            reason: "names a customer".to_owned(),
+        })
     }
 
     #[test]
@@ -844,6 +982,7 @@ mod tests {
         );
         assert_eq!(CommandKind::ApproveDesign.as_str(), "aep.design.approve/v1");
         assert_eq!(CommandKind::AcceptAdr.as_str(), "aep.adr.accept/v1");
+        assert_eq!(CommandKind::RedactEntity.as_str(), "aep.entity.redact/v1");
     }
 
     #[test]
@@ -1100,5 +1239,38 @@ mod tests {
         assert_eq!(error.code, ValidationCode::SelfReference);
         assert_eq!(error.location, "command.create-relation.target");
         assert!(error.message.contains(DESIGN), "{error}");
+    }
+
+    #[test]
+    fn a_redaction_that_contradicts_itself_is_refused_on_every_count() {
+        let Command::RedactEntity(mut redact) = redaction() else {
+            unreachable!("the sample is a redaction")
+        };
+        redact.changes = BTreeMap::from([("status".to_owned(), Node::from("archived"))]);
+        redact.literal_sha256 = "A".repeat(64);
+        redact.literal_chars = 0;
+        redact.count = 0;
+        redact.reason = " ".to_owned();
+        let errors = Command::RedactEntity(redact)
+            .validate()
+            .expect_err("a contradictory redaction is refused");
+        let codes: Vec<ValidationCode> = errors.as_slice().iter().map(|error| error.code).collect();
+        assert_eq!(
+            codes,
+            vec![
+                ValidationCode::EmptyChange,
+                ValidationCode::TypeMismatch,
+                ValidationCode::TypeMismatch,
+                ValidationCode::RedactionInconsistent,
+                ValidationCode::RedactionInconsistent,
+            ]
+        );
+    }
+
+    #[test]
+    fn a_redaction_summary_never_carries_the_text() {
+        let summary = redaction().summary();
+        assert!(summary.contains("redact 3 occurrence(s)"), "{summary}");
+        assert!(!summary.contains("approved"), "{summary}");
     }
 }

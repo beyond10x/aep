@@ -217,6 +217,20 @@ validator refuses a changed evidence file by comparing it with its committed Git
 Immutable kinds (`review-result`): the validator refuses any change after the creating commit,
 checked the same way.
 
+Redaction (`aep plan artifact redact`): the one change an immutable kind's title and body
+admit. The verb replaces every case-insensitive, non-overlapping occurrence of a literal in the
+title, summary and body and, in the same write, records a redaction file beside the artifact's
+evidence files (`"change": "redaction"`): the SHA-256 of the lowercased literal, its length in
+characters once lowercased, the replacement, the count over the three fields and the reason. It
+does not record the literal, and it refuses a replacement or reason that holds it, so the file
+cannot put back what it took out. Windows are measured lowercased, because a character such as
+`İ` lowercases to two. The validator replays every redaction record later than the first
+committed version over that version's title, summary and body, in order of `at` and file name.
+Each window whose lowercased form has the recorded length and digest is replaced. The changed text
+stands only when every record matches its count and the replay ends at the current title and body
+byte for byte. The summary is not part of what an immutable record says, so it is counted but not
+compared. An event-log store keeps the earlier text in its log, so the verb refuses one.
+
 ## 6. Validation
 
 | where | what it reads | what it checks |
