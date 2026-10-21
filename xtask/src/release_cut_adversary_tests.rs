@@ -14,7 +14,7 @@ use super::{prepare, record, tag, Forge, GitWriter, Recorder, ReleaseRun};
 use crate::dep_tests::tempdir::Root;
 
 const CHANGELOG: &str = "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- a thing\n\n\
-    ## [{v}] — 2026-01-01\n\n- the first\n";
+    ## [{v}] - 2026-01-01\n\n- the first\n";
 
 fn git(root: &Path, arguments: &[&str]) -> String {
     let output = Command::new("git")

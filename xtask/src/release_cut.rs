@@ -372,7 +372,7 @@ pub(crate) fn prepare(root: &Path, version: &str, date: &str) -> Result<()> {
     }
     let newest = newest_release_tag(root)?;
     let current = workspace_version(root)?;
-    let heading = format!("## [{version}] — {date}");
+    let heading = format!("## [{version}] - {date}");
     let changelog_path = root.join("CHANGELOG.md");
     let changelog = fs::read_to_string(&changelog_path).context("reading CHANGELOG.md")?;
     let dated = changelog
@@ -391,7 +391,7 @@ pub(crate) fn prepare(root: &Path, version: &str, date: &str) -> Result<()> {
     let changelog = match dated {
         Some(line) if line == heading => changelog,
         Some(line) => bail!("CHANGELOG.md already heads {version} as `{line}`, not `{heading}`"),
-        None => dated_changelog(&changelog, &heading)?,
+        None => dated_changelog(&changelog, &heading, version)?,
     };
     let manifest_path = root.join("Cargo.toml");
     let manifest = fs::read_to_string(&manifest_path).context("reading Cargo.toml")?;
@@ -419,8 +419,9 @@ pub(crate) fn prepare(root: &Path, version: &str, date: &str) -> Result<()> {
     Ok(())
 }
 
-/// Inserts the release heading under `## [Unreleased]`, which stays, empty, for the next change.
-fn dated_changelog(changelog: &str, heading: &str) -> Result<String> {
+/// Inserts the release heading under `## [Unreleased]`, which stays, empty, for the next change,
+/// and moves the `[Unreleased]: …/compare/<previous>...HEAD` link reference on to `version`.
+fn dated_changelog(changelog: &str, heading: &str, version: &str) -> Result<String> {
     let lines: Vec<&str> = changelog.lines().collect();
     let unreleased = lines
         .iter()
@@ -440,12 +441,35 @@ fn dated_changelog(changelog: &str, heading: &str) -> Result<String> {
     out.push("");
     out.push(heading);
     out.push("");
-    out.extend(&lines[first_entry..]);
+    let rest = linked(&lines[first_entry..], version);
+    out.extend(rest.iter().map(String::as_str));
     let mut text = out.join("\n");
     if changelog.ends_with('\n') {
         text.push('\n');
     }
     Ok(text)
+}
+
+/// `lines` with `[Unreleased]: <base>/compare/<previous>...HEAD` pointed at `version` and
+/// `[<version>]: <base>/compare/<previous>...<version>` added after it; unchanged without that line.
+fn linked(lines: &[&str], version: &str) -> Vec<String> {
+    let mut out = Vec::with_capacity(lines.len() + 1);
+    for line in lines {
+        let compare = line
+            .strip_prefix("[Unreleased]: ")
+            .and_then(|url| url.strip_suffix("...HEAD"))
+            .and_then(|url| url.rsplit_once("/compare/"));
+        match compare {
+            Some((base, previous)) if previous != version => {
+                out.push(format!("[Unreleased]: {base}/compare/{version}...HEAD"));
+                out.push(format!(
+                    "[{version}]: {base}/compare/{previous}...{version}"
+                ));
+            }
+            _ => out.push((*line).to_owned()),
+        }
+    }
+    out
 }
 
 /// The manifest with `[workspace.package] version` and every path dependency pinned at `from`
@@ -681,7 +705,10 @@ mod tests {
 
     use anyhow::Result;
 
-    use super::{pin, prepare, record, tag, Forge, GitWriter, Recorder, ReleaseRun, StatusOutput};
+    use super::{
+        dated_changelog, pin, prepare, record, tag, Forge, GitWriter, Recorder, ReleaseRun,
+        StatusOutput,
+    };
     use crate::dep_tests::tempdir::Root;
 
     const MANIFEST: &str = "[workspace]\nmembers = [\"a\"]\n\n[workspace.package]\n\
@@ -693,7 +720,7 @@ mod tests {
         source = \"registry+https://github.com/rust-lang/crates.io-index\"\n";
 
     const CHANGELOG: &str = "# Changelog\n\n## [Unreleased]\n\n### Added\n\n- a thing\n\n\
-        ## [1.0.0] — 2026-01-01\n\n- the first\n";
+        ## [1.0.0] - 2026-01-01\n\n- the first\n";
 
     fn git(root: &Path, arguments: &[&str]) -> String {
         let output = Command::new("git")
@@ -814,12 +841,28 @@ mod tests {
         let changelog = read(&root, "CHANGELOG.md");
         assert!(
             changelog
-                .contains("## [Unreleased]\n\n## [9.9.9] — 2026-01-02\n\n### Added\n\n- a thing\n"),
+                .contains("## [Unreleased]\n\n## [9.9.9] - 2026-01-02\n\n### Added\n\n- a thing\n"),
             "{changelog}"
         );
         assert_eq!(
             crate::changelog_top_version(&root).expect("heading"),
             "9.9.9"
+        );
+    }
+
+    #[test]
+    fn dating_moves_the_unreleased_link_on_to_the_release() {
+        let changelog = "## [Unreleased]\n\n- a thing\n\n## [1.0.0] - 2026-01-01\n\n- first\n\n\
+            [Unreleased]: https://github.com/o/r/compare/1.0.0...HEAD\n\
+            [1.0.0]: https://github.com/o/r/releases/tag/1.0.0\n";
+        let dated = dated_changelog(changelog, "## [1.1.0] - 2026-01-02", "1.1.0").expect("dated");
+        assert!(
+            dated.ends_with(
+                "[Unreleased]: https://github.com/o/r/compare/1.1.0...HEAD\n\
+                [1.1.0]: https://github.com/o/r/compare/1.0.0...1.1.0\n\
+                [1.0.0]: https://github.com/o/r/releases/tag/1.0.0\n"
+            ),
+            "{dated}"
         );
     }
 
