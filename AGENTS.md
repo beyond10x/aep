@@ -162,10 +162,12 @@ The plan is `.engineering/planning/`, an `aep.project/5` store: one Markdown fil
 evidence record is one immutable file under `.engineering/evidence/`, and Git is the history.
 
 1. Write only through the CLI: `aep plan artifact new | relate | unrelate | body | set | scope |
-   move | evidence`. Each write changes one artifact file, plus one evidence file for `evidence`.
+   move | evidence | redact`. Each write changes one artifact file, plus one evidence file for
+   `evidence` and `redact`.
 2. Never hand-edit machine-owned front matter (`format`, `id`, `kind`, `status`, `revision`,
    `relations`, `transitions`) and never edit or delete an evidence file. Retire an artifact with
-   `move --to archived`, never `rm`.
+   `move --to archived`, never `rm`. `redact` is the only way to change an immutable record's text
+   (a committed `review-result`'s title or body), for example to take out a name.
 3. A status move is a claim about project state. Propose it unless the operator asked for that
    exact move.
 4. A refusal is an answer: relay the legal moves it prints; do not route around it.

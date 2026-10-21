@@ -135,6 +135,28 @@ pub enum Change {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         outcome: Option<ReviewOutcome>,
     },
+    /// A literal was replaced in this artifact's title, summary and body (`aep plan artifact
+    /// redact`).
+    ///
+    /// Written as an evidence file beside the artifact's other records, in the same commit as the
+    /// rewritten document, and it is the **only** account under which an immutable record's text
+    /// may differ from its first committed version: `validate` replays every such record over that
+    /// version and accepts the text only when the replay produces it byte for byte. The literal
+    /// itself is written nowhere — a record holding it would put back what it took out — so the
+    /// replay matches windows by the digest of their folded text.
+    Redaction {
+        /// The lowercase hex SHA-256 of the literal folded to lowercase.
+        literal_sha256: String,
+        /// How many characters the literal spans once folded to lowercase: the folded width of
+        /// every window the replay compares.
+        literal_chars: u64,
+        /// What replaced each occurrence.
+        replacement: String,
+        /// How many occurrences were replaced, in the title, the summary and the body together.
+        count: u64,
+        /// Why, as the redactor stated it.
+        reason: String,
+    },
 }
 
 /// What a decision rested on, and — the point of the type — **where each part came from**.
@@ -349,6 +371,17 @@ impl fmt::Display for Change {
                 }
                 Ok(())
             }
+            Self::Redaction {
+                literal_chars,
+                replacement,
+                count,
+                reason,
+                ..
+            } => write!(
+                f,
+                "redacted {count} occurrence(s) of a {literal_chars}-character literal as \
+                 {replacement:?}: {reason}"
+            ),
         }
     }
 }
@@ -499,6 +532,12 @@ pub fn evidence_records_git(
                 Some(entry) if matches!(entry.change, Change::Evidence { .. }) => {
                     records.push((path, entry));
                 }
+                // A redaction record reads, and is not an observation: [`redaction_records_git`]
+                // is its reader.
+                Some(Entry {
+                    change: Change::Redaction { .. },
+                    ..
+                }) => {}
                 _ => unreadable += 1,
             }
         }
@@ -507,6 +546,34 @@ pub fn evidence_records_git(
     // Stable, so equal keys keep file order, as they do in `history_git`.
     records.sort_by(|(_, left), (_, right)| history_order(left, right));
     (records, unreadable)
+}
+
+/// The redaction records about one artifact in a Git-native store, committed or not, each with the
+/// file it was read from, ordered by `at` and then by file name — the order a replay applies them
+/// in.
+///
+/// Read from the artifact's own `evidence/<namespace>/<name>/` only: a redaction rewrites that
+/// artifact's document, and a record filed anywhere else is one `validate` already reports as
+/// misfiled. A file that does not read, and a record about another artifact, is not one.
+#[must_use]
+pub fn redaction_records_git(evidence: &Path, artifact: &ArtifactId) -> Vec<(PathBuf, Entry)> {
+    let mut records: Vec<(PathBuf, Entry)> =
+        files_with(&evidence_directory(evidence, artifact), "json")
+            .into_iter()
+            .filter_map(|path| {
+                let entry = std::fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|text| serde_json::from_str::<Entry>(&text).ok())?;
+                (matches!(entry.change, Change::Redaction { .. }) && &entry.artifact == artifact)
+                    .then_some((path, entry))
+            })
+            .collect();
+    records.sort_by(|(left_path, left), (right_path, right)| {
+        left.at
+            .cmp(&right.at)
+            .then_with(|| left_path.file_name().cmp(&right_path.file_name()))
+    });
+    records
 }
 
 /// The order a Git-native history answers entries in: `at`, then artifact, then revision.
@@ -671,7 +738,14 @@ fn evidence_in(directory: &Path) -> (Vec<Entry>, usize) {
             .ok()
             .and_then(|text| serde_json::from_str::<Entry>(&text).ok())
         {
-            Some(entry) if matches!(entry.change, Change::Evidence { .. }) => entries.push(entry),
+            Some(entry)
+                if matches!(
+                    entry.change,
+                    Change::Evidence { .. } | Change::Redaction { .. }
+                ) =>
+            {
+                entries.push(entry);
+            }
             _ => unreadable += 1,
         }
     }

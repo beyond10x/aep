@@ -9,6 +9,35 @@ belongs in the commit message or in `docs/design/`.
 
 ## [Unreleased]
 
+### Added
+
+- `aep plan artifact redact <id> --literal <text> --with <replacement> --reason <text>` replaces
+  every case-insensitive occurrence of the literal in an artifact's title, summary and body, left
+  to right and without overlap, and writes one evidence file (`"change": "redaction"`) holding the
+  SHA-256 of the lowercased literal, its length in characters once lowercased, the replacement,
+  the count over all three fields and the reason. A window is measured lowercased, so a character
+  that lowercases to two (`İ`) is matched in both spellings. The literal is printed and written
+  nowhere. It prints the id, the count, the new revision and the record's path, and works on any
+  kind in a Git-native store. It refuses, writing nothing, an empty literal or reason, a
+  replacement or a reason that holds the literal in some letter case, a literal the artifact does
+  not hold, a replacement after which the artifact still holds the literal (formed again with the
+  text beside it, or inside a character that lowercases to more than one), an unknown id, and a
+  SQLite or PostgreSQL store. It
+  issues the new command `aep.entity.redact/v1` (`redact-entity`), which the memory backend applies
+  to immutable kinds too, because the record travels with the change.
+
+### Changed
+
+- `aep plan artifact validate` admits a committed `review-result` whose title or body differs from
+  its first committed version when the redaction records under its evidence directory, committed or
+  not, replayed in order of `at` and file name over that version's title, summary and body,
+  produce the current title and body byte for byte and each match as many occurrences as it
+  records. Otherwise it names each record whose count does not replay (a hand-written width no text
+  holds among them, reported rather than crashing the validator), or says the text differs beyond
+  the recorded redactions. A store holding a
+  redaction record needs this release to validate: an older one reports the record as an evidence
+  file that holds something other than evidence.
+
 ## [0.74.0] — 2026-10-16
 
 ### Added

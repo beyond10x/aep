@@ -787,3 +787,380 @@ fn copy_tree(from: &Path, to: &Path) {
         }
     }
 }
+
+// ---- `aep plan artifact redact`: an immutable record's text changes only by a recorded redaction.
+
+/// A committed review-result whose title is `title` and whose body is `body`, validated.
+fn committed_review_saying(name: &str, title: &str, body: &str) -> (PathBuf, PathBuf) {
+    committed_review_with(name, title, body, &[])
+}
+
+/// [`committed_review_saying`], with `extra` arguments to `new`.
+fn committed_review_with(
+    name: &str,
+    title: &str,
+    body: &str,
+    extra: &[&str],
+) -> (PathBuf, PathBuf) {
+    let project = project(name);
+    let file = project.join("review-body.md");
+    std::fs::write(&file, body).expect("the body is written");
+    ok(&project, &["new", "story", "subject", "--title", "Subject"]);
+    let mut args = vec![
+        "new",
+        "review-result",
+        "looked",
+        "--title",
+        title,
+        "--relate",
+        "reviews:story:subject",
+        "--from",
+        printable(&file),
+    ];
+    args.extend_from_slice(extra);
+    ok(&project, &args);
+    std::fs::remove_file(&file).expect("the body file is removable");
+    commit(&project, "review");
+    ok(&project, &["validate"]);
+    let document = project.join(".engineering/planning/review-result/looked.md");
+    (project, document)
+}
+
+/// The review's evidence directory.
+fn review_evidence(project: &Path) -> PathBuf {
+    project.join(".engineering/evidence/review-result/looked")
+}
+
+/// Redacts `literal` from `review-result:looked` as `customer A`, and returns the JSON report.
+fn redact_acme(project: &Path, literal: &str) -> serde_json::Value {
+    let said = ok(
+        project,
+        &[
+            "redact",
+            "review-result:looked",
+            "--literal",
+            literal,
+            "--with",
+            "customer A",
+            "--reason",
+            "names a customer",
+            "--format",
+            "json",
+        ],
+    );
+    assert!(
+        !said.to_lowercase().contains(&literal.to_lowercase()),
+        "the report never prints the literal: {said}"
+    );
+    serde_json::from_str(&said).expect("the report is JSON")
+}
+
+/// The lowercase hex SHA-256 of `literal` folded to lowercase, as a redaction record keeps it.
+fn folded_digest(literal: &str) -> String {
+    use sha2::{Digest as _, Sha256};
+    let folded: String = literal.chars().flat_map(char::to_lowercase).collect();
+    Sha256::digest(folded.as_bytes())
+        .iter()
+        .fold(String::new(), |mut output, byte| {
+            use std::fmt::Write as _;
+            write!(&mut output, "{byte:02x}").expect("writing to a String cannot fail");
+            output
+        })
+}
+
+/// Writes a redaction record by hand into the review's evidence directory.
+fn hand_written_record(project: &Path, literal: &str, count: u64) -> PathBuf {
+    let directory = review_evidence(project);
+    std::fs::create_dir_all(&directory).expect("the evidence directory is writable");
+    let record = serde_json::json!({
+        "at": "2026-10-21T10:00:00Z",
+        "actor": "human:tester",
+        "artifact": "review-result:looked",
+        "kind": "review-result",
+        "revision": 2,
+        "change": {
+            "change": "redaction",
+            "literal_sha256": folded_digest(literal),
+            "literal_chars": literal.chars().count(),
+            "replacement": "customer A",
+            "count": count,
+            "reason": "names a customer",
+        },
+    });
+    let path = directory.join("20261021T100000Z-000-handwritten0.json");
+    std::fs::write(
+        &path,
+        format!(
+            "{}\n",
+            serde_json::to_string_pretty(&record).expect("the record serialises")
+        ),
+    )
+    .expect("the record is written");
+    path
+}
+
+const ACME_BODY: &str = "## Verdict\n\nAcme approved it; ACME signed; acme paid.\n";
+
+#[test]
+fn acme_in_three_letter_cases_counts_three_and_no_file_keeps_it() {
+    let (project, document) = committed_review_saying("redact-cases", "Looked at it", ACME_BODY);
+    let report = redact_acme(&project, "Acme");
+    assert_eq!(report["id"], "review-result:looked", "{report}");
+    assert_eq!(report["count"], 3, "{report}");
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    assert!(
+        text.contains("customer A approved it; customer A signed; customer A paid."),
+        "{text}"
+    );
+    for (file, bytes) in contents(&project.join(".engineering")) {
+        let lowered = String::from_utf8_lossy(&bytes).to_lowercase();
+        assert!(!lowered.contains("acme"), "{file} still holds the literal");
+    }
+    let evidence = std::fs::read_dir(review_evidence(&project))
+        .expect("the redaction wrote a record")
+        .count();
+    assert_eq!(evidence, 1, "one record");
+}
+
+#[test]
+fn a_redacted_committed_review_validates_uncommitted_and_after_commit() {
+    let (project, _) = committed_review_saying("redact-valid", "Looked at Acme", ACME_BODY);
+    let report = redact_acme(&project, "acme");
+    assert_eq!(report["count"], 4, "the title and the body: {report}");
+    ok(&project, &["validate"]);
+    commit(&project, "redact");
+    ok(&project, &["validate"]);
+    let history = ok(&project, &["history", "review-result:looked"]);
+    assert!(history.contains("redacted"), "{history}");
+    assert!(!history.to_lowercase().contains("acme"), "{history}");
+}
+
+#[test]
+fn a_literal_in_the_summary_is_redacted_counted_and_validates() {
+    let (project, document) = committed_review_with(
+        "redact-summary",
+        "Looked at Acme",
+        ACME_BODY,
+        &["--summary", "Acme pass one"],
+    );
+    let report = redact_acme(&project, "acme");
+    assert_eq!(
+        report["count"], 5,
+        "the title, the summary and the body: {report}"
+    );
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    assert!(text.contains("customer A pass one"), "{text}");
+    for (file, bytes) in contents(&project.join(".engineering")) {
+        let lowered = String::from_utf8_lossy(&bytes).to_lowercase();
+        assert!(!lowered.contains("acme"), "{file} still holds the literal");
+    }
+    ok(&project, &["validate"]);
+    commit(&project, "redact");
+    ok(&project, &["validate"]);
+}
+
+#[test]
+fn a_redaction_plus_another_body_edit_is_refused() {
+    let (project, document) =
+        committed_review_saying("redact-body-edit", "Looked at it", ACME_BODY);
+    redact_acme(&project, "Acme");
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    std::fs::write(&document, text.replace("## Verdict", "## Changed verdict"))
+        .expect("the edit is written");
+    let said = refused_validate(&project);
+    assert!(said.contains("review-result:looked"), "{said}");
+    assert!(said.contains("beyond the recorded redactions"), "{said}");
+    commit(&project, "an edit");
+    let said = refused_validate(&project);
+    assert!(said.contains("beyond the recorded redactions"), "{said}");
+}
+
+#[test]
+fn a_redaction_plus_another_title_edit_is_refused() {
+    let (project, document) =
+        committed_review_saying("redact-title-edit", "Looked at Acme", ACME_BODY);
+    redact_acme(&project, "Acme");
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    let edited = text.replace(
+        "title: Looked at customer A",
+        "title: Looked again at customer A",
+    );
+    assert_ne!(text, edited, "the fixture has a redacted title: {text}");
+    std::fs::write(&document, edited).expect("the edit is written");
+    let said = refused_validate(&project);
+    assert!(said.contains("review-result:looked"), "{said}");
+    assert!(said.contains("title"), "{said}");
+    assert!(said.contains("beyond the recorded redactions"), "{said}");
+}
+
+#[test]
+fn a_hand_written_record_matching_nothing_does_not_admit_a_hand_edit() {
+    let (project, document) = committed_review_saying("redact-forged", "Looked at it", ACME_BODY);
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    std::fs::write(&document, text.replace("ACME signed", "nobody signed"))
+        .expect("the edit is written");
+    let record = hand_written_record(&project, "Nowhere Ltd", 1);
+    let said = refused_validate(&project);
+    assert!(said.contains("review-result:looked"), "{said}");
+    let name = record
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("a file name");
+    assert!(said.contains(name), "names the record: {said}");
+    assert!(
+        said.contains("matches 0") && said.contains("records 1"),
+        "says the replay found nothing: {said}"
+    );
+    assert!(said.contains("beyond the recorded redactions"), "{said}");
+}
+
+#[test]
+fn a_redaction_record_whose_count_is_wrong_is_refused() {
+    let (project, document) = committed_review_saying("redact-count", "Looked at it", ACME_BODY);
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    let redacted = text
+        .replace("Acme", "customer A")
+        .replace("ACME", "customer A")
+        .replace("acme", "customer A");
+    std::fs::write(&document, redacted).expect("the edit is written");
+    let record = hand_written_record(&project, "Acme", 5);
+    let said = refused_validate(&project);
+    let name = record
+        .file_name()
+        .and_then(|name| name.to_str())
+        .expect("a file name");
+    assert!(said.contains(name), "names the record: {said}");
+    assert!(
+        said.contains("matches 3") && said.contains("records 5"),
+        "{said}"
+    );
+}
+
+#[test]
+fn every_redact_refusal_writes_nothing() {
+    let (project, _) = committed_review_saying("redact-refusals", "Looked at it", ACME_BODY);
+    let cases: [(&[&str], &str); 6] = [
+        (
+            &[
+                "redact",
+                "review-result:looked",
+                "--literal",
+                "",
+                "--with",
+                "x",
+                "--reason",
+                "r",
+            ],
+            "`--literal` is empty",
+        ),
+        (
+            &[
+                "redact",
+                "review-result:looked",
+                "--literal",
+                "Nowhere",
+                "--with",
+                "x",
+                "--reason",
+                "r",
+            ],
+            "does not hold the literal",
+        ),
+        (
+            &[
+                "redact",
+                "review-result:looked",
+                "--literal",
+                "Acme",
+                "--with",
+                "the ACME team",
+                "--reason",
+                "r",
+            ],
+            "`--with` holds the literal",
+        ),
+        (
+            &[
+                "redact",
+                "review-result:absent",
+                "--literal",
+                "Acme",
+                "--with",
+                "x",
+                "--reason",
+                "r",
+            ],
+            "review-result:absent",
+        ),
+        (
+            &[
+                "redact",
+                "review-result:looked",
+                "--literal",
+                "Acme",
+                "--with",
+                "x",
+                "--reason",
+                " ",
+            ],
+            "`--reason` is empty",
+        ),
+        (
+            &[
+                "redact",
+                "review-result:looked",
+                "--literal",
+                "Acme",
+                "--with",
+                "x",
+                "--reason",
+                "it names ACME",
+            ],
+            "`--reason` holds the literal",
+        ),
+    ];
+    for (args, expected) in cases {
+        let before = contents(&project);
+        let refused = aep(&project, args);
+        let said = format!("{}{}", stdout(&refused), stderr(&refused));
+        assert!(!refused.status.success(), "{args:?} passed: {said}");
+        assert!(said.contains(expected), "{args:?}: {said}");
+        assert_eq!(
+            changed(&before, &contents(&project)),
+            Vec::<String>::new(),
+            "{args:?} wrote"
+        );
+        assert!(
+            !review_evidence(&project).exists(),
+            "{args:?} wrote a record"
+        );
+    }
+}
+
+#[test]
+fn redact_works_on_any_kind() {
+    let project = project("redact-story");
+    ok(
+        &project,
+        &["new", "story", "named", "--title", "Ship it for Acme"],
+    );
+    let said = ok(
+        &project,
+        &[
+            "redact",
+            "story:named",
+            "--literal",
+            "acme",
+            "--with",
+            "customer A",
+            "--reason",
+            "names a customer",
+        ],
+    );
+    assert!(said.contains("story:named"), "{said}");
+    assert!(!said.to_lowercase().contains("acme"), "{said}");
+    ok(&project, &["validate"]);
+    let document = project.join(".engineering/planning/story/named.md");
+    let text = std::fs::read_to_string(&document).expect("the document reads");
+    assert!(text.contains("Ship it for customer A"), "{text}");
+}

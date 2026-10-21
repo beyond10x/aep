@@ -88,6 +88,9 @@ struct Current {
     removed: Option<Removed>,
     /// An observation about an artifact, as the command stated it.
     observation: Option<Observation>,
+    /// A redaction's account, as the journal will spell it: the change its placement carries in
+    /// place of the one [`change_for`] would read off the documents.
+    redaction: Option<Box<journal::Change>>,
     /// The command is an `UpdateEntity` changing the crossings and nothing else.
     ///
     /// An edge is a record of its own and neither endpoint's document revision moves for one
@@ -304,12 +307,18 @@ impl MarkdownProjection {
         if !creating && !observing && !self.current.crossings_only {
             updated.frontmatter.revision = existing.frontmatter.revision.saturating_add(1);
         }
-        let change = change_for(
-            creating,
-            &existing,
-            &updated,
-            self.current.decided_on.clone().unwrap_or_default(),
-        );
+        // A redaction is journalled as its account, which becomes the evidence file a replay reads;
+        // read off the documents it would be `body_replaced`, and the changed text would then have
+        // nothing on record that explains it.
+        let change = match self.current.redaction.clone() {
+            Some(redaction) if !creating && !observing => *redaction,
+            _ => change_for(
+                creating,
+                &existing,
+                &updated,
+                self.current.decided_on.clone().unwrap_or_default(),
+            ),
+        };
         let instance = instance_of(&directory, &name, &updated);
         Ok(Some(Placement {
             entity: directory,
@@ -658,12 +667,23 @@ impl<S: PlanStore> Projection<S> for MarkdownProjection {
             Command::UpdateEntity(update)
                 if update.changes.len() == 1 && update.changes.contains_key("relations")
         );
+        let redaction = match &envelope.payload {
+            Command::RedactEntity(redact) => Some(Box::new(journal::Change::Redaction {
+                literal_sha256: redact.literal_sha256.clone(),
+                literal_chars: redact.literal_chars,
+                replacement: redact.replacement.clone(),
+                count: redact.count,
+                reason: redact.reason.clone(),
+            })),
+            _ => None,
+        };
         self.current = Current {
             decided: matches!(&envelope.payload, Command::MoveStatus(_)),
             decided_on,
             touched,
             removed,
             observation,
+            redaction,
             crossings_only,
         };
         Ok(())

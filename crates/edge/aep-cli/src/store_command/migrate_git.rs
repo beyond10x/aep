@@ -735,6 +735,7 @@ fn compute(planning: &Path, lifecycles: &LifecycleRegistry, carrier: &Carrier) -
                 Change::Related { .. } => "related",
                 Change::Unrelated { .. } => "unrelated",
                 Change::BodyReplaced => "body_replaced",
+                Change::Redaction { .. } => "redaction",
             };
             *plan.dropped.entry(dropped).or_default() += 1;
         }

@@ -57,6 +57,9 @@ mod findings_standing;
 mod task_spend;
 // `aep plan artifact spend`: spend per task kind and figure against the project's baseline and target.
 mod spend;
+// `aep plan artifact redact`: case-folded matching, the literal's digest, and the replay `validate`
+// runs over an immutable record's first version.
+mod record_redaction;
 
 /// Where a new document's body is seeded from, relative to the document tree.
 const TEMPLATE_DIRECTORY: &str = "artifacts/templates";
@@ -1016,6 +1019,33 @@ pub(crate) enum ArtifactCommand {
         #[arg(long, value_name = "HEADING")]
         section: Option<String>,
     },
+    /// Replace a literal in an artifact's title, summary and body, and record that it was done.
+    ///
+    /// The one way an immutable record's text changes. Every case-insensitive occurrence is
+    /// replaced, left to right and without overlap, and one evidence file records the digest of
+    /// the folded literal, its length, the replacement, the count and the reason — never the
+    /// literal. `validate` replays those records over a review-result's first committed version
+    /// and accepts its text only when the replay produces it.
+    ///
+    /// Git-native stores only: a store that keeps an event log keeps the earlier text in it, and a
+    /// redaction there would remove nothing.
+    Redact {
+        /// Where the plan is and how to render.
+        #[command(flatten)]
+        store: StoreArgs,
+        /// The artifact, such as `review-result:security-pass`.
+        id: String,
+        /// The text to take out, matched without regard to letter case. Printed nowhere and
+        /// written nowhere.
+        #[arg(long, value_name = "TEXT")]
+        literal: String,
+        /// What replaces each occurrence. Must not hold the literal.
+        #[arg(long, value_name = "TEXT")]
+        with: String,
+        /// Why, kept in the record as written. Must not hold the literal.
+        #[arg(long, value_name = "TEXT")]
+        reason: String,
+    },
     /// Change one frontmatter field, through the door every other write passes.
     ///
     /// The verb `body` had and frontmatter did not: nothing changed a title, a summary, an owner or
@@ -1660,6 +1690,13 @@ pub(crate) fn run(command: ArtifactCommand) -> Result<ExitCode> {
             relation,
             target,
         } => unrelate(&store, &id, &relation, target.as_deref()),
+        ArtifactCommand::Redact {
+            store,
+            id,
+            literal,
+            with,
+            reason,
+        } => redact_literal(&store, &id, &literal, &with, &reason),
         ArtifactCommand::Body {
             store,
             id,
@@ -1806,7 +1843,8 @@ fn artifact_mutation_location(command: &ArtifactCommand) -> Option<&StoreLocatio
         | ArtifactCommand::Body { store, .. }
         | ArtifactCommand::Set { store, .. }
         | ArtifactCommand::Scope { store, .. }
-        | ArtifactCommand::Evidence { store, .. } => Some(&store.location),
+        | ArtifactCommand::Evidence { store, .. }
+        | ArtifactCommand::Redact { store, .. } => Some(&store.location),
         ArtifactCommand::Waves { .. }
         | ArtifactCommand::Show { .. }
         | ArtifactCommand::List { .. }
@@ -3834,6 +3872,200 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
         )?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// `aep plan artifact redact`
+///
+/// Every refusal comes before the store is written, and names neither the literal nor anything
+/// that would let a reader recover it.
+fn redact_literal(
+    args: &StoreArgs,
+    id: &str,
+    literal: &str,
+    with: &str,
+    reason: &str,
+) -> Result<ExitCode> {
+    use record_redaction::{folded_chars, folded_digest, holds};
+
+    let id = artifact_id(id)?;
+    if literal.is_empty() {
+        anyhow::bail!("`--literal` is empty; there is nothing to redact");
+    }
+    if reason.trim().is_empty() {
+        anyhow::bail!(
+            "`--reason` is empty; a redaction record says why the record's text was changed"
+        );
+    }
+    if holds(with, literal) {
+        anyhow::bail!(
+            "`--with` holds the literal itself, in some letter case; a redaction that writes it \
+             back removes nothing"
+        );
+    }
+    if holds(reason, literal) {
+        anyhow::bail!(
+            "`--reason` holds the literal itself, in some letter case; the record keeps its \
+             reason as written, so a redaction that gives it puts back what it takes out"
+        );
+    }
+    let Plan::Git { evidence, .. } = args.location.plan()? else {
+        anyhow::bail!(
+            "`redact` changes a Git-native store (`aep.project/5`) only: a store that keeps an \
+             event log keeps the earlier text in it, and a redaction there would remove nothing"
+        );
+    };
+
+    let opened = open(&args.location, true)?;
+    let stored = opened
+        .report
+        .documents
+        .get(&id)
+        .with_context(|| opened.missing(&id))?;
+    let (changes, count) = redacted_text(&id, &stored.document, literal, with)?;
+    let records = |directory: &Path| -> BTreeSet<PathBuf> {
+        std::fs::read_dir(directory)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .map(|entry| entry.path())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    let directory = evidence.join(id.namespace()).join(id.name());
+    let before = records(&directory);
+    redaction_through_a_command(opened.backend()?, &id, |target| {
+        aep_domain::command::RedactEntity {
+            target,
+            changes,
+            literal_sha256: folded_digest(literal),
+            literal_chars: folded_chars(literal),
+            replacement: with.to_owned(),
+            count,
+            reason: reason.to_owned(),
+        }
+    })?;
+    let written: Vec<PathBuf> = records(&directory).difference(&before).cloned().collect();
+    let [record] = written.as_slice() else {
+        anyhow::bail!(
+            "`{id}` was redacted, and {} new record(s) appeared under {} where one was expected",
+            written.len(),
+            directory.display()
+        );
+    };
+    let root = args.repository_root();
+    let shown = record
+        .strip_prefix(&root)
+        .unwrap_or(record)
+        .display()
+        .to_string();
+    let reopened = open(&args.location, false)?;
+    let revision = reopened
+        .report
+        .documents
+        .get(&id)
+        .map_or(0, |stored| stored.document.frontmatter.revision);
+    match args.format {
+        Format::Text => outln!(
+            "{id}: redacted {count} occurrence(s) (revision {revision}); recorded in {shown}"
+        ),
+        Format::Yaml | Format::Json => crate::print_serialised(
+            &Redacted {
+                id: id.to_string(),
+                count,
+                revision,
+                record: shown,
+            },
+            args.format,
+        )?,
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// The title, summary and body `document` has once every occurrence of `literal` reads `with`, as
+/// the changes a `RedactEntity` carries, and how many occurrences that replaced in all three.
+///
+/// Refuses a document that does not hold the literal, and a replacement after which the literal is
+/// still there in some letter case: formed again from the text beside it, or inside a character
+/// that folds to more than one.
+fn redacted_text(
+    id: &ArtifactId,
+    document: &PlanningDocument,
+    literal: &str,
+    with: &str,
+) -> Result<(BTreeMap<String, aep_domain::node::Node>, u64)> {
+    use aep_domain::node::Node;
+    use record_redaction::{holds, replace_literal};
+
+    let front = &document.frontmatter;
+    let fields = [
+        ("title", front.title.as_deref()),
+        ("summary", front.summary.as_deref()),
+        (
+            aep_backend_markdown::backend::BODY_KEY,
+            Some(document.body.as_str()),
+        ),
+    ];
+    let mut changes = BTreeMap::new();
+    let mut count = 0;
+    let mut kept = false;
+    for (field, text) in fields {
+        let Some(text) = text else { continue };
+        let (redacted, found) = replace_literal(text, literal, with);
+        kept |= holds(&redacted, literal);
+        if found > 0 {
+            count += found;
+            changes.insert(field.to_owned(), Node::from(redacted.as_str()));
+        }
+    }
+    if count == 0 && !kept {
+        anyhow::bail!(
+            "`{id}` does not hold the literal in its title, summary or body; nothing was redacted"
+        );
+    }
+    // The replacement can complete an occurrence with the text beside it — `ab` replaced by `a`
+    // in `abb` leaves `ab` — and a redaction that leaves what it took out has removed nothing.
+    if kept {
+        anyhow::bail!(
+            "after replacing the literal with `--with`, `{id}` still holds it in some letter case \
+             (formed again from the text beside it, or inside a character that folds to more than \
+             one); nothing was redacted — choose a replacement that cannot complete it"
+        );
+    }
+    Ok((changes, count))
+}
+
+/// Issues the `RedactEntity` command `redact` builds for `id`'s entity.
+fn redaction_through_a_command(
+    backend: &PlanBackend,
+    id: &ArtifactId,
+    redact: impl FnOnce(aep_domain::entity::EntityRef) -> aep_domain::command::RedactEntity,
+) -> Result<()> {
+    use aep_contract::command::CommandService;
+    use aep_contract::query::QueryService;
+    use aep_contract::testing::block_on;
+    use aep_domain::command::Command;
+    use aep_domain::entity::{EntityLocator, EntityRef};
+
+    let locator = EntityLocator::new(
+        aep_backend_markdown::backend::ORGANISATION,
+        aep_backend_markdown::backend::SPACE,
+        id.namespace(),
+        id.name(),
+    )
+    .map_err(|error| anyhow::anyhow!("`{id}` cannot be given an address: {error}"))?;
+    let target = block_on(QueryService::resolve(backend, &locator))
+        .map_err(|error| anyhow::anyhow!("`{id}` is not in this store: {error}"))?;
+    let at = clock_at_the_edge();
+    let envelope = envelope_for(
+        &format!("redact-{id}-{}", at.epoch_millis()),
+        "protocol-artifact-redact",
+        "aep.entity.redact/v1",
+        Command::RedactEntity(redact(EntityRef::new(target))),
+        at,
+    )?;
+    block_on(backend.execute(envelope)).map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(())
 }
 
 /// The frontmatter fields `set` may change.
@@ -6206,7 +6438,7 @@ fn git_findings(
     }
     if let Some(history) = &history {
         problems.extend(unmoved_problems(&unmoved, history));
-        problems.extend(review_problems(&reviews, history));
+        problems.extend(review_problems(&reviews, history, evidence));
     }
     problems.extend(evidence_problems(evidence));
     problems.extend(
@@ -6311,9 +6543,18 @@ fn unmoved_problems(
 /// the first committed `aep.planning-md/3` version, because the migrations into the Git-native
 /// layout rewrote older versions (a redaction pass changed bodies before it) and those were never
 /// Git-native records. An uncommitted review has no baseline yet and is not compared.
+///
+/// One account admits a difference: the redaction records under the review's evidence directory
+/// (`aep plan artifact redact`), committed or not. Each record later than the baseline — its
+/// revision above the baseline's — is replayed over the baseline's title, summary and body in
+/// order, and the text stands only when every record matches as many windows as it says it
+/// replaced and the replay ends at the current title and body byte for byte. A record's width is
+/// read from a file anyone can write, so a width no text holds matches nothing and is reported
+/// here like any other count that does not replay.
 fn review_problems(
     reviews: &[&aep_backend_markdown::StoredDocument],
     history: &BTreeMap<String, Vec<Vec<u8>>>,
+    evidence: &Path,
 ) -> Vec<String> {
     let mut problems = Vec::new();
     for stored in reviews {
@@ -6326,19 +6567,79 @@ fn review_problems(
             continue;
         };
         let now = &stored.document;
-        let mut changed = Vec::new();
-        if first.frontmatter.title != now.frontmatter.title {
-            changed.push("title");
+        let id = &now.frontmatter.id;
+        let changed = |title: &Option<String>, body: &str| {
+            let mut changed = Vec::new();
+            if *title != now.frontmatter.title {
+                changed.push("title");
+            }
+            if body != now.body {
+                changed.push("body");
+            }
+            changed
+        };
+        let differs = changed(&first.frontmatter.title, &first.body);
+        if differs.is_empty() {
+            continue;
         }
-        if first.body != now.body {
-            changed.push("body");
-        }
-        if !changed.is_empty() {
+        let records: Vec<_> = aep_backend_markdown::journal::redaction_records_git(evidence, id)
+            .into_iter()
+            .filter(|(_, entry)| entry.revision > first.frontmatter.revision)
+            .collect();
+        if records.is_empty() {
             problems.push(format!(
-                "{}: its {} differs from its first committed version — a review-result is \
+                "{id}: its {} differs from its first committed version — a review-result is \
                  immutable after the commit that created it; record a second review instead",
-                now.frontmatter.id,
-                changed.join(" and ")
+                differs.join(" and ")
+            ));
+            continue;
+        }
+        // The summary is replayed so each record's count covers every field the verb redacts, and
+        // compared with nothing: the summary is not part of what an immutable record says.
+        let (mut title, mut summary, mut body) = (
+            first.frontmatter.title.clone(),
+            first.frontmatter.summary.clone(),
+            Some(first.body.clone()),
+        );
+        for (path, entry) in &records {
+            let aep_backend_markdown::journal::Change::Redaction {
+                literal_sha256,
+                literal_chars,
+                replacement,
+                count,
+                ..
+            } = &entry.change
+            else {
+                continue;
+            };
+            let mut matched: u64 = 0;
+            for text in [&mut title, &mut summary, &mut body].into_iter().flatten() {
+                let (replayed, found) = record_redaction::replace_digest(
+                    text,
+                    literal_sha256,
+                    *literal_chars,
+                    replacement,
+                );
+                *text = replayed;
+                matched = matched.saturating_add(found);
+            }
+            if matched != *count {
+                problems.push(format!(
+                    "{id}: the redaction record {} matches {matched} occurrence(s) in the text it \
+                     replays over, and records {count} — a redaction record is the account the \
+                     verb wrote, and one that does not replay explains nothing",
+                    path.display()
+                ));
+            }
+        }
+        let left = changed(&title, body.as_deref().unwrap_or_default());
+        if !left.is_empty() {
+            problems.push(format!(
+                "{id}: its {} differs from its first committed version beyond the recorded \
+                 redactions — a review-result is immutable after the commit that created it, and \
+                 `aep plan artifact redact` is the only change its text admits; record a second \
+                 review instead",
+                left.join(" and ")
             ));
         }
     }
@@ -6462,9 +6763,17 @@ fn evidence_problems(evidence: &Path) -> Vec<String> {
                         "{}: not an evidence record: {error}",
                         path.display()
                     )),
-                    Ok(entry) if !matches!(entry.change, Change::Evidence { .. }) => {
+                    // A redaction's account is the one other record an evidence file holds:
+                    // `review_problems` replays it.
+                    Ok(entry)
+                        if !matches!(
+                            entry.change,
+                            Change::Evidence { .. } | Change::Redaction { .. }
+                        ) =>
+                    {
                         problems.push(format!(
-                            "{}: records `{}`, and an evidence file holds evidence only",
+                            "{}: records `{}`, and an evidence file holds evidence and redaction \
+                             records only",
                             path.display(),
                             entry.change
                         ));
@@ -7787,7 +8096,8 @@ fn joined(entries: &[aep_backend_markdown::journal::Entry]) -> (Vec<Reached>, Ve
             Change::Created { .. }
             | Change::Related { .. }
             | Change::Unrelated { .. }
-            | Change::BodyReplaced => {}
+            | Change::BodyReplaced
+            | Change::Redaction { .. } => {}
         }
     }
     (reached, since)
@@ -8732,6 +9042,15 @@ struct BodyReplaced {
     id: String,
     revision: u64,
     path: String,
+}
+
+/// What `redact` replaced, and where it recorded that it did. Never the literal.
+#[derive(Debug, serde::Serialize)]
+struct Redacted {
+    id: String,
+    count: u64,
+    revision: u64,
+    record: String,
 }
 
 /// What `set` changed, and what the document reads at afterwards.

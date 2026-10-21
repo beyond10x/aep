@@ -190,6 +190,40 @@ fn apply_valid(
             vec![reference]
         }
 
+        // **Not** the guard `UpdateEntity` carries, and deliberately. Immutability forbids an edit
+        // that leaves no account of itself; a redaction carries its account — the digest of the
+        // literal, the width, the replacement, the count and the reason — and the store that keeps
+        // the text writes that account beside it, so a reader can replay the change over the first
+        // version and see that nothing else moved. Without it the only ways to take a customer's
+        // name out of a review were a hand edit `validate` refuses, or leaving it there.
+        Command::RedactEntity(redact) => {
+            require_entity(store, &redact.target)?;
+            let reference = mutate(
+                store,
+                envelope,
+                &redact.target,
+                at,
+                &actor,
+                executor.as_ref(),
+                |entity| {
+                    merge(&mut entity.data, &redact.changes);
+                },
+            )?;
+            emit(
+                store,
+                envelope,
+                "aep.entity.updated/v1",
+                DomainEvent::Custom {
+                    event_type: parse_type("aep.entity.updated/v1"),
+                    data: Node::Map(redact.changes.clone()),
+                },
+                &reference,
+                at,
+                &actor,
+            );
+            vec![reference]
+        }
+
         Command::CreateRelation(create) => {
             require_entity(store, &create.source)?;
             require_entity(store, &create.target)?;
