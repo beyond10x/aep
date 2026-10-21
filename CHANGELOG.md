@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.76.0] - 2026-10-21
+
 ### Fixed
 
 - A repository protocol source loads on macOS; publishing its snapshot failed with `Permission denied (os error 13)`.
@@ -1804,7 +1806,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.75.0...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.76.0...HEAD
+[0.76.0]: https://github.com/beyond10x/aep/compare/0.75.0...0.76.0
 [0.75.0]: https://github.com/beyond10x/aep/compare/0.74.0...0.75.0
 [0.74.0]: https://github.com/beyond10x/aep/compare/0.73.0...0.74.0
 [0.73.0]: https://github.com/beyond10x/aep/compare/0.72.1...0.73.0
