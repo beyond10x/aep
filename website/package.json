@@ -19,7 +19,7 @@
     "@docusaurus/core": "3.10.2",
     "@docusaurus/faster": "3.10.2",
     "@docusaurus/preset-classic": "3.10.2",
-    "@beyond10x/docs-system": "git+https://github.com/beyond10x/docs-system.git#8eb302de78feba319fbdd8191270d9fe7b6c1244",
+    "@beyond10x/docs-system": "git+https://github.com/beyond10x/docs-system.git#a3fae6c9f7d70ca5c04f1dacf8a4ade8b7647523",
     "@docusaurus/theme-mermaid": "^3.10.2",
     "@mdx-js/react": "^3.0.0",
     "clsx": "^2.0.0",
