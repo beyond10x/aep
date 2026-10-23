@@ -55,7 +55,7 @@ use crate::resolve::resolve;
 /// time, is the single-field convention that classifies a stale reading as the freshest record
 /// there is. A value in the future is refused outright:
 /// [`ProtocolError::ObservationInFuture`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EvidenceSubmission {
     /// The observation.
     pub evidence: Evidence,
