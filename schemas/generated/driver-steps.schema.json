@@ -386,6 +386,17 @@
             "prompt"
           ],
           "properties": {
+            "commands": {
+              "description": "The commands this step's shell admits, each an argv prefix with the program first.\n\n`[[aep, plan, artifact]]` admits one simple invocation of `aep plan artifact …` and nothing else; `[[task], [cargo, test]]` admits the repository's tasks and `cargo test`. Absent means the step declares nothing and is held to the driver's default surface.",
+              "default": [],
+              "type": "array",
+              "items": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
             "context": {
               "description": "Files the run is given before it starts, instead of discovering them.\n\nA list and never a glob: a glob is a promise about a directory's future size, and a step map is pinned. A named file that is absent at run time refuses the run — a run given a smaller context than its map declares is one nobody can reproduce from the map.\n\nNot free. A stateless harness replays its conversation every turn, so a preloaded file is paid for on every turn rather than once. It is still usually a saving, because what it replaces — a discovery read — is a call, a turn, *and* a result that joins the same replay.",
               "default": [],

@@ -288,6 +288,115 @@ pub struct ScopeRule {
     pub write: WriteScope,
 }
 
+/// One argv prefix a driven `llm` step's shell admits: the program, then the leading words.
+///
+/// **A prefix, not a pattern.** `[aep, plan, artifact]` admits `aep plan artifact new …` and
+/// `aep plan artifact move …`; `[cargo, test]` admits `cargo test --workspace` and not `cargo
+/// install`. The words are matched against one simple invocation — the driver has already refused
+/// anything that composes, redirects or substitutes — so a prefix is a statement about *which
+/// command*, in the vocabulary of the repository the map drives, and nothing finer. A rule about
+/// which flags a command may carry is a rule the map cannot state, and this type does not pretend
+/// it can.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, schemars::JsonSchema)]
+pub struct CommandPrefix {
+    /// The words, program first. Never empty, never blank.
+    pub words: Vec<String>,
+}
+
+impl CommandPrefix {
+    /// The program, which is the first word.
+    pub fn program(&self) -> &str {
+        self.words.first().map_or("", String::as_str)
+    }
+
+    /// Programs a map may not declare, because each exists to run a program, or a string, the
+    /// declaration did not name.
+    ///
+    /// *No general shell* is the rule the declaration exists to state, and a declared `bash` would
+    /// state the opposite in the same key. Four groups: the shells and the shell words that
+    /// evaluate a string (`eval`, `exec`, `source`, `.`, `command`, `builtin`); the wrappers that
+    /// run their arguments as a program (`env`, `xargs`, `sudo`, `timeout`, `nohup`, `find` with
+    /// `-exec`, …); the script interpreters, whose one-line programs are a shell in another
+    /// syntax; and `npx`, which fetches a program and runs it.
+    ///
+    /// **A list of the runners the loader knows, not a proof.** A program outside it may still run
+    /// another program through a flag of its own (`git -c alias.x='!…'`, `cargo --config
+    /// target.…runner=…`), and the driver refuses the flags it knows at call time
+    /// (`aep-cli`'s `RUNNER_FLAGS`). The property a map holds is the one its author kept: it
+    /// names the programs the step's work needs, and the loader refuses the ones that name
+    /// nothing.
+    pub const PROGRAM_RUNNERS: &'static [&'static str] = &[
+        // shells, and the shell words that evaluate a string
+        "sh",
+        "bash",
+        "zsh",
+        "dash",
+        "fish",
+        "ksh",
+        "mksh",
+        "csh",
+        "tcsh",
+        "busybox",
+        "eval",
+        "exec",
+        "source",
+        ".",
+        "command",
+        "builtin",
+        // wrappers that run their arguments as a program
+        "env",
+        "xargs",
+        "sudo",
+        "doas",
+        "su",
+        "runuser",
+        "pkexec",
+        "run0",
+        "systemd-run",
+        "nohup",
+        "timeout",
+        "nice",
+        "ionice",
+        "setsid",
+        "stdbuf",
+        "script",
+        "chroot",
+        "unshare",
+        "flock",
+        "taskset",
+        "time",
+        "watch",
+        "strace",
+        "ltrace",
+        "find",
+        // interpreters of a program given on the command line
+        "perl",
+        "python",
+        "python2",
+        "python3",
+        "node",
+        "nodejs",
+        "ruby",
+        "php",
+        "lua",
+        "luajit",
+        "deno",
+        "bun",
+        "awk",
+        "gawk",
+        "mawk",
+        "nawk",
+        // fetches a program and runs it
+        "npx",
+    ];
+}
+
+impl fmt::Display for CommandPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.words.join(" "))
+    }
+}
+
 /// What is wrong with one context entry as the session would be handed it, if anything.
 ///
 /// A blank entry names no file, and a glob is refused by name rather than expanded: a step map is
@@ -486,6 +595,79 @@ fn validated_scope(
              covering the tree it was written for.",
         ));
         usable = false;
+    }
+    usable.then_some(kept)
+}
+
+/// Checks the commands a step declares its shell admits.
+///
+/// Three refusals, each at the prefix's own index so a map with two bad prefixes hears about both
+/// (invariant *Validation accumulates*): a prefix with no words names no command; a blank word, or
+/// one with whitespace inside it, can never match a word of a split invocation; and a program on
+/// [`CommandPrefix::PROGRAM_RUNNERS`] would admit whatever it is handed, which is a general shell
+/// declared under another name. Empty is **no declaration**, exactly as [`validated_scope`] reads
+/// an empty scope: the step keeps whatever surface the driver holds an undeclared step to.
+fn validated_commands(
+    commands: &[Vec<String>],
+    location: &str,
+    errors: &mut ValidationErrors,
+) -> Option<Vec<CommandPrefix>> {
+    let mut kept = Vec::new();
+    let mut usable = true;
+    for (index, words) in commands.iter().enumerate() {
+        let at = format!("{location}.commands[{index}]");
+        if words.is_empty() {
+            errors.push(ValidationError::new(
+                ValidationCode::EmptyDeclaration,
+                at,
+                "a command prefix with no words names no command",
+            ));
+            usable = false;
+            continue;
+        }
+        if words
+            .iter()
+            .any(|word| word.trim().is_empty() || word.contains(char::is_whitespace))
+        {
+            errors.push(ValidationError::new(
+                ValidationCode::EmptyDeclaration,
+                at,
+                "every word of a command prefix is one word of an invocation: a blank, or a word \
+                 with whitespace inside it, can never match one",
+            ));
+            usable = false;
+            continue;
+        }
+        let program = words[0].as_str();
+        if program.contains('/') {
+            errors.push(ValidationError::new(
+                ValidationCode::UnsupportedConstruct,
+                at,
+                format!(
+                    "`{program}` is a path, and a prefix names its program by name: the driver \
+                     compares an invocation's program by its last path component, so a path \
+                     here would promise a location the comparison does not hold."
+                ),
+            ));
+            usable = false;
+            continue;
+        }
+        if CommandPrefix::PROGRAM_RUNNERS.contains(&program) {
+            errors.push(ValidationError::new(
+                ValidationCode::UnsupportedConstruct,
+                at,
+                format!(
+                    "`{program}` runs a program this prefix does not name, so declaring it \
+                     declares a general shell. Name the program itself; the driver runs one \
+                     simple invocation of it."
+                ),
+            ));
+            usable = false;
+            continue;
+        }
+        kept.push(CommandPrefix {
+            words: words.clone(),
+        });
     }
     usable.then_some(kept)
 }
@@ -817,6 +999,13 @@ pub struct RawLlmStep {
     /// Where this step may write, in order. First match wins.
     #[serde(default)]
     pub scope: Vec<RawScopeRule>,
+    /// The commands this step's shell admits, each an argv prefix with the program first.
+    ///
+    /// `[[aep, plan, artifact]]` admits one simple invocation of `aep plan artifact …` and nothing
+    /// else; `[[task], [cargo, test]]` admits the repository's tasks and `cargo test`. Absent
+    /// means the step declares nothing and is held to the driver's default surface.
+    #[serde(default)]
+    pub commands: Vec<Vec<String>>,
     /// Skills the harness should make available, by name.
     #[serde(default)]
     pub skills: Vec<String>,
@@ -1226,6 +1415,18 @@ pub struct LlmStep {
     /// Empty means no scope was declared, which is not the same as a scope that allows
     /// everything: nothing is enforced and nothing claims to be.
     pub scope: Vec<ScopeRule>,
+    /// The commands this step's shell admits, in the order the map wrote them.
+    ///
+    /// Empty means no command was declared, and the driver holds the step to the surface it
+    /// holds every undeclared step to. A declared list replaces that surface's commands: an
+    /// invocation that matches none of its prefixes is refused by name, whatever the undeclared
+    /// surface admits. The read-only programs a state that admits `repository.read` may run stay
+    /// admitted beside a declaration; they are the state's, not the step's.
+    ///
+    /// Skipped when empty, so a map that declares nothing keeps the digest it had before this key
+    /// existed and a run under it resumes.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub commands: Vec<CommandPrefix>,
     /// Skills the harness makes available, by name.
     pub skills: Vec<String>,
     /// Which harness runs it.
@@ -2145,7 +2346,9 @@ fn validate_llm_step(
     }
     let judgement = validated_judgement(step.judgement.as_deref(), format, location, errors);
     let context = validated_context(&step.context, location, errors);
+    let commands = validated_commands(&step.commands, location, errors);
     let scope = validated_scope(&step.scope, location, errors)?;
+    let commands = commands?;
     let judgement = judgement?;
     if !prompted {
         return None;
@@ -2154,6 +2357,7 @@ fn validate_llm_step(
         prompt: step.prompt,
         context,
         scope,
+        commands,
         skills: step.skills,
         harness: step
             .harness
@@ -2842,6 +3046,186 @@ mod tests {
             only_llm_step(r#","scope":[{"paths":[],"write":"denied"}]"#).is_err(),
             "a rule with no paths is about nothing"
         );
+    }
+
+    // --- declared command surface (story:checks-map-per-phase-command-surface) --------------
+
+    #[test]
+    fn a_step_may_declare_the_commands_its_shell_admits_and_they_are_kept_in_order() {
+        let map =
+            only_llm_step(r#","commands":[["task"],["cargo","test"],["aep","plan","artifact"]]"#)
+                .expect("valid");
+        let Some(Step::Llm(step)) = map.states.values().next().expect("one state").steps.first()
+        else {
+            panic!("one llm step");
+        };
+        let rendered: Vec<String> = step.commands.iter().map(ToString::to_string).collect();
+        assert_eq!(rendered, ["task", "cargo test", "aep plan artifact"]);
+        assert_eq!(step.commands[1].program(), "cargo");
+    }
+
+    #[test]
+    fn a_command_prefix_with_no_words_or_a_blank_word_is_refused_at_its_own_index() {
+        // Both defects in one map, both reported: a prefix that names nothing and a word that
+        // can never match one word of a split invocation.
+        let errors = only_llm_step(r#","commands":[[],["cargo","test --workspace"],["task"]]"#)
+            .expect_err("refused");
+        let codes: Vec<(ValidationCode, String)> = errors
+            .as_slice()
+            .iter()
+            .map(|error| (error.code, error.location.clone()))
+            .collect();
+        assert!(
+            codes.contains(&(
+                ValidationCode::EmptyDeclaration,
+                "driver-steps[development/default].states.specify.steps[0].commands[0]".to_owned()
+            )),
+            "the empty prefix is refused at index 0: {codes:?}"
+        );
+        assert!(
+            codes.contains(&(
+                ValidationCode::EmptyDeclaration,
+                "driver-steps[development/default].states.specify.steps[0].commands[1]".to_owned()
+            )),
+            "the word with whitespace inside it is refused at index 1: {codes:?}"
+        );
+    }
+
+    #[test]
+    fn a_program_that_runs_another_program_cannot_be_declared() {
+        // `bash -c` admits whatever it is handed, which is a general shell declared under
+        // another name — the one thing the declaration exists to rule out. The list is every
+        // runner the loader knows, so a name that falls off it fails here by name.
+        let accepted: Vec<&str> = [
+            "bash",
+            "sh",
+            "zsh",
+            "dash",
+            "fish",
+            "ksh",
+            "mksh",
+            "csh",
+            "tcsh",
+            "busybox",
+            "eval",
+            "exec",
+            "source",
+            ".",
+            "command",
+            "builtin",
+            "env",
+            "xargs",
+            "sudo",
+            "doas",
+            "su",
+            "runuser",
+            "pkexec",
+            "run0",
+            "systemd-run",
+            "nohup",
+            "timeout",
+            "nice",
+            "ionice",
+            "setsid",
+            "stdbuf",
+            "script",
+            "chroot",
+            "unshare",
+            "flock",
+            "taskset",
+            "time",
+            "watch",
+            "strace",
+            "ltrace",
+            "find",
+            "perl",
+            "python",
+            "python2",
+            "python3",
+            "node",
+            "nodejs",
+            "ruby",
+            "php",
+            "lua",
+            "luajit",
+            "deno",
+            "bun",
+            "awk",
+            "gawk",
+            "mawk",
+            "nawk",
+            "npx",
+        ]
+        .into_iter()
+        .filter(|runner| {
+            let loaded = only_llm_step(&format!(r#","commands":[["{runner}","-c"]]"#));
+            !loaded.is_err_and(|errors| errors.contains(ValidationCode::UnsupportedConstruct))
+        })
+        .collect();
+        assert!(
+            accepted.is_empty(),
+            "the loader accepts these program runners as declared commands: {accepted:?}"
+        );
+    }
+
+    #[test]
+    fn an_empty_word_in_a_prefix_is_refused() {
+        // A word with whitespace inside it is one case; the empty word is the other, and it
+        // contains no whitespace character at all. Both are refused with the same code.
+        let errors = only_llm_step(r#","commands":[["cargo",""]]"#).expect_err("refused");
+        assert!(
+            errors.contains(ValidationCode::EmptyDeclaration),
+            "an empty word is refused: {errors}"
+        );
+    }
+
+    #[test]
+    fn a_prefix_names_its_program_and_not_a_path() {
+        // The driver compares programs by their last path component, so `[/usr/bin/cargo, test]`
+        // would read as a promise about `/usr/bin` that `./cargo test` satisfies. The loader
+        // refuses the path, and the map says `[cargo, test]`.
+        let errors =
+            only_llm_step(r#","commands":[["/usr/bin/cargo","test"]]"#).expect_err("refused");
+        assert!(
+            errors.contains(ValidationCode::UnsupportedConstruct),
+            "a program written as a path is refused: {errors}"
+        );
+        assert!(
+            errors.to_string().contains("`/usr/bin/cargo` is a path"),
+            "the refusal names the path: {errors}"
+        );
+    }
+
+    #[test]
+    fn a_step_that_declares_no_commands_keeps_the_digest_it_had() {
+        // The cursor pins a run to its map's digest, and every map written before `commands:`
+        // existed declares none. Their digests must not move, or every in-flight run under
+        // them refuses to resume after an upgrade.
+        let before = only_llm_step("").expect("valid");
+        let serialized = serde_json::to_value(&before).expect("a map serializes");
+        let step = &serialized["states"]["specify"]["steps"][0];
+        assert!(
+            step.get("commands").is_none(),
+            "an undeclared `commands` is absent from the canonical form: {step}"
+        );
+        let declared = only_llm_step(r#","commands":[["cargo","test"]]"#).expect("valid");
+        assert_ne!(
+            before.digest(),
+            declared.digest(),
+            "a declaration is part of the map the cursor pins"
+        );
+    }
+
+    #[test]
+    fn a_step_that_declares_no_commands_declares_nothing() {
+        // Empty is not "admits nothing": the driver holds an undeclared step to its own default
+        // surface, and every map written before this key existed keeps meaning what it meant.
+        let map = only_llm_step("").expect("valid");
+        let Some(Step::Llm(step)) = map.states.values().next().expect("one state").steps.first()
+        else {
+            panic!("one llm step");
+        };
+        assert_eq!(step.commands, Vec::<CommandPrefix>::new());
     }
 
     // --- expected failure, run inputs and kept output (story:command-step-expects-failure) ---

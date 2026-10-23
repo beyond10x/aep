@@ -39,7 +39,7 @@ use std::path::Path;
 use aep_domain::action::ActionRequest;
 use aep_domain::ids::{ExecutionId, StateId};
 use aep_domain::task::Task;
-use aep_driver_spec::map::{CommandStep, LlmStep, OperatorStep};
+use aep_driver_spec::map::{CommandPrefix, CommandStep, LlmStep, OperatorStep};
 use aep_driver_spec::tool::ToolConfig;
 use aep_engine::policy::Decision;
 use aep_engine::EvidenceSubmission;
@@ -119,6 +119,16 @@ pub struct StepContext<'a> {
     /// Per state rather than per run: `effective_policy` grants the state's capabilities on top of
     /// the plan's, so the legal tool set genuinely changes at every `Moved`.
     pub tools: &'a ToolConfig,
+    /// The commands this step's shell admits, as the step map declared them.
+    ///
+    /// Per step rather than per state, because that is where the map writes it: an `llm` step's
+    /// `commands:`, in the order the map lists them. Empty for a `command` or `operator` step,
+    /// which holds no shell to declare one for, and for an `llm` step that declares none — which
+    /// is a map that said nothing, so the executor holds the step to the surface it holds every
+    /// undeclared step to. A declared list replaces that surface's commands for the step; the
+    /// readers a state admits stay beside it. An executor that offers a shell at all is the one
+    /// place the list can be read.
+    pub commands: &'a [CommandPrefix],
     /// The run's own directory, where a transcript or a captured output belongs.
     pub run_directory: &'a Path,
     /// One line per requirement in force, from the evaluation, each naming the document that asked.

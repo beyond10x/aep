@@ -8,6 +8,18 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Added
+
+- An `llm` step may declare `commands:`, the argv prefixes its shell admits; `driven_surface`, which a harness consults per shell call, holds the step to one simple invocation of a declared prefix, and the refusal names the declared surface.
+- The loader refuses a `commands:` prefix with no words, a blank word, a program written as a path, or a program that runs another program: the shells, `eval`, `exec`, `source`, the wrappers (`env`, `xargs`, `sudo`, `timeout`, `nohup`, `find`, …), the script interpreters and `npx` (`CommandPrefix::PROGRAM_RUNNERS`).
+- `driven_surface` refuses `cargo --config` and `rg --pre` under every surface, because each runs a program the call does not name.
+- `StepContext` carries the running step's declared `commands`, empty for a step that declares none.
+
+### Changed
+
+- `drivers/development/checks.yaml` declares `[aep, plan, artifact]` for `receive`, `specify`, `decompose`, `establish_verifiers` and `adversarial_verify`, and the gate, the generators (`task check|fmt|schema|ess|status`) and the working-tree `cargo` verbs (`build`, `check`, `clippy`, `doc`, `fmt`, `test`) for `implement`; its `scope:` now denies writes under `drivers/**`, `Taskfile.yml`, `.cargo/**` and `rust-toolchain*`.
+- A step that declares no `commands:` keeps the surface it had (`aep plan artifact …`, `aep observe trace …` and the read-only programs) and the map digest it had, so a run under such a map resumes after the upgrade.
+
 ## [0.76.0] - 2026-10-21
 
 ### Fixed

@@ -1314,6 +1314,12 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             // Zero attempts means the step was never run in this run or any it resumed from, so
             // there is nothing it wrote to be about.
             .filter(|preceding| preceding.attempt > 0);
+        // The surface the map declared for this step, read off the step itself: only an `llm`
+        // step holds a shell, so only one has a declaration to carry.
+        let commands = match self.map.steps_for(state).get(index) {
+            Some(Step::Llm(step)) => step.commands.as_slice(),
+            _ => &[],
+        };
         StepContext {
             task: self.task,
             // Off the options rather than off the task: a validated `Task` carries no path, by
@@ -1325,6 +1331,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             index,
             attempt,
             tools: &frame.tools,
+            commands,
             run_directory: self.directory.path(),
             requirements: &frame.requirements,
             reaching: &frame.reaching,
