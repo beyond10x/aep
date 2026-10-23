@@ -453,8 +453,8 @@ fn no_producer_writes_a_record_a_person_is_recorded_as_having_produced() {
         );
         assert!(
             !matches!(record.evidence, Evidence::Approval(_)),
-            "{name} is an approval, which reaches an execution through a person running \
-             `aep govern evaluate --evidence` and never through a step"
+            "{name} is an approval, which reaches a run through a person running \
+             `aep drive resume --evidence` and never through a step"
         );
         assert!(
             matches!(record.producer, Producer::Verifier { .. }),

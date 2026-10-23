@@ -193,6 +193,21 @@ pub struct DriverOptions {
     /// ([`StepMap::check_inputs`]), so a run that was not given one stops before it has done
     /// anything. A resume is handed the inputs its launch recorded.
     pub inputs: BTreeMap<String, String>,
+    /// Records to submit to the run's execution before its first step, in order.
+    ///
+    /// The one way a record made *while the run was stopped* reaches the run: `aep drive resume
+    /// <run> --evidence <file>` reads the file and hands its records here, and the driver submits
+    /// them to the restored execution before an owed `operator` step is settled, so the settle
+    /// finds the approval where it looks. Here rather than written into the run directory by the
+    /// caller, because the directory's committed generation is the driver's to write and nothing
+    /// else reads a projection beside it. `aep govern evaluate --state` evaluates a snapshot and
+    /// writes nothing, and until 0.77.1 the pause text named it as if it did.
+    ///
+    /// A refused submission stops the call before anything is persisted; the run directory is the
+    /// bytes the previous call left (*Refusals change nothing*). What a record answers is still
+    /// `settle`'s decision: an approval by an actor the run does not admit is recorded and then
+    /// refused there, naming who would be admissible, exactly as one written any other way.
+    pub evidence: Vec<EvidenceSubmission>,
 }
 
 impl Default for DriverOptions {
@@ -206,6 +221,7 @@ impl Default for DriverOptions {
             stolen_lock: None,
             in_flight_resolution: None,
             inputs: BTreeMap::new(),
+            evidence: Vec::new(),
         }
     }
 }
@@ -858,6 +874,7 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
             if !checked {
                 self.check_map(&execution)?;
+                self.submit_carried(&mut execution, &mut tally)?;
                 checked = true;
             }
             // A run stopped at an `operator` step reads what arrived while it was stopped before
@@ -1168,6 +1185,30 @@ impl<C: Clock, S: PlanSource + ?Sized> Session<'_, C, S> {
             }
         }
         Ok(None)
+    }
+
+    /// Submits what the caller carried in ([`DriverOptions::evidence`]), before anything is
+    /// settled or run.
+    ///
+    /// Before `settle`, so an owed `operator` step finds the records among those after its
+    /// `evidence_before`. Nothing is persisted until `finish`, so a refusal here leaves the run
+    /// directory as the previous call left it. The records are counted and named in the report;
+    /// what they answer is `settle`'s decision.
+    fn submit_carried(
+        &self,
+        execution: &mut Execution,
+        tally: &mut Tally,
+    ) -> Result<(), DriveError> {
+        for submission in self.options.evidence.iter().cloned() {
+            let producer = submission.producer.to_string();
+            let kind = submission.evidence.kind().as_str().to_owned();
+            self.engine.submit_evidence(execution, submission)?;
+            tally.progress.evidence_submitted += 1;
+            tally.progress.notes.push(format!(
+                "a `{kind}` record by {producer} was submitted with this resume"
+            ));
+        }
+        Ok(())
     }
 
     /// Submits a step's verdict and moves past the step: the run's one way evidence enters.

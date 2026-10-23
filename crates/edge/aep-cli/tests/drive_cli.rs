@@ -3099,3 +3099,118 @@ fn an_llm_step_runs_after_every_command_before_it_and_before_any_after_it() {
         "the llm step waits for the batch before it and runs before the one after it"
     );
 }
+
+/// One granted approval by `agent:orchestrator`, in the records document the CLI reads.
+const ORCHESTRATOR_APPROVAL: &str = "\
+- kind: approval
+  approval: specification
+  decision: granted
+  approver:
+    producer: agent
+    id: orchestrator
+  observed_at: 2026-10-22
+  producer:
+    producer: agent
+    id: orchestrator
+";
+
+/// `story:resume-submits-evidence-to-a-stopped-run`, acceptance 3 and 4, end to end.
+///
+/// The defect as ess-ui-templates met it on 2026-10-23: a run under `--approver agent:<name>`
+/// stopped at the `operator` step, and the pause text named `aep govern evaluate --evidence
+/// --state <run>/snapshot.json`, which evaluates and writes nothing, so the resume found nothing
+/// recorded and stopped again, on every resume. The route is the resume itself: the pause text
+/// names `aep drive resume <run> --evidence <file>`, and that command records the approval in the
+/// run and walks on.
+#[test]
+fn an_approval_handed_to_the_resume_answers_the_operator_step_and_the_pause_text_names_that_route()
+{
+    let fixture = Fixture::new("resume-evidence", true);
+    let paused = fixture.drive(
+        &["run"],
+        &["--pause-on-approval", "--approver", "agent:orchestrator"],
+    );
+    let text = stdout(&paused);
+    assert_eq!(code(&paused), 0, "{}", said(&paused));
+    assert_eq!(
+        fixture.cursor("DRIVE-1/1")["status"],
+        "awaiting_operator",
+        "the fixture did not reach the operator step, so this case is about nothing:\n{text}"
+    );
+    assert!(
+        text.contains("aep drive resume <run> --evidence <file>"),
+        "the pause text names the route that writes:\n{text}"
+    );
+    assert!(
+        !text.contains("govern evaluate") && !text.contains("snapshot.json"),
+        "and no longer names a route that does not:\n{text}"
+    );
+
+    let approval = fixture.directory.join("approval.yaml");
+    write(&approval, ORCHESTRATOR_APPROVAL);
+    let resumed = fixture.drive(
+        &["resume", "DRIVE-1/1"],
+        &["--evidence", printable(&approval)],
+    );
+    let said = said(&resumed);
+    let cursor = fixture.cursor("DRIVE-1/1");
+    assert_ne!(
+        cursor["status"], "awaiting_operator",
+        "the approval handed to the resume did not answer the step:\n{said}"
+    );
+    assert_eq!(
+        cursor["answers"][0]["by"], "agent orchestrator",
+        "the cursor says who answered:\n{said}"
+    );
+    assert_eq!(cursor["answers"][0]["approval"], "specification", "{said}");
+    assert!(
+        said.contains("answered by agent orchestrator"),
+        "and the report says so in one line:\n{said}"
+    );
+}
+
+/// The resume's own refusal: a file that does not read writes nothing.
+///
+/// Read before the driver runs, so the cursor and the generation pointer are the bytes the pause
+/// left and the lock is free for the next attempt. (The read is also before the lock is taken;
+/// that is a cost, not a state this test can see, since the lock is released on the error path
+/// either way.)
+#[test]
+fn an_evidence_file_that_does_not_read_refuses_the_resume_and_writes_nothing() {
+    let fixture = Fixture::new("resume-evidence-unreadable", true);
+    let paused = fixture.drive(
+        &["run"],
+        &["--pause-on-approval", "--approver", "agent:orchestrator"],
+    );
+    assert_eq!(code(&paused), 0, "{}", said(&paused));
+    let cursor_before = fixture.cursor_text("DRIVE-1/1");
+    let pointer = fixture.runs().join("DRIVE-1/1/state.json");
+    let pointer_before = std::fs::read(&pointer).expect("the pause committed a generation");
+
+    let broken = fixture.directory.join("broken.yaml");
+    write(&broken, "- kind: approval\n  this is not a record\n");
+    let resumed = fixture.drive(
+        &["resume", "DRIVE-1/1"],
+        &["--evidence", printable(&broken)],
+    );
+    let said = said(&resumed);
+    assert_ne!(
+        code(&resumed),
+        0,
+        "an unreadable file is a refusal:\n{said}"
+    );
+    assert!(
+        said.contains("broken.yaml"),
+        "the refusal names the file:\n{said}"
+    );
+    assert_eq!(fixture.cursor_text("DRIVE-1/1"), cursor_before, "{said}");
+    assert_eq!(
+        std::fs::read(&pointer).expect("the pointer is still there"),
+        pointer_before,
+        "{said}"
+    );
+    assert!(
+        !fixture.lock().exists(),
+        "the refusal left a lock behind:\n{said}"
+    );
+}

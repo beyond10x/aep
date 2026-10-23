@@ -8,6 +8,17 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Added
+
+- `aep drive resume <run> --evidence <file>` submits the file's records (the document `aep govern evaluate --evidence` reads) to the run before its first step, and `DriverOptions::evidence` carries them; a record the engine refuses stops the resume before anything is persisted.
+- `EvidenceSubmission` implements `PartialEq` and `Eq`.
+
+### Fixed
+
+- A run stopped at an `operator` step under `--approver` can be answered: the pause text names `aep drive resume <run> --evidence <file>`, which writes the approval into the run. It named `aep govern evaluate --evidence --state <run>/snapshot.json`, which restores a snapshot, evaluates it and writes nothing back, so every resume stopped again with "nothing was recorded while the run was stopped".
+- `aep govern evaluate --state` with `--evidence` says on stderr that it writes nothing back and names the resume.
+- The refusal a driven step prints for an approval read out of a record names `aep drive resume --evidence` as the route.
+
 ## [0.77.0] - 2026-10-23
 
 ### Added

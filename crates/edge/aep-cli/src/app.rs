@@ -1809,6 +1809,8 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
             .context("initialising the execution")?,
     };
 
+    note_that_state_is_read_only(args);
+
     // One record two hours ahead used to discard the other 214: the first failure propagated with
     // `?` and the run produced no evaluation at all. A future observation is still a refusal — it
     // is the rule against manufacturing evidence and nothing here downgrades it to a warning — but
@@ -1839,17 +1841,7 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
     }
 
     if args.advance {
-        // Advance until nothing more can move, stopping at the first state seen twice. A workflow
-        // with a back-edge — `verify -> implement` in `adp/default` — would otherwise ping-pong
-        // until the loop bound, which looks like progress and is not: no evidence arrives in here,
-        // so the second visit can only repeat the first.
-        let mut seen = vec![execution.state_id().clone()];
-        while let Ok(TransitionResult::Moved { to, .. }) = engine.transition(&mut execution) {
-            if seen.contains(&to) {
-                break;
-            }
-            seen.push(to);
-        }
+        advance(&engine, &mut execution);
     }
 
     if let Some(action) = action {
@@ -1914,6 +1906,38 @@ fn evaluate(args: &ExecutionArgs, action: Option<&str>) -> Result<ExitCode> {
 fn report_refusals(refusals: &[String]) {
     for refusal in refusals {
         eprintln!("{refusal}");
+    }
+}
+
+/// Says, once per call, that `--state` with `--evidence` writes nothing back.
+///
+/// Said on every such call, because the pause text of an `operator` step named this verb as the
+/// way to record an approval against a run until 0.77.1, and it never was: the snapshot is
+/// restored, evaluated and dropped. The driver's resume is the one write path into a run.
+fn note_that_state_is_read_only(args: &ExecutionArgs) {
+    if args.state.is_some() && !args.evidence.is_empty() {
+        eprintln!(
+            "note: `--state` evaluates the snapshot and writes nothing back; to record these \
+             records against a stopped run, use `aep drive resume <run> --evidence <file>`"
+        );
+    }
+}
+
+/// Advances until nothing more can move, stopping at the first state seen twice.
+///
+/// A workflow with a back-edge — `verify -> implement` in `adp/default` — would otherwise
+/// ping-pong until the loop bound, which looks like progress and is not: no evidence arrives in
+/// here, so the second visit can only repeat the first.
+fn advance<C: aep_engine::Clock>(
+    engine: &Engine<C>,
+    execution: &mut aep_engine::execution::Execution,
+) {
+    let mut seen = vec![execution.state_id().clone()];
+    while let Ok(TransitionResult::Moved { to, .. }) = engine.transition(execution) {
+        if seen.contains(&to) {
+            break;
+        }
+        seen.push(to);
     }
 }
 
@@ -2314,7 +2338,7 @@ pub(crate) fn ess_readers() -> aep_domain::ess_conformance_coverage::EssEvidence
     }
 }
 
-fn read_evidence(path: &Path) -> Result<Vec<EvidenceSubmission>> {
+pub(crate) fn read_evidence(path: &Path) -> Result<Vec<EvidenceSubmission>> {
     let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let origin = path.display().to_string();
     let inputs = aep_schema::parse::evidence_list_with_readers(&text, Some(&origin), &ess_readers())

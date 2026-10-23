@@ -399,6 +399,14 @@ pub struct ResumeArgs {
     /// was started admitting; given here, it replaces that for this resume and the ones after.
     #[arg(long, value_name = "ACTOR")]
     pub approver: Option<ActorRef>,
+    /// Evidence to submit to the run before it continues, as a list of records.
+    ///
+    /// The document `aep govern evaluate --evidence` reads. This is how a record made while the
+    /// run was stopped reaches it: the records are submitted to the run's own restored execution
+    /// before an owed `operator` step is settled, and the settle decides whether one of them
+    /// answers it and whether whoever gave it may. Repeat for more than one file.
+    #[arg(long, value_name = "FILE")]
+    pub evidence: Vec<PathBuf>,
     /// Stop after this many loop iterations, whatever the state of the run.
     #[arg(long, default_value_t = 25)]
     pub max_iterations: u32,
@@ -750,6 +758,7 @@ pub fn start_with_host(args: &RunArgs, host: &dyn ExecutionHost) -> Result<ExitC
         stolen_lock: lock.stolen().cloned(),
         in_flight_resolution: None,
         inputs: run_inputs,
+        evidence: Vec::new(),
     };
     let context = ExecutorContext {
         working_directory: inputs.project.clone(),
@@ -844,6 +853,11 @@ pub fn resume_with_host(args: &ResumeArgs, host: &dyn ExecutionHost) -> Result<E
         if let Some(refusal) = protocol_command_preflight(&inputs.map) { bail!("{refusal}"); }
     }
 
+    // Read here, before the lock, so a file that does not read refuses without costing a lock or
+    // an attempt; submitted by the driver before the first step, so a record the engine refuses
+    // leaves the run directory as the pause left it.
+    let evidence = read_evidence_files(&args.evidence)?;
+
     // A paused run holds no lock, because the pause has no bound — so a resume must **re-take** it,
     // and must refuse when another run now holds it. The first draft said a pause releases and
     // never said a resume re-acquires, which left the obvious assumption to produce two live runs.
@@ -890,6 +904,7 @@ pub fn resume_with_host(args: &ResumeArgs, host: &dyn ExecutionHost) -> Result<E
             .as_ref()
             .map(|l| l.inputs.clone())
             .unwrap_or_default(),
+        evidence,
     };
     let context = ExecutorContext {
         working_directory: inputs.project.clone(),
@@ -921,6 +936,15 @@ pub fn resume_with_host(args: &ResumeArgs, host: &dyn ExecutionHost) -> Result<E
     outcome
 }
 
+
+/// Reads every `--evidence` file into the submissions a resume carries in, in the order given.
+fn read_evidence_files(paths: &[PathBuf]) -> Result<Vec<EvidenceSubmission>> {
+    let mut evidence = Vec::new();
+    for path in paths {
+        evidence.extend(crate::read_evidence(path)?);
+    }
+    Ok(evidence)
+}
 
 /// `aep drive status`
 pub fn status(args: &StatusArgs) -> Result<ExitCode> {
@@ -1990,9 +2014,13 @@ impl OperatorStepExecutor for CliExecutors {
             }
         }
         outln!();
+        // The route named here has to be one that writes: until 0.77.1 this line named `aep
+        // govern evaluate --state`, which evaluates a snapshot and writes nothing, and a run under
+        // `--approver` stopped on every resume with "nothing was recorded while the run was
+        // stopped".
         outln!(
-            "who may answer: {}. Record the approval against this run's snapshot with `aep \
-             govern evaluate --evidence <file> --state <run>/snapshot.json`, or do what the prompt says, \
+            "who may answer: {}. Write the approval as an evidence record and hand it to the \
+             resume with `aep drive resume <run> --evidence <file>`, or do what the prompt says, \
              then resume.",
             aep_driver::attest::admissible(self.approver.as_ref())
         );
@@ -2968,7 +2996,8 @@ pub fn observed_now() -> ObservedAt {
 /// which is honest for a suite and impossible for a check whose record carries digests and counts:
 /// a `trace_conformance` minted from `exit 0` would state a specification digest nobody computed.
 /// So a verifier that can write its own record does, and the driver's whole job here is to read it
-/// — which is the same thing `aep govern evaluate --evidence` does with a file a person points at.
+/// — which is the same thing `aep govern evaluate --evidence` and `aep drive resume --evidence`
+/// do with a file a person points at.
 ///
 /// Three refusals, each of them D5's `Unknown` rather than a failing verdict:
 ///
@@ -2977,8 +3006,8 @@ pub fn observed_now() -> ObservedAt {
 ///   the driver choosing what the run is about;
 /// * **an approval, or anything a person is recorded as having produced** — the rule against
 ///   manufacturing evidence at this layer. A run's own step must not be able to hand the engine a
-///   human's approval read out of a file; that record enters through a person and `aep govern
-///   evaluate --evidence`, never here.
+///   human's approval read out of a file; that record enters through a person running `aep drive
+///   resume --evidence`, never here.
 pub fn read_record(
     declared: impl Into<Word>,
     mapping: &EvidenceMapping,
@@ -3028,8 +3057,8 @@ pub fn read_record(
     {
         return no_verdict(format!(
             "the record at {} is an approval or is recorded as a person's, and a driven step \
-             cannot submit one: an approval reaches an execution through a person running \
-             `aep govern evaluate --evidence`",
+             cannot submit one: an approval reaches a run through a person running \
+             `aep drive resume <run> --evidence <file>`",
             path.display()
         ));
     }

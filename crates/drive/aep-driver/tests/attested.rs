@@ -576,3 +576,145 @@ fn a_person_is_admitted_without_being_named_and_whoever_else_was_named() {
         Admission::Admitted
     );
 }
+
+/// One granted approval as a submission, the way `aep drive resume --evidence <file>` reads one.
+fn granted(approver: Producer, approval: &str, observed_at: Timestamp) -> EvidenceSubmission {
+    EvidenceSubmission::new(
+        Evidence::Approval(ApprovalRecord {
+            approval: ApprovalId::new(approval).expect("an approval id"),
+            approver: approver.clone(),
+            decision: ApprovalDecision::Granted,
+            subject: None,
+            note: None,
+        }),
+        approver,
+        ObservedAt::new(observed_at),
+    )
+}
+
+/// `story:resume-submits-evidence-to-a-stopped-run`, acceptance 1.
+///
+/// The route a CLI can take: nothing is written into the run between the pause and the resume,
+/// and the approval arrives *with* the resume, through `DriverOptions::evidence`. The driver
+/// submits it to the restored execution before the owed step is settled, so the settle finds it
+/// where `approve` used to put it. Before this, the only route that worked was an in-process
+/// write to the run directory, which no verb offered — the pause text named `aep govern evaluate
+/// --state`, which evaluates and writes nothing, and a run under `--approver` stopped on every
+/// resume with "nothing was recorded while the run was stopped".
+#[test]
+fn the_named_agents_approval_handed_to_the_resume_answers_the_step_without_a_write_in_between() {
+    let root = scratch("attested-resume-evidence");
+    let (run, _, _) = paused(&root, Some("agent:orchestrator"));
+    let before =
+        std::fs::read(run.current_generation_path()).expect("the pause committed a generation");
+
+    let options = DriverOptions {
+        pause_on_approval: true,
+        approver: Some(actor("agent:orchestrator")),
+        evidence: vec![granted(
+            agent("orchestrator"),
+            "specification",
+            Timestamp::EPOCH,
+        )],
+        ..DriverOptions::default()
+    };
+    let (report, asked) = resumed(&root, &run, &options, &[Act::Diff]);
+
+    assert_eq!(
+        asked,
+        vec![1],
+        "the step after the pause ran, and nobody was asked again"
+    );
+    assert_eq!(
+        report
+            .transitions
+            .iter()
+            .map(|(from, to)| (from.to_string(), to.to_string()))
+            .collect::<Vec<_>>(),
+        vec![("implement".to_owned(), "verify".to_owned())],
+        "the run walked on"
+    );
+    assert_eq!(
+        report.evidence_submitted, 2,
+        "the approval and the diff: {:?}",
+        report.notes
+    );
+    let answer = report
+        .cursor
+        .answers
+        .first()
+        .expect("the cursor says who answered");
+    assert_eq!(answer.by, "agent orchestrator");
+    assert_eq!(answer.approval, "specification");
+    assert_eq!(report.cursor.owed, None, "nothing is owed any more");
+    let written = run.read_cursor().expect("the cursor is on disk");
+    assert_eq!(
+        written.answers, report.cursor.answers,
+        "and the record on disk carries it"
+    );
+    assert_ne!(
+        std::fs::read(run.current_generation_path()).expect("a generation pointer"),
+        before,
+        "the resume committed a new generation holding the record"
+    );
+    let snapshot = run.read_snapshot().expect("the snapshot is on disk");
+    assert!(
+        snapshot.evidence.iter().any(|record| matches!(&record.record.value, Evidence::Approval(approval) if approval.approval.as_str() == "specification")),
+        "the committed snapshot holds the approval: {} record(s)",
+        snapshot.evidence.len()
+    );
+}
+
+/// `story:resume-submits-evidence-to-a-stopped-run`, acceptance 2 (*Refusals change nothing*).
+///
+/// A record the engine refuses — here one observed in the future of the engine's clock — stops
+/// the resume before the first step and before anything is persisted: the generation pointer and
+/// the cursor are the bytes the pause left.
+#[test]
+fn a_submission_the_engine_refuses_stops_the_resume_and_the_run_directory_is_untouched() {
+    let root = scratch("attested-resume-refused");
+    let (run, _, _) = paused(&root, Some("agent:orchestrator"));
+    let pointer_before =
+        std::fs::read(run.current_generation_path()).expect("a generation pointer");
+    let cursor_before = run.read_cursor().expect("a cursor");
+
+    let far_ahead = Timestamp::from_epoch_millis(1_000 * 60 * 60 * 24 * 365 * 100);
+    let options = DriverOptions {
+        pause_on_approval: true,
+        approver: Some(actor("agent:orchestrator")),
+        evidence: vec![granted(agent("orchestrator"), "specification", far_ahead)],
+        ..DriverOptions::default()
+    };
+    let store = MarkdownStore::open(root.join("planning"));
+    let mut fake = Fake::new(&[]);
+    let error = resume(
+        &engine(),
+        &task(),
+        &store,
+        &map(),
+        &run,
+        &mut fake,
+        &options,
+    )
+    .expect_err("a future observation is refused, not stored");
+
+    assert!(
+        matches!(
+            error,
+            aep_driver::run::DriveError::Protocol(
+                aep_engine::error::ProtocolError::ObservationInFuture { .. }
+            )
+        ),
+        "the refusal is the engine's, unchanged: {error}"
+    );
+    assert!(fake.asked.is_empty(), "no step ran");
+    assert_eq!(
+        std::fs::read(run.current_generation_path()).expect("the pointer is still there"),
+        pointer_before,
+        "the refused resume committed a generation"
+    );
+    assert_eq!(
+        run.read_cursor().expect("the cursor is still there"),
+        cursor_before
+    );
+}

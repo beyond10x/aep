@@ -206,6 +206,49 @@ fn evaluate_reads_every_evidence_file_in_the_example() {
     );
 }
 
+/// `story:resume-submits-evidence-to-a-stopped-run`, acceptance 5.
+///
+/// `--state` restores a snapshot, evaluates it and drops it; it never wrote the snapshot back,
+/// and until 0.77.1 the `operator` pause text named it as if it did. The behaviour is unchanged
+/// and now says so: the file is the bytes it was, and stderr names the verb that writes.
+#[test]
+fn evaluate_with_a_state_and_evidence_leaves_the_snapshot_unchanged_and_names_the_resume() {
+    let directory = scratch("aep-cli-evaluate-state-read-only");
+    let path = directory.join("snapshot.json");
+    let snapshot = "{\"execution\":\"AUTH-142.1\",\"task\":\"AUTH-142\",\"state\":\"receive\",\
+                    \"entered\":[\"receive\"],\"evidence\":[],\"events\":[],\"next_seq\":1}\n";
+    write(&path, snapshot);
+    let output = aep(&[
+        "govern",
+        "evaluate",
+        "--task",
+        TASK,
+        "--artifacts",
+        ARTIFACTS,
+        "--state",
+        printable(&path),
+        "--evidence",
+        "examples/development-passkeys/evidence/01-red-test.yaml",
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert!(
+        stdout(&output).contains("state       receive"),
+        "the evaluation is still produced: {}",
+        stdout(&output)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&path).expect("the snapshot is still there"),
+        snapshot,
+        "the evaluation wrote the snapshot back, which no verb but the driver's resume may"
+    );
+    let note = stderr(&output);
+    assert!(
+        note.contains("writes nothing back")
+            && note.contains("aep drive resume <run> --evidence <file>"),
+        "the verb says it writes nothing and names the one that does: {note}"
+    );
+}
+
 #[test]
 fn explain_refuses_a_production_change_and_names_the_rule() {
     let output = aep(&[
