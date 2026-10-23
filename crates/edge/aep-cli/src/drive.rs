@@ -2479,12 +2479,24 @@ pub fn store_integrity_at(target: &str, edits: &[(&str, &str)]) -> Result<(), St
 }
 
 
-/// The per-state shell surface: one simple invocation of `aep plan artifact …` or
-/// `aep observe trace …`, exactly what the retired `driven-surface.sh` held the grant to.
+/// The per-step shell surface: the commands the step map declares for this step, or, for a step
+/// that declares none, one simple invocation of `aep plan artifact …` or `aep observe trace …`,
+/// exactly what the retired `driven-surface.sh` held the grant to.
 ///
-/// The surface lives here and not in any document the run can reach, deliberately: a run that
-/// could name its own allowed surface could widen it. Pattern-based and best-effort, as § 4.8
-/// says — granting `command.execute` grants a superset of the shell's reach, and this narrows it.
+/// **The declaration is read from the map; the default is written here.** Which commands a phase
+/// admits is a property of the work — `specify` reaches the store and nothing else, `implement`
+/// reaches the repository's build — so it belongs in the document a person reads,
+/// `drivers/development/checks.yaml`, as each `llm` step's `commands:`
+/// (`aep_driver_spec::map::CommandPrefix`). What stays here is the floor every undeclared step
+/// stands on, and the rules no declaration lifts: one simple invocation per call, the loader's
+/// refusal of a declared program runner (`CommandPrefix::PROGRAM_RUNNERS`), and the refusal of a
+/// flag that turns a named program into a runner ([`RUNNER_FLAGS`]). The map a run is held to is
+/// the one its cursor's digest pins (`aep drive resume` refuses a changed map), and a map that
+/// declares a surface also denies writes under `drivers/**` in its own `scope:`, so a run cannot
+/// edit the declaration it is held to and then be unable to resume under it. Pattern-based and
+/// best-effort, as § 4.8 says — granting `command.execute` grants a superset of the shell's reach,
+/// and this narrows it. What the admitted programs do with the tree is outside it: `cargo test`
+/// runs the tree's tests and `cargo build` its build scripts, whoever wrote them.
 pub fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> Result<(), String> {
     if !context.tools.shell_offered() {
         return Err(format!(
@@ -2515,6 +2527,12 @@ pub fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> R
         verb = words.next().unwrap_or_default();
     }
     let leaf = program.rsplit('/').next().unwrap_or(program);
+    if let Some(flag) = runner_flag(leaf, command) {
+        return Err(format!(
+            "`{leaf} {flag}` runs a program this call does not name, and a driven step's shell \
+             admits the program it names and nothing through it. Drop `{flag}`."
+        ));
+    }
     if READ_ONLY_PROGRAMS.contains(&leaf) {
         if context.tools.admits(&Capability::RepositoryRead)
             || context.tools.admits(&Capability::ArtifactRead)
@@ -2524,6 +2542,33 @@ pub fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> R
         return Err(format!(
             "`{leaf}` reads the repository and state `{}` does not admit `repository.read`.",
             context.state
+        ));
+    }
+    if !context.commands.is_empty() {
+        let invocation = canonical_words(&command.split_whitespace().collect::<Vec<_>>());
+        let declared = context.commands.iter().any(|prefix| {
+            let words: Vec<&str> = prefix.words.iter().map(String::as_str).collect();
+            invocation.starts_with(&canonical_words(&words))
+        });
+        if declared {
+            return Ok(());
+        }
+        let surface: Vec<String> = context
+            .commands
+            .iter()
+            .map(|prefix| format!("`{prefix} …`"))
+            .collect();
+        return Err(format!(
+            "`{}` is outside the surface this step declares: {}. A driven step's shell exists for \
+             the commands its map names for this state; it is not a general shell. Anything the \
+             map does not name here is a `command` step the driver runs, and its record carries a \
+             verifier's provenance rather than yours.",
+            if program.is_empty() {
+                "(nothing)"
+            } else {
+                command
+            },
+            surface.join(", ")
         ));
     }
     if leaf != "aep" {
@@ -2549,6 +2594,60 @@ pub fn driven_surface(context: &StepContext<'_>, input: &serde_json::Value) -> R
         ));
     }
     Ok(())
+}
+
+
+/// Flags that make an otherwise admitted program run a program the call did not name.
+///
+/// Each is refused whatever admitted the program, because a reader with `--pre` or a build with a
+/// `runner=` is a general shell wearing that program's name: `rg --pre <program>` runs it over
+/// every file, and `cargo test --config 'target.<triple>.runner=["sh","-c",…]'` runs the string
+/// as the test runner, with the `|` inside quotes where [`composes`] correctly leaves it. The
+/// list names the flags the two admitted programs have for that; a program a map declares may
+/// have others, and the map's author is the one who knows them.
+pub const RUNNER_FLAGS: &[(&str, &[&str])] = &[("rg", &["--pre"]), ("cargo", &["--config"])];
+
+/// The first runner flag of `program` that `command` carries, as `--flag` or `--flag=…`.
+fn runner_flag(program: &str, command: &str) -> Option<&'static str> {
+    let flags = RUNNER_FLAGS
+        .iter()
+        .find(|(named, _)| *named == program)
+        .map(|(_, flags)| *flags)?;
+    command.split_whitespace().find_map(|word| {
+        flags
+            .iter()
+            .copied()
+            .find(|flag| word == *flag || word.strip_prefix(flag).is_some_and(|rest| rest.starts_with('=')))
+    })
+}
+
+/// The words of an invocation or a declared prefix as the surface compares them.
+///
+/// Two spellings become one, both of which the surface already admitted before a map could
+/// declare anything: the program by its leaf name, so `/usr/bin/cargo` and `cargo` are one
+/// program, and an `aep` area word dropped when a verb follows it, so `aep artifact new` and
+/// `aep plan artifact new` are one command here as they are in the CLI. Applied to both sides,
+/// so a map may write either spelling of a prefix and an invocation may use either.
+///
+/// The area word is kept when nothing follows it. `[aep, plan]` then means the two-word
+/// invocation `aep plan` and not every `aep` command: dropped, it would be `[aep]`, and `aep
+/// drive run` would start with that.
+fn canonical_words<'a>(words: &[&'a str]) -> Vec<&'a str> {
+    let Some((program, mut rest)) = words.split_first() else {
+        return Vec::new();
+    };
+    let leaf = program.rsplit('/').next().unwrap_or(program);
+    if leaf == "aep" {
+        if let [area, _, ..] = rest {
+            if crate::AREAS.contains(area) {
+                rest = &rest[1..];
+            }
+        }
+    }
+    let mut canonical = Vec::with_capacity(words.len());
+    canonical.push(leaf);
+    canonical.extend_from_slice(rest);
+    canonical
 }
 
 

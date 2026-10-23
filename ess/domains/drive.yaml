@@ -26,7 +26,7 @@ summary: >-
 # Not modelled here: the rest of a step map (its workflow pin, a format string other than the two
 # this build reads, which `StepMap::try_from` refuses with `unsupported_format_version` before
 # any step is admitted, visit budgets, the `command` step's evidence mapping, circuit breaker and
-# placeholders other than `{input.<name>}`, the `llm` step's scope, skills and harness, the
+# placeholders other than `{input.<name>}`, the `llm` step's scope, commands, skills and harness, the
 # `operator` step's prompt), the two-phase cross-validation against the workflow and the protocol
 # (`StepMap::cross_validate`, `StepMap::check_run`), and every other fact of a run's cursor (state,
 # visits, attempts per step, in-flight attempt, owed answers). Each is unchanged by these stories.

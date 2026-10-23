@@ -1627,6 +1627,20 @@ budget on work the outgoing guard then refused. Additive to `aep.drive-step-cont
   silently, which is this section's own rule that a plugin installed without the driver ships no
   per-state enforcement.
 
+  **Amended 2026-10-23 (approval-record `checks-map-command-surface`).** The surface is now
+  *declared in the step map and enforced by the driver*: each `llm` step's `commands:` lists the
+  argv prefixes its shell admits, `driven_surface` (`crates/edge/aep-cli/src/drive.rs`) admits one
+  simple invocation of a declared prefix, and a step that declares none is held to the surface
+  above. The widening this bullet feared is answered in three places rather than by keeping the
+  rule out of every document: the loader refuses a declared shell, wrapper or interpreter
+  (`CommandPrefix::PROGRAM_RUNNERS`), `driven_surface` refuses the flags it knows that make a named
+  program run an unnamed one (`cargo --config`, `rg --pre`), and the cursor's digest pins the map a
+  run is held to, so `aep drive resume` refuses a changed one; the maps that declare a surface also
+  deny writes under `drivers/**` in their own `scope:`, so a run cannot edit its declaration and
+  then fail to resume under it. Neither list is a proof: a program outside the first may run
+  another through a flag outside the second, and what an admitted build does with the tree is the
+  harness's sandbox to bound, not the map's. The step context still carries no rules; the map does.
+
 #### F13, answered — a hook deny does reach `permission_denials`
 
 **Nothing documents it; two real driven runs on Claude Code 2.1.238 settled it, 2026-08-21.** In the

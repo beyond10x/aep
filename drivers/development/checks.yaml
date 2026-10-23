@@ -63,6 +63,33 @@
 # trace documents in this repository live today. That coupling is worth seeing: the map depends on a
 # path under `conformance/trace/`, and a rename there stops this step producing a record
 # — it does not block the run, because nothing gates on `trace_conformance` yet.
+#
+# ## What each phase's shell reaches, declared here and enforced by the driver
+#
+# Every `llm` step carries a `commands:` list: the argv prefixes its shell admits, program first.
+# The driver (`driven_surface` in `aep-cli`) admits one simple invocation whose leading words match a
+# declared prefix, the readers a state that admits `repository.read` may use, and nothing else. A
+# composed line is refused before any prefix is consulted; the loader refuses a declared shell,
+# wrapper or interpreter (`sh`, `env`, `xargs`, `timeout`, `python3`, …); and a flag that makes a
+# named program run an unnamed one (`cargo --config`, `rg --pre`) is refused at the call. Decided
+# 2026-10-23 (approval-record:checks-map-command-surface):
+#
+#   * `receive`, `specify`, `decompose`, `establish_verifiers` and `adversarial_verify` reach
+#     `aep plan artifact …` and nothing else. Their product is the planning store and the checks,
+#     and the checks are run by the `command` steps beside them;
+#   * `implement` reaches the repository's own build: the gate and the generators the Taskfile
+#     names, and the `cargo` verbs that act inside the working tree. Not `task install` (it
+#     overwrites the operator's `aep`), not `cargo run` (the store's verbs through the build), not
+#     `cargo xtask` (`release tag` writes through the bot), not `cargo install` or `cargo publish`.
+#
+# What the admitted programs do with the tree is outside the surface: `cargo test` runs the tree's
+# tests and `cargo build` its build scripts, whoever wrote them. The declaration bounds which programs
+# the session invokes; a sandbox for what the build itself does is the harness's. The files that
+# redirect those programs are denied to every `llm` step's `scope:` beside the planning store and the
+# maps: `Taskfile.yml`, `.cargo/**` and `rust-toolchain*` decide what `task` and `cargo` run, and
+# `drivers/**` is the declaration itself, which the cursor's digest pins (`aep drive resume` refuses
+# a changed map) and which a run must therefore not edit. `default.yaml` declares no `commands:` and
+# keeps the driver's default surface.
 format: aep.driver-steps/2
 id: development/checks
 # Pinned like its sibling, and for the same reason: a map names states and orders steps inside them,
@@ -87,17 +114,22 @@ states:
           out of prose.
         skills: [planning]
         # Where this step may write. First match wins and the last rule is a catch-all, so a path
-        # nobody thought of has an answer rather than a default. Two rules and not this map's
+        # nobody thought of has an answer rather than a default. Three rules and not this map's
         # sibling's four: the work driven under `default.yaml` is Rust in known directories, and the
         # work driven under this one is documents, prompts and plugin shell, which live everywhere
         # in the tree. What is *not* everywhere is the planning store — `aep plan artifact` owns
-        # every mutation of it, including bodies — and that is the rule this declaration exists to
-        # state, in the document a person reads rather than in the driver.
+        # every mutation of it, including bodies — the step maps, which declare the surface a run
+        # is held to and so must not be the run's to edit, and the three files that decide what the
+        # declared `task` and `cargo` run. All of it is stated here, in the document a person reads
+        # rather than in the driver.
         scope:
-          - paths: [".engineering/planning/**"]
+          - paths: [".engineering/planning/**", "drivers/**", "Taskfile.yml", ".cargo/**", "rust-toolchain*"]
             write: denied
           - paths: ["**"]
             write: allowed
+        # What this step's shell reaches: the store, and only through its own CLI.
+        commands:
+          - [aep, plan, artifact]
         prompt: >-
           Read the task under `.engineering/` and the artifacts it references. Record what is being
           asked for in the planning store, in the requester's own terms. Do not design, do not
@@ -111,13 +143,17 @@ states:
           Which behaviour the request requires, and how to state it so it can be checked, is a
           choice no command derives from prose.
         skills: [planning]
-        # Where this step may write; the same two rules every `llm` step here carries, and the
-        # first one is why: the planning store has one writer.
+        # Where this step may write; the same rules every `llm` step here carries. The planning
+        # store has one writer, the maps are the declaration the run is held to, and the Taskfile,
+        # `.cargo` and the toolchain file decide what the declared `task` and `cargo` run.
         scope:
-          - paths: [".engineering/planning/**"]
+          - paths: [".engineering/planning/**", "drivers/**", "Taskfile.yml", ".cargo/**", "rust-toolchain*"]
             write: denied
           - paths: ["**"]
             write: allowed
+        # The store and nothing else: a specification is an artifact, and the CLI writes those.
+        commands:
+          - [aep, plan, artifact]
         prompt: >-
           Write the specification for this task as a planning artifact of kind `specification`,
           through `aep plan artifact new`. State the required behaviour so that a verifier could
@@ -135,13 +171,17 @@ states:
           Where to cut the work so that each unit can be verified alone is a design decision no
           command makes.
         skills: [planning]
-        # Where this step may write; the same two rules every `llm` step here carries, and the
-        # first one is why: the planning store has one writer.
+        # Where this step may write; the same rules every `llm` step here carries. The planning
+        # store has one writer, the maps are the declaration the run is held to, and the Taskfile,
+        # `.cargo` and the toolchain file decide what the declared `task` and `cargo` run.
         scope:
-          - paths: [".engineering/planning/**"]
+          - paths: [".engineering/planning/**", "drivers/**", "Taskfile.yml", ".cargo/**", "rust-toolchain*"]
             write: denied
           - paths: ["**"]
             write: allowed
+        # The store and nothing else: tasks and their edges are artifacts, and the CLI writes those.
+        commands:
+          - [aep, plan, artifact]
         prompt: >-
           Break the specification into tasks that can each be implemented and verified on their own,
           through `aep plan artifact new` and `aep plan artifact relate`. Every task states its own
@@ -156,13 +196,19 @@ states:
           Which cases would decide the unit before any code exists is a judgement about what could
           go wrong; a command runs checks, it does not choose them.
         skills: [planning]
-        # Where this step may write; the same two rules every `llm` step here carries, and the
-        # first one is why: the planning store has one writer.
+        # Where this step may write; the same rules every `llm` step here carries. The planning
+        # store has one writer, the maps are the declaration the run is held to, and the Taskfile,
+        # `.cargo` and the toolchain file decide what the declared `task` and `cargo` run.
         scope:
-          - paths: [".engineering/planning/**"]
+          - paths: [".engineering/planning/**", "drivers/**", "Taskfile.yml", ".cargo/**", "rust-toolchain*"]
             write: denied
           - paths: ["**"]
             write: allowed
+        # The store, to read the units the checks decide and to record what each check is for.
+        # Not `bash`: the checks are run by the `command` step below, so that the red result is
+        # the driver's observation and not the session's account of one.
+        commands:
+          - [aep, plan, artifact]
         prompt: >-
           Write the checks that will decide whether each decomposed unit is done — one check per
           unit, each naming the unit it decides — and make `bash .engineering/checks/run.sh` run all
@@ -205,13 +251,34 @@ states:
           Writing the change is authorship; the commands after this step decide whether it works,
           and none of them writes it.
         skills: [planning]
-        # Where this step may write; the same two rules every `llm` step here carries, and the
-        # first one is why: the planning store has one writer.
+        # Where this step may write; the same rules every `llm` step here carries. The planning
+        # store has one writer, the maps are the declaration the run is held to, and the Taskfile,
+        # `.cargo` and the toolchain file decide what the declared `task` and `cargo` run.
         scope:
-          - paths: [".engineering/planning/**"]
+          - paths: [".engineering/planning/**", "drivers/**", "Taskfile.yml", ".cargo/**", "rust-toolchain*"]
             write: denied
           - paths: ["**"]
             write: allowed
+        # The repository's own build, and only that: the gate and the generators the Taskfile
+        # names, and the `cargo` verbs that act inside the working tree. Each task and verb is its
+        # own prefix because the ones left out are not the ones listed with a different flag:
+        # `task install` overwrites the operator's `aep`, `cargo install` and `cargo publish` reach
+        # the home directory or a registry, `cargo run -p aep-cli -- plan artifact …` is the
+        # store's write path through the build, and `cargo xtask release tag` writes through the
+        # bot. The store's verbs are not here either: this state's product is the change, and the
+        # records the engine admits for it are written by the `command` steps that follow.
+        commands:
+          - [task, check]
+          - [task, fmt]
+          - [task, schema]
+          - [task, ess]
+          - [task, status]
+          - [cargo, build]
+          - [cargo, check]
+          - [cargo, clippy]
+          - [cargo, doc]
+          - [cargo, fmt]
+          - [cargo, test]
         prompt: >-
           Make the smallest change that satisfies the decomposed unit and the checks written for it.
           Do not weaken a check to make it pass; the workflow has an explicit route back here from
@@ -288,13 +355,18 @@ states:
           Finding the input nobody thought of is invention; a command reruns the checks that exist
           and cannot imagine new ones.
         skills: [planning]
-        # Where this step may write; the same two rules every `llm` step here carries, and the
-        # first one is why: the planning store has one writer.
+        # Where this step may write; the same rules every `llm` step here carries. The planning
+        # store has one writer, the maps are the declaration the run is held to, and the Taskfile,
+        # `.cargo` and the toolchain file decide what the declared `task` and `cargo` run.
         scope:
-          - paths: [".engineering/planning/**"]
+          - paths: [".engineering/planning/**", "drivers/**", "Taskfile.yml", ".cargo/**", "rust-toolchain*"]
             write: denied
           - paths: ["**"]
             write: allowed
+        # The store, to read the specification its checks must contradict. The checks it adds are
+        # run by the `command` step below, as in `establish_verifiers`.
+        commands:
+          - [aep, plan, artifact]
         prompt: >-
           Try to break what `verify` just declared working: an input the checks do not cover, a
           claim in the specification no check decides, a check that would pass with the

@@ -456,6 +456,54 @@ the tree has to say so. One rule is deliberately not expressible here and stays 
 edit whose text crosses a planning document's closing `---` is refused whatever the scope allows,
 because that is a judgement about the edit's text and no path can decide it.
 
+### What an `llm` step may run
+
+An `llm` step may declare `commands:` — the argv prefixes its shell admits, program first:
+
+```yaml
+      - kind: llm
+        description: Make the smallest change that satisfies the unit.
+        judgement: Writing the change is authorship, which no command performs.
+        commands:
+          - [task, check]         # the repository's gate, and not `task install`
+          - [cargo, test]         # `cargo test …`, and not `cargo install`
+          - [cargo, build]
+        prompt: …
+```
+
+A prefix admits **one simple invocation** whose leading words match it: `[aep, plan, artifact]`
+admits `aep plan artifact new …` and `aep plan artifact move …`; `[cargo, test]` admits `cargo test
+--workspace` and refuses `cargo install`. An invocation's program is compared by its leaf name, so
+`/usr/bin/cargo test` matches `[cargo, test]`; a prefix names its program and not a path. The `aep`
+area word is dropped on both sides when a verb follows it, so `aep artifact new` matches
+`[aep, plan, artifact]`. A call outside every prefix is refused by name, and the refusal lists what
+the step declares.
+
+Three rules hold whatever a step declares. A composed line — `&&`, `|`, `;`, a redirect, `$(…)` —
+is refused before any prefix is consulted, because two commands wearing one name are not one
+invocation. A prefix whose program exists to run another program — the shells, `eval`, `exec` and
+`source`, the wrappers (`env`, `xargs`, `sudo`, `timeout`, `nohup`, `find`, …), the script
+interpreters (`perl`, `python3`, `node`, `awk`, …) and `npx` — is refused at load, because
+declaring it declares a general shell under another name. And a flag that makes a named program
+run an unnamed one, `cargo --config` and `rg --pre`, is refused at the call. The readers a state
+that admits `repository.read` may use (`grep`, `rg`, `ls`, `cat`, `head`, `tail`, `wc`) stay
+admitted beside any declaration.
+
+The declaration bounds which programs the step invokes, not what the tree does when they run:
+`cargo test` runs the tree's tests and `cargo build` its build scripts, whoever wrote them. A map
+that declares a build should deny, in the same step's `scope:`, the files that decide what the
+declared programs run (`Taskfile.yml`, `.cargo/**`, `rust-toolchain*`) and the maps themselves
+(`drivers/**`): the cursor's digest pins the map a run is held to, so `aep drive resume` refuses a
+changed one, and a run that edited its own declaration could not resume.
+
+**A step with no `commands:` is held to the driver's default surface**: one simple invocation of
+`aep plan artifact …` or `aep observe trace …`, which is what every driven step was held to before
+a map could declare anything. Such a map's digest is unchanged, so a run under it resumes.
+`drivers/development/checks.yaml` declares `[aep, plan, artifact]` for its planning states, and for
+`implement` the gate and generators (`task check`, `task fmt`, `task schema`, `task ess`,
+`task status`) and the working-tree `cargo` verbs (`build`, `check`, `clippy`, `doc`, `fmt`,
+`test`).
+
 ## Task and artifact manifest
 
 See [Govern a task](../guides/govern-a-task.md) for complete examples. A task requires `id`,

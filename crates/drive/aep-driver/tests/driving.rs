@@ -1981,3 +1981,109 @@ fn an_explained_verdict_is_submitted_and_its_reason_is_in_the_report() {
         report.notes
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// The declared command surface reaches the executor (story:checks-map-per-phase-command-surface)
+// ---------------------------------------------------------------------------------------------
+
+/// An `llm` step that declares a surface, then the commands that end the run.
+const SURFACE_MAP: &str = r"
+format: aep.driver-steps/1
+id: test/surface
+workflow: test/linear/1
+states:
+  implement:
+    steps:
+      - kind: llm
+        prompt: write the change
+        judgement: what the change should say is authorship, which no command performs
+        commands: [[cargo, test], [aep, plan, artifact]]
+      - kind: command
+        run: [git, diff]
+        evidence:
+          kind: diff
+          verifier: compiler
+  verify:
+    steps:
+      - kind: command
+        run: [cargo, test]
+        evidence:
+          kind: test_result
+          verifier: test-runner
+          suite: unit
+";
+
+/// Records the surface each step was handed, and otherwise behaves as [`Reader`].
+#[derive(Debug, Default)]
+struct Surfaces {
+    inner: Reader,
+    llm: Vec<Vec<String>>,
+    command: Vec<usize>,
+}
+
+impl CommandStepExecutor for Surfaces {
+    fn run_command(&mut self, step: &CommandStep, context: &StepContext<'_>) -> StepOutcome {
+        self.command.push(context.commands.len());
+        self.inner.run_command(step, context)
+    }
+}
+
+impl LlmStepExecutor for Surfaces {
+    fn run_llm(
+        &mut self,
+        _: &LlmStep,
+        context: &StepContext<'_>,
+        _: StepAuthorizer<'_>,
+    ) -> StepOutcome {
+        self.llm
+            .push(context.commands.iter().map(ToString::to_string).collect());
+        StepOutcome::Nothing
+    }
+}
+
+impl OperatorStepExecutor for Surfaces {
+    fn run_operator(&mut self, _: &OperatorStep, _: &StepContext<'_>) -> StepOutcome {
+        StepOutcome::Paused {
+            reason: "a person is owed a question".to_owned(),
+        }
+    }
+}
+
+/// `run.rs` fills `StepContext.commands` from the map for an `llm` step and hands every other
+/// kind an empty list; a driver that handed every step an empty list would leave the rest of this
+/// suite green, so the executor itself records what it was handed.
+#[test]
+fn an_llm_step_is_handed_the_commands_its_map_declares_and_a_command_step_none() {
+    let root = scratch("declared-surface");
+    let engine = engine();
+    let store = MarkdownStore::open(root.join("planning"));
+    let map = map(SURFACE_MAP);
+    let run = run_directory(&root);
+    let mut surfaces = Surfaces::default();
+
+    let report = drive(
+        &engine,
+        &task(),
+        &store,
+        &map,
+        &run,
+        &mut surfaces,
+        &DriverOptions::default(),
+    )
+    .expect("the run finishes");
+
+    assert_eq!(report.status(), RunStatus::Completed, "{:?}", report.notes);
+    assert_eq!(
+        surfaces.llm,
+        [vec![
+            "cargo test".to_owned(),
+            "aep plan artifact".to_owned()
+        ]],
+        "the llm step is handed its declared prefixes, in the map's order"
+    );
+    assert!(
+        !surfaces.command.is_empty() && surfaces.command.iter().all(|len| *len == 0),
+        "a command step holds no shell and is handed no surface: {:?}",
+        surfaces.command
+    );
+}
