@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: approval-record:checks-map-command-surface
 kind: approval-record
-status: draft
+status: approved
 title: 'Approved: the development/checks map declares a command surface per phase'
 summary: 'Orchestrator decision 2481b483 (2026-10-23 14:01Z): specify and decompose admit only aep plan artifact, implement admits the repository''s task and cargo commands, no general shell.'
 owner: project
@@ -10,7 +10,9 @@ tags:
 - driver
 relations:
 - decides: story:checks-map-per-phase-command-surface
-revision: 2
+revision: 3
+transitions:
+- {from: "draft", to: "approved", at: "2026-10-23T17:37:07Z", actor: "human:timo", revision: 3}
 ---
 # Approval record: the development/checks map declares a command surface per phase
 
