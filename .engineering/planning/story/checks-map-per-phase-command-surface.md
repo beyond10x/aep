@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:checks-map-per-phase-command-surface
 kind: story
-status: active
+status: implemented
 title: The development/checks map declares the commands each phase admits
 summary: Each llm step of drivers/development/checks.yaml declares the argv prefixes its shell admits, and driven_surface holds the step to them.
 owner: project
@@ -36,10 +36,11 @@ scope:
   path: schemas/generated/driver-steps.schema.json
 - confidence: cited
   path: website/docs/reference/documents.md
-revision: 6
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-23T16:39:10Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-10-23T16:39:10Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-10-23T17:37:06Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"test_result":1}}}
 ---
 # Story: The development/checks map declares the commands each phase admits
 

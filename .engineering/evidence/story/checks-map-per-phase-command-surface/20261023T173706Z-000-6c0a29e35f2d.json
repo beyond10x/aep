@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-23T17:37:06Z",
+  "actor": "human:timo",
+  "artifact": "story:checks-map-per-phase-command-surface",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "task check exit 0 on 14459d3f9 (PR 140, merged as 3e1e8c6ea; Gate run 39995090035)",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/39995090035"
+  }
+}
