@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:resume-submits-evidence-to-a-stopped-run
 kind: story
-status: active
+status: implemented
 title: A stopped run takes evidence on resume
 summary: aep drive resume <run> --evidence <file> submits the file's records to the run's own snapshot before the owed operator step is settled; the pause text names that command; aep govern evaluate --state stays read-only and says so.
 owner: project
@@ -28,10 +28,11 @@ scope:
   path: crates/edge/aep-cli/tests/evidence_producers.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-23T19:34:29Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-10-23T19:34:29Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-10-23T20:10:04Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"test_result":1}}}
 ---
 # Story: A stopped run takes evidence on resume
 

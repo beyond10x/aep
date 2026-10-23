@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-23T20:10:04Z",
+  "actor": "human:timo",
+  "artifact": "story:resume-submits-evidence-to-a-stopped-run",
+  "kind": "story",
+  "revision": 4,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "fix: a stopped run takes evidence on resume, PR 143 merged as 79f3ebad0 (commits 8c44dcc9c, f2f2b3c27); AEP_BIN=target/release/aep task check exit 0, CI Gate pass",
+    "reference": "https://github.com/beyond10x/aep/pull/143"
+  }
+}

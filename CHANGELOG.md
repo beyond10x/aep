@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.77.1] - 2026-10-23
+
 ### Added
 
 - `aep drive resume <run> --evidence <file>` submits the file's records (the document `aep govern evaluate --evidence` reads) to the run before its first step, and `DriverOptions::evidence` carries them; a record the engine refuses stops the resume before anything is persisted.
@@ -1831,7 +1833,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.77.0...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.77.1...HEAD
+[0.77.1]: https://github.com/beyond10x/aep/compare/0.77.0...0.77.1
 [0.77.0]: https://github.com/beyond10x/aep/compare/0.76.0...0.77.0
 [0.76.0]: https://github.com/beyond10x/aep/compare/0.75.0...0.76.0
 [0.75.0]: https://github.com/beyond10x/aep/compare/0.74.0...0.75.0
