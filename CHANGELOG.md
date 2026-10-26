@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.78.0] - 2026-10-26
+
 ### Added
 
 - The suite readers admit what ESS's suite majors /46–/57 added outside scenario bodies, each from its own major as ESS does: the suite-level `events` and `one_time_response` catalogs (/52), the held-outcome (/50), wrapped-invariant (/52) and view-reference (/54) scenario ids, synthesis seeds through /57, the generated refusal codes `ESS-SYNTH-018`–`024` (023 and 024 from /53) and the authored codes up to `ESS-AUTHOR-046`.
@@ -1846,7 +1848,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.77.1...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.78.0...HEAD
+[0.78.0]: https://github.com/beyond10x/aep/compare/0.77.1...0.78.0
 [0.77.1]: https://github.com/beyond10x/aep/compare/0.77.0...0.77.1
 [0.77.0]: https://github.com/beyond10x/aep/compare/0.76.0...0.77.0
 [0.76.0]: https://github.com/beyond10x/aep/compare/0.75.0...0.76.0
