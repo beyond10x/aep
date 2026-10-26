@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-26T18:39:02Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-admits-ess-0692-suites",
+  "kind": "story",
+  "revision": 7,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "fix: record evidence from every suite major ESS 0.69.2 writes, PR 146 merged as e1fb6ad59 (commits 0a86f179c, 87899bea6), released in 0.78.0 (tag commit c7cbe65aa); AEP_BIN=target/release/aep task check exit 0 (2502 passed), CI Gate pass",
+    "reference": "https://github.com/beyond10x/aep/pull/146"
+  }
+}

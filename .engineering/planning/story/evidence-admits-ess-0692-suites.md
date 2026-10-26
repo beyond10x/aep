@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:evidence-admits-ess-0692-suites
 kind: story
-status: active
+status: implemented
 title: Evidence admits the suite majors ESS 0.69.2 writes
 summary: aep 0.77.1 refuses an ess-conformance/54 suite from ess 0.69.2 as UnsupportedSuiteVersion; the admitted majors end at /44 and /45 (ESS 0.55.0).
 owner: project
@@ -60,10 +60,11 @@ scope:
   path: generated/ess/rust/types.rs
 - confidence: cited
   path: xtask/tests/ess_gate.rs
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-26T17:31:56Z", actor: "human:timo", revision: 5}
 - {from: "proposed", to: "active", at: "2026-10-26T17:31:56Z", actor: "human:timo", revision: 6}
+- {from: "active", to: "implemented", at: "2026-10-26T18:39:04Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1,"review_outcome":1}}}
 ---
 # Story: Evidence admits the suite majors ESS 0.69.2 writes
 
