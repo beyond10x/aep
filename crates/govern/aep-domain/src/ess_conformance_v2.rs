@@ -119,10 +119,11 @@ fn disclosure_cell(parts: &[&str]) -> bool {
 impl ScenarioId {
     /// Parses a scenario identity in the grammar current ESS reads, without inventing coverage.
     ///
-    /// Mirrors ESS 0.55.0 `ScenarioId::parse` (`crates/verify/ess-conformance/src/scenario.rs`):
+    /// Mirrors ESS 0.69.2 `ScenarioId::parse` (`crates/verify/ess-conformance/src/scenario.rs`):
     /// the [`frozen`](Self::frozen) forms plus the disclosure cells, `<view>/aggregate`, the four
-    /// grant forms, `<binding>/binding/refusal/<outcome>` and the `final-failure`,
-    /// `condition-false` and `condition-absent` binding aspects. Like ESS, the grammar is
+    /// grant forms, `<binding>/binding/refusal/<outcome>`, the `final-failure`,
+    /// `condition-false` and `condition-absent` binding aspects, and the held outcome, the
+    /// wrapped value invariant and the view reference ESS added after 0.55.0. Like ESS, the grammar is
     /// independent of the suite major; which major may carry a form is the suite reader's check.
     pub fn new(value: impl Into<String>) -> Result<Self, EssAdmissionError> {
         let value = value.into();
@@ -144,6 +145,27 @@ impl ScenarioId {
             [binding, "binding", "final-failure" | "condition-false" | "condition-absent"] => {
                 lower_kebab(binding)
             }
+            // ESS 0.69.2 `HeldOutcome`: `<command>/outcome/<outcome>/held/<field>/<seconds>`. The
+            // field is only non-empty there, and the seconds are what Rust's `i64` parse reads.
+            [command, "outcome", outcome, "held", field, seconds] => {
+                qualified_name(command)
+                    && lower_kebab(outcome)
+                    && !field.is_empty()
+                    && seconds.parse::<i64>().is_ok()
+            }
+            // ESS 0.69.2 `ValueInvariantWrapped`:
+            // `<type>/invariant-wrapped/at/<view>/<root>/<digest>`, the digest 64 lowercase hex.
+            [value, "invariant-wrapped", "at", view, root, digest] => {
+                qualified_name(value)
+                    && qualified_name(view)
+                    && !root.is_empty()
+                    && digest.len() == 64
+                    && digest
+                        .bytes()
+                        .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+            }
+            // ESS 0.69.2 `ViewReference`: `<view>/reference/<field>`.
+            [view, "reference", field] => qualified_name(view) && field_name(field),
             _ => return Self::frozen(value),
         };
         if valid {
@@ -224,16 +246,28 @@ pub const FROZEN_SUITE_MAJORS: &[u32] = &[1, 2, 3, 4];
 /// The ordinary `ess-conformance/<N>` majors from /6 on: suites with no `coverage` block, which
 /// ESS 0.56.0 and later write by default.
 ///
-/// Transcribed from ESS at 0.55.0, beside [`COVERAGE_SUITE_MAJORS`]: each ordinary major from /6
-/// on is the even neighbour below its odd coverage counterpart, and /44 is the newest ESS writes.
-/// Adding the next one is a deliberate edit here, never inferred from its number, so an ordinary
-/// suite from a newer ESS is refused by name until AEP knows it; the suite reader gates what each
-/// major added that AEP reads, exactly as it does for the coverage counterpart.
+/// Transcribed from ESS at [`SUITE_MAJORS_TRANSCRIBED_FROM`], beside [`COVERAGE_SUITE_MAJORS`]:
+/// each ordinary major from /6 on is the even neighbour below its odd coverage counterpart, and
+/// /56 is the newest ESS writes (`scenario.rs` `SUPPORTED_SUITE_FORMATS` is 1–57). Adding the next
+/// one is a deliberate edit here, never inferred from its number, so an ordinary suite from a
+/// newer ESS is refused by name until AEP knows it; the suite reader gates what each major added
+/// that AEP reads, exactly as it does for the coverage counterpart.
 ///
 /// [`COVERAGE_SUITE_MAJORS`]: crate::ess_conformance_coverage::COVERAGE_SUITE_MAJORS
 pub const ORDINARY_SUITE_MAJORS: &[u32] = &[
-    6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44,
+    6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52,
+    54, 56,
 ];
+
+/// The ESS release [`ORDINARY_SUITE_MAJORS`], [`COVERAGE_SUITE_MAJORS`] and the suite readers'
+/// per-major gates were last transcribed from.
+///
+/// The ESS gate (`xtask/tests/ess_gate.rs`) refuses an ESS pin other than this release, so moving
+/// the pin is where the next suite major is noticed: re-read ESS's suite formats, extend the
+/// lists and gates, then move this. A newer ESS major is otherwise refused downstream by name.
+///
+/// [`COVERAGE_SUITE_MAJORS`]: crate::ess_conformance_coverage::COVERAGE_SUITE_MAJORS
+pub const SUITE_MAJORS_TRANSCRIBED_FROM: &str = "0.69.2";
 
 /// The major `version` spells exactly as ESS writes it (`ess-conformance/<N>`, no leading zero).
 fn suite_major(version: &str) -> Option<u32> {

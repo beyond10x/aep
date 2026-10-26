@@ -17,6 +17,8 @@ fn a_coverage_major_goes_to_the_coverage_reader_and_an_ordinary_one_to_the_count
         "ess-conformance/4",
         "ess-conformance/6",
         "ess-conformance/44",
+        "ess-conformance/54",
+        "ess-conformance/56",
     ] {
         let route = suite_route(&suite(version)).unwrap();
         assert_eq!(route, SuiteRoute::Count, "{version}");
@@ -25,6 +27,8 @@ fn a_coverage_major_goes_to_the_coverage_reader_and_an_ordinary_one_to_the_count
         "ess-conformance/5",
         "ess-conformance/35",
         "ess-conformance/45",
+        "ess-conformance/55",
+        "ess-conformance/57",
     ] {
         let route = suite_route(&suite(version)).unwrap();
         assert_eq!(route, SuiteRoute::Coverage, "{version}");
@@ -34,8 +38,8 @@ fn a_coverage_major_goes_to_the_coverage_reader_and_an_ordinary_one_to_the_count
 #[test]
 fn a_version_neither_reader_knows_is_refused_by_name() {
     for version in [
-        "ess-conformance/46",
-        "ess-conformance/47",
+        "ess-conformance/58",
+        "ess-conformance/59",
         "ess-conformance/0",
         "ess-conformance/06",
         "ess-conformance/x",

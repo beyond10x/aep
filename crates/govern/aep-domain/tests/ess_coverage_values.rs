@@ -372,8 +372,8 @@ fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other(
     let reference = |version: &str| {
         SuiteReference::new(version.into(), "sha256-json-bytes/1".into(), digest.clone())
     };
-    // ESS writes declared coverage in the odd suite majors from /5 through /45 (ESS 0.55.0).
-    for major in (5..=45).step_by(2) {
+    // ESS writes declared coverage in the odd suite majors from /5 through /57 (ESS 0.69.2).
+    for major in (5..=57).step_by(2) {
         let version = format!("ess-conformance/{major}");
         let admitted = reference(&version).unwrap_or_else(|error| panic!("{version}: {error}"));
         assert_eq!(admitted.version(), version);
@@ -389,8 +389,8 @@ fn suite_reference_admits_every_coverage_version_ess_writes_and_names_any_other(
         "ess-conformance/32",
         "ess-conformance/34",
         "ess-conformance/44",
-        "ess-conformance/46",
-        "ess-conformance/47",
+        "ess-conformance/58",
+        "ess-conformance/59",
         "ess-conformance/05",
         "ess-conformance/+7",
         "ess-conformance/",
@@ -423,8 +423,8 @@ fn count_suite_reference_admits_the_frozen_and_ordinary_majors_and_names_any_oth
         assert!(COVERAGE_SUITE_MAJORS.contains(&(major + 1)), "{major}");
         assert!(!COVERAGE_SUITE_MAJORS.contains(major), "{major}");
     }
-    // ESS writes an ordinary suite in the even majors from /6 through /44 (ESS 0.55.0).
-    for major in (1..=4).chain((6..=44).step_by(2)) {
+    // ESS writes an ordinary suite in the even majors from /6 through /56 (ESS 0.69.2).
+    for major in (1..=4).chain((6..=56).step_by(2)) {
         let version = format!("ess-conformance/{major}");
         let admitted = reference(&version).unwrap_or_else(|error| panic!("{version}: {error}"));
         assert_eq!(admitted.version(), version);
@@ -438,8 +438,9 @@ fn count_suite_reference_admits_the_frozen_and_ordinary_majors_and_names_any_oth
         "ess-conformance/5",
         "ess-conformance/35",
         "ess-conformance/45",
-        "ess-conformance/46",
-        "ess-conformance/47",
+        "ess-conformance/57",
+        "ess-conformance/58",
+        "ess-conformance/59",
         "ess-conformance/06",
         "ess-conformance/+6",
         "ess-conformance/",
@@ -493,10 +494,10 @@ fn authored_refusal(code: &str) -> Refusal {
 }
 
 #[test]
-fn every_authored_refusal_code_ess_0_55_names_a_file_with_is_admitted_and_no_other() {
-    // ESS 0.55.0 `authored::names_file_refusal` (`authored.rs`): every key of the authored
-    // catalogue, 001 through 041, but 036, which refuses the model before any file is read.
-    for code in (1..=35).chain(37..=41) {
+fn every_authored_refusal_code_ess_names_a_file_with_is_admitted_and_no_other() {
+    // ESS 0.69.2 `authored::names_file_refusal` (`authored.rs`): every key of the authored
+    // catalogue, 001 through 046, but 036, which refuses the model before any file is read.
+    for code in (1..=35).chain(37..=46) {
         let code = format!("ESS-AUTHOR-{code:03}");
         authored_refusal(&code)
             .validate()
@@ -504,7 +505,7 @@ fn every_authored_refusal_code_ess_0_55_names_a_file_with_is_admitted_and_no_oth
     }
     for code in [
         "ESS-AUTHOR-036",
-        "ESS-AUTHOR-042",
+        "ESS-AUTHOR-047",
         "ESS-AUTHOR-000",
         "ESS-AUTHOR-38",
     ] {

@@ -11,13 +11,14 @@ use aep_domain::evidence::SpecDigest;
 use crate::count_json::{Json, Result};
 use crate::count_suite::AdmittedSuite;
 use crate::coverage_suite::{
-    admit_id_forms, admit_provenance_vocabulary, admit_seed_record, major, scenario_keys,
+    admit_id_forms, admit_provenance_vocabulary, admit_root_catalogs, admit_seed_record, major,
+    scenario_keys, ROOT_CATALOGS,
 };
 
 /// Admits one ordinary suite whose `provenance.suite_version` is `version`.
 pub(crate) fn admit(value: &Json, version: &str) -> Result<AdmittedSuite> {
     debug_assert!(is_ordinary_suite_version(version));
-    let fields = value.closed(&["provenance", "scenarios"], &[])?;
+    let fields = value.closed(&["provenance", "scenarios"], &ROOT_CATALOGS)?;
     let provenance = fields["provenance"].closed(
         &[
             "suite_version",
@@ -30,6 +31,7 @@ pub(crate) fn admit(value: &Json, version: &str) -> Result<AdmittedSuite> {
     )?;
     let major = major(version);
     admit_provenance_vocabulary(major, &fields["provenance"], provenance)?;
+    admit_root_catalogs(major, fields)?;
     provenance["system"].text()?;
     provenance["specification_version"].text()?;
     if let Some(component) = provenance.get("component") {

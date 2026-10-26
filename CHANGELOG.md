@@ -8,6 +8,19 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Added
+
+- The suite readers admit what ESS's suite majors /46–/57 added outside scenario bodies, each from its own major as ESS does: the suite-level `events` and `one_time_response` catalogs (/52), the held-outcome (/50), wrapped-invariant (/52) and view-reference (/54) scenario ids, synthesis seeds through /57, the generated refusal codes `ESS-SYNTH-018`–`024` (023 and 024 from /53) and the authored codes up to `ESS-AUTHOR-046`.
+
+### Changed
+
+- A `--suite-input` lineage whose suites carry a suite-level catalog (suite/52 and later) is refused as `UnsupportedVocabulary`, naming the catalog: ESS's selection re-spells surviving scenarios against a trimmed catalog, and AEP compares survivors byte for byte. Record the complete suite instead.
+- The ESS pin is 0.69.2, and the ESS gate refuses a pin other than the release the admitted suite majors were transcribed from (`SUITE_MAJORS_TRANSCRIBED_FROM`).
+
+### Fixed
+
+- `aep plan artifact evidence --from <report/2> --suite <suite>` records a report against every suite major ESS 0.69.2 writes, the ordinary `ess-conformance/46`–`/56` and the coverage `/47`–`/57`; it refused them as `UnsupportedSuiteVersion`. A later major is still refused by name, before any member of the suite is read.
+
 ## [0.77.1] - 2026-10-23
 
 ### Added

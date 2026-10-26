@@ -1,0 +1,43 @@
+{
+  "completed_at": 1700000003200,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 8,
+    "skipped": 0,
+    "total": 8,
+    "unsupported": 0
+  },
+  "coverage": {
+    "knowledge": "unknown"
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "interpreted 0.69.2",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "ledger.incident.Incident/state/Resolved/refuses/ledger.incident.ResolveIncident",
+      "ledger.incident.Incident/transition/resolve/by/ledger.incident.ResolveIncident/resolved",
+      "ledger.incident.OpenIncident/outcome/opened",
+      "ledger.incident.PlanWindow/outcome/planned",
+      "ledger.incident.ResolveIncident/outcome/resolved",
+      "ledger.incident.ResolveIncident/outcome/wrong-state",
+      "ledger.incident.Windows/reference/incident_id",
+      "ledger.incident.WindowsOfResolvedIncidents/reference/incident_id"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "6d9ab601f6b7fedd41b678d662d1fd0851e20ea1204058cffbb86d3edbaab6c2",
+  "specification": "ledger/v1",
+  "suite": {
+    "digest": "sha256:e57b5a06fb01269bf2655439bbd451f351847a634ae5018859a3097ce2a85c89",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/54"
+  }
+}

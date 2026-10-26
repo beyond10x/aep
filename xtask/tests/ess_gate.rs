@@ -24,7 +24,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 /// The release `ess/ess-inputs.yaml` pins and `.github/workflows/ci.yml` installs.
-const PINNED: &str = "0.68.0";
+const PINNED: &str = "0.69.2";
+
+/// The `x86_64-unknown-linux-gnu` line of the pinned release's `SHA256SUMS` asset, which CI's
+/// install step greps for exactly; a pin moved without it fails every CI run at "Install ess".
+const PINNED_LINUX_SHA256: &str =
+    "8cc5a3a7ed7c27aacbff131ab1437e18e7d7d1878fee77542b3e0fff7157d414";
 
 /// The marker of an open question, in two halves so this file does not carry it whole.
 const OPEN_QUESTION: &str = concat!("UNMAPPED", ":");
@@ -231,6 +236,42 @@ fn the_pin_is_the_release_ci_installs() {
         installed,
         [PINNED],
         "ESS_VERSION in .github/workflows/ci.yml"
+    );
+    let checksum: Vec<&str> = ci
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("ESS_SHA256:"))
+        .map(|value| value.trim().trim_matches('"'))
+        .collect();
+    assert_eq!(
+        checksum,
+        [PINNED_LINUX_SHA256],
+        "ESS_SHA256 in .github/workflows/ci.yml is the pinned release's linux checksum"
+    );
+}
+
+/// The suite majors `aep plan artifact evidence --from --suite` admits were transcribed from the
+/// pinned ESS (story:evidence-admits-ess-0692-suites). Moving the pin past the release they were
+/// read from fails here, so a suite major the new ESS writes is admitted, or refused by decision,
+/// before a consumer meets `UnsupportedSuiteVersion`.
+#[test]
+fn the_admitted_suite_majors_were_transcribed_from_the_pinned_release() {
+    let source =
+        fs::read_to_string(repo_root().join("crates/govern/aep-domain/src/ess_conformance_v2.rs"))
+            .expect("ess_conformance_v2.rs reads");
+    let transcribed: Vec<&str> = source
+        .lines()
+        .filter_map(|line| {
+            line.trim()
+                .strip_prefix("pub const SUITE_MAJORS_TRANSCRIBED_FROM: &str = \"")
+        })
+        .filter_map(|rest| rest.strip_suffix("\";"))
+        .collect();
+    assert_eq!(
+        transcribed,
+        [PINNED],
+        "SUITE_MAJORS_TRANSCRIBED_FROM in aep-domain names the pinned ESS: re-read ESS's suite \
+         formats (`scenario.rs` `SUPPORTED_SUITE_FORMATS`, `coverage.rs`, `admission.rs`), extend \
+         ORDINARY_SUITE_MAJORS, COVERAGE_SUITE_MAJORS and the readers' per-major gates, then move it"
     );
 }
 

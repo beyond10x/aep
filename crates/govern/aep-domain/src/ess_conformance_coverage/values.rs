@@ -48,12 +48,16 @@ pub fn original_digest(value: &str) -> bool {
 /// The `ess-conformance/<N>` majors that carry declared coverage, in the order ESS added them.
 ///
 /// Transcribed from ESS `crates/verify/ess-conformance/src/coverage.rs` (`is_coverage_version`)
-/// at ESS 0.55.0: each ordinary suite major from /6 on has an odd coverage counterpart, and
-/// /45 is the newest ESS writes. Adding the next one is a deliberate edit here, never inferred
-/// from its number, so a suite from a newer ESS is refused by name until AEP knows it; the suite
-/// reader gates what each major added that AEP reads.
+/// at ESS [`SUITE_MAJORS_TRANSCRIBED_FROM`]: each ordinary suite major from /6 on has an odd
+/// coverage counterpart, and /57 is the newest ESS writes (`admission.rs` `validate_suite`
+/// requires `coverage` exactly for the odd majors 5–57). Adding the next one is a deliberate edit
+/// here, never inferred from its number, so a suite from a newer ESS is refused by name until AEP
+/// knows it; the suite reader gates what each major added that AEP reads.
+///
+/// [`SUITE_MAJORS_TRANSCRIBED_FROM`]: crate::ess_conformance_v2::SUITE_MAJORS_TRANSCRIBED_FROM
 pub const COVERAGE_SUITE_MAJORS: &[u32] = &[
-    5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45,
+    5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51,
+    53, 55, 57,
 ];
 
 /// Whether `version` spells a coverage-bearing suite major exactly as ESS writes it.
@@ -461,9 +465,10 @@ impl Refusal {
     /// Checks the code-to-effect mapping ESS admits and the local refusal structure.
     ///
     /// Mirrors ESS `Inventory::validate_refusal` (`crates/verify/ess-conformance/src/coverage.rs`
-    /// at ESS 0.55.0): generated codes `ESS-SYNTH-001`–`017`, of which 005, 011, 012, 014, 016
-    /// and 017 omit a check and the rest a candidate; authored codes are every `ESS-AUTHOR` cause
-    /// of the authored catalogue, 001–041, but 036 (`authored::names_file_refusal`), each
+    /// at ESS 0.69.2, `RefusalCause::CATALOGUE` and `synthesize::CHECK_NOT_EMITTED`): generated
+    /// codes `ESS-SYNTH-001`–`024`, of which 005, 011, 012, 014, 016, 017, 020, 021 and 022 omit
+    /// a check and the rest a candidate; authored codes are every `ESS-AUTHOR` cause
+    /// of the authored catalogue, 001–046, but 036 (`authored::names_file_refusal`), each
     /// omitting a candidate. Which suite major may carry a code is the suite reader's check.
     pub fn validate(&self) -> Result<(), EssAdmissionError> {
         let number = |family: &str| {
@@ -474,16 +479,16 @@ impl Refusal {
         };
         let expected = match self.origin {
             Origin::Generated => number("ESS-SYNTH-")
-                .filter(|code| (1..=17).contains(code))
+                .filter(|code| (1..=24).contains(code))
                 .map(|code| {
-                    if matches!(code, 5 | 11 | 12 | 14 | 16 | 17) {
+                    if matches!(code, 5 | 11 | 12 | 14 | 16 | 17 | 20 | 21 | 22) {
                         RefusalEffect::CheckNotEmitted
                     } else {
                         RefusalEffect::CandidateNotEmitted
                     }
                 }),
             Origin::Authored => number("ESS-AUTHOR-")
-                .filter(|code| (1..=41).contains(code) && *code != 36)
+                .filter(|code| (1..=46).contains(code) && *code != 36)
                 .map(|_| RefusalEffect::CandidateNotEmitted),
         };
         let Some(effect) = expected else {
