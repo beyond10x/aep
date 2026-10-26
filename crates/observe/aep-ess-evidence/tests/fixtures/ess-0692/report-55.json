@@ -1,0 +1,59 @@
+{
+  "completed_at": 1700000003200,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 8,
+    "skipped": 0,
+    "total": 8,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 8,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "interpreted 0.69.2",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "ledger.incident.Incident/state/Resolved/refuses/ledger.incident.ResolveIncident",
+      "ledger.incident.Incident/transition/resolve/by/ledger.incident.ResolveIncident/resolved",
+      "ledger.incident.OpenIncident/outcome/opened",
+      "ledger.incident.PlanWindow/outcome/planned",
+      "ledger.incident.ResolveIncident/outcome/resolved",
+      "ledger.incident.ResolveIncident/outcome/wrong-state",
+      "ledger.incident.Windows/reference/incident_id",
+      "ledger.incident.WindowsOfResolvedIncidents/reference/incident_id"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "6d9ab601f6b7fedd41b678d662d1fd0851e20ea1204058cffbb86d3edbaab6c2",
+  "specification": "ledger/v1",
+  "suite": {
+    "digest": "sha256:a0f727e870000917bc37567b1cfe1f7f795a44c325a3487ef8138c9ff5793943",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/55"
+  }
+}

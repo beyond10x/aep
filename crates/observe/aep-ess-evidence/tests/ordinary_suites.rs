@@ -102,10 +102,10 @@ fn a_report_naming_another_ordinary_version_than_its_suite_is_refused() {
 
 #[test]
 fn an_ordinary_major_this_build_does_not_know_is_refused_by_name_never_as_a_missing_field() {
-    let (suite, report) = relabelled("ess-conformance/46");
+    let (suite, report) = relabelled("ess-conformance/58");
     let error = admit(&report, &suite).expect_err("unknown ordinary major");
     assert!(
-        refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/46"),
+        refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/58"),
         "{error}"
     );
     assert!(

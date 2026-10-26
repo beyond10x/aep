@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 
 const ORDINARY_SUITES: &str = "crates/observe/aep-ess-evidence/tests/fixtures/ordinary-suites";
 const CURRENT_SUITES: &str = "crates/observe/aep-ess-evidence/tests/fixtures/current-suites";
+const ESS_0692: &str = "crates/observe/aep-ess-evidence/tests/fixtures/ess-0692";
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -206,23 +207,23 @@ fn an_ordinary_major_this_build_does_not_know_is_refused_by_name_not_as_a_missin
     let original = std::fs::read_to_string(ordinary("suite-34-aep.json")).unwrap();
     let relabelled = original.replace(
         "\"suite_version\": \"ess-conformance/34\"",
-        "\"suite_version\": \"ess-conformance/46\"",
+        "\"suite_version\": \"ess-conformance/58\"",
     );
     assert_ne!(relabelled, original);
-    let suite = directory.join("suite-46.json");
+    let suite = directory.join("suite-58.json");
     std::fs::write(&suite, &relabelled).unwrap();
     let mut report: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(ordinary("report-34-aep.json")).unwrap())
             .unwrap();
-    report["suite"] = serde_json::json!({"version":"ess-conformance/46","digest_profile":"sha256-json-bytes/1","digest":digest(&relabelled)});
-    let path = directory.join("report-46.json");
+    report["suite"] = serde_json::json!({"version":"ess-conformance/58","digest_profile":"sha256-json-bytes/1","digest":digest(&relabelled)});
+    let path = directory.join("report-58.json");
     std::fs::write(&path, report.to_string()).unwrap();
 
     let output = record(&store, &path, &suite);
-    refused_naming(&output, "UnsupportedSuiteVersion", "ess-conformance/46");
+    refused_naming(&output, "UnsupportedSuiteVersion", "ess-conformance/58");
     // The suite's own version is named even beside a report that names one this build knows.
     let output = record(&store, &ordinary("report-34-aep.json"), &suite);
-    refused_naming(&output, "UnsupportedSuiteVersion", "ess-conformance/46");
+    refused_naming(&output, "UnsupportedSuiteVersion", "ess-conformance/58");
     assert!(evidence(&store).is_empty(), "a refusal writes nothing");
 }
 
@@ -238,4 +239,63 @@ fn a_coverage_suite_still_goes_to_the_coverage_reader() {
     let recorded = evidence(&store);
     assert_eq!(recorded.len(), 1, "{recorded:?}");
     assert_eq!(recorded[0]["change"]["kind"], "ess_conformance_coverage_v1");
+}
+
+/// `aep.evidence.RecordFromReport/outcome/recorded` for the suite majors ESS 0.69.2 writes
+/// (story:evidence-admits-ess-0692-suites): an ordinary /54 and a coverage /55, each written
+/// with its report by `ess 0.69.2`, are recorded, the first as count-stage evidence and the second
+/// through the coverage reader. On 0.77.1 both were `UnsupportedSuiteVersion`.
+#[test]
+fn the_suites_ess_0_69_2_writes_are_recorded_with_their_reports() {
+    let fixture = |name: &str| root().join(ESS_0692).join(name);
+    for (suite, report, kind) in [
+        ("suite-54.json", "report-54.json", "ess_conformance_v2"),
+        (
+            "suite-55.json",
+            "report-55.json",
+            "ess_conformance_coverage_v1",
+        ),
+    ] {
+        let (_, store) = store(&format!("ess-0692-{kind}"));
+        success(&record(&store, &fixture(report), &fixture(suite)));
+        let recorded = evidence(&store);
+        assert_eq!(recorded.len(), 1, "{suite}: {recorded:?}");
+        let change = &recorded[0]["change"];
+        assert_eq!(change["kind"], kind, "{suite}: {change}");
+        let source: serde_json::Value =
+            serde_json::from_str(change["source"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            source["suite"]["digest"],
+            digest(&std::fs::read_to_string(fixture(suite)).unwrap()),
+            "{suite}"
+        );
+        assert_eq!(source["counts"]["passed"], 8, "{suite}: {source}");
+    }
+}
+
+/// `aep.evidence.RecordFromReport/outcome/unsupported-suite-version` past ESS 0.69.2: the /54
+/// fixture relabelled /58 is refused by name and records nothing.
+#[test]
+fn a_major_newer_than_ess_0_69_2_is_refused_by_name_and_records_nothing() {
+    let (directory, store) = store("ess-0692-newer");
+    let fixture = |name: &str| root().join(ESS_0692).join(name);
+    let original = std::fs::read_to_string(fixture("suite-54.json")).unwrap();
+    let relabelled = original.replace(
+        "\"suite_version\": \"ess-conformance/54\"",
+        "\"suite_version\": \"ess-conformance/58\"",
+    );
+    assert_ne!(relabelled, original);
+    let suite = directory.join("suite-58.json");
+    std::fs::write(&suite, &relabelled).unwrap();
+    let mut report: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(fixture("report-54.json")).unwrap()).unwrap();
+    report["suite"] = serde_json::json!({"version":"ess-conformance/58","digest_profile":"sha256-json-bytes/1","digest":digest(&relabelled)});
+    let path = directory.join("report-58.json");
+    std::fs::write(&path, report.to_string()).unwrap();
+    refused_naming(
+        &record(&store, &path, &suite),
+        "UnsupportedSuiteVersion",
+        "ess-conformance/58",
+    );
+    assert!(evidence(&store).is_empty(), "a refusal writes nothing");
 }

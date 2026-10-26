@@ -152,20 +152,20 @@ fn a_suite_version_newer_than_aep_knows_is_refused_naming_it() {
         SUITE_31,
         REPORT_31,
         "ess-conformance/31",
-        "ess-conformance/47",
+        "ess-conformance/59",
     );
     let error = wrap_coverage_suite(&suite).expect_err("unknown suite version");
-    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/47"));
+    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/59"));
     let input = json!({"format":"ess-conformance-input/1", "suite_json":suite, "parent_suites":[]});
     let error = admit_input(&report, &input.to_string()).expect_err("unknown suite version");
-    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/47"));
+    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/59"));
     // The report alone names the version as well, beside a suite aep does know.
     let mut report: Value = serde_json::from_str(REPORT_31).unwrap();
-    report["suite"]["version"] = "ess-conformance/47".into();
+    report["suite"]["version"] = "ess-conformance/59".into();
     let error = admit_raw(&report.to_string(), SUITE_31).expect_err("unknown report version");
     let located = refusal(&error, "UnsupportedSuiteVersion");
     assert!(located.starts_with("$.suite.version"), "{located}");
-    assert!(located.contains("ess-conformance/47"), "{located}");
+    assert!(located.contains("ess-conformance/59"), "{located}");
 }
 
 #[test]
@@ -325,9 +325,9 @@ fn a_refusal_code_older_than_its_suite_major_is_refused_as_ess_refuses_it() {
 #[test]
 fn a_refusal_code_ess_does_not_define_is_still_refused() {
     for (from, to) in [
-        ("ESS-SYNTH-017", "ESS-SYNTH-018"),
+        ("ESS-SYNTH-017", "ESS-SYNTH-025"),
         ("ESS-AUTHOR-037", "ESS-AUTHOR-036"),
-        ("ESS-AUTHOR-037", "ESS-AUTHOR-042"),
+        ("ESS-AUTHOR-037", "ESS-AUTHOR-047"),
     ] {
         let (suite, report) = if from.starts_with("ESS-SYNTH") {
             (SUITE_17_AGGREGATE_REFUSALS, REPORT_17_AGGREGATE_REFUSALS)
@@ -768,9 +768,9 @@ fn scenario_initial_state_is_required_empty_from_suite_34_and_refused_below_it()
 }
 
 #[test]
-fn a_seed_record_is_required_in_suite_43_admitted_in_45_and_refused_elsewhere() {
-    // ESS 0.55.0 `synthesis_seeds::seed_major` (/42, /43) and `admitted_in` (and
-    // `event_multiplicity::ADMITTED`, /44, /45).
+fn a_seed_record_is_required_in_suite_43_admitted_through_57_and_refused_elsewhere() {
+    // ESS 0.69.2 `synthesis_seeds::seed_major` (/42, /43) and `admitted_in` (every pair from
+    // /42 through `one_time_reader::ADMITTED`, /56 and /57).
     let (suite, report) = relabelled(
         SUITE_43_SEEDS,
         REPORT_43_SEEDS,
@@ -778,13 +778,20 @@ fn a_seed_record_is_required_in_suite_43_admitted_in_45_and_refused_elsewhere() 
         "ess-conformance/45",
     );
     admit_raw(&report, &suite).expect("a seed record is admitted in suite/45");
+    let (suite, report) = relabelled(
+        SUITE_43_SEEDS,
+        REPORT_43_SEEDS,
+        "ess-conformance/43",
+        "ess-conformance/57",
+    );
+    admit_raw(&report, &suite).expect("a seed record is admitted in suite/57");
     for to in ["ess-conformance/41", "ess-conformance/35"] {
         let (suite, report) = relabelled(SUITE_43_SEEDS, REPORT_43_SEEDS, "ess-conformance/43", to);
         let error = admit_raw(&report, &suite).expect_err(to);
         let located = refusal(&error, "UnsupportedVocabulary");
         assert!(
             located.starts_with("$suite.provenance.synthesis_seeds")
-                && located.contains("suite/42 or /43"),
+                && located.contains("suite/42"),
             "{to}: {located}"
         );
     }

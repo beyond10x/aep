@@ -1,0 +1,99 @@
+format: ess/28
+system: ledger
+version: v1
+domain: ledger.incident
+summary: A maintenance window may belong to an incident; what it reads of the incident is absent where it belongs to none.
+types:
+  - {name: ledger.incident.IncidentId, kind: newtype, of: Uuid}
+  - {name: ledger.incident.WindowId, kind: newtype, of: Uuid}
+entities:
+  - name: ledger.incident.Incident
+    identity: {name: incident_id, type: ledger.incident.IncidentId}
+    fields:
+      - {name: title, type: String}
+    lifecycle:
+      initial: Open
+      states: [Open, Resolved]
+      terminal: [Resolved]
+      transitions:
+        - {name: resolve, from: [Open], to: Resolved}
+  - name: ledger.incident.Window
+    identity: {name: window_id, type: ledger.incident.WindowId}
+    fields:
+      - {name: incident_id, type: Optional<ledger.incident.IncidentId>}
+    relations:
+      - {name: incident, kind: references, target: ledger.incident.Incident, cardinality: one, via: incident_id}
+    lifecycle:
+      initial: Planned
+      states: [Planned]
+      terminal: [Planned]
+      transitions: []
+errors:
+  - {name: ledger.incident.WrongState, summary: The incident is not open., fields: []}
+events:
+  - name: ledger.incident.IncidentOpened
+    fields: [{name: incident_id, type: ledger.incident.IncidentId}]
+  - name: ledger.incident.IncidentResolved
+    fields: [{name: incident_id, type: ledger.incident.IncidentId}]
+  - name: ledger.incident.WindowPlanned
+    fields:
+      - {name: window_id, type: ledger.incident.WindowId}
+      - {name: incident_state, type: Optional<ledger.incident.Incident.State>}
+actors:
+  - name: ledger.incident.Operator
+    may: [ledger.incident.OpenIncident, ledger.incident.ResolveIncident, ledger.incident.PlanWindow]
+commands:
+  - name: ledger.incident.OpenIncident
+    input:
+      - {name: title, type: String}
+    outcomes:
+      - name: opened
+        creates: ledger.incident.Incident
+        instance: incident_id
+        emits: [ledger.incident.IncidentOpened]
+        payload: {ledger.incident.IncidentOpened: {incident_id: {generated: true}}}
+        sets: {title: input.title}
+  - name: ledger.incident.ResolveIncident
+    input:
+      - {name: incident_id, type: ledger.incident.IncidentId}
+    outcomes:
+      - name: resolved
+        moves: ledger.incident.Incident.resolve
+        instance: incident_id
+        emits: [ledger.incident.IncidentResolved]
+        payload: {ledger.incident.IncidentResolved: {incident_id: input.incident_id}}
+      - {name: wrong-state, wrong_state: true, error: ledger.incident.WrongState}
+  - name: ledger.incident.PlanWindow
+    input:
+      - {name: incident_id, type: Optional<ledger.incident.IncidentId>}
+    outcomes:
+      - name: planned
+        creates: ledger.incident.Window
+        instance: window_id
+        emits: [ledger.incident.WindowPlanned]
+        payload:
+          ledger.incident.WindowPlanned:
+            window_id: {generated: true}
+            incident_state: {related: {via: input.incident_id, field: state}}
+        sets: {incident_id: input.incident_id}
+views:
+  - name: ledger.incident.Windows
+    source: ledger.incident.Window
+    consistency: read_your_writes
+    fields:
+      - {name: window_id, type: ledger.incident.WindowId}
+      - name: incident_state
+        type: Optional<ledger.incident.Incident.State>
+        field: {related: {via: incident_id, field: state}}
+  - name: ledger.incident.WindowsOfResolvedIncidents
+    source: ledger.incident.Window
+    consistency: read_your_writes
+    fields:
+      - {name: window_id, type: ledger.incident.WindowId}
+    filter: incident_id.state == Resolved
+  - name: ledger.incident.Incidents
+    source: ledger.incident.Incident
+    consistency: read_your_writes
+    fields:
+      - {name: incident_id, type: ledger.incident.IncidentId}
+      - {name: state, type: ledger.incident.Incident.State}

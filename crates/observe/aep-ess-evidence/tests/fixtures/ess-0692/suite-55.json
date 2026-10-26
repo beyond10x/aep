@@ -1,0 +1,1542 @@
+{
+  "coverage": {
+    "authored": [],
+    "authored_sources": {},
+    "counts": {
+      "authored": 0,
+      "generated": 8,
+      "outside": 0,
+      "refused": 0
+    },
+    "generated": [
+      "ledger.incident.Incident/state/Resolved/refuses/ledger.incident.ResolveIncident",
+      "ledger.incident.Incident/transition/resolve/by/ledger.incident.ResolveIncident/resolved",
+      "ledger.incident.OpenIncident/outcome/opened",
+      "ledger.incident.PlanWindow/outcome/planned",
+      "ledger.incident.ResolveIncident/outcome/resolved",
+      "ledger.incident.ResolveIncident/outcome/wrong-state",
+      "ledger.incident.Windows/reference/incident_id",
+      "ledger.incident.WindowsOfResolvedIncidents/reference/incident_id"
+    ],
+    "knowledge": "complete_inventory",
+    "outside": [],
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "events": [
+    "ledger.incident.IncidentOpened",
+    "ledger.incident.IncidentResolved",
+    "ledger.incident.WindowPlanned"
+  ],
+  "provenance": {
+    "contract_digest": "06a6ee2295d3fd01ee890e6e4542f2b6a3ea49c00c107a1f1cec20226ea3ca7f",
+    "scenario_initial_state": "empty",
+    "spec_digest": "6d9ab601f6b7fedd41b678d662d1fd0851e20ea1204058cffbb86d3edbaab6c2",
+    "specification_version": "v1",
+    "suite_version": "ess-conformance/55",
+    "system": "ledger"
+  },
+  "scenarios": {
+    "ledger.incident.Incident/state/Resolved/refuses/ledger.incident.ResolveIncident": {
+      "absent_events": [
+        {
+          "before": 10,
+          "except": []
+        }
+      ],
+      "purpose": "`ledger.incident.ResolveIncident` does not move a `ledger.incident.Incident` that is in `Resolved`, and reports `ledger.incident.WrongState`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Incident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.OpenIncident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.ResolveIncident"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "wrong-state"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentResolved"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "error",
+          "name": "ledger.incident.WrongState"
+        },
+        {
+          "kind": "view",
+          "name": "ledger.incident.Incidents"
+        },
+        {
+          "kind": "actor",
+          "name": "ledger.incident.Operator"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Incidents"
+        },
+        {
+          "shape": {
+            "declarations": {
+              "ledger.incident.Incident.State": {
+                "kind": "enum",
+                "variants": [
+                  "Open",
+                  "Resolved"
+                ]
+              },
+              "ledger.incident.IncidentId": {
+                "kind": "newtype",
+                "of": "Uuid"
+              }
+            },
+            "fields": [
+              {
+                "name": "incident_id",
+                "type": "ledger.incident.IncidentId"
+              },
+              {
+                "name": "state",
+                "type": "ledger.incident.Incident.State"
+              }
+            ],
+            "identity_field": "incident_id"
+          },
+          "step": "snapshot_complete_subject",
+          "subject": {
+            "incident_id": {
+              "instance": "incident",
+              "kind": "instance"
+            }
+          },
+          "view": "ledger.incident.Incidents"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "wrong-state"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "ledger.incident.WrongState",
+          "step": "expect_error"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Incidents"
+        },
+        {
+          "step": "expect_complete_subject_unchanged",
+          "view": "ledger.incident.Incidents"
+        }
+      ]
+    },
+    "ledger.incident.Incident/transition/resolve/by/ledger.incident.ResolveIncident/resolved": {
+      "absent_events": [
+        {
+          "before": 6,
+          "except": [
+            "ledger.incident.IncidentResolved"
+          ]
+        }
+      ],
+      "purpose": "`ledger.incident.ResolveIncident` on `resolved` moves a `ledger.incident.Incident` to `Resolved` along `resolve`",
+      "source": [
+        {
+          "kind": "type",
+          "name": "ledger.incident.IncidentId"
+        },
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Incident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.OpenIncident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.ResolveIncident"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentResolved"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "view",
+          "name": "ledger.incident.Incidents"
+        },
+        {
+          "kind": "actor",
+          "name": "ledger.incident.Operator"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "ledger.incident.IncidentResolved",
+          "payload": {
+            "incident_id": {
+              "instance": "incident",
+              "kind": "instance"
+            }
+          },
+          "shape": {
+            "incident_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Incidents"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "incident_id": {
+                "instance": "incident",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Resolved"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Incidents"
+        }
+      ]
+    },
+    "ledger.incident.OpenIncident/outcome/opened": {
+      "absent_events": [
+        {
+          "before": 3,
+          "except": [
+            "ledger.incident.IncidentOpened"
+          ]
+        }
+      ],
+      "purpose": "`ledger.incident.OpenIncident` answers `opened` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "ledger.incident.IncidentId"
+        },
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Incident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.OpenIncident"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentResolved"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "view",
+          "name": "ledger.incident.Incidents"
+        },
+        {
+          "kind": "actor",
+          "name": "ledger.incident.Operator"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "ledger.incident.IncidentOpened",
+          "shape": {
+            "incident_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Incidents"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "incident_id": {
+                "event": "ledger.incident.IncidentOpened",
+                "field": "incident_id",
+                "kind": "observed"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Open"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Incidents"
+        }
+      ]
+    },
+    "ledger.incident.PlanWindow/outcome/planned": {
+      "absent_events": [
+        {
+          "before": 12,
+          "except": [
+            "ledger.incident.WindowPlanned"
+          ]
+        },
+        {
+          "before": 16,
+          "except": [
+            "ledger.incident.WindowPlanned"
+          ]
+        }
+      ],
+      "purpose": "`ledger.incident.PlanWindow` answers `planned` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "ledger.incident.Incident.State"
+        },
+        {
+          "kind": "type",
+          "name": "ledger.incident.IncidentId"
+        },
+        {
+          "kind": "type",
+          "name": "ledger.incident.WindowId"
+        },
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Window"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.OpenIncident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.PlanWindow"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentResolved"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "actor",
+          "name": "ledger.incident.Operator"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title-27719"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident-27720",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title-27720"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident-27721",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title-27721"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident-27722",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "input": {
+            "incident_id": {
+              "instance": "incident-27721",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "ledger.incident.WindowPlanned",
+          "payload": {
+            "incident_state": "Open"
+          },
+          "shape": {
+            "incident_state": {
+              "holds": "enum",
+              "optional": true,
+              "variants": [
+                "Open",
+                "Resolved"
+              ]
+            },
+            "window_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Window",
+          "event": "ledger.incident.WindowPlanned",
+          "field": "window_id",
+          "instance": "window-130",
+          "step": "capture_instance"
+        },
+        {
+          "event": "ledger.incident.WindowPlanned",
+          "shape": {
+            "incident_state": {
+              "holds": "enum",
+              "optional": true,
+              "variants": []
+            },
+            "window_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event"
+        }
+      ]
+    },
+    "ledger.incident.ResolveIncident/outcome/resolved": {
+      "absent_events": [
+        {
+          "before": 6,
+          "except": [
+            "ledger.incident.IncidentResolved"
+          ]
+        }
+      ],
+      "purpose": "`ledger.incident.ResolveIncident` answers `resolved` for an input no other branch's guard claims",
+      "source": [
+        {
+          "kind": "type",
+          "name": "ledger.incident.IncidentId"
+        },
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Incident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.OpenIncident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.ResolveIncident"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentResolved"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "view",
+          "name": "ledger.incident.Incidents"
+        },
+        {
+          "kind": "actor",
+          "name": "ledger.incident.Operator"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "event": "ledger.incident.IncidentResolved",
+          "payload": {
+            "incident_id": {
+              "instance": "incident",
+              "kind": "instance"
+            }
+          },
+          "shape": {
+            "incident_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          },
+          "step": "expect_event_values"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Incidents"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "incident_id": {
+                "instance": "incident",
+                "kind": "instance"
+              },
+              "state": {
+                "kind": "literal",
+                "value": "Resolved"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Incidents"
+        }
+      ]
+    },
+    "ledger.incident.ResolveIncident/outcome/wrong-state": {
+      "absent_events": [
+        {
+          "before": 3,
+          "except": []
+        }
+      ],
+      "purpose": "`ledger.incident.ResolveIncident` for an identity no record carries takes `wrong-state` and reports `ledger.incident.WrongState`",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Incident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.ResolveIncident"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "wrong-state"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentResolved"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "error",
+          "name": "ledger.incident.WrongState"
+        },
+        {
+          "kind": "actor",
+          "name": "ledger.incident.Operator"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "kind": "literal",
+              "value": "00000000-0000-4000-8000-92f6da213207"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "wrong-state"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "error": "ledger.incident.WrongState",
+          "step": "expect_error"
+        }
+      ]
+    },
+    "ledger.incident.Windows/reference/incident_id": {
+      "purpose": "`ledger.incident.Windows` reads the `ledger.incident.Incident` row `incident_id` names as it is when read: a row whose referenced row changes, a decoy, and an absent reference",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Incident"
+        },
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Window"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.OpenIncident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.PlanWindow"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.ResolveIncident"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "view",
+          "name": "ledger.incident.Windows"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title-1000000"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident-1000001",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title-1000001"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident-1000002",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000001",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Window",
+          "event": "ledger.incident.WindowPlanned",
+          "field": "window_id",
+          "instance": "window-1000003",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000002",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Window",
+          "event": "ledger.incident.WindowPlanned",
+          "field": "window_id",
+          "instance": "window-1000004",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Window",
+          "event": "ledger.incident.WindowPlanned",
+          "field": "window_id",
+          "instance": "window-1000005",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000002",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "incident_state": {
+                "kind": "literal",
+                "value": "Open"
+              },
+              "window_id": {
+                "instance": "window-1000003",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "incident_state": {
+                "kind": "literal",
+                "value": "Resolved"
+              },
+              "window_id": {
+                "instance": "window-1000004",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "window_id": {
+                "instance": "window-1000005",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "incident_state": {
+                "kind": "literal",
+                "value": "Open"
+              },
+              "window_id": {
+                "instance": "window-1000005",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "incident_state": {
+                "kind": "literal",
+                "value": "Resolved"
+              },
+              "window_id": {
+                "instance": "window-1000005",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000001",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.Windows"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "incident_state": {
+                "kind": "literal",
+                "value": "Resolved"
+              },
+              "window_id": {
+                "instance": "window-1000003",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.Windows"
+        }
+      ]
+    },
+    "ledger.incident.WindowsOfResolvedIncidents/reference/incident_id": {
+      "purpose": "`ledger.incident.WindowsOfResolvedIncidents` reads the `ledger.incident.Incident` row `incident_id` names as it is when read: a row whose referenced row changes, a decoy, and an absent reference",
+      "source": [
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Incident"
+        },
+        {
+          "kind": "entity",
+          "name": "ledger.incident.Window"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.OpenIncident"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.PlanWindow"
+        },
+        {
+          "kind": "command",
+          "name": "ledger.incident.ResolveIncident"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.IncidentOpened"
+        },
+        {
+          "kind": "event",
+          "name": "ledger.incident.WindowPlanned"
+        },
+        {
+          "kind": "view",
+          "name": "ledger.incident.WindowsOfResolvedIncidents"
+        }
+      ],
+      "steps": [
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title-1000000"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident-1000001",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.OpenIncident",
+          "input": {
+            "title": {
+              "kind": "literal",
+              "value": "title-1000001"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.OpenIncident",
+            "outcome": "opened"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Incident",
+          "event": "ledger.incident.IncidentOpened",
+          "field": "incident_id",
+          "instance": "incident-1000002",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000001",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Window",
+          "event": "ledger.incident.WindowPlanned",
+          "field": "window_id",
+          "instance": "window-1000003",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000002",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Window",
+          "event": "ledger.incident.WindowPlanned",
+          "field": "window_id",
+          "instance": "window-1000004",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.PlanWindow",
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.PlanWindow",
+            "outcome": "planned"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "entity": "ledger.incident.Window",
+          "event": "ledger.incident.WindowPlanned",
+          "field": "window_id",
+          "instance": "window-1000005",
+          "step": "capture_instance"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000002",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "window_id": {
+                "instance": "window-1000003",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "window_id": {
+                "instance": "window-1000004",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        },
+        {
+          "expectation": {
+            "expect": "excludes",
+            "fields": {
+              "window_id": {
+                "instance": "window-1000005",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        },
+        {
+          "actor": "ledger.incident.Operator",
+          "command": "ledger.incident.ResolveIncident",
+          "input": {
+            "incident_id": {
+              "instance": "incident-1000001",
+              "kind": "instance"
+            }
+          },
+          "step": "execute_command"
+        },
+        {
+          "outcome": {
+            "command": "ledger.incident.ResolveIncident",
+            "outcome": "resolved"
+          },
+          "step": "expect_outcome"
+        },
+        {
+          "step": "query_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        },
+        {
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "window_id": {
+                "instance": "window-1000003",
+                "kind": "instance"
+              }
+            }
+          },
+          "step": "expect_view",
+          "view": "ledger.incident.WindowsOfResolvedIncidents"
+        }
+      ]
+    }
+  }
+}

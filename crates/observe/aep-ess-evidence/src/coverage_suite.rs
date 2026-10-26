@@ -87,7 +87,8 @@ pub(crate) fn wrap_suite(original: &str) -> Result<String> {
 
 fn admit_suite(original: &str) -> Result<AdmittedSuite> {
     let document = Json::parse(original, "$suite")?;
-    let fields = document.closed(&["provenance", "scenarios", "coverage"], &[])?;
+    admit_known_version(&document)?;
+    let fields = document.closed(&["provenance", "scenarios", "coverage"], &ROOT_CATALOGS)?;
     let provenance = fields["provenance"].closed(
         &[
             "suite_version",
@@ -106,6 +107,7 @@ fn admit_suite(original: &str) -> Result<AdmittedSuite> {
         ));
     }
     admit_provenance_vocabulary(major(version), &fields["provenance"], provenance)?;
+    admit_root_catalogs(major(version), fields)?;
     // The reference binds every original byte; the report must name exactly this digest.
     let reference = SuiteReference::new(
         version.into(),
@@ -173,10 +175,56 @@ const TRANSCRIBED_SUITE_VERSION: &str = "ess-conformance/5";
 /// (the `one_time_response::ORDINARY` pair) and absent below it.
 const INITIAL_STATE_MAJOR: u32 = 34;
 
-/// The majors whose provenance may carry a seed record: ESS 0.55.0
+/// The majors whose provenance may carry a seed record: ESS 0.69.2
 /// `synthesis_seeds::admitted_in`, the seed pair (`synthesis_seeds::ORDINARY` 42 and `COVERAGE`
-/// 43) and the counted event-claim pair over it (`event_multiplicity::ADMITTED`, 44 and 45).
-const SEED_MAJORS: [u32; 4] = [42, 43, 44, 45];
+/// 43) and every pair ESS added over it, 44/45 (`event_multiplicity`) through 56/57
+/// (`one_time_reader`).
+const SEED_MAJORS: std::ops::RangeInclusive<u32> = 42..=57;
+
+/// The first ordinary major whose suite root may carry the `events` and `one_time_response`
+/// catalogs (ESS 0.69.2 `one_time_response::compact::ORDINARY`, `admission.rs`
+/// `compact_spellings`). Scenario bodies that refer to them are ESS's to read.
+const ROOT_CATALOG_MAJOR: u32 = 52;
+
+/// The optional members of a suite root besides `coverage` (ESS 0.69.2 `admission.rs`
+/// `ROOT_OPTIONAL`).
+pub(crate) const ROOT_CATALOGS: [&str; 2] = ["events", "one_time_response"];
+
+/// Refuses a suite-level catalog under a major below [`ROOT_CATALOG_MAJOR`], as ESS does.
+pub(crate) fn admit_root_catalogs(major: u32, root: &BTreeMap<String, Json>) -> Result<()> {
+    if major >= ROOT_CATALOG_MAJOR {
+        return Ok(());
+    }
+    match ROOT_CATALOGS.iter().find_map(|key| root.get(*key)) {
+        Some(catalog) => Err(catalog.error(
+            "UnsupportedVocabulary",
+            "a suite-level event or one-time catalog requires suite/52 or /53",
+        )),
+        None => Ok(()),
+    }
+}
+
+/// Refuses, by name, a suite version neither reader knows before any member is read, so a suite
+/// from a newer ESS is never refused for a member that major added.
+fn admit_known_version(document: &Json) -> Result<()> {
+    let Some(marker) = document
+        .object()?
+        .get("provenance")
+        .and_then(|provenance| provenance.object().ok())
+        .and_then(|provenance| provenance.get("suite_version"))
+    else {
+        return Ok(());
+    };
+    let version = marker.text()?;
+    if is_coverage_suite_version(version) {
+        Ok(())
+    } else {
+        Err(marker.error(
+            "UnsupportedSuiteVersion",
+            format!("{version} is not a coverage suite version this build admits"),
+        ))
+    }
+}
 
 /// The majors whose provenance must carry one (`synthesis_seeds::seed_major`).
 const SEED_REQUIRED_MAJORS: [u32; 2] = [42, 43];
@@ -222,7 +270,7 @@ pub(crate) fn admit_provenance_vocabulary(
     match fields.get("synthesis_seeds") {
         Some(seeds) if !SEED_MAJORS.contains(&major) => Err(seeds.error(
             "UnsupportedVocabulary",
-            "synthesis seeds require suite/42 or /43, or the counted event-claim pair /44 or /45",
+            "synthesis seeds require suite/42 or a later major",
         )),
         Some(seeds) => admit_seeds(seeds),
         None if SEED_REQUIRED_MAJORS.contains(&major) => Err(missing(
@@ -606,7 +654,14 @@ fn nesting(value: &Json) -> usize {
 /// | `disclosure/...` | `one_time_response::admit` | `one_time_response::ORDINARY` (34) |
 /// | `binding/refusal/<outcome>` | `refusal_policy::admit` | `refusal_policy::ORDINARY` (36) |
 /// | `binding/condition-false`, `binding/condition-absent` | `no_invocation::admit` | `no_invocation::ORDINARY` (36) |
-const LATER_ID_FORMS: [(&[&str], u32); 10] = [
+/// | `outcome/<outcome>/held/<field>/<seconds>` | `hold_now::admit` (0.69.2) | `hold_now::ORDINARY` (50) |
+/// | `invariant-wrapped/at/<view>/<root>/<digest>` | `value_invariant::admit` (0.69.2) | `value_invariant::ORDINARY` (52) |
+/// | `reference/<field>` | `view_reference::admit` (0.69.2) | `view_reference::ORDINARY` (54) |
+///
+/// ESS 0.69.2 also changed what `disclosure/<outcome>/<field>/read/<view>/as/actor/<A>` names from
+/// suite/56 on (`one_time_reader`: the reader rather than the issuer) without a floor on the
+/// spelling; AEP reads only the identity, which is the same at every major.
+const LATER_ID_FORMS: [(&[&str], u32); 13] = [
     (&["aggregate"], 16),
     (&["binding", "final-failure"], 26),
     (&["grant", "denied"], 26),
@@ -617,6 +672,15 @@ const LATER_ID_FORMS: [(&[&str], u32); 10] = [
     (&["binding", "refusal", "<outcome>"], 36),
     (&["binding", "condition-false"], 36),
     (&["binding", "condition-absent"], 36),
+    (
+        &["outcome", "<outcome>", "held", "<field>", "<seconds>"],
+        50,
+    ),
+    (
+        &["invariant-wrapped", "at", "<view>", "<root>", "<digest>"],
+        52,
+    ),
+    (&["reference", "<field>"], 54),
 ];
 
 /// Whether the segments after an id's subject spell `form`.
@@ -667,12 +731,16 @@ pub(crate) fn major(version: &str) -> u32 {
 
 /// Refusal codes ESS added after suite/5, each with the first coverage major that admits it.
 ///
-/// ESS `Inventory::validate` (`coverage.rs`): `ESS-SYNTH-015` needs suite/7, and
-/// `aggregate::is_aggregate_refusal` (`ESS-SYNTH-016`, `-017`) suite/17 (`aggregate::COVERAGE`).
-const LATER_REFUSAL_CODES: [(&str, u32); 3] = [
+/// ESS `Inventory::validate` (`coverage.rs`): `ESS-SYNTH-015` needs suite/7,
+/// `aggregate::is_aggregate_refusal` (`ESS-SYNTH-016`, `-017`) suite/17 (`aggregate::COVERAGE`),
+/// and, at ESS 0.69.2, `system_issued::REFUSALS` (`ESS-SYNTH-023`, `-024`) suite/53
+/// (`system_issued::COVERAGE`). The other codes ESS added after 0.55.0 (018–022) are not gated.
+const LATER_REFUSAL_CODES: [(&str, u32); 5] = [
     ("ESS-SYNTH-015", 7),
     ("ESS-SYNTH-016", 17),
     ("ESS-SYNTH-017", 17),
+    ("ESS-SYNTH-023", 53),
+    ("ESS-SYNTH-024", 53),
 ];
 
 fn admit_refusal_codes(version: &str, inventory: &Inventory, coverage: &Json) -> Result<()> {
@@ -948,6 +1016,24 @@ fn admit_child(child: &AdmittedSuite, parent: &AdmittedSuite) -> Result<()> {
             "filter cannot change provenance",
         ));
     }
+    // From suite/52 a scenario body may be written against the suite-level catalogs, and ESS's
+    // selection rewrites both: a child drops the catalog entries its survivors no longer need and
+    // re-spells their `absent_events` against what is left, so a surviving body's bytes differ
+    // from its parent's while its expansion does not. AEP compares bodies byte for byte and does
+    // not transcribe that expansion, so such a lineage is refused by name rather than as a changed
+    // survivor (ESS 0.69.2 `admission.rs` `compact_spellings`, `ess verify conform select`).
+    if let Some(key) = [&child.definitions, &parent.definitions]
+        .iter()
+        .find_map(|definitions| definitions.catalogs.keys().next())
+    {
+        return Err(invalid(
+            "UnsupportedVocabulary",
+            format!(
+                "a selected suite whose lineage carries the suite-level `{key}` catalog \
+                 (suite/52 and later) is not compared by this build; record the complete suite"
+            ),
+        ));
+    }
     for (id, scenario) in &child.definitions.scenarios {
         if parent.definitions.scenarios.get(id) != Some(scenario) {
             return Err(invalid(
@@ -998,10 +1084,10 @@ mod tests {
     use crate::count_json::Json;
     use aep_domain::ess_conformance_v2::ScenarioId;
 
-    /// One id of each form ESS added after suite/5, with the first ordinary major ESS 0.55.0
+    /// One id of each form ESS added after suite/5, with the first ordinary major ESS 0.69.2
     /// carries it in, for checking the table against. The reader's gate is tested through the
     /// reader in `tests/current_suites.rs`, which admits and refuses each form at its majors.
-    const LATER: [(&str, u32); 11] = [
+    const LATER: [(&str, u32); 14] = [
         ("metrics.session.ByAgent/aggregate", 16),
         ("notify-ledger/binding/final-failure", 26),
         ("billing.invoice.IssueInvoice/grant/denied", 26),
@@ -1013,6 +1099,12 @@ mod tests {
         ("notify-ledger/binding/refusal/at-limit", 36),
         ("notify-ledger/binding/condition-false", 36),
         ("notify-ledger/binding/condition-absent", 36),
+        ("ledger.incident.OpenIncident/outcome/opened/held/opened_at/30", 50),
+        (
+            "ledger.incident.Code/invariant-wrapped/at/ledger.incident.Windows/code/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            52,
+        ),
+        ("ledger.incident.Windows/reference/incident_id", 54),
     ];
 
     #[test]
@@ -1034,7 +1126,7 @@ mod tests {
     fn a_frozen_form_is_admitted_at_every_major() {
         let scenarios = Json::parse("{}", "$suite.scenarios").unwrap();
         let ids = [ScenarioId::new("notify-ledger/binding/flow").unwrap()];
-        for major in [5, 7, 33, 45] {
+        for major in [5, 7, 33, 45, 56, 57] {
             admit_id_forms(&format!("ess-conformance/{major}"), &ids, &scenarios)
                 .unwrap_or_else(|error| panic!("/{major}: {error}"));
         }

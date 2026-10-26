@@ -13,6 +13,10 @@ use crate::count_json::{Json, Result};
 pub(super) struct Definitions {
     pub provenance: Provenance,
     pub scenarios: BTreeMap<String, Body>,
+    /// The suite-level catalogs from suite/52 on (`events`, `one_time_response`), exactly as
+    /// written. A surviving scenario's body may be spelled against them, so a lineage that
+    /// carries one cannot be compared byte for byte (`coverage_suite` `admit_child`).
+    pub catalogs: BTreeMap<String, serde_json::Value>,
 }
 
 /// A surviving scenario as a parent comparison sees it.
@@ -45,6 +49,11 @@ impl Definitions {
         };
         Ok(Self {
             provenance: decode(&fields["provenance"])?,
+            catalogs: crate::coverage_suite::ROOT_CATALOGS
+                .iter()
+                .filter_map(|key| fields.get(*key).map(|value| (key, value)))
+                .map(|(key, value)| Ok(((*key).to_owned(), decode(value)?)))
+                .collect::<Result<_>>()?,
             scenarios,
         })
     }
