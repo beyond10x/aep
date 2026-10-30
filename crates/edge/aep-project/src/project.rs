@@ -2741,8 +2741,9 @@ mod tests {
     enum Connection {
         /// No connection arrived within the watch.
         NeverAccepted,
-        /// The peer closed the connection: the instant end-of-stream (or a reset) was read.
-        Closed(std::time::Instant),
+        /// The peer closed the connection: the instant end-of-stream (or a reset) was read. Only
+        /// the Linux deadline test reads the instant.
+        Closed(#[cfg_attr(not(target_os = "linux"), allow(dead_code))] std::time::Instant),
         /// The connection was still open when the watch ended.
         StillOpen,
     }
@@ -2797,6 +2798,7 @@ mod tests {
 
     /// Resolves `source` in `cache` on a thread, giving up after `limit` so a missing deadline
     /// fails the test instead of hanging it. Returns the result and the instant it returned.
+    #[cfg(target_os = "linux")]
     fn resolve_within(
         source: &GitProtocolSource,
         cache: &SourceCache,
@@ -2828,6 +2830,7 @@ mod tests {
 
     /// Extra time a test allows past a deadline: Git asked to stop, the grace before it is made
     /// to, and a loaded machine's scheduling.
+    #[cfg(target_os = "linux")]
     const DEADLINE_MARGIN: std::time::Duration = std::time::Duration::from_secs(3);
 
     /// Acceptances 1 to 4 of `story:an-unreachable-protocol-source-fails-within-a-deadline`.

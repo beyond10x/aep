@@ -8,6 +8,7 @@
 
 mod support;
 
+#[cfg(target_os = "linux")]
 use std::time::{Duration, Instant};
 
 use support::resolve_in_child;
