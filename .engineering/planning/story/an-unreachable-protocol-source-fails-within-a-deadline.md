@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:an-unreachable-protocol-source-fails-within-a-deadline
 kind: story
-status: active
+status: implemented
 title: An unreachable protocol source fails within a deadline, naming the pin and the cache
 tags:
 - confinement
@@ -26,10 +26,11 @@ scope:
   path: website/docs/reference/cli.md
 - confidence: cited
   path: website/docs/reference/project-file.md
-revision: 7
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 5}
 - {from: "proposed", to: "active", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 6}
+- {from: "active", to: "implemented", at: "2026-10-30T17:37:05Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 # Story: An unreachable protocol source fails within a deadline, naming the pin and the cache
 

@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:evidence-admits-ess-0770-suites
 kind: story
-status: active
+status: implemented
 title: The ESS pin moves to 0.77.0, and evidence admits the suite majors it writes
 tags:
 - ess
@@ -33,10 +33,11 @@ scope:
   path: generated/ess
 - confidence: cited
   path: xtask/tests/ess_gate.rs
-revision: 13
+revision: 14
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 10}
 - {from: "proposed", to: "active", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 11}
+- {from: "active", to: "implemented", at: "2026-10-30T17:37:06Z", actor: "human:timo", revision: 14, decided_on: {"recorded":{"test_result":1,"review_outcome":1,"verification":1}}}
 ---
 # Story: The ESS pin moves to 0.77.0, and evidence admits the suite majors it writes
 

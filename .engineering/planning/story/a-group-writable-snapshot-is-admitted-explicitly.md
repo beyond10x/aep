@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:a-group-writable-snapshot-is-admitted-explicitly
 kind: story
-status: active
+status: implemented
 title: A group-writable protocol snapshot is admitted only when the operator says so
 tags:
 - confinement
@@ -26,10 +26,11 @@ scope:
   path: website/docs/reference/cli.md
 - confidence: cited
   path: website/docs/reference/project-file.md
-revision: 8
+revision: 9
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-30T16:38:54Z", actor: "human:timo", revision: 5}
 - {from: "proposed", to: "active", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 6}
+- {from: "active", to: "implemented", at: "2026-10-30T17:37:05Z", actor: "human:timo", revision: 9, decided_on: {"recorded":{"test_result":1,"review_outcome":2,"verification":1}}}
 ---
 # Story: A group-writable protocol snapshot is admitted only when the operator says so
 
