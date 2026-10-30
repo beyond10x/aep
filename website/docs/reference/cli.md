@@ -41,7 +41,9 @@ is missing here fails the build.
 |---|---|
 | `AEP_ACTOR` | who a planning write is recorded as: `human:<name>`, `agent:<name>`, `service:<name>` or `system`. Unset means `human:$USER`, and an unparseable value is refused |
 | `AEP_PROJECT_DIR` | renames the project directory (default `.engineering`) |
-| `AEP_CACHE_DIR` | where pinned Git protocol sources are materialized (default `~/.cache/aep`) |
+| `AEP_CACHE_DIR` | where pinned Git protocol sources are materialized (default `~/.cache/aep`). A cache that already holds a pin's sealed snapshot is read with no network, so point this at a prefilled cache on a machine or pod without egress |
+| `AEP_FETCH_TIMEOUT_SECS` | how long fetching a pinned protocol revision may take before it is stopped and refused, naming the pin and the cache (default `60`); a value that is not a positive integer is refused |
+| `AEP_CACHE_GROUP_WRITABLE` | `1` admits a cached snapshot that its group can write, such as a cache on a Kubernetes volume with `fsGroup`, which makes files `0664` and directories `2775`. Bytes are still verified against the sealed manifest. Unset, a group-writable snapshot is refused; a snapshot others can write is always refused |
 | `AEP_DRIVE_PLUGIN_DIR` | the plugin directory `drive` and `doctor` use when `--plugin-dir` is absent |
 
 ## Plan: artifacts
