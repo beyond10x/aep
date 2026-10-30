@@ -122,6 +122,9 @@
     "state"
   ],
   "additionalProperties": false,
+  "x-ess-invariants": [
+    "(state != GitNative or defined(planning_scope))"
+  ],
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",

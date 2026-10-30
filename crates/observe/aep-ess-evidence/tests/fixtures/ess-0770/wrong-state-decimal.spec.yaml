@@ -1,0 +1,54 @@
+format: ess/32
+system: demo
+version: v1
+summary: Probe.
+domain: demo.p
+types:
+  - {name: demo.p.ItemId, kind: newtype, of: Uuid}
+  - {name: demo.p.Line, kind: struct, fields: [{name: price, type: Decimal}]}
+entities:
+  - name: demo.p.Item
+    identity: {name: item_id, type: demo.p.ItemId}
+    fields:
+      - {name: price, type: Decimal}
+    lifecycle:
+      initial: Open
+      states: [Open, Closed]
+      terminal: [Closed]
+      transitions:
+        - {name: close, from: [Open], to: Closed}
+commands:
+  - name: demo.p.Make
+    input:
+      - {name: price, type: Decimal}
+    outcomes:
+      - name: made
+        creates: demo.p.Item
+        instance: item_id
+        sets: {price: input.price}
+        emits: [demo.p.Made]
+        payload:
+          demo.p.Made: {item_id: {generated: true}}
+  - name: demo.p.Close
+    input:
+      - {name: item_id, type: demo.p.ItemId}
+    outcomes:
+      - {name: wrong-state, wrong_state: true, error: demo.p.WrongState}
+      - name: closed
+        moves: demo.p.Item.close
+        instance: item_id
+        emits: [demo.p.Closed]
+        payload:
+          demo.p.Closed: {item_id: input.item_id}
+events:
+  - {name: demo.p.Made, fields: [{name: item_id, type: demo.p.ItemId}]}
+  - {name: demo.p.Closed, fields: [{name: item_id, type: demo.p.ItemId}]}
+views:
+  - name: demo.p.Items
+    source: demo.p.Item
+    consistency: read_your_writes
+    fields:
+      - {name: item_id, type: demo.p.ItemId}
+      - {name: price, type: Decimal}
+errors:
+  - {name: demo.p.WrongState, summary: Wrong state.}

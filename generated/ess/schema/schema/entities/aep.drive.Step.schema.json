@@ -59,6 +59,9 @@
     "state"
   ],
   "additionalProperties": false,
+  "x-ess-invariants": [
+    "(kind != llm or format == v1 or defined(judgement))"
+  ],
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",

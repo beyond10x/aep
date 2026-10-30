@@ -152,20 +152,20 @@ fn a_suite_version_newer_than_aep_knows_is_refused_naming_it() {
         SUITE_31,
         REPORT_31,
         "ess-conformance/31",
-        "ess-conformance/59",
+        "ess-conformance/61",
     );
     let error = wrap_coverage_suite(&suite).expect_err("unknown suite version");
-    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/59"));
+    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/61"));
     let input = json!({"format":"ess-conformance-input/1", "suite_json":suite, "parent_suites":[]});
     let error = admit_input(&report, &input.to_string()).expect_err("unknown suite version");
-    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/59"));
+    assert!(refusal(&error, "UnsupportedSuiteVersion").contains("ess-conformance/61"));
     // The report alone names the version as well, beside a suite aep does know.
     let mut report: Value = serde_json::from_str(REPORT_31).unwrap();
-    report["suite"]["version"] = "ess-conformance/59".into();
+    report["suite"]["version"] = "ess-conformance/61".into();
     let error = admit_raw(&report.to_string(), SUITE_31).expect_err("unknown report version");
     let located = refusal(&error, "UnsupportedSuiteVersion");
     assert!(located.starts_with("$.suite.version"), "{located}");
-    assert!(located.contains("ess-conformance/59"), "{located}");
+    assert!(located.contains("ess-conformance/61"), "{located}");
 }
 
 #[test]

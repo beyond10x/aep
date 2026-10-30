@@ -1,0 +1,43 @@
+{
+  "completed_at": 1700000003700,
+  "conformance_status": "inconclusive",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 8,
+    "skipped": 0,
+    "total": 8,
+    "unsupported": 0
+  },
+  "coverage": {
+    "knowledge": "unknown"
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "interpreted 0.77.0",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "counter.model.Authorize/outcome/authorized",
+      "counter.model.Authorize/outcome/invalid",
+      "counter.model.Authorize/outcome/revision-exhausted",
+      "counter.model.Authorize/outcome/stale",
+      "counter.model.Authorize/outcome/unknown",
+      "counter.model.Counter/invariant/after/counter.model.Authorize/authorized",
+      "counter.model.Counter/invariant/after/counter.model.Create/created",
+      "counter.model.Create/outcome/created"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "2a81ddf0e59648422364f3eacde1d63b5966944e2683138f77d2d873973d160a",
+  "specification": "counter/v1",
+  "suite": {
+    "digest": "sha256:a1968d3fd6039876db64f65a6a6be8ae666ed4013ac22fe66c34f0434aa96ba4",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/42"
+  }
+}

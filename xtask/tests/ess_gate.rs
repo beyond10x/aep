@@ -24,12 +24,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 /// The release `ess/ess-inputs.yaml` pins and `.github/workflows/ci.yml` installs.
-const PINNED: &str = "0.69.2";
+const PINNED: &str = "0.77.0";
 
 /// The `x86_64-unknown-linux-gnu` line of the pinned release's `SHA256SUMS` asset, which CI's
 /// install step greps for exactly; a pin moved without it fails every CI run at "Install ess".
 const PINNED_LINUX_SHA256: &str =
-    "8cc5a3a7ed7c27aacbff131ab1437e18e7d7d1878fee77542b3e0fff7157d414";
+    "dd31b828bf6c6d9976f339b0a25dabcf0fa7fbb33c2856c49a1e3b71a5c00089";
 
 /// The marker of an open question, in two halves so this file does not carry it whole.
 const OPEN_QUESTION: &str = concat!("UNMAPPED", ":");
@@ -250,7 +250,8 @@ fn the_pin_is_the_release_ci_installs() {
 }
 
 /// The suite majors `aep plan artifact evidence --from --suite` admits were transcribed from the
-/// pinned ESS (story:evidence-admits-ess-0692-suites). Moving the pin past the release they were
+/// pinned ESS (story:evidence-admits-ess-0692-suites, and story:evidence-admits-ess-0770-suites
+/// for 0.77.0). Moving the pin past the release they were
 /// read from fails here, so a suite major the new ESS writes is admitted, or refused by decision,
 /// before a consumer meets `UnsupportedSuiteVersion`.
 #[test]

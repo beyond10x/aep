@@ -1,0 +1,56 @@
+{
+  "completed_at": 1700000001600,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 5,
+    "skipped": 0,
+    "total": 5,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 5,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "interpreted 0.77.0",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "demo.p.Close/outcome/closed",
+      "demo.p.Close/outcome/wrong-state",
+      "demo.p.Item/state/Closed/refuses/demo.p.Close",
+      "demo.p.Item/transition/close/by/demo.p.Close/closed",
+      "demo.p.Make/outcome/made"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "63172a5af11ca82c2a35f72335e3cd6abb8a62dc0f318f9441d51ec57a38463f",
+  "specification": "demo/v1",
+  "suite": {
+    "digest": "sha256:a931a73bbb4e4a2ed9ebecee1f9b64509ecca484cec91f9b7117312fd78dc101",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/59"
+  }
+}

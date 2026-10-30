@@ -60,6 +60,9 @@
     "state"
   ],
   "additionalProperties": false,
+  "x-ess-invariants": [
+    "(findings_block == false or not (defined(prose_only)))"
+  ],
   "x-ess-provenance": {
     "system": "aep",
     "specification_version": "v1",

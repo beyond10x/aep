@@ -43,9 +43,10 @@ fn coverage(report: &str, suite: &str) -> Result<(), EssAdmissionError> {
 }
 
 /// `coverage_suite.rs` `admit_known_version` exists so a newer suite is refused by version before
-/// its members are read. The unit's /59 case keeps only members this build allows (`events` is in
-/// `ROOT_CATALOGS`), so the later version check refuses it anyway and deleting the guard leaves
-/// every test green. A member only a later major could add tells them apart.
+/// its members are read. The unit's newer-major case (then /59, now /61) kept only members this
+/// build allows (`events` is in `ROOT_CATALOGS`), so the later version check refused it anyway
+/// and deleting the guard left every test green. A member only a later major could add tells them
+/// apart.
 #[test]
 fn a_newer_coverage_suite_with_a_member_this_build_does_not_know_is_refused_by_version() {
     for (place, change) in [
@@ -58,7 +59,7 @@ fn a_newer_coverage_suite_with_a_member_this_build_does_not_know_is_refused_by_v
         }),
     ] {
         let (suite, _) = rewritten(SUITE_55, REPORT_55, |suite, _| {
-            suite["provenance"]["suite_version"] = "ess-conformance/59".into();
+            suite["provenance"]["suite_version"] = "ess-conformance/61".into();
             change(suite);
         });
         let error = wrap_coverage_suite(&suite).expect_err(place);
