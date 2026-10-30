@@ -175,11 +175,11 @@ const TRANSCRIBED_SUITE_VERSION: &str = "ess-conformance/5";
 /// (the `one_time_response::ORDINARY` pair) and absent below it.
 const INITIAL_STATE_MAJOR: u32 = 34;
 
-/// The majors whose provenance may carry a seed record: ESS 0.69.2
+/// The majors whose provenance may carry a seed record: ESS 0.77.0
 /// `synthesis_seeds::admitted_in`, the seed pair (`synthesis_seeds::ORDINARY` 42 and `COVERAGE`
-/// 43) and every pair ESS added over it, 44/45 (`event_multiplicity`) through 56/57
-/// (`one_time_reader`).
-const SEED_MAJORS: std::ops::RangeInclusive<u32> = 42..=57;
+/// 43) and every pair ESS added over it, 44/45 (`event_multiplicity`) through 58/59
+/// (`exact_decimal`).
+const SEED_MAJORS: std::ops::RangeInclusive<u32> = 42..=59;
 
 /// The first ordinary major whose suite root may carry the `events` and `one_time_response`
 /// catalogs (ESS 0.69.2 `one_time_response::compact::ORDINARY`, `admission.rs`
@@ -187,7 +187,7 @@ const SEED_MAJORS: std::ops::RangeInclusive<u32> = 42..=57;
 const ROOT_CATALOG_MAJOR: u32 = 52;
 
 /// The optional members of a suite root besides `coverage` (ESS 0.69.2 `admission.rs`
-/// `ROOT_OPTIONAL`).
+/// `ROOT_OPTIONAL`, unchanged at 0.77.0).
 pub(crate) const ROOT_CATALOGS: [&str; 2] = ["events", "one_time_response"];
 
 /// Refuses a suite-level catalog under a major below [`ROOT_CATALOG_MAJOR`], as ESS does.
@@ -661,6 +661,10 @@ fn nesting(value: &Json) -> usize {
 /// ESS 0.69.2 also changed what `disclosure/<outcome>/<field>/read/<view>/as/actor/<A>` names from
 /// suite/56 on (`one_time_reader`: the reader rather than the issuer) without a floor on the
 /// spelling; AEP reads only the identity, which is the same at every major.
+///
+/// ESS 0.77.0 adds no form: its pair /58 and /59 (`exact_decimal`) admits a `Decimal` in a
+/// complete subject or a retained result, which are scenario steps, and AEP reads no step past
+/// suite/5 (whose transcribed grammar refuses both steps as `UnsupportedStep`).
 const LATER_ID_FORMS: [(&[&str], u32); 13] = [
     (&["aggregate"], 16),
     (&["binding", "final-failure"], 26),
@@ -735,6 +739,7 @@ pub(crate) fn major(version: &str) -> u32 {
 /// `aggregate::is_aggregate_refusal` (`ESS-SYNTH-016`, `-017`) suite/17 (`aggregate::COVERAGE`),
 /// and, at ESS 0.69.2, `system_issued::REFUSALS` (`ESS-SYNTH-023`, `-024`) suite/53
 /// (`system_issued::COVERAGE`). The other codes ESS added after 0.55.0 (018–022) are not gated.
+/// ESS 0.77.0 adds no code.
 const LATER_REFUSAL_CODES: [(&str, u32); 5] = [
     ("ESS-SYNTH-015", 7),
     ("ESS-SYNTH-016", 17),
@@ -1126,7 +1131,7 @@ mod tests {
     fn a_frozen_form_is_admitted_at_every_major() {
         let scenarios = Json::parse("{}", "$suite.scenarios").unwrap();
         let ids = [ScenarioId::new("notify-ledger/binding/flow").unwrap()];
-        for major in [5, 7, 33, 45, 56, 57] {
+        for major in [5, 7, 33, 45, 56, 57, 58, 59] {
             admit_id_forms(&format!("ess-conformance/{major}"), &ids, &scenarios)
                 .unwrap_or_else(|error| panic!("/{major}: {error}"));
         }

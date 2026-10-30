@@ -49,15 +49,16 @@ pub fn original_digest(value: &str) -> bool {
 ///
 /// Transcribed from ESS `crates/verify/ess-conformance/src/coverage.rs` (`is_coverage_version`)
 /// at ESS [`SUITE_MAJORS_TRANSCRIBED_FROM`]: each ordinary suite major from /6 on has an odd
-/// coverage counterpart, and /57 is the newest ESS writes (`admission.rs` `validate_suite`
-/// requires `coverage` exactly for the odd majors 5–57). Adding the next one is a deliberate edit
-/// here, never inferred from its number, so a suite from a newer ESS is refused by name until AEP
-/// knows it; the suite reader gates what each major added that AEP reads.
+/// coverage counterpart, and /59 is the newest ESS writes (`admission.rs` `validate_suite`
+/// requires `coverage` exactly for the odd majors 5–59; /59 is `exact_decimal::COVERAGE`).
+/// Adding the next one is a deliberate edit here, never inferred from its number, so a suite from
+/// a newer ESS is refused by name until AEP knows it; the suite reader gates what each major added
+/// that AEP reads.
 ///
 /// [`SUITE_MAJORS_TRANSCRIBED_FROM`]: crate::ess_conformance_v2::SUITE_MAJORS_TRANSCRIBED_FROM
 pub const COVERAGE_SUITE_MAJORS: &[u32] = &[
     5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51,
-    53, 55, 57,
+    53, 55, 57, 59,
 ];
 
 /// Whether `version` spells a coverage-bearing suite major exactly as ESS writes it.
@@ -465,7 +466,8 @@ impl Refusal {
     /// Checks the code-to-effect mapping ESS admits and the local refusal structure.
     ///
     /// Mirrors ESS `Inventory::validate_refusal` (`crates/verify/ess-conformance/src/coverage.rs`
-    /// at ESS 0.69.2, `RefusalCause::CATALOGUE` and `synthesize::CHECK_NOT_EMITTED`): generated
+    /// at ESS 0.69.2 and unchanged at 0.77.0, `RefusalCause::CATALOGUE` and
+    /// `synthesize::CHECK_NOT_EMITTED`): generated
     /// codes `ESS-SYNTH-001`–`024`, of which 005, 011, 012, 014, 016, 017, 020, 021 and 022 omit
     /// a check and the rest a candidate; authored codes are every `ESS-AUTHOR` cause
     /// of the authored catalogue, 001–046, but 036 (`authored::names_file_refusal`), each

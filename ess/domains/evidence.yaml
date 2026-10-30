@@ -63,8 +63,8 @@ types:
 
   # change (story:evidence-admits-ordinary-ess-suites): what a suite major is, by the build's own
   # lists, never by its number alone. The lists are deliberate edits: a major ESS adds later is
-  # `unknown` here until AEP lists it. Since story:evidence-admits-ess-0692-suites the lists hold
-  # every major ESS 0.69.2 writes (ordinary 6–56, coverage 5–57), the release they were
+  # `unknown` here until AEP lists it. Since story:evidence-admits-ess-0770-suites the lists hold
+  # every major ESS 0.77.0 writes (ordinary 6–58, coverage 5–59), the release they were
   # transcribed from is `SUITE_MAJORS_TRANSCRIBED_FROM` (ess_conformance_v2.rs), and the ESS gate
   # refuses a pin other than that release.
   - name: aep.evidence.SuiteKind
@@ -73,14 +73,14 @@ types:
       - count_stage   # `ess-conformance/1`–`/4`, the frozen count reader's (ess_conformance_v2.rs `SuiteReference::new`)
       - ordinary      # an even major in `ORDINARY_SUITE_MAJORS` (ess_conformance_v2.rs): no `coverage` block
       - coverage      # an odd major in `COVERAGE_SUITE_MAJORS` (values.rs): carries a `coverage` block
-      - unknown       # any other spelling or major, e.g. `ess-conformance/58` from an ESS newer than 0.69.2
+      - unknown       # any other spelling or major, e.g. `ess-conformance/60` from an ESS newer than 0.77.0
 
   # change (story:evidence-admits-generated-runner-profile): the report's `producer_profile`, read
   # by both readers (`ProducerProfile::from_wire` in ess_conformance_v2.rs, called from counts.rs
   # and coverage.rs `read_report`). On 0.71.1 `go-scenario-status/2`, which the generated Go and
   # TypeScript runners of ESS 0.56.0 and later write, was `unknown`. A profile ESS adds later is
-  # `unknown` here until AEP lists it. Since story:evidence-admits-ess-0692-suites the lists hold
-  # every major ESS 0.69.2 writes (ordinary 6–56, coverage 5–57), the release they were
+  # `unknown` here until AEP lists it. Since story:evidence-admits-ess-0770-suites the lists hold
+  # every major ESS 0.77.0 writes (ordinary 6–58, coverage 5–59), the release they were
   # transcribed from is `SUITE_MAJORS_TRANSCRIBED_FROM` (ess_conformance_v2.rs), and the ESS gate
   # refuses a pin other than that release.
   - name: aep.evidence.ProducerProfile
