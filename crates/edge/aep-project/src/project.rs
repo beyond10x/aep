@@ -65,6 +65,17 @@ pub const PROJECT_DIRECTORY_ENV: &str = "AEP_PROJECT_DIR";
 /// Overrides the directory where immutable protocol repositories are materialized.
 pub const CACHE_DIRECTORY_ENV: &str = "AEP_CACHE_DIR";
 
+/// Set to `1` to trust a protocol source snapshot whose files and directories its group can write.
+///
+/// A Kubernetes volume mounted with `fsGroup` is the reason this exists: the kubelet makes every
+/// file of the volume 0664 and every directory 2775 on each mount, so a cache kept on such a volume
+/// is group-writable however it was sealed. A snapshot another principal can write could be
+/// rewritten together with its manifest, which no hash in the same directory can catch, so the
+/// group is trusted only when the operator says so; every byte is still verified against the
+/// sealed manifest. Any other value, or none, refuses a group-writable snapshot, and a snapshot
+/// writable by others is refused whatever this says.
+pub const CACHE_GROUP_WRITABLE_ENV: &str = "AEP_CACHE_GROUP_WRITABLE";
+
 /// The directory a project keeps its metadata in: `.engineering`, or whatever `AEP_PROJECT_DIR`
 /// says.
 ///
@@ -397,12 +408,33 @@ struct SnapshotManifest {
 
 const SNAPSHOT_MANIFEST: &str = ".aep-source-manifest.json";
 
+/// Whether a snapshot its group can write is trusted, as [`CACHE_GROUP_WRITABLE_ENV`] says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum GroupWrite {
+    /// The group is not trusted: a group-writable snapshot is refused.
+    Refused,
+    /// The operator declared the group trusted.
+    Admitted,
+}
+
+impl GroupWrite {
+    /// [`GroupWrite::Admitted`] only when [`CACHE_GROUP_WRITABLE_ENV`] is exactly `1`.
+    fn from_environment() -> Self {
+        if std::env::var_os(CACHE_GROUP_WRITABLE_ENV).is_some_and(|value| value == "1") {
+            Self::Admitted
+        } else {
+            Self::Refused
+        }
+    }
+}
+
 /// Returns a verified read-only snapshot of exactly the source's declared commit.
 fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String> {
     refuse_credentials(source.git_url())?;
+    let group_write = GroupWrite::from_environment();
     let (bare, destination) = git_cache_paths(source)?;
     if destination.exists() {
-        verify_snapshot_once(&destination, source.revision())?;
+        verify_snapshot_once(&destination, source.revision(), group_write)?;
         seal_published_root(&destination);
         return Ok(destination);
     }
@@ -473,7 +505,7 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
         return Err(error);
     }
     publish_snapshot(&temporary, &destination)?;
-    verify_snapshot_once(&destination, source.revision())?;
+    verify_snapshot_once(&destination, source.revision(), group_write)?;
     seal_published_root(&destination);
     Ok(destination)
 }
@@ -514,11 +546,24 @@ fn publish_snapshot(tree: &Path, destination: &Path) -> Result<(), String> {
 ///
 /// Called only after the snapshot verified, so a refused command changes nothing. Best effort:
 /// verification, not the mode, decides whether a snapshot is used, and a cache another user owns
-/// cannot be changed.
+/// cannot be changed. A root its group can write is left as found: only an admitted group gets
+/// this far, and a volume that grants group write (Kubernetes `fsGroup`) re-applies it on every
+/// mount, so sealing it would only move the root's `ctime` and invalidate its stamp each time.
 fn seal_published_root(snapshot: &Path) {
-    if std::fs::metadata(snapshot).is_ok_and(|metadata| !metadata.permissions().readonly()) {
+    if std::fs::metadata(snapshot).is_ok_and(|metadata| writable_by_its_owner_alone(&metadata)) {
         make_read_only(snapshot, true).ok();
     }
+}
+
+#[cfg(unix)]
+fn writable_by_its_owner_alone(metadata: &std::fs::Metadata) -> bool {
+    let bits = permission_bits(metadata);
+    bits & 0o200 != 0 && bits & (GROUP_WRITE | OTHERS_WRITE) == 0
+}
+
+#[cfg(not(unix))]
+fn writable_by_its_owner_alone(metadata: &std::fs::Metadata) -> bool {
+    !metadata.permissions().readonly()
 }
 
 /// Bare object cache and source-and-revision snapshot paths containing no URL or credentials.
@@ -624,12 +669,15 @@ fn git_bare(
 }
 
 /// Snapshots this process has already verified, by directory and revision.
-fn verified_snapshots() -> &'static std::sync::Mutex<std::collections::BTreeSet<(PathBuf, String)>>
-{
-    static VERIFIED: OnceLock<std::sync::Mutex<std::collections::BTreeSet<(PathBuf, String)>>> =
+fn verified_snapshots() -> &'static std::sync::Mutex<std::collections::BTreeSet<VerifiedSnapshot>> {
+    static VERIFIED: OnceLock<std::sync::Mutex<std::collections::BTreeSet<VerifiedSnapshot>>> =
         OnceLock::new();
     VERIFIED.get_or_init(Default::default)
 }
+
+/// One verification this process remembers: the snapshot, its revision, and whether its group was
+/// trusted, so an admission never answers for a check that would not have made it.
+type VerifiedSnapshot = (PathBuf, String, GroupWrite);
 
 /// [`verify_snapshot`], at most once per snapshot per process, and in full at most once per pin.
 ///
@@ -642,8 +690,12 @@ fn verified_snapshots() -> &'static std::sync::Mutex<std::collections::BTreeSet<
 /// Across processes, a full verification leaves a stamp beside the snapshot (see
 /// [`verify_snapshot_stamped`]); a later process whose stamp still matches every file's and
 /// directory's metadata trusts the snapshot without reading a file or opening a directory.
-fn verify_snapshot_once(directory: &Path, revision: &str) -> Result<(), String> {
-    let key = (directory.to_path_buf(), revision.to_owned());
+fn verify_snapshot_once(
+    directory: &Path,
+    revision: &str,
+    group_write: GroupWrite,
+) -> Result<(), String> {
+    let key = (directory.to_path_buf(), revision.to_owned(), group_write);
     let verified = verified_snapshots();
     if verified
         .lock()
@@ -651,7 +703,7 @@ fn verify_snapshot_once(directory: &Path, revision: &str) -> Result<(), String> 
     {
         return Ok(());
     }
-    let listing = verify_snapshot_stamped(directory, revision, RACY_WINDOW)?;
+    let listing = verify_snapshot_stamped(directory, revision, RACY_WINDOW, group_write)?;
     crate::load::remember_sealed_listing(directory, listing);
     if let Ok(mut verified) = verified.lock() {
         verified.insert(key);
@@ -720,7 +772,9 @@ fn snapshot_stamp_path(directory: &Path) -> Option<PathBuf> {
 /// file and directory finds its length, times, inode, device and mode unchanged. No directory is
 /// opened: adding, removing or renaming an entry moves its directory's `mtime` and `ctime`, so
 /// unchanged directory metadata proves an unchanged listing, and the racy window keeps a change in
-/// the clock tick of the stamp from hiding. Anything else falls back to [`verify_snapshot`],
+/// the clock tick of the stamp from hiding. The recorded modes must also pass this process's own
+/// write check: a stamp written while [`CACHE_GROUP_WRITABLE_ENV`] admitted the group does not
+/// admit it for a process that did not. Anything else falls back to [`verify_snapshot`],
 /// unchanged as the full check. A
 /// failed verification writes no stamp; a failure to write one is not an error, it only means the
 /// next process verifies in full again.
@@ -731,12 +785,13 @@ fn verify_snapshot_stamped(
     directory: &Path,
     revision: &str,
     racy_window: std::time::Duration,
+    group_write: GroupWrite,
 ) -> Result<Vec<String>, String> {
-    if let Some(listing) = snapshot_stamp_listing(directory, revision) {
+    if let Some(listing) = snapshot_stamp_listing(directory, revision, group_write) {
         return Ok(listing);
     }
     let started = std::time::SystemTime::now();
-    let listing = verify_snapshot(directory, revision)?;
+    let listing = verify_snapshot(directory, revision, group_write)?;
     write_snapshot_stamp(directory, revision, started, racy_window).ok();
     Ok(listing)
 }
@@ -746,7 +801,11 @@ fn verify_snapshot_stamped(
 ///
 /// The stamp's file map is the listing: a stamp is written only after the tree matched the sealed
 /// manifest, and it is trusted only while every recorded file and directory is unchanged.
-fn snapshot_stamp_listing(directory: &Path, revision: &str) -> Option<Vec<String>> {
+fn snapshot_stamp_listing(
+    directory: &Path,
+    revision: &str,
+    group_write: GroupWrite,
+) -> Option<Vec<String>> {
     let path = snapshot_stamp_path(directory)?;
     let bytes = std::fs::read(&path).ok()?;
     let stamp = serde_json::from_slice::<SnapshotStamp>(&bytes).ok()?;
@@ -761,6 +820,17 @@ fn snapshot_stamp_listing(directory: &Path, revision: &str) -> Option<Vec<String
         return None;
     }
     if !recorded_entries_unchanged(directory, &stamp) {
+        return None;
+    }
+    // The stamp proves the modes are the ones it recorded, not that this process trusts them: an
+    // admission belongs to the process that declared it, so a refused mode falls back to the full
+    // check, which refuses it by name.
+    if stamp
+        .files
+        .values()
+        .chain(stamp.directories.values())
+        .any(|entry| entry.mode & untrusted_write_bits(group_write) != 0)
+    {
         return None;
     }
     Some(
@@ -955,7 +1025,11 @@ thread_local! {
 
 /// Rebuilds a snapshot's manifest from its current bytes and compares it with the sealed one,
 /// returning the sealed manifest's file paths.
-fn verify_snapshot(directory: &Path, revision: &str) -> Result<Vec<String>, String> {
+fn verify_snapshot(
+    directory: &Path,
+    revision: &str,
+    group_write: GroupWrite,
+) -> Result<Vec<String>, String> {
     let path = directory.join(SNAPSHOT_MANIFEST);
     let bytes = std::fs::read(&path)
         .map_err(|error| format!("reading snapshot manifest {}: {error}", path.display()))?;
@@ -967,7 +1041,19 @@ fn verify_snapshot(directory: &Path, revision: &str) -> Result<Vec<String>, Stri
             path.display()
         ));
     }
-    let actual = snapshot_manifest(directory, revision, false)?;
+    let mut files = Vec::new();
+    let mut directories = Vec::new();
+    walk_snapshot(directory, directory, &mut files, &mut directories)?;
+    files.sort();
+    directories.sort();
+    refuse_shared_write(directory, &directories, &files, group_write)?;
+    let actual = manifest_of(directory, revision, files, false)?;
+    // Manifests already on disk were sealed at 0444 or 0555; masking what they recorded keeps one
+    // that recorded a write bit comparable too.
+    let mut expected = expected;
+    for entry in &mut expected.files {
+        entry.mode &= MANIFEST_MODE_BITS;
+    }
     if actual == expected {
         Ok(expected.files.into_iter().map(|entry| entry.path).collect())
     } else {
@@ -976,6 +1062,79 @@ fn verify_snapshot(directory: &Path, revision: &str) -> Result<Vec<String>, Stri
             directory.display()
         ))
     }
+}
+
+/// Group write on a snapshot entry: refused unless [`CACHE_GROUP_WRITABLE_ENV`] admits it.
+const GROUP_WRITE: u32 = 0o020;
+
+/// Write for others on a snapshot entry: always refused.
+const OTHERS_WRITE: u32 = 0o002;
+
+/// The write bits that make a snapshot entry untrusted under `group_write`.
+fn untrusted_write_bits(group_write: GroupWrite) -> u32 {
+    match group_write {
+        GroupWrite::Refused => GROUP_WRITE | OTHERS_WRITE,
+        GroupWrite::Admitted => OTHERS_WRITE,
+    }
+}
+
+/// Refuses a snapshot that a principal other than its owner could rewrite together with its
+/// manifest, which no hash inside the snapshot can catch.
+///
+/// Every entry is checked: the snapshot itself, its manifest, then every directory and every file
+/// in path order. Write for others is looked for first, so a snapshot that is refused whatever the
+/// operator declares never names [`CACHE_GROUP_WRITABLE_ENV`] as the way out. Owner write protects
+/// against nothing the owner cannot undo with `chmod`, and is admitted.
+fn refuse_shared_write(
+    directory: &Path,
+    directories: &[PathBuf],
+    files: &[PathBuf],
+    group_write: GroupWrite,
+) -> Result<(), String> {
+    let manifest = directory.join(SNAPSHOT_MANIFEST);
+    let mut modes = Vec::with_capacity(directories.len() + files.len() + 2);
+    for path in [directory, manifest.as_path()]
+        .into_iter()
+        .chain(directories.iter().map(PathBuf::as_path))
+        .chain(files.iter().map(PathBuf::as_path))
+    {
+        let metadata = std::fs::symlink_metadata(path)
+            .map_err(|error| format!("reading metadata for {}: {error}", path.display()))?;
+        modes.push((path, permission_bits(&metadata)));
+    }
+    if let Some((path, _)) = modes.iter().find(|(_, bits)| bits & OTHERS_WRITE != 0) {
+        return Err(format!(
+            "protocol source snapshot {}: {} is writable by others, who could rewrite it together \
+             with its manifest; a snapshot writable by others is never trusted (`chmod -R o-w` it)",
+            directory.display(),
+            path.display()
+        ));
+    }
+    if group_write == GroupWrite::Refused {
+        if let Some((path, _)) = modes.iter().find(|(_, bits)| bits & GROUP_WRITE != 0) {
+            return Err(format!(
+                "protocol source snapshot {}: {} is writable by its group, which could rewrite it \
+                 together with its manifest; set `{CACHE_GROUP_WRITABLE_ENV}=1` if that group is \
+                 trusted, as on a Kubernetes volume mounted with `fsGroup` (every byte is still \
+                 verified), or `chmod -R g-w` the snapshot",
+                directory.display(),
+                path.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Permission bits, setgid and sticky included; none where Unix modes are unavailable.
+#[cfg(unix)]
+fn permission_bits(metadata: &std::fs::Metadata) -> u32 {
+    use std::os::unix::fs::PermissionsExt as _;
+    metadata.permissions().mode() & 0o7777
+}
+
+#[cfg(not(unix))]
+fn permission_bits(_metadata: &std::fs::Metadata) -> u32 {
+    0
 }
 
 /// Walks every snapshot file in deterministic order, optionally making it read-only first.
@@ -987,6 +1146,16 @@ fn snapshot_manifest(
     let mut paths = Vec::new();
     collect_snapshot_files(directory, directory, &mut paths)?;
     paths.sort();
+    manifest_of(directory, revision, paths, seal)
+}
+
+/// The manifest of `paths`, sorted regular files below `directory`, the manifest itself excluded.
+fn manifest_of(
+    directory: &Path,
+    revision: &str,
+    paths: Vec<PathBuf>,
+    seal: bool,
+) -> Result<SnapshotManifest, String> {
     let mut files = Vec::with_capacity(paths.len());
     for path in paths {
         if seal {
@@ -1119,11 +1288,19 @@ fn make_subdirectories_read_only(directory: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// The mode bits a manifest holds a file to: read and execute, never write.
+///
+/// The executable bit is part of the pinned content. Write bits are not: who may write a snapshot
+/// is decided by [`refuse_shared_write`], and a sealed file is 0444 or 0555 until a volume such as
+/// one mounted with Kubernetes `fsGroup` adds owner and group write to it. On a platform without
+/// Unix modes the recorded value is the read-only bit, 0 or 1, which this mask keeps.
+const MANIFEST_MODE_BITS: u32 = 0o555;
+
 /// Platform mode recorded in the manifest.
 #[cfg(unix)]
 fn file_mode(metadata: &std::fs::Metadata) -> u32 {
     use std::os::unix::fs::PermissionsExt as _;
-    metadata.permissions().mode() & 0o777
+    metadata.permissions().mode() & MANIFEST_MODE_BITS
 }
 
 /// Portable read-only bit where Unix modes are unavailable.
@@ -1426,14 +1603,15 @@ mod tests {
         let revision = "b".repeat(40);
         write(&root.join("protocol.yaml"), "sealed\n");
         seal(&root, &revision);
-        verify_snapshot_once(&root, &revision).expect("the sealed bytes verify");
+        verify_snapshot_once(&root, &revision, GroupWrite::Refused)
+            .expect("the sealed bytes verify");
 
         write(&root.join("protocol.yaml"), "changed after verification\n");
         assert!(
-            verify_snapshot(&root, &revision).is_err(),
+            verify_snapshot(&root, &revision, GroupWrite::Refused).is_err(),
             "a full verification still sees the changed bytes"
         );
-        verify_snapshot_once(&root, &revision)
+        verify_snapshot_once(&root, &revision, GroupWrite::Refused)
             .expect("the process already verified this snapshot and does not re-read it");
         std::fs::remove_dir_all(&root).ok();
     }
@@ -1446,7 +1624,7 @@ mod tests {
         seal(&root, &revision);
         write(&root.join("protocol.yaml"), "changed before verification\n");
         for attempt in 0..2 {
-            let refusal = verify_snapshot_once(&root, &revision)
+            let refusal = verify_snapshot_once(&root, &revision, GroupWrite::Refused)
                 .expect_err("changed bytes are refused on every attempt");
             assert!(
                 refusal.contains("does not match"),
@@ -1478,9 +1656,20 @@ mod tests {
         root: &Path,
         revision: &str,
     ) -> (Result<(), String>, usize, usize) {
+        stamped_verification_trusting(root, revision, GroupWrite::Refused)
+    }
+
+    /// [`stamped_verification_counting`], with the group trusted or not.
+    fn stamped_verification_trusting(
+        root: &Path,
+        revision: &str,
+        group_write: GroupWrite,
+    ) -> (Result<(), String>, usize, usize) {
         FILES_HASHED.with(|hashed| hashed.set(0));
         DIRECTORIES_READ.with(|read| read.set(0));
-        let result = verify_snapshot_stamped(root, revision, std::time::Duration::ZERO).map(drop);
+        let result =
+            verify_snapshot_stamped(root, revision, std::time::Duration::ZERO, group_write)
+                .map(drop);
         (
             result,
             FILES_HASHED.with(std::cell::Cell::get),
@@ -1686,7 +1875,8 @@ mod tests {
     fn a_snapshot_changed_within_the_racy_window_is_not_stamped() {
         let revision = "4".repeat(40);
         let (root, stamp) = sealed_snapshot("stamp-racy", &revision);
-        verify_snapshot_stamped(&root, &revision, RACY_WINDOW).expect("the sealed bytes verify");
+        verify_snapshot_stamped(&root, &revision, RACY_WINDOW, GroupWrite::Refused)
+            .expect("the sealed bytes verify");
         assert!(
             !stamp.exists(),
             "files written just now could change again within the clock's resolution"
@@ -1759,13 +1949,18 @@ mod tests {
         let revision = "8".repeat(40);
         let root = sealed_protocol_snapshot("tree-load-stamped", &revision, &[]);
         let stamp = snapshot_stamp_path(&root).expect("a stamp path");
-        verify_snapshot_stamped(&root, &revision, std::time::Duration::ZERO)
-            .expect("the sealed tree verifies and is stamped");
+        verify_snapshot_stamped(
+            &root,
+            &revision,
+            std::time::Duration::ZERO,
+            GroupWrite::Refused,
+        )
+        .expect("the sealed tree verifies and is stamped");
         crate::load::forget_sealed_listing(&root);
 
         DIRECTORIES_READ.with(|read| read.set(0));
         crate::load::TREE_DIRECTORIES_LISTED.with(|listed| listed.set(0));
-        verify_snapshot_once(&root, &revision).expect("the stamp holds");
+        verify_snapshot_once(&root, &revision, GroupWrite::Refused).expect("the stamp holds");
         let outcome = load_tree_report(&root);
         let bundle = crate::load::load_bundle(&root).expect("the tree is a valid bundle");
         assert_eq!(
@@ -1819,7 +2014,8 @@ mod tests {
                 ("top-level.yaml", "not: [anything"),
             ],
         );
-        let listing = verify_snapshot(&root, &revision).expect("the sealed tree verifies");
+        let listing = verify_snapshot(&root, &revision, GroupWrite::Refused)
+            .expect("the sealed tree verifies");
         crate::load::remember_sealed_listing(&root, listing);
 
         crate::load::TREE_DIRECTORIES_LISTED.with(|listed| listed.set(0));
@@ -1911,7 +2107,8 @@ mod tests {
         assert_eq!(mode(&destination), 0o555, "the snapshot root is read-only");
         assert_eq!(mode(&destination.join("profiles")), 0o555);
         assert_eq!(mode(&destination.join("protocol.yaml")), 0o444);
-        verify_snapshot(&destination, &revision).expect("the published bytes match the manifest");
+        verify_snapshot(&destination, &revision, GroupWrite::Refused)
+            .expect("the published bytes match the manifest");
         unseal(&parent);
         std::fs::remove_dir_all(&parent).ok();
     }
@@ -1943,5 +2140,251 @@ mod tests {
         assert_eq!(mode, 0o555, "the found snapshot's root is sealed");
         unseal(&parent);
         std::fs::remove_dir_all(&parent).ok();
+    }
+
+    /// The permission bits of `path`, setgid included, without following a symlink.
+    #[cfg(unix)]
+    fn mode_of(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::symlink_metadata(path)
+            .expect("the entry exists")
+            .permissions()
+            .mode()
+            & 0o7777
+    }
+
+    #[cfg(unix)]
+    fn set_mode(path: &Path, mode: u32) {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+            .expect("the test owns the entry");
+    }
+
+    /// Adds `files` to every file's mode and `directories` to every directory's, `path` included.
+    #[cfg(unix)]
+    fn add_mode_bits(path: &Path, files: u32, directories: u32) {
+        let is_directory = std::fs::symlink_metadata(path)
+            .expect("the entry exists")
+            .is_dir();
+        let added = if is_directory { directories } else { files };
+        set_mode(path, mode_of(path) | added);
+        if is_directory {
+            for entry in std::fs::read_dir(path).expect("readable") {
+                add_mode_bits(&entry.expect("an entry").path(), files, directories);
+            }
+        }
+    }
+
+    /// What the kubelet does to a volume mounted with `fsGroup`, on every mount: group read and
+    /// write on every file, and setgid, group write and search on every directory. A sealed file
+    /// becomes 0664 (0775 when executable) and a sealed directory 2775.
+    #[cfg(unix)]
+    fn as_an_fs_group_volume_mounts_it(root: &Path) {
+        add_mode_bits(root, 0o660, 0o2770);
+    }
+
+    /// A snapshot exactly as materialization publishes it: files 0444, the executable `bin/check`
+    /// 0555, every directory and the root 0555, the manifest inside. No stamp beside it yet.
+    #[cfg(unix)]
+    fn published_snapshot(name: &str, revision: &str) -> (PathBuf, PathBuf) {
+        unseal(&std::env::temp_dir().join(format!("aep-project-{name}")));
+        let root = scratch(name);
+        std::fs::remove_dir_all(root.join(project_directory())).ok();
+        let stamp = snapshot_stamp_path(&root).expect("the scratch directory has a name");
+        std::fs::remove_file(&stamp).ok();
+        write(&root.join("protocol.yaml"), "sealed\n");
+        write(&root.join("profiles/standard.yaml"), "standard\n");
+        write(&root.join("bin/check"), "#!/bin/sh\n");
+        set_mode(&root.join("bin/check"), 0o755);
+        seal_snapshot(&root, revision).expect("the tree seals");
+        make_read_only(&root, true).expect("the root seals");
+        assert_eq!(mode_of(&root.join("protocol.yaml")), 0o444);
+        assert_eq!(mode_of(&root.join("bin/check")), 0o555);
+        assert_eq!(mode_of(&root.join("profiles")), 0o555);
+        (root, stamp)
+    }
+
+    #[cfg(unix)]
+    fn remove_sealed(root: &Path, stamp: &Path) {
+        unseal(root);
+        cleanup(root, stamp);
+    }
+
+    /// Acceptance 1 of `story:a-group-writable-snapshot-is-admitted-explicitly`.
+    #[cfg(unix)]
+    #[test]
+    fn a_snapshot_on_an_fs_group_volume_loads_when_its_group_is_admitted_and_its_bytes_still_count()
+    {
+        let revision = "a1".repeat(20);
+        let (root, stamp) = published_snapshot("group-admitted", &revision);
+        as_an_fs_group_volume_mounts_it(&root);
+        assert_eq!(mode_of(&root.join("protocol.yaml")), 0o664);
+        assert_eq!(mode_of(&root.join("bin/check")), 0o775);
+        assert_eq!(mode_of(&root.join("profiles")), 0o2775);
+        assert_eq!(mode_of(&root), 0o2775);
+
+        verify_snapshot(&root, &revision, GroupWrite::Admitted)
+            .expect("the operator declared the volume's group trusted");
+
+        std::fs::write(root.join("protocol.yaml"), "seaLed\n").expect("one byte changes");
+        let refusal = verify_snapshot(&root, &revision, GroupWrite::Admitted)
+            .expect_err("the admission trusts the group, not the bytes");
+        assert!(refusal.contains("does not match"), "{refusal}");
+        remove_sealed(&root, &stamp);
+    }
+
+    /// Acceptance 2: without the declaration a group-writable snapshot is refused, and the refusal
+    /// names the declaration and a path the group can write.
+    #[cfg(unix)]
+    #[test]
+    fn a_group_writable_snapshot_is_refused_naming_the_declaration_and_the_path() {
+        let revision = "a2".repeat(20);
+        let (root, stamp) = published_snapshot("group-refused", &revision);
+        as_an_fs_group_volume_mounts_it(&root);
+        let refusal = verify_snapshot(&root, &revision, GroupWrite::Refused)
+            .expect_err("nobody declared the group trusted");
+        assert!(refusal.contains(CACHE_GROUP_WRITABLE_ENV), "{refusal}");
+        assert!(refusal.contains("writable by its group"), "{refusal}");
+        remove_sealed(&root, &stamp);
+
+        for (case, target) in [
+            ("file", "profiles/standard.yaml"),
+            ("directory", "profiles"),
+        ] {
+            let (root, stamp) = published_snapshot(&format!("group-refused-{case}"), &revision);
+            let path = root.join(target);
+            set_mode(&path, mode_of(&path) | 0o020);
+            let refusal = verify_snapshot(&root, &revision, GroupWrite::Refused)
+                .expect_err("one group-writable entry is enough");
+            assert!(
+                refusal.contains(CACHE_GROUP_WRITABLE_ENV),
+                "{case}: {refusal}"
+            );
+            assert!(
+                refusal.contains(&path.display().to_string()),
+                "{case}: the refusal names the entry the group can write: {refusal}"
+            );
+            remove_sealed(&root, &stamp);
+        }
+    }
+
+    /// Acceptance 3: write access for others is never admitted.
+    #[cfg(unix)]
+    #[test]
+    fn a_snapshot_writable_by_others_is_refused_whatever_the_group_declaration() {
+        let revision = "a3".repeat(20);
+        for (case, target) in [
+            ("file", "profiles/standard.yaml"),
+            ("directory", "profiles"),
+            ("manifest", SNAPSHOT_MANIFEST),
+            ("root", ""),
+        ] {
+            for group_write in [GroupWrite::Refused, GroupWrite::Admitted] {
+                let (root, stamp) = published_snapshot(&format!("others-{case}"), &revision);
+                let path = if target.is_empty() {
+                    root.clone()
+                } else {
+                    root.join(target)
+                };
+                set_mode(&path, mode_of(&path) | 0o002);
+                let refusal = verify_snapshot(&root, &revision, group_write)
+                    .expect_err("anyone could rewrite it together with its manifest");
+                assert!(
+                    refusal.contains("writable by others"),
+                    "{case}, {group_write:?}: {refusal}"
+                );
+                assert!(
+                    refusal.contains(&path.display().to_string()),
+                    "{case}, {group_write:?}: {refusal}"
+                );
+                remove_sealed(&root, &stamp);
+            }
+        }
+    }
+
+    /// Acceptance 4: owner write protects against nothing the owner cannot undo with `chmod`.
+    #[cfg(unix)]
+    #[test]
+    fn a_snapshot_whose_entries_gained_only_owner_write_loads_without_a_declaration() {
+        let revision = "a4".repeat(20);
+        let (root, stamp) = published_snapshot("owner-write", &revision);
+        add_mode_bits(&root, 0o200, 0o200);
+        assert_eq!(mode_of(&root.join("protocol.yaml")), 0o644);
+        assert_eq!(mode_of(&root.join("profiles")), 0o755);
+        verify_snapshot(&root, &revision, GroupWrite::Refused)
+            .expect("owner write is admitted with no declaration");
+        remove_sealed(&root, &stamp);
+    }
+
+    /// Acceptance 5: the executable bit is part of the pinned content.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_whose_executable_bit_changed_is_refused() {
+        let revision = "a5".repeat(20);
+        for (case, target, mode) in [
+            ("added", "protocol.yaml", 0o544),
+            ("removed", "bin/check", 0o444),
+        ] {
+            for group_write in [GroupWrite::Refused, GroupWrite::Admitted] {
+                let (root, stamp) = published_snapshot(&format!("exec-{case}"), &revision);
+                set_mode(&root.join(target), mode);
+                let refusal = verify_snapshot(&root, &revision, group_write)
+                    .expect_err("the manifest holds each file's executable bit");
+                assert!(
+                    refusal.contains("does not match"),
+                    "{case}, {group_write:?}: {refusal}"
+                );
+                remove_sealed(&root, &stamp);
+            }
+        }
+    }
+
+    /// Acceptance 6: the stamp trusts metadata without re-hashing, so it must not carry an
+    /// admission over to a process that did not make it.
+    #[cfg(unix)]
+    #[test]
+    fn a_stamp_written_while_the_group_was_admitted_does_not_admit_a_later_load_without_it() {
+        let revision = "a6".repeat(20);
+        let (root, stamp) = published_snapshot("group-stamp", &revision);
+        as_an_fs_group_volume_mounts_it(&root);
+
+        let (admitted, hashed, _) =
+            stamped_verification_trusting(&root, &revision, GroupWrite::Admitted);
+        admitted.expect("the group is trusted in this process");
+        assert!(hashed > 0, "the first verification is a full one");
+        assert!(stamp.exists(), "the admitted verification left a stamp");
+        let before = std::fs::read(&stamp).expect("stamped");
+
+        let (trusted, hashed, _) =
+            stamped_verification_trusting(&root, &revision, GroupWrite::Admitted);
+        trusted.expect("the stamp still holds for a process that trusts the group");
+        assert_eq!(hashed, 0, "and spares it every file read");
+
+        let (refused, _, _) = stamped_verification_trusting(&root, &revision, GroupWrite::Refused);
+        let refusal = refused.expect_err("this process did not declare the group trusted");
+        assert!(refusal.contains(CACHE_GROUP_WRITABLE_ENV), "{refusal}");
+        assert_eq!(
+            std::fs::read(&stamp).expect("still there"),
+            before,
+            "a refusal changes nothing"
+        );
+        remove_sealed(&root, &stamp);
+    }
+
+    /// The kubelet re-applies the volume's modes on every mount, so sealing a group-writable root
+    /// would only change its `ctime` and invalidate the stamp each time.
+    #[cfg(unix)]
+    #[test]
+    fn a_found_snapshot_with_a_group_writable_root_is_not_resealed() {
+        let revision = "a7".repeat(20);
+        let (root, stamp) = published_snapshot("group-no-reseal", &revision);
+        as_an_fs_group_volume_mounts_it(&root);
+        seal_published_root(&root);
+        assert_eq!(
+            mode_of(&root),
+            0o2775,
+            "the volume's modes are left as mounted"
+        );
+        remove_sealed(&root, &stamp);
     }
 }
