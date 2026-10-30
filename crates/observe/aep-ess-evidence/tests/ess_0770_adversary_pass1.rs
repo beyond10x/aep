@@ -6,7 +6,9 @@
 //! `aep plan artifact evidence --from <report> --suite <suite>` records through. The last case
 //! asserts the story's acceptance 6 against the repository's `CHANGELOG.md`.
 use aep_domain::ess_conformance_coverage::EssConformanceCoverageReading;
-use aep_domain::ess_conformance_v2::{CountStatus, EssAdmissionError, EssConformanceV2Reading};
+use aep_domain::ess_conformance_v2::{
+    CountStatus, EssAdmissionError, EssConformanceV2Reading, ScenarioId,
+};
 use aep_domain::Evidence;
 use aep_ess_evidence::{
     adapt_json_coverage, adapt_json_v2, suite_route, wrap_coverage_suite, SuiteRoute,
@@ -71,7 +73,11 @@ fn a_seed_suite_58_ess_0_77_0_wrote_itself_is_admitted_with_its_report() {
     assert_eq!(data.suite.digest(), digest(SUITE_58_SEEDS));
     assert_eq!((data.counts.total, data.counts.passed), (13, 13));
     assert_eq!(data.execution_status, CountStatus::Passed);
-    let selected: Vec<&str> = reading.selected_ids().iter().map(|id| id.as_str()).collect();
+    let selected: Vec<&str> = reading
+        .selected_ids()
+        .iter()
+        .map(ScenarioId::as_str)
+        .collect();
     assert!(selected.contains(&DECIMAL_SUBJECT), "{selected:?}");
     let seeded = seeded_scenarios(SUITE_58_SEEDS);
     assert_eq!(seeded.len(), 2);
@@ -89,7 +95,11 @@ fn a_seed_suite_59_ess_0_77_0_wrote_itself_is_admitted_with_its_report() {
     assert_eq!(data.suite.version(), "ess-conformance/59");
     assert_eq!(data.suite.digest(), digest(SUITE_59_SEEDS));
     assert_eq!((data.counts.total, data.counts.passed), (13, 13));
-    let selected: Vec<&str> = reading.selected_ids().iter().map(|id| id.as_str()).collect();
+    let selected: Vec<&str> = reading
+        .selected_ids()
+        .iter()
+        .map(ScenarioId::as_str)
+        .collect();
     assert!(selected.contains(&DECIMAL_SUBJECT), "{selected:?}");
     for scenario in seeded_scenarios(SUITE_59_SEEDS) {
         assert!(selected.contains(&scenario.as_str()), "{scenario}");
