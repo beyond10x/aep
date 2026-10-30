@@ -1,0 +1,64 @@
+{
+  "completed_at": 1700000005300,
+  "conformance_status": "passed",
+  "counts": {
+    "error": 0,
+    "failed": 0,
+    "passed": 13,
+    "skipped": 0,
+    "total": 13,
+    "unsupported": 0
+  },
+  "coverage": {
+    "counts": {
+      "authored": 0,
+      "generated": 13,
+      "outside": 0,
+      "refused": 0
+    },
+    "knowledge": "complete_inventory",
+    "refused": [],
+    "selection": {
+      "filter": {
+        "kind": "all"
+      },
+      "origins": "generated",
+      "scope": {
+        "kind": "system"
+      }
+    }
+  },
+  "execution_status": "passed",
+  "format": "ess-conformance-report/2",
+  "implementation": "interpreted 0.77.0",
+  "outcomes": {
+    "error": [],
+    "failed": [],
+    "passed": [
+      "counter.model.Authorize/outcome/authorized",
+      "counter.model.Authorize/outcome/invalid",
+      "counter.model.Authorize/outcome/revision-exhausted",
+      "counter.model.Authorize/outcome/stale",
+      "counter.model.Authorize/outcome/unknown",
+      "counter.model.Close/outcome/closed",
+      "counter.model.Close/outcome/wrong-state",
+      "counter.model.Counter/invariant/after/counter.model.Authorize/authorized",
+      "counter.model.Counter/invariant/after/counter.model.Close/closed",
+      "counter.model.Counter/invariant/after/counter.model.Create/created",
+      "counter.model.Counter/state/Closed/refuses/counter.model.Close",
+      "counter.model.Counter/transition/close/by/counter.model.Close/closed",
+      "counter.model.Create/outcome/created"
+    ],
+    "skipped": [],
+    "unsupported": []
+  },
+  "policy": "complete-selection/1",
+  "producer_profile": "rust-scenario-status/1",
+  "spec_digest": "396033a7b3dc09c9d1ebbfd34b035f02b9fc535ec6679596dd0caa4952962e5e",
+  "specification": "counter/v1",
+  "suite": {
+    "digest": "sha256:dcacabed08e1a1e19475ab99b0c6ac98cdd79806cc6feb9606bc4e389bc0fb64",
+    "digest_profile": "sha256-json-bytes/1",
+    "version": "ess-conformance/59"
+  }
+}
