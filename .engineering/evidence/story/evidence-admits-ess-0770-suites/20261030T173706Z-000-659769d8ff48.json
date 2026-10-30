@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-30T17:37:06Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-admits-ess-0770-suites",
+  "kind": "story",
+  "revision": 13,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "wave gate on 75abd9fa4 (ccd79919f plus the lint fix 75abd9fa4): task test exit 0 (cargo test --workspace), clippy -D warnings exit 0, fmt-check exit 0, plan-check, claim-check, docs-check, doc-check, schema-check, ess-gate, msrv exit 0; aep-project targets fetch_deadline, group_writable_cache, fetch_deadline_adversary, group_writable_adversary, protocol_cache_security, boundary, lib all green",
+    "reference": "75abd9fa4"
+  }
+}

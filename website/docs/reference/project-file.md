@@ -56,6 +56,12 @@ repository can be cloned anywhere.
 | a path | `..`, `../governance` | a tree in the repository, or beside it; use this to add your own lifecycles |
 | a pinned Git URL | `git+https://github.com/beyond10x/aep#<40-hex>` | fetched once into `~/.cache/aep/protocol-sources/` (or `AEP_CACHE_DIR`), verified against the commit, and read from there |
 
+A machine or pod with no route to the source needs the snapshot in its cache first: fill a cache
+where the network is reachable and point `AEP_CACHE_DIR` at it. A fetch that cannot finish is
+stopped after `AEP_FETCH_TIMEOUT_SECS` (60 s) and refused, naming the pin and the cache. A cache on a
+Kubernetes volume with `fsGroup` is group-writable; set `AEP_CACHE_GROUP_WRITABLE=1` to admit it
+(see [the environment](cli.md#environment)).
+
 An unpinned Git URL is refused. A governing tree that can move without a commit in your repository
 would be a gate whose meaning changes silently.
 

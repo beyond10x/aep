@@ -1,6 +1,7 @@
 //! The suite majors ESS 0.69.2 writes (story:evidence-admits-ess-0692-suites): the ordinary
 //! majors /46–/56 and the coverage majors /47–/57, each read for what AEP reads of it and gated
-//! by the major that added it, and a major newer than the build lists refused by name.
+//! by the major that added it. A major newer than the build lists is refused by name in
+//! `ess_0770_suites.rs`, over the suites of the release the lists were last transcribed from.
 //!
 //! The pairs under `fixtures/ess-0692/` were written by `ess 0.69.2`; its README says how. An
 //! ordinary suite goes through `adapt_json_v2`, a coverage suite through `wrap_coverage_suite` and
@@ -146,38 +147,6 @@ fn every_major_ess_0_69_2_writes_goes_to_its_reader_and_the_newest_pair_admits()
         } else {
             ordinary(&report, &suite).unwrap_or_else(|error| panic!("{to}: {error}"));
         }
-    }
-}
-
-#[test]
-fn a_major_newer_than_ess_0_69_2_is_refused_by_name_never_as_an_unknown_member() {
-    for (suite, report, to) in [
-        (SUITE_54, REPORT_54, "ess-conformance/58"),
-        (SUITE_55, REPORT_55, "ess-conformance/59"),
-    ] {
-        // A later major may add a root member; the version is named before any member is read.
-        let (suite, report) = rewritten(suite, report, |suite, _| {
-            suite["provenance"]["suite_version"] = to.into();
-            suite["later"] = json!([]);
-        });
-        let error = suite_route(&suite).expect_err(to);
-        assert!(refusal(&error, "UnsupportedSuiteVersion").contains(to));
-        let error = if to.ends_with('9') {
-            wrap_coverage_suite(&suite).expect_err(to)
-        } else {
-            ordinary(&report, &suite).expect_err(to)
-        };
-        assert!(
-            refusal(&error, "UnsupportedSuiteVersion").contains(to),
-            "{error}"
-        );
-        assert!(
-            error
-                .issues
-                .iter()
-                .all(|issue| issue.reason != "UnknownField"),
-            "{to}: {error}"
-        );
     }
 }
 

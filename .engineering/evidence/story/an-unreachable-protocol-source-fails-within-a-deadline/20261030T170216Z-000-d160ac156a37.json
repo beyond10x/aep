@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-30T17:02:16Z",
+  "actor": "human:timo",
+  "artifact": "story:an-unreachable-protocol-source-fails-within-a-deadline",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: aep plan artifact validate in a store pinned to git+https://10.255.255.1/beyond10x/aep#dc0598d5 with an empty AEP_CACHE_DIR and AEP_FETCH_TIMEOUT_SECS=5: baseline aep 0.78.0 still running at the 40 s outer cap (exit 124); wave build 5f7f7b9a0 exit 1 at 5.1 s naming the pin, the cache, AEP_FETCH_TIMEOUT_SECS and AEP_CACHE_DIR. Same store pinned to github.com under bwrap --unshare-net with a prefilled cache: exit 0 at 0.1 s on both.",
+    "reference": "coordinator scratch verify-baseline/summary.txt vs verify-treatment/summary.txt"
+  }
+}

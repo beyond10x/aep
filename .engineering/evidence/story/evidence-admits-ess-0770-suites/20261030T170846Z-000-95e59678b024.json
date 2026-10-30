@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-30T17:08:46Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-admits-ess-0770-suites",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:adversary-ess-0770-suites-pass-1",
+    "review": "review-result:adversary-ess-0770-suites-pass-1",
+    "outcome": "fixed"
+  }
+}

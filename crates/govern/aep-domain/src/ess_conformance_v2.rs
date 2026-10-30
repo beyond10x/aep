@@ -123,8 +123,9 @@ impl ScenarioId {
     /// the [`frozen`](Self::frozen) forms plus the disclosure cells, `<view>/aggregate`, the four
     /// grant forms, `<binding>/binding/refusal/<outcome>`, the `final-failure`,
     /// `condition-false` and `condition-absent` binding aspects, and the held outcome, the
-    /// wrapped value invariant and the view reference ESS added after 0.55.0. Like ESS, the grammar is
-    /// independent of the suite major; which major may carry a form is the suite reader's check.
+    /// wrapped value invariant and the view reference ESS added after 0.55.0. ESS 0.77.0 parses
+    /// the same grammar. Like ESS, the grammar is independent of the suite major; which major may
+    /// carry a form is the suite reader's check.
     pub fn new(value: impl Into<String>) -> Result<Self, EssAdmissionError> {
         let value = value.into();
         let parts: Vec<_> = value.split('/').collect();
@@ -248,15 +249,16 @@ pub const FROZEN_SUITE_MAJORS: &[u32] = &[1, 2, 3, 4];
 ///
 /// Transcribed from ESS at [`SUITE_MAJORS_TRANSCRIBED_FROM`], beside [`COVERAGE_SUITE_MAJORS`]:
 /// each ordinary major from /6 on is the even neighbour below its odd coverage counterpart, and
-/// /56 is the newest ESS writes (`scenario.rs` `SUPPORTED_SUITE_FORMATS` is 1–57). Adding the next
-/// one is a deliberate edit here, never inferred from its number, so an ordinary suite from a
-/// newer ESS is refused by name until AEP knows it; the suite reader gates what each major added
-/// that AEP reads, exactly as it does for the coverage counterpart.
+/// /58 is the newest ESS writes (`scenario.rs` `SUPPORTED_SUITE_FORMATS` is 1–59; /58 is
+/// `exact_decimal::ORDINARY`). Adding the next one is a deliberate edit here, never inferred from
+/// its number, so an ordinary suite from a newer ESS is refused by name until AEP knows it; the
+/// suite reader gates what each major added that AEP reads, exactly as it does for the coverage
+/// counterpart.
 ///
 /// [`COVERAGE_SUITE_MAJORS`]: crate::ess_conformance_coverage::COVERAGE_SUITE_MAJORS
 pub const ORDINARY_SUITE_MAJORS: &[u32] = &[
     6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 42, 44, 46, 48, 50, 52,
-    54, 56,
+    54, 56, 58,
 ];
 
 /// The ESS release [`ORDINARY_SUITE_MAJORS`], [`COVERAGE_SUITE_MAJORS`] and the suite readers'
@@ -267,7 +269,7 @@ pub const ORDINARY_SUITE_MAJORS: &[u32] = &[
 /// lists and gates, then move this. A newer ESS major is otherwise refused downstream by name.
 ///
 /// [`COVERAGE_SUITE_MAJORS`]: crate::ess_conformance_coverage::COVERAGE_SUITE_MAJORS
-pub const SUITE_MAJORS_TRANSCRIBED_FROM: &str = "0.69.2";
+pub const SUITE_MAJORS_TRANSCRIBED_FROM: &str = "0.77.0";
 
 /// The major `version` spells exactly as ESS writes it (`ess-conformance/<N>`, no leading zero).
 fn suite_major(version: &str) -> Option<u32> {

@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-30T17:18:08Z",
+  "actor": "human:timo",
+  "artifact": "story:evidence-admits-ess-0770-suites",
+  "kind": "story",
+  "revision": 11,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: aep plan artifact evidence --from report-N.json --suite suite-N.json over the ess-0770 fixtures in a scratch store: baseline aep 0.78.0 refuses suite-58 and suite-59 (exit 1, UnsupportedSuiteVersion \"ess-conformance/58 is not a suite version this build admits\"), admits suite-42-seeds; unit B build 33e3f2236 records suite-58 as ess_conformance_v2 (5 passed), suite-59 as ess_conformance_coverage_v1 (conformance passed), suite-42-seeds unchanged, all exit 0.",
+    "reference": "coordinator scratch verify-b-baseline.log, verify-b-treatment.log"
+  }
+}

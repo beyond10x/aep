@@ -1,0 +1,598 @@
+{
+  "provenance": {
+    "suite_version": "ess-conformance/58",
+    "system": "demo",
+    "specification_version": "v1",
+    "spec_digest": "63172a5af11ca82c2a35f72335e3cd6abb8a62dc0f318f9441d51ec57a38463f",
+    "contract_digest": "510116375967459d94df1d9b5d37cfe4c750ca05d2558dcac2ba1017c55cf8f3",
+    "scenario_initial_state": "empty"
+  },
+  "events": [
+    "demo.p.Closed",
+    "demo.p.Made"
+  ],
+  "scenarios": {
+    "demo.p.Close/outcome/closed": {
+      "purpose": "`demo.p.Close` answers `closed` for an input no other branch's guard claims",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "demo.p.Make",
+          "input": {
+            "price": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "item",
+          "entity": "demo.p.Item",
+          "event": "demo.p.Made",
+          "field": "item_id"
+        },
+        {
+          "step": "execute_command",
+          "command": "demo.p.Close",
+          "input": {
+            "item_id": {
+              "kind": "instance",
+              "instance": "item"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Close",
+            "outcome": "closed"
+          }
+        },
+        {
+          "step": "expect_event_values",
+          "event": "demo.p.Closed",
+          "payload": {
+            "item_id": {
+              "kind": "instance",
+              "instance": "item"
+            }
+          },
+          "shape": {
+            "item_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "demo.p.Made"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.p.Items"
+        },
+        {
+          "step": "expect_view",
+          "view": "demo.p.Items",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "item_id": {
+                "kind": "instance",
+                "instance": "item"
+              },
+              "price": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.p.ItemId"
+        },
+        {
+          "kind": "entity",
+          "name": "demo.p.Item"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Close"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Make"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Close",
+            "outcome": "closed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Closed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Made"
+        },
+        {
+          "kind": "view",
+          "name": "demo.p.Items"
+        }
+      ]
+    },
+    "demo.p.Close/outcome/wrong-state": {
+      "absent_events": [
+        {
+          "before": 3,
+          "except": []
+        }
+      ],
+      "purpose": "`demo.p.Close` for an identity no record carries takes `wrong-state` and reports `demo.p.WrongState`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "demo.p.Close",
+          "input": {
+            "item_id": {
+              "kind": "literal",
+              "value": "00000000-0000-4000-8000-6bbbad36af80"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Close",
+            "outcome": "wrong-state"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "demo.p.WrongState"
+        }
+      ],
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.p.Item"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Close"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Close",
+            "outcome": "wrong-state"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Closed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Made"
+        },
+        {
+          "kind": "error",
+          "name": "demo.p.WrongState"
+        }
+      ]
+    },
+    "demo.p.Item/state/Closed/refuses/demo.p.Close": {
+      "absent_events": [
+        {
+          "before": 10,
+          "except": []
+        }
+      ],
+      "purpose": "`demo.p.Close` does not move a `demo.p.Item` that is in `Closed`, and reports `demo.p.WrongState`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "demo.p.Make",
+          "input": {
+            "price": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "item",
+          "entity": "demo.p.Item",
+          "event": "demo.p.Made",
+          "field": "item_id"
+        },
+        {
+          "step": "execute_command",
+          "command": "demo.p.Close",
+          "input": {
+            "item_id": {
+              "kind": "instance",
+              "instance": "item"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Close",
+            "outcome": "closed"
+          }
+        },
+        {
+          "step": "query_view",
+          "view": "demo.p.Items"
+        },
+        {
+          "step": "snapshot_complete_subject",
+          "view": "demo.p.Items",
+          "subject": {
+            "item_id": {
+              "kind": "instance",
+              "instance": "item"
+            }
+          },
+          "shape": {
+            "identity_field": "item_id",
+            "fields": [
+              {
+                "name": "item_id",
+                "type": "demo.p.ItemId"
+              },
+              {
+                "name": "price",
+                "type": "Decimal"
+              }
+            ],
+            "declarations": {
+              "demo.p.ItemId": {
+                "kind": "newtype",
+                "of": "Uuid"
+              }
+            }
+          }
+        },
+        {
+          "step": "execute_command",
+          "command": "demo.p.Close",
+          "input": {
+            "item_id": {
+              "kind": "instance",
+              "instance": "item"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Close",
+            "outcome": "wrong-state"
+          }
+        },
+        {
+          "step": "expect_error",
+          "error": "demo.p.WrongState"
+        },
+        {
+          "step": "expect_no_events"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.p.Items"
+        },
+        {
+          "step": "expect_complete_subject_unchanged",
+          "view": "demo.p.Items"
+        }
+      ],
+      "source": [
+        {
+          "kind": "entity",
+          "name": "demo.p.Item"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Close"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Make"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Close",
+            "outcome": "closed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Close",
+            "outcome": "wrong-state"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Closed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Made"
+        },
+        {
+          "kind": "error",
+          "name": "demo.p.WrongState"
+        },
+        {
+          "kind": "view",
+          "name": "demo.p.Items"
+        }
+      ]
+    },
+    "demo.p.Item/transition/close/by/demo.p.Close/closed": {
+      "purpose": "`demo.p.Close` on `closed` moves a `demo.p.Item` to `Closed` along `close`",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "demo.p.Make",
+          "input": {
+            "price": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "step": "capture_instance",
+          "instance": "item",
+          "entity": "demo.p.Item",
+          "event": "demo.p.Made",
+          "field": "item_id"
+        },
+        {
+          "step": "execute_command",
+          "command": "demo.p.Close",
+          "input": {
+            "item_id": {
+              "kind": "instance",
+              "instance": "item"
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Close",
+            "outcome": "closed"
+          }
+        },
+        {
+          "step": "expect_event_values",
+          "event": "demo.p.Closed",
+          "payload": {
+            "item_id": {
+              "kind": "instance",
+              "instance": "item"
+            }
+          },
+          "shape": {
+            "item_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "demo.p.Made"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.p.Items"
+        },
+        {
+          "step": "expect_view",
+          "view": "demo.p.Items",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "item_id": {
+                "kind": "instance",
+                "instance": "item"
+              },
+              "price": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.p.ItemId"
+        },
+        {
+          "kind": "entity",
+          "name": "demo.p.Item"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Close"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Make"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Close",
+            "outcome": "closed"
+          }
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Closed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Made"
+        },
+        {
+          "kind": "view",
+          "name": "demo.p.Items"
+        }
+      ]
+    },
+    "demo.p.Make/outcome/made": {
+      "purpose": "`demo.p.Make` answers `made` for an input no other branch's guard claims",
+      "steps": [
+        {
+          "step": "execute_command",
+          "command": "demo.p.Make",
+          "input": {
+            "price": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step": "expect_outcome",
+          "outcome": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "step": "expect_event",
+          "event": "demo.p.Made",
+          "shape": {
+            "item_id": {
+              "holds": "primitive",
+              "kind": "uuid"
+            }
+          }
+        },
+        {
+          "step": "expect_no_event",
+          "event": "demo.p.Closed"
+        },
+        {
+          "step": "query_view",
+          "view": "demo.p.Items"
+        },
+        {
+          "step": "expect_view",
+          "view": "demo.p.Items",
+          "expectation": {
+            "expect": "contains",
+            "fields": {
+              "item_id": {
+                "kind": "observed",
+                "event": "demo.p.Made",
+                "field": "item_id"
+              },
+              "price": {
+                "kind": "literal",
+                "value": 1.0
+              }
+            }
+          }
+        }
+      ],
+      "source": [
+        {
+          "kind": "type",
+          "name": "demo.p.ItemId"
+        },
+        {
+          "kind": "entity",
+          "name": "demo.p.Item"
+        },
+        {
+          "kind": "command",
+          "name": "demo.p.Make"
+        },
+        {
+          "kind": "outcome",
+          "name": {
+            "command": "demo.p.Make",
+            "outcome": "made"
+          }
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Closed"
+        },
+        {
+          "kind": "event",
+          "name": "demo.p.Made"
+        },
+        {
+          "kind": "view",
+          "name": "demo.p.Items"
+        }
+      ]
+    }
+  }
+}
