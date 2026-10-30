@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.79.0] - 2026-10-30
+
 ### Added
 
 - `AEP_CACHE_GROUP_WRITABLE=1` admits a protocol source snapshot its group can write, as a cache on a Kubernetes volume with `fsGroup` is (files `0664`, directories `2775`); every byte is still verified against the sealed manifest.
@@ -1864,7 +1866,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.78.0...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.79.0...HEAD
+[0.79.0]: https://github.com/beyond10x/aep/compare/0.78.0...0.79.0
 [0.78.0]: https://github.com/beyond10x/aep/compare/0.77.1...0.78.0
 [0.77.1]: https://github.com/beyond10x/aep/compare/0.77.0...0.77.1
 [0.77.0]: https://github.com/beyond10x/aep/compare/0.76.0...0.77.0
