@@ -13,7 +13,13 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `AEP_CACHE_GROUP_WRITABLE=1` admits a protocol source snapshot its group can write, as a cache on a Kubernetes volume with `fsGroup` is (files `0664`, directories `2775`); every byte is still verified against the sealed manifest.
 - `AEP_FETCH_TIMEOUT_SECS` sets how long fetching a pinned protocol revision may take (default 60 s).
 
+### Changed
+
+- The ESS pin is 0.77.0, and the suite majors `aep plan artifact evidence --from <report/2> --suite <suite>` admits were transcribed from it.
+
 ### Fixed
+
+- `aep plan artifact evidence --from <report/2> --suite <suite>` records a report against the suite majors ESS 0.70.0 added and 0.77.0 writes, the ordinary `ess-conformance/58` and the coverage `/59` (a `Decimal` in a complete subject or a retained result), with a synthesis seed record admitted in both; it refused them as `UnsupportedSuiteVersion`. `/60` and later are still refused by name.
 
 - Fetching a pinned protocol revision with no route to the source stops after `AEP_FETCH_TIMEOUT_SECS` and is refused naming the pin, the cache and `AEP_CACHE_DIR`; it hung until the caller killed aep.
 - A protocol source snapshot under Kubernetes `fsGroup` failed with "does not match its path, mode and byte manifest": the manifest (`file_mode`) now compares read and execute bits only, a group-writable snapshot is refused naming `AEP_CACHE_GROUP_WRITABLE`, and one that others can write is always refused.
