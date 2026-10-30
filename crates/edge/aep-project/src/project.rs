@@ -476,9 +476,12 @@ fn fetch_timeout_from(value: Option<&std::ffi::OsStr>) -> Result<std::time::Dura
         .and_then(|value| value.parse::<u64>().ok())
         .filter(|seconds| *seconds > 0)
         .map(std::time::Duration::from_secs)
+        // A deadline this machine's clock cannot represent is refused here, before Git starts.
+        .filter(|timeout| std::time::Instant::now().checked_add(*timeout).is_some())
         .ok_or_else(|| {
             format!(
-                "`{FETCH_TIMEOUT_ENV}` is `{}`; it must be a positive whole number of seconds",
+                "`{FETCH_TIMEOUT_ENV}` is `{}`; it must be a positive whole number of seconds \
+                 that this machine can count down as a deadline",
                 value.to_string_lossy()
             )
         })
@@ -504,20 +507,16 @@ fn materialize_git_source_in(
         return Ok(destination);
     }
 
-    let repository_root = bare
-        .parent()
-        .ok_or_else(|| format!("the bare cache path {} has no parent", bare.display()))?;
-    std::fs::create_dir_all(repository_root)
-        .map_err(|error| format!("creating {}: {error}", repository_root.display()))?;
-    if !bare.exists() {
-        git_bare(
-            &bare,
-            None,
-            &["init", "--quiet", "--bare"],
-            "initializing the bare source cache",
-        )?;
-    }
-    fetch_pinned_revision(&bare, source, cache)?;
+    fetch_into_bare_cache(&bare, source, cache).map_err(|failure| {
+        format!(
+            "fetching the pinned protocol revision {}#{} into the cache {}: {failure}; point \
+             `{CACHE_DIRECTORY_ENV}` at a cache that already holds the sealed snapshot of this \
+             pin to resolve it with no network",
+            source.repository(),
+            source.revision(),
+            cache.root.display()
+        )
+    })?;
     let actual = git_bare(
         &bare,
         None,
@@ -725,15 +724,30 @@ fn git_bare(
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-/// Fetches exactly the pinned commit into the bare cache within the cache's deadline.
+/// Creates the bare cache if it is missing and fetches exactly the pinned commit into it within the
+/// cache's deadline, returning the failure's detail.
 ///
-/// Every refusal names the pin, the cache in use and the way to resolve it with no network: a
-/// pod without egress learns from the message what to mount, not only that the network failed.
-fn fetch_pinned_revision(
+/// The caller words every failure on this path the same way, naming the pin, the cache in use and
+/// the way to resolve the pin with no network: a pod without egress, or with a read-only cache
+/// that lacks the pin, learns from the message what to mount, not only that something failed.
+fn fetch_into_bare_cache(
     bare: &Path,
     source: &GitProtocolSource,
     cache: &SourceCache,
 ) -> Result<(), String> {
+    let repository_root = bare
+        .parent()
+        .ok_or_else(|| format!("the bare cache path {} has no parent", bare.display()))?;
+    std::fs::create_dir_all(repository_root)
+        .map_err(|error| format!("creating {}: {error}", repository_root.display()))?;
+    if !bare.exists() {
+        git_bare(
+            bare,
+            None,
+            &["init", "--quiet", "--bare"],
+            "initializing the bare source cache",
+        )?;
+    }
     let mut command = git_command(
         bare,
         None,
@@ -746,31 +760,25 @@ fn fetch_pinned_revision(
             source.revision(),
         ],
     );
-    let failure = match run_within(&mut command, cache.fetch_timeout) {
-        Ok(Bounded::Finished(output)) if output.status.success() => return Ok(()),
-        Ok(Bounded::Finished(output)) => String::from_utf8_lossy(&output.stderr).trim().to_owned(),
-        Ok(Bounded::Expired) => format!(
+    match run_within(&mut command, cache.fetch_timeout) {
+        Ok(Bounded::Finished(output)) if output.status.success() => Ok(()),
+        Ok(Bounded::Finished(output)) => {
+            Err(String::from_utf8_lossy(&output.stderr).trim().to_owned())
+        }
+        Ok(Bounded::Expired) => Err(format!(
             "Git did not finish within {} s (`{FETCH_TIMEOUT_ENV}`) and was stopped with its \
              transport",
             cache.fetch_timeout.as_secs()
-        ),
-        Err(error) => format!("could not run Git: {error}"),
-    };
-    Err(format!(
-        "fetching the pinned protocol revision {}#{} into the cache {}: {failure}; point \
-         `{CACHE_DIRECTORY_ENV}` at a cache that already holds the sealed snapshot of this pin to \
-         resolve it with no network",
-        source.repository(),
-        source.revision(),
-        cache.root.display()
-    ))
+        )),
+        Err(error) => Err(format!("could not run Git: {error}")),
+    }
 }
 
 /// How a process run under a deadline ended.
 enum Bounded {
     /// It exited by itself, with this output.
     Finished(std::process::Output),
-    /// The deadline passed first; it and every process it started were stopped.
+    /// The deadline passed first; it and the processes it started were stopped.
     Expired,
 }
 
@@ -778,35 +786,47 @@ enum Bounded {
 const DEADLINE_POLL: std::time::Duration = std::time::Duration::from_millis(20);
 
 /// How long a stopped run may take to exit by itself, removing its lock files, before it is killed.
+#[cfg(target_os = "linux")]
 const STOP_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// How long the output of a run that exited is read for when something it started still holds its
+/// pipes; never past the deadline.
+const PIPE_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
 
 /// Runs `command` to completion or until `limit` passes, whichever is first.
 ///
-/// Git runs its transport as a child of its own (`git-remote-https`, `ssh`), and killing Git alone
-/// leaves that child connecting. On Unix the command therefore starts a process group of its own,
-/// and expiry stops the whole group, so nothing it started outlives the refusal.
+/// The command stays in this process's group, so whatever stops this process's group (Ctrl-C at a
+/// terminal, GNU `timeout`, a caller's group kill) stops Git and its transport with it. Git runs
+/// its transport as a child of its own (`git-remote-https`, `ssh`), and killing Git alone leaves
+/// that child connecting, so expiry stops Git's descendants first (see [`stop`]).
+///
+/// Neither the run nor the reading of its output outlasts the deadline: a process Git started that
+/// keeps Git's standard error open after Git exits (a daemonizing helper) is not waited for.
 fn run_within(command: &mut Command, limit: std::time::Duration) -> std::io::Result<Bounded> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt as _;
-        command.process_group(0);
-    }
+    let deadline = std::time::Instant::now()
+        .checked_add(limit)
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("a deadline of {} s cannot be represented", limit.as_secs()),
+            )
+        })?;
     let mut child = command
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()?;
-    let stdout = drain(child.stdout.take());
-    let stderr = drain(child.stderr.take());
-    let deadline = std::time::Instant::now() + limit;
+    let stdout = Drain::start(child.stdout.take());
+    let stderr = Drain::start(child.stderr.take());
     loop {
         match child.try_wait() {
             Ok(Some(status)) => {
+                let until = deadline.min(std::time::Instant::now() + PIPE_GRACE);
                 return Ok(Bounded::Finished(std::process::Output {
                     status,
-                    stdout: drained(stdout),
-                    stderr: drained(stderr),
-                }))
+                    stdout: Drain::finish(stdout, until),
+                    stderr: Drain::finish(stderr, until),
+                }));
             }
             Ok(None) => {}
             Err(error) => {
@@ -824,55 +844,121 @@ fn run_within(command: &mut Command, limit: std::time::Duration) -> std::io::Res
     }
 }
 
-/// Reads a child's pipe to its end on a thread of its own, so a full pipe never blocks the child.
-fn drain(
-    pipe: Option<impl std::io::Read + Send + 'static>,
-) -> Option<std::thread::JoinHandle<Vec<u8>>> {
-    pipe.map(|mut pipe| {
+/// A child's pipe read to its end on a thread of its own, so a full pipe never blocks the child.
+struct Drain {
+    bytes: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+    ended: std::sync::mpsc::Receiver<()>,
+}
+
+impl Drain {
+    fn start(pipe: Option<impl std::io::Read + Send + 'static>) -> Option<Self> {
+        let mut pipe = pipe?;
+        let bytes = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let (ended_sender, ended) = std::sync::mpsc::channel();
+        let collected = std::sync::Arc::clone(&bytes);
         std::thread::spawn(move || {
-            let mut bytes = Vec::new();
-            pipe.read_to_end(&mut bytes).ok();
-            bytes
-        })
-    })
+            let mut buffer = [0_u8; 8192];
+            while let Ok(read @ 1..) = pipe.read(&mut buffer) {
+                if let Ok(mut collected) = collected.lock() {
+                    collected.extend_from_slice(&buffer[..read]);
+                }
+            }
+            ended_sender.send(()).ok();
+        });
+        Some(Self { bytes, ended })
+    }
+
+    /// What was read by the pipe's end or by `until`, whichever is first.
+    fn finish(drain: Option<Self>, until: std::time::Instant) -> Vec<u8> {
+        let Some(drain) = drain else {
+            return Vec::new();
+        };
+        drain
+            .ended
+            .recv_timeout(until.saturating_duration_since(std::time::Instant::now()))
+            .ok();
+        drain
+            .bytes
+            .lock()
+            .map(|mut bytes| std::mem::take(&mut *bytes))
+            .unwrap_or_default()
+    }
 }
 
-fn drained(reader: Option<std::thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
-    reader
-        .and_then(|reader| reader.join().ok())
-        .unwrap_or_default()
-}
-
-/// Stops a run and everything it started: asked first, so Git can remove its lock files, then
-/// killed, then reaped.
+/// Stops a run and the processes it started: its descendants first, then itself, asked first so
+/// Git can remove its lock files, then killed, then reaped.
 ///
-/// The group's id is the child's pid, which cannot be reused before the child is reaped; the
-/// final group kill after a reap reaches only members still alive, which keep the id in use.
+/// On Linux the descendants are found by their parent ids under `/proc` and killed by pid, after
+/// Git is paused so it cannot start another while they are listed. Elsewhere only Git is stopped,
+/// and a transport it started may stay connected until it fails by itself. Git's own pid cannot be
+/// reused before it is reaped here; a descendant's could only between the listing and the kill.
 fn stop(child: &mut std::process::Child) {
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     {
-        let group = child.id();
-        signal_group(group, "TERM");
+        let pid = child.id();
+        signal(&[pid], "STOP");
+        let descendants = descendants(pid);
+        if !descendants.is_empty() {
+            signal(&descendants, "KILL");
+        }
+        signal(&[pid], "TERM");
+        signal(&[pid], "CONT");
         let grace = std::time::Instant::now() + STOP_GRACE;
         while std::time::Instant::now() < grace && matches!(child.try_wait(), Ok(None)) {
             std::thread::sleep(DEADLINE_POLL);
         }
-        signal_group(group, "KILL");
     }
-    // Without `kill` or `sh` on the machine, Git itself is still stopped.
     child.kill().ok();
     child.wait().ok();
 }
 
-/// Sends `signal` to process group `group` with the system's `kill`, or the shell's built-in when
-/// there is no `kill` executable (a minimal container image).
+/// Every live descendant of `root`, from the parent id each `/proc/<pid>/stat` records.
+#[cfg(target_os = "linux")]
+fn descendants(root: u32) -> Vec<u32> {
+    let mut children: std::collections::BTreeMap<u32, Vec<u32>> = std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir("/proc").into_iter().flatten().flatten() {
+        let Some(pid) = entry
+            .file_name()
+            .to_str()
+            .and_then(|name| name.parse::<u32>().ok())
+        else {
+            continue;
+        };
+        // `pid (comm) state ppid …`; the command name may itself hold spaces and parentheses.
+        let parent = std::fs::read_to_string(entry.path().join("stat"))
+            .ok()
+            .and_then(|stat| {
+                stat.rsplit_once(')')
+                    .and_then(|(_, rest)| rest.split_whitespace().nth(1))
+                    .and_then(|parent| parent.parse::<u32>().ok())
+            });
+        if let Some(parent) = parent {
+            children.entry(parent).or_default().push(pid);
+        }
+    }
+    let mut found = Vec::new();
+    let mut pending = vec![root];
+    while let Some(next) = pending.pop() {
+        for &child in children.get(&next).into_iter().flatten() {
+            if !found.contains(&child) {
+                found.push(child);
+                pending.push(child);
+            }
+        }
+    }
+    found
+}
+
+/// Sends `signal` to `pids` with the system's `kill`, or the shell's built-in when there is no
+/// `kill` executable (a minimal container image).
 ///
-/// The standard library signals only its own child, never a group. A library that can would mean
-/// this workspace's first `unsafe` block (`libc`, which the workspace's `unsafe_code = "forbid"`
-/// refuses) or a new dependency; the `kill` utility is POSIX and needs neither.
-#[cfg(unix)]
-fn signal_group(group: u32, signal: &str) {
-    let target = format!("-{group}");
+/// The standard library signals only its own child, and only with `SIGKILL`. A library that can do
+/// more would mean this workspace's first `unsafe` block (`libc`, which the workspace's
+/// `unsafe_code = "forbid"` refuses) or a new dependency; the `kill` utility is POSIX and needs
+/// neither.
+#[cfg(target_os = "linux")]
+fn signal(pids: &[u32], signal: &str) {
+    let pids: Vec<String> = pids.iter().map(ToString::to_string).collect();
     let quiet = |command: &mut Command| {
         command
             .stdin(std::process::Stdio::null())
@@ -880,10 +966,19 @@ fn signal_group(group: u32, signal: &str) {
             .stderr(std::process::Stdio::null())
             .status()
     };
-    let sent = quiet(Command::new("kill").args(["-s", signal, "--", &target]));
+    let sent = quiet(Command::new("kill").args(["-s", signal, "--"]).args(&pids));
     if sent.is_err() {
-        quiet(Command::new("sh").args(["-c", "kill -s \"$1\" -- \"$2\"", "sh", signal, &target]))
-            .ok();
+        quiet(
+            Command::new("sh")
+                .args([
+                    "-c",
+                    "signal=$1; shift; kill -s \"$signal\" -- \"$@\"",
+                    "sh",
+                    signal,
+                ])
+                .args(&pids),
+        )
+        .ok();
     }
 }
 
@@ -991,9 +1086,11 @@ fn snapshot_stamp_path(directory: &Path) -> Option<PathBuf> {
 /// file and directory finds its length, times, inode, device and mode unchanged. No directory is
 /// opened: adding, removing or renaming an entry moves its directory's `mtime` and `ctime`, so
 /// unchanged directory metadata proves an unchanged listing, and the racy window keeps a change in
-/// the clock tick of the stamp from hiding. The recorded modes must also pass this process's own
-/// write check: a stamp written while [`CACHE_GROUP_WRITABLE_ENV`] admitted the group does not
-/// admit it for a process that did not. Anything else falls back to [`verify_snapshot`],
+/// the clock tick of the stamp from hiding. The stamp file and the modes it records must also pass
+/// this process's own write check: a stamp others can write is never trusted, one its group can
+/// write only when [`CACHE_GROUP_WRITABLE_ENV`] admits the group here, and a stamp written while
+/// the variable admitted the group does not admit it for a process that did not. Anything else
+/// falls back to [`verify_snapshot`],
 /// unchanged as the full check. A
 /// failed verification writes no stamp; a failure to write one is not an error, it only means the
 /// next process verifies in full again.
@@ -1026,6 +1123,14 @@ fn snapshot_stamp_listing(
     group_write: GroupWrite,
 ) -> Option<Vec<String>> {
     let path = snapshot_stamp_path(directory)?;
+    // Whoever can write the stamp can leave an entry out of it and admit bytes the manifest does
+    // not hold, so the stamp itself passes the same write check as the snapshot's entries: one
+    // writable by others is never trusted, one writable by its group only when this process
+    // admits the group. An untrusted stamp is ignored, and the full verification decides.
+    let metadata = std::fs::symlink_metadata(&path).ok()?;
+    if !metadata.is_file() || permission_bits(&metadata) & untrusted_write_bits(group_write) != 0 {
+        return None;
+    }
     let bytes = std::fs::read(&path).ok()?;
     let stamp = serde_json::from_slice::<SnapshotStamp>(&bytes).ok()?;
     if stamp.format != SNAPSHOT_STAMP_FORMAT
@@ -1041,9 +1146,9 @@ fn snapshot_stamp_listing(
     if !recorded_entries_unchanged(directory, &stamp) {
         return None;
     }
-    // The stamp proves the modes are the ones it recorded, not that this process trusts them: an
-    // admission belongs to the process that declared it, so a refused mode falls back to the full
-    // check, which refuses it by name.
+    // A trusted stamp proves the modes are the ones it recorded, not that this process trusts
+    // them: an admission belongs to the process that declared it, so a refused mode falls back to
+    // the full check, which refuses it by name.
     if stamp
         .files
         .values()
@@ -1317,8 +1422,15 @@ fn refuse_shared_write(
         .chain(directories.iter().map(PathBuf::as_path))
         .chain(files.iter().map(PathBuf::as_path))
     {
-        let metadata = std::fs::symlink_metadata(path)
-            .map_err(|error| format!("reading metadata for {}: {error}", path.display()))?;
+        // The snapshot root is read through a symlink to it, so a link's own 0777 is not taken
+        // for the snapshot's mode; every entry inside is read without following, and a symlink
+        // inside is refused by the walk.
+        let metadata = if path == directory {
+            std::fs::metadata(path)
+        } else {
+            std::fs::symlink_metadata(path)
+        }
+        .map_err(|error| format!("reading metadata for {}: {error}", path.display()))?;
         modes.push((path, permission_bits(&metadata)));
     }
     if let Some((path, _)) = modes.iter().find(|(_, bits)| bits & OTHERS_WRITE != 0) {
@@ -2719,7 +2831,7 @@ mod tests {
     const DEADLINE_MARGIN: std::time::Duration = std::time::Duration::from_secs(3);
 
     /// Acceptances 1 to 4 of `story:an-unreachable-protocol-source-fails-within-a-deadline`.
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     #[test]
     fn a_fetch_from_a_source_that_never_answers_is_stopped_at_its_deadline_with_its_transport() {
         let deadline = std::time::Duration::from_secs(2);
@@ -2831,7 +2943,8 @@ mod tests {
         assert_eq!(fetch_timeout_from(None), Ok(seconds(60)));
         assert_eq!(fetch_timeout_from(Some(OsStr::new(""))), Ok(seconds(60)));
         assert_eq!(fetch_timeout_from(Some(OsStr::new("7"))), Ok(seconds(7)));
-        for refused in ["0", "-1", "1.5", "ten", " 7", "7s"] {
+        let largest = u64::MAX.to_string();
+        for refused in ["0", "-1", "1.5", "ten", " 7", "7s", largest.as_str()] {
             let refusal = fetch_timeout_from(Some(OsStr::new(refused)))
                 .expect_err("only a positive whole number of seconds is a deadline");
             assert!(refusal.contains(FETCH_TIMEOUT_ENV), "{refused}: {refusal}");

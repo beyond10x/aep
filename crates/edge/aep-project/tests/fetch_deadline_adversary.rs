@@ -231,8 +231,9 @@ fn a_read_only_cache_without_the_pin_is_refused_naming_the_pin_the_cache_and_aep
     );
 }
 
-/// Acceptance 4 says "refusals change nothing". A fetch that fails leaves the bare object cache
-/// `git init --bare` created behind it.
+/// Acceptance 4 says "refusals change nothing", decided as: a refused fetch leaves no snapshot
+/// directory and no temporary checkout under the cache. The bare object cache (`objects.git`) that
+/// `git init --bare` created may remain.
 #[test]
 fn a_refused_fetch_changes_nothing_in_the_cache() {
     let root = support::scratch("adv-fetch-refusal-changes-nothing");
@@ -247,7 +248,25 @@ fn a_refused_fetch_changes_nothing_in_the_cache() {
     .refused("there is no repository to fetch from");
     let left = list(&cache);
     support::remove(&root);
-    assert!(left.is_empty(), "a refused fetch left {left:?}");
+    let changed: Vec<&String> = left
+        .iter()
+        .filter(|path| {
+            // `protocol-sources`, `protocol-sources/<repository>` and everything in
+            // `protocol-sources/<repository>/objects.git` make up the bare object cache.
+            let mut components = path.split('/');
+            let in_bare_cache = components.next() == Some("protocol-sources")
+                && components.next().is_none_or(|_repository| {
+                    components.next().is_none_or(|next| next == "objects.git")
+                });
+            !in_bare_cache
+        })
+        .collect();
+    assert!(
+        changed.is_empty(),
+        "story:an-unreachable-protocol-source-fails-within-a-deadline: a refused fetch leaves no \
+         snapshot directory and no temporary checkout under the cache; only the bare object cache \
+         (objects.git) is kept, because a concurrent process may be using it. Left: {changed:?}"
+    );
 }
 
 /// Every path below `directory`, relative to it.

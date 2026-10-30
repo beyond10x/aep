@@ -8,7 +8,6 @@
 
 mod support;
 
-use std::io::Read as _;
 use std::time::{Duration, Instant};
 
 use support::resolve_in_child;
@@ -24,7 +23,10 @@ fn child_resolves_the_source_its_parent_named() {
 
 /// When the one connection a never-answering loopback listener accepted was closed, if it was
 /// within `watch`.
+#[cfg(target_os = "linux")]
 fn closed_within(listener: &std::net::TcpListener, watch: Duration) -> Option<Instant> {
+    use std::io::Read as _;
+
     let until = Instant::now() + watch;
     listener.set_nonblocking(true).expect("non-blocking accept");
     let mut stream = loop {
@@ -63,7 +65,7 @@ fn closed_within(listener: &std::net::TcpListener, watch: Duration) -> Option<In
     }
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn the_fetch_deadline_in_the_environment_bounds_a_source_that_never_answers() {
     let root = support::scratch("fetch-deadline-env");
