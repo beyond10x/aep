@@ -76,6 +76,14 @@ pub const CACHE_DIRECTORY_ENV: &str = "AEP_CACHE_DIR";
 /// writable by others is refused whatever this says.
 pub const CACHE_GROUP_WRITABLE_ENV: &str = "AEP_CACHE_GROUP_WRITABLE";
 
+/// How many seconds the fetch of a pinned protocol revision may take: a positive whole number, 60
+/// when unset or empty.
+///
+/// Without a deadline a source that accepts a connection and never answers (a pod with DNS and no
+/// egress) holds the command until its caller kills it. On expiry Git and the transport it started
+/// are stopped, and the refusal names the pin and the cache. Any other value is refused by name.
+pub const FETCH_TIMEOUT_ENV: &str = "AEP_FETCH_TIMEOUT_SECS";
+
 /// The directory a project keeps its metadata in: `.engineering`, or whatever `AEP_PROJECT_DIR`
 /// says.
 ///
@@ -428,11 +436,68 @@ impl GroupWrite {
     }
 }
 
+/// How long a fetch of a pinned revision may take when [`FETCH_TIMEOUT_ENV`] does not say.
+const DEFAULT_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// Where and how this process materializes Git protocol sources, as its environment says.
+#[derive(Debug, Clone)]
+struct SourceCache {
+    /// The cache directory in use: [`CACHE_DIRECTORY_ENV`], or the platform's cache.
+    root: PathBuf,
+    /// How long one fetch may take before it and its transport are stopped.
+    fetch_timeout: std::time::Duration,
+    /// Whether a snapshot its group can write is trusted.
+    group_write: GroupWrite,
+}
+
+impl SourceCache {
+    fn from_environment() -> Result<Self, String> {
+        Ok(Self {
+            root: cache_root()?,
+            fetch_timeout: fetch_timeout()?,
+            group_write: GroupWrite::from_environment(),
+        })
+    }
+}
+
+/// [`FETCH_TIMEOUT_ENV`] as a duration: a positive whole number of seconds, or the default when
+/// unset or empty. Anything else is refused by name, never read as the default.
+fn fetch_timeout() -> Result<std::time::Duration, String> {
+    fetch_timeout_from(std::env::var_os(FETCH_TIMEOUT_ENV).as_deref())
+}
+
+/// [`fetch_timeout`] for the variable's value, `None` when it is unset.
+fn fetch_timeout_from(value: Option<&std::ffi::OsStr>) -> Result<std::time::Duration, String> {
+    let Some(value) = value.filter(|value| !value.is_empty()) else {
+        return Ok(DEFAULT_FETCH_TIMEOUT);
+    };
+    value
+        .to_str()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|seconds| *seconds > 0)
+        .map(std::time::Duration::from_secs)
+        .ok_or_else(|| {
+            format!(
+                "`{FETCH_TIMEOUT_ENV}` is `{}`; it must be a positive whole number of seconds",
+                value.to_string_lossy()
+            )
+        })
+}
+
 /// Returns a verified read-only snapshot of exactly the source's declared commit.
 fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String> {
     refuse_credentials(source.git_url())?;
-    let group_write = GroupWrite::from_environment();
-    let (bare, destination) = git_cache_paths(source)?;
+    materialize_git_source_in(source, &SourceCache::from_environment()?)
+}
+
+/// [`materialize_git_source`] in `cache`, whose settings a test can choose without touching the
+/// process environment.
+fn materialize_git_source_in(
+    source: &GitProtocolSource,
+    cache: &SourceCache,
+) -> Result<PathBuf, String> {
+    let group_write = cache.group_write;
+    let (bare, destination) = git_cache_paths(source, &cache.root);
     if destination.exists() {
         verify_snapshot_once(&destination, source.revision(), group_write)?;
         seal_published_root(&destination);
@@ -452,19 +517,7 @@ fn materialize_git_source(source: &GitProtocolSource) -> Result<PathBuf, String>
             "initializing the bare source cache",
         )?;
     }
-    git_bare(
-        &bare,
-        None,
-        &[
-            "fetch",
-            "--quiet",
-            "--depth",
-            "1",
-            source.git_url(),
-            source.revision(),
-        ],
-        "fetching the pinned protocol revision",
-    )?;
+    fetch_pinned_revision(&bare, source, cache)?;
     let actual = git_bare(
         &bare,
         None,
@@ -567,8 +620,7 @@ fn writable_by_its_owner_alone(metadata: &std::fs::Metadata) -> bool {
 }
 
 /// Bare object cache and source-and-revision snapshot paths containing no URL or credentials.
-fn git_cache_paths(source: &GitProtocolSource) -> Result<(PathBuf, PathBuf), String> {
-    let root = cache_root()?;
+fn git_cache_paths(source: &GitProtocolSource, root: &Path) -> (PathBuf, PathBuf) {
     let repository: String = Sha256::digest(source.repository().as_bytes()).iter().fold(
         String::new(),
         |mut output, byte| {
@@ -578,10 +630,10 @@ fn git_cache_paths(source: &GitProtocolSource) -> Result<(PathBuf, PathBuf), Str
         },
     );
     let base = root.join("protocol-sources").join(repository);
-    Ok((
+    (
         base.join("objects.git"),
         base.join("snapshots").join(source.revision()),
-    ))
+    )
 }
 
 /// Refuses URL userinfo that could write a secret into process listings or Git configuration.
@@ -642,6 +694,20 @@ fn create_temporary_checkout(parent: &Path, revision: &str) -> Result<PathBuf, S
     ))
 }
 
+/// Git against the bare object database and, optionally, a detached work tree, never prompting.
+fn git_command(bare: &Path, work_tree: Option<&Path>, arguments: &[&str]) -> Command {
+    let mut command = Command::new("git");
+    command.arg(format!("--git-dir={}", bare.display()));
+    if let Some(work_tree) = work_tree {
+        command.arg(format!("--work-tree={}", work_tree.display()));
+    }
+    command
+        .args(arguments)
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes");
+    command
+}
+
 /// Runs Git against the bare object database and, optionally, a detached work tree.
 fn git_bare(
     bare: &Path,
@@ -649,16 +715,7 @@ fn git_bare(
     arguments: &[&str],
     operation: &str,
 ) -> Result<String, String> {
-    let mut command = Command::new("git");
-    command.arg(format!("--git-dir={}", bare.display()));
-    if let Some(work_tree) = work_tree {
-        command.arg(format!("--work-tree={}", work_tree.display()));
-    }
-    let output = Command::new("git")
-        .args(command.get_args())
-        .args(arguments)
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .env("GIT_SSH_COMMAND", "ssh -oBatchMode=yes")
+    let output = git_command(bare, work_tree, arguments)
         .output()
         .map_err(|error| format!("{operation}: could not run Git: {error}"))?;
     if !output.status.success() {
@@ -666,6 +723,168 @@ fn git_bare(
         return Err(format!("{operation}: {}", detail.trim()));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
+}
+
+/// Fetches exactly the pinned commit into the bare cache within the cache's deadline.
+///
+/// Every refusal names the pin, the cache in use and the way to resolve it with no network: a
+/// pod without egress learns from the message what to mount, not only that the network failed.
+fn fetch_pinned_revision(
+    bare: &Path,
+    source: &GitProtocolSource,
+    cache: &SourceCache,
+) -> Result<(), String> {
+    let mut command = git_command(
+        bare,
+        None,
+        &[
+            "fetch",
+            "--quiet",
+            "--depth",
+            "1",
+            source.git_url(),
+            source.revision(),
+        ],
+    );
+    let failure = match run_within(&mut command, cache.fetch_timeout) {
+        Ok(Bounded::Finished(output)) if output.status.success() => return Ok(()),
+        Ok(Bounded::Finished(output)) => String::from_utf8_lossy(&output.stderr).trim().to_owned(),
+        Ok(Bounded::Expired) => format!(
+            "Git did not finish within {} s (`{FETCH_TIMEOUT_ENV}`) and was stopped with its \
+             transport",
+            cache.fetch_timeout.as_secs()
+        ),
+        Err(error) => format!("could not run Git: {error}"),
+    };
+    Err(format!(
+        "fetching the pinned protocol revision {}#{} into the cache {}: {failure}; point \
+         `{CACHE_DIRECTORY_ENV}` at a cache that already holds the sealed snapshot of this pin to \
+         resolve it with no network",
+        source.repository(),
+        source.revision(),
+        cache.root.display()
+    ))
+}
+
+/// How a process run under a deadline ended.
+enum Bounded {
+    /// It exited by itself, with this output.
+    Finished(std::process::Output),
+    /// The deadline passed first; it and every process it started were stopped.
+    Expired,
+}
+
+/// How often a run under a deadline is checked, and the step of the grace before a kill.
+const DEADLINE_POLL: std::time::Duration = std::time::Duration::from_millis(20);
+
+/// How long a stopped run may take to exit by itself, removing its lock files, before it is killed.
+const STOP_GRACE: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// Runs `command` to completion or until `limit` passes, whichever is first.
+///
+/// Git runs its transport as a child of its own (`git-remote-https`, `ssh`), and killing Git alone
+/// leaves that child connecting. On Unix the command therefore starts a process group of its own,
+/// and expiry stops the whole group, so nothing it started outlives the refusal.
+fn run_within(command: &mut Command, limit: std::time::Duration) -> std::io::Result<Bounded> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt as _;
+        command.process_group(0);
+    }
+    let mut child = command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?;
+    let stdout = drain(child.stdout.take());
+    let stderr = drain(child.stderr.take());
+    let deadline = std::time::Instant::now() + limit;
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                return Ok(Bounded::Finished(std::process::Output {
+                    status,
+                    stdout: drained(stdout),
+                    stderr: drained(stderr),
+                }))
+            }
+            Ok(None) => {}
+            Err(error) => {
+                stop(&mut child);
+                return Err(error);
+            }
+        }
+        let now = std::time::Instant::now();
+        if now >= deadline {
+            // The pipe readers are left to finish when the stopped processes' pipes close.
+            stop(&mut child);
+            return Ok(Bounded::Expired);
+        }
+        std::thread::sleep((deadline - now).min(DEADLINE_POLL));
+    }
+}
+
+/// Reads a child's pipe to its end on a thread of its own, so a full pipe never blocks the child.
+fn drain(
+    pipe: Option<impl std::io::Read + Send + 'static>,
+) -> Option<std::thread::JoinHandle<Vec<u8>>> {
+    pipe.map(|mut pipe| {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            pipe.read_to_end(&mut bytes).ok();
+            bytes
+        })
+    })
+}
+
+fn drained(reader: Option<std::thread::JoinHandle<Vec<u8>>>) -> Vec<u8> {
+    reader
+        .and_then(|reader| reader.join().ok())
+        .unwrap_or_default()
+}
+
+/// Stops a run and everything it started: asked first, so Git can remove its lock files, then
+/// killed, then reaped.
+///
+/// The group's id is the child's pid, which cannot be reused before the child is reaped; the
+/// final group kill after a reap reaches only members still alive, which keep the id in use.
+fn stop(child: &mut std::process::Child) {
+    #[cfg(unix)]
+    {
+        let group = child.id();
+        signal_group(group, "TERM");
+        let grace = std::time::Instant::now() + STOP_GRACE;
+        while std::time::Instant::now() < grace && matches!(child.try_wait(), Ok(None)) {
+            std::thread::sleep(DEADLINE_POLL);
+        }
+        signal_group(group, "KILL");
+    }
+    // Without `kill` or `sh` on the machine, Git itself is still stopped.
+    child.kill().ok();
+    child.wait().ok();
+}
+
+/// Sends `signal` to process group `group` with the system's `kill`, or the shell's built-in when
+/// there is no `kill` executable (a minimal container image).
+///
+/// The standard library signals only its own child, never a group. A library that can would mean
+/// this workspace's first `unsafe` block (`libc`, which the workspace's `unsafe_code = "forbid"`
+/// refuses) or a new dependency; the `kill` utility is POSIX and needs neither.
+#[cfg(unix)]
+fn signal_group(group: u32, signal: &str) {
+    let target = format!("-{group}");
+    let quiet = |command: &mut Command| {
+        command
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+    };
+    let sent = quiet(Command::new("kill").args(["-s", signal, "--", &target]));
+    if sent.is_err() {
+        quiet(Command::new("sh").args(["-c", "kill -s \"$1\" -- \"$2\"", "sh", signal, &target]))
+            .ok();
+    }
 }
 
 /// Snapshots this process has already verified, by directory and revision.
@@ -2386,5 +2605,240 @@ mod tests {
             "the volume's modes are left as mounted"
         );
         remove_sealed(&root, &stamp);
+    }
+
+    /// The Git source a project file spelling `locator` declares.
+    fn git_source(locator: &str) -> GitProtocolSource {
+        match ProtocolSource::parse(locator).expect("a valid locator") {
+            ProtocolSource::Git(source) => source,
+            ProtocolSource::Path(path) => panic!("{} is not a Git source", path.display()),
+        }
+    }
+
+    /// A cache under `root` with a fetch deadline of `seconds`.
+    fn cache_with_deadline(root: &Path, seconds: u64) -> SourceCache {
+        SourceCache {
+            root: root.join("cache"),
+            fetch_timeout: std::time::Duration::from_secs(seconds),
+            group_write: GroupWrite::Refused,
+        }
+    }
+
+    /// What a loopback listener that never answers saw of the one connection it accepted.
+    #[derive(Debug)]
+    enum Connection {
+        /// No connection arrived within the watch.
+        NeverAccepted,
+        /// The peer closed the connection: the instant end-of-stream (or a reset) was read.
+        Closed(std::time::Instant),
+        /// The connection was still open when the watch ended.
+        StillOpen,
+    }
+
+    /// Binds a loopback listener that accepts one connection and never writes a byte, and watches
+    /// it for `watch` on a thread of its own.
+    fn silent_listener(watch: std::time::Duration) -> (u16, std::thread::JoinHandle<Connection>) {
+        use std::io::Read as _;
+
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
+        let port = listener.local_addr().expect("bound").port();
+        listener.set_nonblocking(true).expect("non-blocking accept");
+        let watcher = std::thread::spawn(move || {
+            let until = std::time::Instant::now() + watch;
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        if std::time::Instant::now() >= until {
+                            return Connection::NeverAccepted;
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("accepting: {error}"),
+                }
+            };
+            stream.set_nonblocking(false).expect("blocking reads");
+            let mut buffer = [0_u8; 4096];
+            loop {
+                let left = until.saturating_duration_since(std::time::Instant::now());
+                if left.is_zero() {
+                    return Connection::StillOpen;
+                }
+                stream.set_read_timeout(Some(left)).expect("a read timeout");
+                match stream.read(&mut buffer) {
+                    Ok(0) => return Connection::Closed(std::time::Instant::now()),
+                    Ok(_) => {}
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                        ) =>
+                    {
+                        return Connection::StillOpen
+                    }
+                    Err(_) => return Connection::Closed(std::time::Instant::now()),
+                }
+            }
+        });
+        (port, watcher)
+    }
+
+    /// Resolves `source` in `cache` on a thread, giving up after `limit` so a missing deadline
+    /// fails the test instead of hanging it. Returns the result and the instant it returned.
+    fn resolve_within(
+        source: &GitProtocolSource,
+        cache: &SourceCache,
+        limit: std::time::Duration,
+    ) -> (Result<PathBuf, String>, std::time::Instant) {
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let (source, cache) = (source.clone(), cache.clone());
+        std::thread::spawn(move || {
+            let result = materialize_git_source_in(&source, &cache);
+            sender.send((result, std::time::Instant::now())).ok();
+        });
+        receiver
+            .recv_timeout(limit)
+            .unwrap_or_else(|_| panic!("resolution did not return within {limit:?}"))
+    }
+
+    /// Asserts acceptance 4: no snapshot and no temporary checkout under the cache.
+    fn assert_no_snapshot_left(source: &GitProtocolSource, cache: &SourceCache) {
+        let (_, destination) = git_cache_paths(source, &cache.root);
+        let snapshots = destination.parent().expect("a snapshots directory");
+        let left: Vec<_> = std::fs::read_dir(snapshots)
+            .map(|entries| entries.flatten().map(|entry| entry.path()).collect())
+            .unwrap_or_default();
+        assert!(
+            left.is_empty(),
+            "a refused fetch leaves no snapshot and no temporary checkout: {left:?}"
+        );
+    }
+
+    /// Extra time a test allows past a deadline: Git asked to stop, the grace before it is made
+    /// to, and a loaded machine's scheduling.
+    const DEADLINE_MARGIN: std::time::Duration = std::time::Duration::from_secs(3);
+
+    /// Acceptances 1 to 4 of `story:an-unreachable-protocol-source-fails-within-a-deadline`.
+    #[cfg(unix)]
+    #[test]
+    fn a_fetch_from_a_source_that_never_answers_is_stopped_at_its_deadline_with_its_transport() {
+        let deadline = std::time::Duration::from_secs(2);
+        let (port, watcher) = silent_listener(deadline + DEADLINE_MARGIN * 4);
+        let root = scratch("fetch-deadline");
+        let cache = cache_with_deadline(&root, deadline.as_secs());
+        let revision = "d".repeat(40);
+        let locator = format!("git+https://127.0.0.1:{port}/protocols.git#{revision}");
+        let source = git_source(&locator);
+
+        let started = std::time::Instant::now();
+        let (result, returned) = resolve_within(&source, &cache, deadline + DEADLINE_MARGIN);
+        let elapsed = returned - started;
+        let refusal = result.expect_err("the source never answers");
+
+        assert!(
+            elapsed >= deadline,
+            "the fetch was stopped by its deadline, not by another failure ({elapsed:?}): {refusal}"
+        );
+        assert!(
+            refusal.contains("did not finish within 2 s"),
+            "the refusal says the deadline expired: {refusal}"
+        );
+        assert!(refusal.contains(FETCH_TIMEOUT_ENV), "{refusal}");
+        assert!(
+            refusal.contains(&locator),
+            "the refusal names the pin: {refusal}"
+        );
+        assert!(
+            refusal.contains(&cache.root.display().to_string()),
+            "the refusal names the cache in use: {refusal}"
+        );
+        assert!(refusal.contains(CACHE_DIRECTORY_ENV), "{refusal}");
+        assert!(refusal.contains("no network"), "{refusal}");
+        assert_no_snapshot_left(&source, &cache);
+
+        match watcher.join().expect("the watcher finishes") {
+            Connection::Closed(closed) => assert!(
+                closed <= returned + std::time::Duration::from_secs(1),
+                "the transport's connection closed {:?} after the refusal returned",
+                closed.saturating_duration_since(returned)
+            ),
+            other => panic!("Git's transport must be gone when the refusal returns: {other:?}"),
+        }
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// Acceptances 2 and 4 for a failure other than the deadline.
+    #[test]
+    fn any_failed_fetch_names_the_pin_the_cache_and_how_to_resolve_it_with_no_network() {
+        let root = scratch("fetch-failure");
+        let cache = cache_with_deadline(&root, 30);
+        let revision = "e".repeat(40);
+        let missing = root.join("no-such-repository");
+        let locator = format!("git+file://{}#{revision}", missing.display());
+        let source = git_source(&locator);
+
+        let refusal = materialize_git_source_in(&source, &cache)
+            .expect_err("there is no repository to fetch from");
+        assert!(
+            refusal.contains(&locator),
+            "the refusal names the pin: {refusal}"
+        );
+        assert!(
+            refusal.contains(&cache.root.display().to_string()),
+            "the refusal names the cache in use: {refusal}"
+        );
+        assert!(refusal.contains(CACHE_DIRECTORY_ENV), "{refusal}");
+        assert!(refusal.contains("no network"), "{refusal}");
+        assert_no_snapshot_left(&source, &cache);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// Acceptance 5: a cache already holding the sealed snapshot never reaches for the source.
+    #[test]
+    fn a_cache_holding_the_sealed_snapshot_resolves_without_touching_the_network() {
+        let (port, watcher) = silent_listener(std::time::Duration::from_millis(500));
+        let root = scratch("fetch-cached");
+        let cache = cache_with_deadline(&root, 2);
+        let revision = "c".repeat(40);
+        let source = git_source(&format!(
+            "git+https://127.0.0.1:{port}/protocols.git#{revision}"
+        ));
+        let (_, destination) = git_cache_paths(&source, &cache.root);
+        let tree = destination.with_file_name(format!(".{revision}.tmp"));
+        write(&tree.join("protocol.yaml"), "sealed\n");
+        seal_snapshot(&tree, &revision).expect("the tree seals");
+        publish_snapshot(&tree, &destination).expect("the snapshot is published");
+
+        let resolved = materialize_git_source_in(&source, &cache)
+            .expect("the sealed snapshot is the pin, with no network");
+        assert_eq!(resolved, destination);
+        assert!(
+            matches!(
+                watcher.join().expect("the watcher finishes"),
+                Connection::NeverAccepted
+            ),
+            "the never-answering source was not contacted"
+        );
+        #[cfg(unix)]
+        unseal(&root);
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_fetch_deadline_is_sixty_seconds_unless_a_positive_whole_number_says_otherwise() {
+        use std::ffi::OsStr;
+        let seconds = std::time::Duration::from_secs;
+        assert_eq!(fetch_timeout_from(None), Ok(seconds(60)));
+        assert_eq!(fetch_timeout_from(Some(OsStr::new(""))), Ok(seconds(60)));
+        assert_eq!(fetch_timeout_from(Some(OsStr::new("7"))), Ok(seconds(7)));
+        for refused in ["0", "-1", "1.5", "ten", " 7", "7s"] {
+            let refusal = fetch_timeout_from(Some(OsStr::new(refused)))
+                .expect_err("only a positive whole number of seconds is a deadline");
+            assert!(refusal.contains(FETCH_TIMEOUT_ENV), "{refused}: {refusal}");
+            assert!(
+                refusal.contains(&format!("`{refused}`")),
+                "{refused}: {refusal}"
+            );
+        }
     }
 }
