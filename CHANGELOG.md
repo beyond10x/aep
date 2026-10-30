@@ -11,7 +11,7 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 ### Added
 
 - `AEP_CACHE_GROUP_WRITABLE=1` admits a protocol source snapshot its group can write, as a cache on a Kubernetes volume with `fsGroup` is (files `0664`, directories `2775`); every byte is still verified against the sealed manifest.
-- `AEP_FETCH_TIMEOUT_SECS` sets how long fetching a pinned protocol revision may take (default 60 s).
+- `AEP_FETCH_TIMEOUT_SECS` sets how long fetching a pinned protocol revision may take (default 60 s); on expiry Git and the transport it started are stopped, and a value that is not a positive whole number of seconds the clock can count down is refused before Git starts.
 
 ### Changed
 
@@ -20,9 +20,9 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 ### Fixed
 
 - `aep plan artifact evidence --from <report/2> --suite <suite>` records a report against the suite majors ESS 0.70.0 added and 0.77.0 writes, the ordinary `ess-conformance/58` and the coverage `/59` (a `Decimal` in a complete subject or a retained result), with a synthesis seed record admitted in both; it refused them as `UnsupportedSuiteVersion`. `/60` and later are still refused by name.
-
 - Fetching a pinned protocol revision with no route to the source stops after `AEP_FETCH_TIMEOUT_SECS` and is refused naming the pin, the cache and `AEP_CACHE_DIR`; it hung until the caller killed aep.
 - A protocol source snapshot under Kubernetes `fsGroup` failed with "does not match its path, mode and byte manifest": the manifest (`file_mode`) now compares read and execute bits only, a group-writable snapshot is refused naming `AEP_CACHE_GROUP_WRITABLE`, and one that others can write is always refused.
+- A snapshot's verification stamp (`<snapshot>.verified.json`, read by `snapshot_stamp_listing`) was trusted whatever its own mode, so whoever could write it could leave an entry out and skip that entry's checks. A stamp others can write is now never trusted, one its group can write only with `AEP_CACHE_GROUP_WRITABLE=1`; an untrusted stamp falls back to the full verification.
 
 ## [0.78.0] - 2026-10-26
 
