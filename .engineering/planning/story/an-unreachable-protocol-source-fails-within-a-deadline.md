@@ -15,8 +15,18 @@ scope:
 - confidence: cited
   path: crates/edge/aep-project/src/project.rs
 - confidence: cited
+  path: crates/edge/aep-project/tests/fetch_deadline.rs
+- confidence: cited
+  path: crates/edge/aep-project/tests/fetch_deadline_adversary.rs
+- confidence: cited
+  path: crates/edge/aep-project/tests/protocol_cache_security.rs
+- confidence: cited
+  path: crates/edge/aep-project/tests/support/mod.rs
+- confidence: cited
   path: website/docs/reference/cli.md
-revision: 6
+- confidence: cited
+  path: website/docs/reference/project-file.md
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 5}
 - {from: "proposed", to: "active", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 6}

@@ -15,8 +15,18 @@ scope:
 - confidence: cited
   path: crates/edge/aep-project/src/project.rs
 - confidence: cited
+  path: crates/edge/aep-project/tests/group_writable_adversary.rs
+- confidence: cited
+  path: crates/edge/aep-project/tests/group_writable_cache.rs
+- confidence: cited
+  path: crates/edge/aep-project/tests/protocol_cache_security.rs
+- confidence: cited
+  path: crates/edge/aep-project/tests/support/mod.rs
+- confidence: cited
   path: website/docs/reference/cli.md
-revision: 6
+- confidence: cited
+  path: website/docs/reference/project-file.md
+revision: 8
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-30T16:38:54Z", actor: "human:timo", revision: 5}
 - {from: "proposed", to: "active", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 6}
@@ -58,6 +68,11 @@ Taken by the wave coordinator under the operator's grant: make the check explici
   the refusal names that variable and the first offending path.
 - Owner write is admitted and nothing is re-sealed on a found snapshot that is group-writable: the
   kubelet re-applies the modes on every mount.
+- The verification stamp follows the same rule (security review pass 1): a stamp others can write is
+  never trusted, a stamp its group can write is trusted only with `AEP_CACHE_GROUP_WRITABLE=1`, and an
+  untrusted stamp falls back to the full verification.
+- Directories above the snapshot root are not checked here; that is
+  `story:a-snapshot-parent-its-group-can-write-is-not-trusted-silently`.
 
 ## Acceptance
 

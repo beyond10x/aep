@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-30T17:02:17Z",
+  "actor": "human:timo",
+  "artifact": "story:a-group-writable-snapshot-is-admitted-explicitly",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "VERIFIED: aep plan artifact validate under bwrap --unshare-net with a prefilled cache made group-writable (files 0664, directories 2775): baseline aep 0.78.0 exit 1 with or without AEP_CACHE_GROUP_WRITABLE (manifest mismatch); wave build 5f7f7b9a0 exit 1 unset (names AEP_CACHE_GROUP_WRITABLE and fsGroup), exit 0 with AEP_CACHE_GROUP_WRITABLE=1, exit 1 with one file other-writable.",
+    "reference": "coordinator scratch verify-baseline/summary.txt vs verify-treatment/summary.txt"
+  }
+}

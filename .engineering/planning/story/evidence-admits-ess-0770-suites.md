@@ -14,18 +14,26 @@ scope:
 - confidence: cited
   path: CHANGELOG.md
 - confidence: cited
+  path: crates/edge/aep-cli/tests/ess_conformance_coverage.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/ess_ordinary_suites.rs
+- confidence: cited
   path: crates/govern/aep-domain/src/ess_conformance_coverage/values.rs
 - confidence: cited
   path: crates/govern/aep-domain/src/ess_conformance_v2.rs
 - confidence: cited
+  path: crates/govern/aep-domain/tests/ess_coverage_values.rs
+- confidence: cited
   path: crates/observe/aep-ess-evidence
+- confidence: cited
+  path: ess/domains/evidence.yaml
 - confidence: cited
   path: ess/ess-inputs.yaml
 - confidence: cited
   path: generated/ess
 - confidence: cited
   path: xtask/tests/ess_gate.rs
-revision: 11
+revision: 13
 transitions:
 - {from: "draft", to: "proposed", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 10}
 - {from: "proposed", to: "active", at: "2026-10-30T16:38:55Z", actor: "human:timo", revision: 11}
