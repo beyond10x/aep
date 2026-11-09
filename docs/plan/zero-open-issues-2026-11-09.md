@@ -9,6 +9,12 @@ from it carries every wave. Every checkout is a managed worktree (`worktree crea
 builds into `target/` inside its own tree. Paths are recorded by managed tree id; the coordinator's
 scratch record maps ids to paths.
 
+## Status
+
+Stopped on 2026-11-09 before wave 1 closed: the operator narrowed the goal to another
+repository. Wave 1's first unit is on its own branch, unmerged; no other unit was dispatched. No
+pull request was opened and no issue was closed.
+
 ## The plan
 
 Derived with `aep plan artifact waves --kind story --status active` (aep 0.79.0) after the ten
@@ -82,6 +88,7 @@ version bump, no release.
 
 | wave | unit | managed tree | branch | head | stage |
 |---|---|---|---|---|---|
+| 1 | `story:a-directory-and-a-file-inside-it-read-as-disjoint` | `zi-dir-file` | `impl/a-directory-and-a-file-inside-it-read-as-disjoint` | `aabd52ee1` | implementor dispatched |
 
 ## Backlog filed from findings
 
