@@ -2,11 +2,14 @@
 format: aep.planning-md/3
 id: story:a-guarded-rung-counts-records-not-verdicts
 kind: story
-status: draft
+status: archived
 title: A guarded rung counts records, and cannot ask that one passed
 relations:
 - serves: vision:O2
-revision: 4
+- decomposes: epic:zero-open-issues-2026-11-09
+revision: 6
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:31Z", actor: "human:timo", revision: 6}
 ---
 ## What was found
 
@@ -100,3 +103,9 @@ word that names a verdict.
 
 `an adopting project` moved the artifact back to `validated` and recorded why in its body. It moves by hand,
 and not while anything is skipped.
+
+## Closed 2026-11-09
+
+Fixed on main; not implemented by this epic. Since 0.68.0 (`CHANGELOG.md`: "A specification's conformance record counts only when it passed and its `spec_digest` equals `model_digest`") `judged_evidence` (`crates/edge/aep-cli/src/planning.rs:685-706`) filters records through `crates/edge/aep-cli/src/planning/conformance_count.rs:48`. The story's case, a failed report admitted at `conforming`, is refused by `a_failed_report_1_does_not_move_a_specification_to_conforming` (`crates/edge/aep-cli/tests/conforming_rung.rs:274`) and `a_failed_report_2_does_not_move_a_specification_to_conforming_and_says_why` (`:232`); both were read at `824869fec`, and run in this epic's gate.
+
+The fix is narrower than the story's *Shape*: there is no general `facts` map or predicate on a guarded rung, only the conformance count. That mechanism is a feature nobody has asked for since and is not filed here.

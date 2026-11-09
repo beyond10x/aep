@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: task:artifact-root-follows-project
 kind: task
-status: draft
+status: archived
 title: Planning documents follow the project's configured protocol tree
 summary: Make artifact lifecycle and template lookup honor .engineering/project.yaml when --root is omitted.
 owner: protocol
@@ -11,7 +11,10 @@ tags:
 - bug
 relations:
 - derived_from: story:adopter-bugs
-revision: 3
+- decomposes: epic:zero-open-issues-2026-11-09
+revision: 5
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:31Z", actor: "human:timo", revision: 5}
 ---
 # Task: Planning documents follow the project's configured protocol tree
 
@@ -52,3 +55,7 @@ the project while `StoreLocation::lifecycles()` and `create()` used `StoreLocati
 The lightweight resolver belongs in `aep-engine::project`; using the full `project::load` would
 incorrectly couple source lookup to validation of unrelated project documents. Repository locators
 are typed in `aep-domain`; the engine alone owns Git, cache, environment, and filesystem effects.
+
+## Closed 2026-11-09
+
+Fixed on main; not implemented by this epic. `StoreLocation::document_root` (`crates/edge/aep-cli/src/planning.rs:218-235`) takes `--root`, then the discovered project's `protocols` source, then `.`. Landed in `15009eda8` ("feat: resolve project protocol sources"). Held by `planning_documents_follow_the_protocol_tree_named_by_the_project` (`crates/edge/aep-cli/tests/planning_cli.rs:2016`), read at `824869fec` and run in this epic's gate.

@@ -2,13 +2,16 @@
 format: aep.planning-md/3
 id: story:unowned-document-in-eventlog-projection-is-reported
 kind: story
-status: draft
+status: archived
 title: A document added by hand to an Eventlog projection is reported
 owner: aep
 relations:
 - informed_by: review-result:validate-v2-review-1
 - informed_by: story:eventlog-planning-authority-migration
-revision: 1
+- decomposes: epic:zero-open-issues-2026-11-09
+revision: 3
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:32Z", actor: "human:timo", revision: 3}
 ---
 ## Outcome
 
@@ -45,3 +48,7 @@ review-result:validate-v2-review-1, finding 2 (2026-09-20, pass 1 over af2af7e74
 
 inferred: crates/plan/aep-planning-migration/src/projection.rs, crates/edge/aep-cli/src/store_command.rs,
 crates/edge/aep-cli/tests/store_writer_control.rs.
+
+## Closed 2026-11-09
+
+Obsolete. `projection_current`, `read_owned_files`, the ownership marker and `aep plan store verify` went in 0.62.0. Commit `742bb0713` ("refactor: remove Eventlog from AEP", released in 0.62.0) deleted the `aep-planning-migration` and `aep-backend-eventlog` crates; `CHANGELOG.md` 0.62.0 *Removed* lists it. A search for `projection_current` and `read_owned_files` over `crates/` at `824869fec` finds nothing. In a Git-native store a document written by hand is the artifact; there is no projection it could be unowned in.

@@ -2,14 +2,24 @@
 format: aep.planning-md/3
 id: story:checks-map-evidence-producers
 kind: story
-status: draft
+status: active
 title: The checks map produces every record the driven plan demands
 summary: 'A governed run under drivers/development/checks.yaml launches without --allow-evidence-gap: the map gains command steps producing the verification and specification records the plan demands, as default.yaml already does.'
 tags:
 - driver
 relations:
 - decomposes: epic:evidence-gated-completion
-revision: 2
+- decomposes: epic:zero-open-issues-2026-11-09
+- serves: vision:O3
+scope:
+- confidence: cited
+  path: crates/drive/aep-driver/tests/coverage.rs
+- confidence: cited
+  path: drivers/development/checks.yaml
+revision: 7
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-09T22:07:45Z", actor: "human:timo", revision: 6}
+- {from: "proposed", to: "active", at: "2026-11-09T22:07:46Z", actor: "human:timo", revision: 7}
 ---
 # Story: The checks map produces every record the driven plan demands
 
@@ -60,3 +70,11 @@ that record.
 
 - metaharness's own launch flags and prompt text; it is told when this ships.
 - Changing what the `development` protocol demands.
+
+## Triage 2026-11-09
+
+Still present at `824869fec`. `drivers/development/checks.yaml` has no step producing `kind: verification` or `kind: specification`; they appear only in `drivers/development/default.yaml:324` and `:415`. `crates/drive/aep-driver/tests/coverage.rs:174-201` records the gap as a passing fact.
+
+Acceptance 2 is decided at triage (coordinator), and the implementor reverses it only on evidence from the map itself: the tasks this map drives declare `change.code: false`, because the map is written for documents-and-shell work, so the pre-flight's applicability rule removes `contract_result` and `property_test_result`. If the map's `implement` state is shown to change code, the map produces the two kinds as `default.yaml` does instead, and the header comment says which was taken and why.
+
+`CHANGELOG.md` is the coordinator's file in this wave; the implementor returns the entry's text.

@@ -11,6 +11,7 @@ invariant numbers are as of their date.
 |---|---|
 | [`gap-register.md`](gap-register.md) | every known gap, and the decision or code that closes it |
 | [`document-authoring-brief.md`](document-authoring-brief.md) | the declared vocabulary a protocol, principle, workflow or profile document may use |
+| [`zero-open-issues-2026-11-09.md`](zero-open-issues-2026-11-09.md) | the wave plan and wave record of `epic:zero-open-issues-2026-11-09` |
 
 ## Archive
 

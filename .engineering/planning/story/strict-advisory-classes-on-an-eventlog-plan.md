@@ -2,14 +2,17 @@
 format: aep.planning-md/3
 id: story:strict-advisory-classes-on-an-eventlog-plan
 kind: story
-status: draft
+status: archived
 title: validate --strict reports its three advisory classes on an Eventlog plan from the authority
 owner: aep
 relations:
 - informed_by: review-result:validate-v2-review-2
 - informed_by: review-result:evidence-on-hand-review-1
 - informed_by: story:eventlog-planning-authority-migration
-revision: 1
+- decomposes: epic:zero-open-issues-2026-11-09
+revision: 3
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:32Z", actor: "human:timo", revision: 3}
 ---
 ## Outcome
 
@@ -60,3 +63,7 @@ this lands.
 
 cited: crates/edge/aep-cli/src/planning.rs, crates/edge/aep-cli/tests/store_writer_control.rs,
 website/docs/reference/cli.md, CHANGELOG.md.
+
+## Closed 2026-11-09
+
+Obsolete. The gap existed only on an `aep.project/2` Eventlog plan, which every planning verb refuses since 0.62.0. Commit `742bb0713` ("refactor: remove Eventlog from AEP", released in 0.62.0) deleted the `aep-planning-migration` and `aep-backend-eventlog` crates; `CHANGELOG.md` 0.62.0 *Removed* lists it. `pre_provider` itself is gone (0.65.0; no match under `crates/` at `824869fec`); `closed_on_an_assertion` and `without_an_outcome` remain for the supported stores.

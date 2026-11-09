@@ -2,13 +2,16 @@
 format: aep.planning-md/3
 id: story:migration-receipt-identity-under-symlinked-selector
 kind: story
-status: draft
+status: archived
 title: A migration apply reached through a symlinked path is decided like the real path
 owner: aep
 relations:
 - informed_by: review-result:validate-v2-review-1
 - informed_by: story:eventlog-planning-authority-migration
-revision: 1
+- decomposes: epic:zero-open-issues-2026-11-09
+revision: 3
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:32Z", actor: "human:timo", revision: 3}
 ---
 ## Outcome
 
@@ -43,3 +46,7 @@ variable, mechanism **not isolated**:
 
 inferred: crates/plan/aep-planning-migration/, crates/edge/aep-cli/src/store_command.rs,
 crates/edge/aep-cli/tests/store_writer_control.rs.
+
+## Closed 2026-11-09
+
+Obsolete. The Eventlog migration `apply` and its receipts went in 0.62.0. Commit `742bb0713` ("refactor: remove Eventlog from AEP", released in 0.62.0) deleted the `aep-planning-migration` and `aep-backend-eventlog` crates; `CHANGELOG.md` 0.62.0 *Removed* lists it. A search for `receipt_conflict` and `ReceiptConflict` over `crates/` at `824869fec` finds nothing. The one migration left, `aep plan store migrate git`, writes no receipt.

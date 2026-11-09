@@ -2,19 +2,23 @@
 format: aep.planning-md/3
 id: story:discarded-protocol-source-tree-is-removed
 kind: story
-status: draft
+status: active
 title: A protocol-source publisher that does not publish removes its sealed tree
 summary: A temporary snapshot tree that is not published is removed even though seal_snapshot made its directories read-only.
 tags:
 - protocol-source
 relations:
 - serves: vision:O2
+- decomposes: epic:zero-open-issues-2026-11-09
 scope:
 - confidence: inferred
   path: .github/workflows/ci.yml
 - confidence: cited
   path: crates/edge/aep-project/src/project.rs
-revision: 3
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-09T22:07:29Z", actor: "human:timo", revision: 5}
+- {from: "proposed", to: "active", at: "2026-11-09T22:07:29Z", actor: "human:timo", revision: 6}
 ---
 # Story: A protocol-source publisher that does not publish removes its sealed tree
 
@@ -64,3 +68,7 @@ source: crates/edge/aep-project/src/project.rs:500
 ## Out of scope
 
 - Removing `.tmp` trees that earlier versions already leaked.
+
+## Triage 2026-11-09
+
+Still present at `824869fec`; the lines moved. The two discards are `std::fs::remove_dir_all(...).ok()` at `crates/edge/aep-project/src/project.rs:556` (checkout or `seal_snapshot` failed) and `:584` (`publish_snapshot` lost the race). Neither restores write permission first, though `seal_snapshot` (`:566-573`) and `make_subdirectories_read_only` (`:1604`) made the subdirectories 0555. The story's filesystem predicate still prints `1`.

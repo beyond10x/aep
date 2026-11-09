@@ -2,12 +2,18 @@
 format: aep.planning-md/3
 id: story:agents-dependency-rule-matches-the-manifests
 kind: story
-status: draft
+status: active
 title: AGENTS.md's dependency-comment rule matches what the manifests do
+relations:
+- decomposes: epic:zero-open-issues-2026-11-09
+- serves: vision:O2
 scope:
 - confidence: cited
   path: AGENTS.md
-revision: 2
+revision: 6
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-09T22:07:44Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-11-09T22:07:44Z", actor: "human:timo", revision: 6, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 
@@ -43,8 +49,24 @@ repository's own manifests.
 
 ## Acceptance
 
-- `AGENTS.md` says which dependency entries carry an explanation beside them (for example: a new
-  external dependency, never a workspace-internal one) and where the reasoning for the rest lives
-  (the commit message). The sentence is checkable against the manifests.
-- A count like the table above, taken after the change, matches the sentence.
-- No manifest comment is added or removed by this story beyond what the sentence requires.
+- `AGENTS.md` § Conventions states, in place of "justify each one beside its manifest entry", that
+  a new dependency is justified in the commit message that adds it, and that a manifest entry needs
+  no comment beside it. After the change, `grep -n "beside its manifest entry" AGENTS.md` prints
+  nothing.
+- The rule then holds for every entry counted below (it demands nothing of any of them), where the
+  0.79.0 rule held for 54 of 211.
+- No manifest comment is added or removed by this story: `git diff --stat` over `Cargo.toml` files
+  is empty.
+
+Counted at triage (`824869fec`, a `#` on the entry's line or the line above, over
+`crates/*/*/Cargo.toml`, `xtask/Cargo.toml` and the root `Cargo.toml`): `[dependencies]` 144
+entries, 46 commented; `[dev-dependencies]` 31, 7 commented; root `[workspace.dependencies]` 36, 1
+commented.
+
+Decision taken at revision (coordinator): the commit message carries the reason, because the
+operator's standing rule is that manifest files carry no explanatory comments, and the manifests
+already follow that for 157 of 211 entries.
+
+## Triage 2026-11-09
+
+Still present at `824869fec`. The rule is now `AGENTS.md:185`: "Prefer no new dependency; justify each one beside its manifest entry." Counted across `crates/*/*/Cargo.toml` and `xtask/Cargo.toml` (an entry counts as commented when a `#` is on its line or the line above): `[dependencies]` 144 entries, 46 commented; `[dev-dependencies]` 31, 7 commented; root `[workspace.dependencies]` 36, 1 commented.

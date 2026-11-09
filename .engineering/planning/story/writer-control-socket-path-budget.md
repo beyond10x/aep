@@ -2,11 +2,15 @@
 format: aep.planning-md/3
 id: story:writer-control-socket-path-budget
 kind: story
-status: draft
+status: archived
 title: The writer-control holder exits silently when TMPDIR leaves its socket no room
 summary: 45 bytes of TMPDIR, measured; over it the holder dies at custody and says nothing a caller reads
 owner: aep
-revision: 2
+relations:
+- decomposes: epic:zero-open-issues-2026-11-09
+revision: 4
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:33Z", actor: "human:timo", revision: 4}
 ---
 ## Outcome
 
@@ -68,3 +72,7 @@ What that costs, and why it was not obvious:
   not go through `TMPDIR` — or it is documented at `writer-control hold` in
   `website/docs/reference/cli.md` and checked before the first line is printed.
 - The repository's own gate does not depend on the caller's `TMPDIR` being short by luck.
+
+## Closed 2026-11-09
+
+Obsolete. `aep plan store writer-control` went in 0.62.0 (`CHANGELOG.md` 0.62.0: "Every `aep plan store` verb is removed"; `website/docs/reference/cli.md` lists `writer-control` as removed). A search for `writer-control` and `hold.sock` over `crates/` at `824869fec` finds nothing.

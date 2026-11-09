@@ -2,14 +2,17 @@
 format: aep.planning-md/3
 id: story:eventlog-lifecycle-refusal-names-the-legal-moves
 kind: story
-status: draft
+status: archived
 title: An Eventlog plan's illegal-move refusal names the current status and the legal moves
 relations:
 - informed_by: story:strict-advisory-classes-on-an-eventlog-plan
+- decomposes: epic:zero-open-issues-2026-11-09
 scope:
 - confidence: inferred
   path: crates/edge/aep-cli/src/planning.rs
-revision: 3
+revision: 5
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:32Z", actor: "human:timo", revision: 5}
 ---
 ## Outcome
 
@@ -106,3 +109,7 @@ Eventlog arm replaces with a code that names the authority and nothing else.
 A second red case, beside the illegal-move one: a **legal** rung whose post-move store would not
 validate, asserted to carry the finding text the Markdown arm prints, on both output formats. A fix
 that only threads the lifecycle's legal-move list through would leave this case red.
+
+## Closed 2026-11-09
+
+Obsolete. The faulty arm was `eventlog_invocation` returning `SemanticMismatch`. Commit `742bb0713` ("refactor: remove Eventlog from AEP", released in 0.62.0) deleted the `aep-planning-migration` and `aep-backend-eventlog` crates; `CHANGELOG.md` 0.62.0 *Removed* lists it. A search for `eventlog_invocation` and `SemanticMismatch` over `crates/` at `824869fec` finds nothing; an `aep.project/2` plan is refused by every planning verb, so there is no Eventlog arm to compare with the Markdown one.

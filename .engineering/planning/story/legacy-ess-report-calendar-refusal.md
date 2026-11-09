@@ -2,16 +2,22 @@
 format: aep.planning-md/3
 id: story:legacy-ess-report-calendar-refusal
 kind: story
-status: draft
+status: active
 title: Legacy ESS report dates refuse before the planning backend panics
 tags:
 - measured
+relations:
+- decomposes: epic:zero-open-issues-2026-11-09
+- serves: vision:O2
 scope:
 - confidence: cited
   path: crates/edge/aep-cli/src/planning.rs
 - confidence: inferred
-  path: crates/edge/aep-cli/tests
-revision: 3
+  path: crates/edge/aep-cli/tests/ess_report_calendar.rs
+revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-09T22:07:44Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-11-09T22:07:45Z", actor: "human:timo", revision: 8, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 ## Outcome
 
@@ -27,10 +33,19 @@ The new report2 path already returns PlanningTimestampUnsupported before opening
 
 ## Acceptance
 
-- Reproduce actual legacy report1 import at the calendar boundary and the two observed upper-i64 values; return a located error rather than panic and retain exact original source time.
-- Refuse before opening an absent store or mutating an existing one; exercise the actual CLI path.
-- Preserve valid in-range legacy evidence, zero-total refusal, and existing signed/unsigned transport semantics. Do not relax the runtime's calendar contract or narrow the library's valid u64 input domain.
-- Preserve the separately checked report2 route and exact typed replay.
+- `aep plan artifact evidence <id> --from <report>` on an `ess-conformance-report/1` whose
+  `completed_at` is `9007199254740993` or `9223372036854775807` exits 1 (not 101), prints no panic
+  and prints one line starting `PlanningTimestampUnsupported:` that names the report's
+  `completed_at` as given and the timestamp it renders as — the same text the report/2 branch
+  prints (`crates/edge/aep-cli/src/planning.rs:7533`). Before this story both values exit 101 with
+  `EnvelopeError("recorded_at \"292278994-08-17T07:12:55Z\" is not a valid runtime timestamp")`.
+- The refusal is decided by `entity_core::is_valid_timestamp`, the same check the report/2 branch
+  uses, before the store is opened: on an existing store every file under `.engineering/` is
+  byte-identical before and after, and with `--store` naming an absent directory that directory is
+  not created.
+- The same command on the same report with `completed_at` `1700000000000` still exits 0 and records
+  one evidence file; a report/1 with zero scenarios is still refused as before; the report/2
+  route's existing tests still pass unchanged.
 
 ## Scope
 
@@ -42,3 +57,9 @@ The new report2 path already returns PlanningTimestampUnsupported before opening
 ## Out of Scope
 
 ESS writer changes, default/version movement, rewriting stored evidence, changing report1's aggregate category meaning, or implementing a general backend panic policy.
+
+## Triage 2026-11-09
+
+Still present at `824869fec`, and reproduced on a Git-native store. The `ess-conformance-report/1` branch of `recorded_from_report` (`crates/edge/aep-cli/src/planning.rs:7626-7635`) takes `completed_at` with `as_i64` and has no `entity_core::is_valid_timestamp` check; the report/2 branch has it (`:7531-7534`) and so does `recorded_coverage` (`:7667-7670`). The panic is now at `crates/plan/aep-backend-entity/src/lib.rs:265-267`.
+
+With aep 0.79.0, `aep plan artifact evidence story:probe --from r.json` with `completed_at` 9007199254740993 or 9223372036854775807 exits 101 on `EnvelopeError("recorded_at \"292278994-08-17T07:12:55Z\" is not a valid runtime timestamp")`; the store stays byte-identical; `1700000000000` records normally.

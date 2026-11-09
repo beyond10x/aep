@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: task:decomposes-edge-examples
 kind: task
-status: draft
+status: archived
 title: Correct the two examples that teach derived_from for an epic edge
 summary: decomposer.md's creation example and the planning skill's worked decomposition teach --relate decomposes:epic:..., matching all 39 stories in the store and what D4 asserts.
 owner: eval
@@ -11,7 +11,10 @@ tags:
 relations:
 - decomposes: specification:agent-charter-eval-cases
 - derived_from: task:w4-1-agent-eval-cases
-revision: 1
+- decomposes: epic:zero-open-issues-2026-11-09
+revision: 3
+transitions:
+- {from: "draft", to: "archived", at: "2026-11-09T22:07:31Z", actor: "human:timo", revision: 3}
 ---
 # Task: the two examples that teach the wrong epic edge
 
@@ -58,3 +61,7 @@ Verifiable on its own, with no API call and without any other task in this set e
 E3 is exact rather than approximate: it undoes the substitution on the current file and requires the
 result to be byte-identical to the file at the pinned pre-task revision in
 `checks/contracts/pre-task-blobs.txt`. Any other edit anywhere in either file survives that undo.
+
+## Closed 2026-11-09
+
+Obsolete here. Its two targets, `integrations/claude-code/agents/decomposer.md` and `integrations/claude-code/skills/planning/SKILL.md`, left this repository in `44366194d` ("feat: separate AEP from ESS and agent plugins"); `integrations/` does not exist at `824869fec`. In the published plugin (aep plugin 0.26.0) both examples read `--relate decomposes:epic:passkey-login` (`skills/planning/SKILL.md` § 6 and `skills/planning/references/decomposer.md:155`), and neither holds `derived_from:epic`.

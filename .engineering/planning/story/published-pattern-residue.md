@@ -2,16 +2,32 @@
 format: aep.planning-md/3
 id: story:published-pattern-residue
 kind: story
-status: draft
+status: active
 title: Three published patterns still disagree with the constructors they are published for
+relations:
+- decomposes: epic:zero-open-issues-2026-11-09
+- serves: vision:O2
 scope:
 - confidence: cited
   path: crates/drive/aep-driver-spec
 - confidence: cited
+  path: crates/drive/aep-driver-spec/tests/published_pattern_evaluated.rs
+- confidence: cited
   path: crates/govern/aep-domain
 - confidence: cited
+  path: crates/govern/aep-domain/src/artifact.rs
+- confidence: cited
+  path: crates/govern/aep-domain/src/domain_event.rs
+- confidence: cited
+  path: crates/govern/aep-domain/src/entity.rs
+- confidence: cited
+  path: crates/govern/aep-domain/src/facts.rs
+- confidence: cited
   path: schemas/generated/protocol.schema.json
-revision: 7
+revision: 16
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-09T22:07:43Z", actor: "human:timo", revision: 15, decided_on: {"recorded":{"review_outcome":1}}}
+- {from: "proposed", to: "active", at: "2026-11-09T22:07:43Z", actor: "human:timo", revision: 16, decided_on: {"recorded":{"review_outcome":1}}}
 ---
 # Story: Three published patterns still disagree with the constructors they are published for
 
@@ -65,9 +81,23 @@ ids containing `_` under `.engineering/planning`, so nothing in this tree reache
 
 ## Acceptance
 
-Each of the four publishes a pattern derived from its own validator rather than paraphrasing it, and
-`every_published_identifier_rule_accepts_exactly_what_its_constructor_accepts_in_its_own_shape`
-holds with an empty `OPEN_DIVERGENCES`.
+- `FactPattern::PATTERN`, `EntityType`'s and `DomainEventType`'s published patterns are composed
+  from the same segment definitions their constructors check, and
+  `every_published_identifier_rule_accepts_exactly_what_its_constructor_accepts_in_its_own_shape`
+  (`crates/drive/aep-driver-spec/tests/published_pattern_evaluated.rs`) passes with
+  `OPEN_DIVERGENCES` empty. Before this story it pins three rows: EntityType 66, DomainEventType 49,
+  FactPattern 96.
+- The shape corpus gains `a*`, `*a` and `a**` (the hole under *Not established*), and with them
+  loosening `FactPath::PATTERN` to include `*` in its class makes that test fail; restored, it
+  passes.
+- `ArtifactId` is measured first, with the same test's comparison over its own shape including the
+  strings `_a:b`, `.a:b`, `a:.`, `a:-`, `a:_` and `a:/`. If pattern and constructor disagree on any of
+  them, the pattern is changed to accept exactly what `ArtifactId::new` accepts and a case in that
+  test asserts each of the six strings is accepted by both or refused by both. If they already agree,
+  that case is still added and passes before and after, and the story records that `ArtifactId` was
+  already consistent.
+- `cargo xtask schema` leaves `schemas/generated/` unchanged or the changed patterns are the only
+  difference, and `schema-check` passes.
 
 ## Out of Scope
 
@@ -90,3 +120,11 @@ contains an alphanumeric glued to `*`, because `charset_corpus`'s alphabet has n
 `shape_corpus` only joins segments with `.`, `:` and `/`. Closing it means adding `a*`, `*a`, `a**`
 to the shape corpus — which moves the pinned counts above. Whoever takes this story should expect to
 re-pin them.
+
+## Triage 2026-11-09
+
+Still present at `824869fec`, for three of the four. `crates/govern/aep-domain/src/facts.rs:488` still has `*` inside the character class; `crates/govern/aep-domain/src/entity.rs:282` and `crates/govern/aep-domain/src/domain_event.rs:213` keep the loose classes; `crates/drive/aep-driver-spec/tests/published_pattern_evaluated.rs:1594` pins `OPEN_DIVERGENCES` to three rows: EntityType 66, DomainEventType 49, FactPattern 96.
+
+`ArtifactId` is no longer in that list. Its `PATTERN` (`artifact.rs:135`) still anchors both halves on an alphanumeric while `new` takes a separator anywhere; whether the corpus still reaches it was not run at triage (inferred). The implementor measures it first.
+
+The open question's default is taken: the alternation the story gives, composed from one definition.

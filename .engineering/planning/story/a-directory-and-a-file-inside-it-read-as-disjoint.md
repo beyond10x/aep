@@ -2,11 +2,26 @@
 format: aep.planning-md/3
 id: story:a-directory-and-a-file-inside-it-read-as-disjoint
 kind: story
-status: draft
+status: active
 title: waves compares scope entries as strings, so a directory never collides with its own contents
 relations:
 - serves: vision:O3
-revision: 1
+- decomposes: epic:zero-open-issues-2026-11-09
+scope:
+- confidence: inferred
+  path: crates/edge/aep-cli/src/planning.rs
+- confidence: cited
+  path: crates/edge/aep-cli/src/planning/waves.rs
+- confidence: inferred
+  path: crates/edge/aep-cli/tests/wave_derivation.rs
+- confidence: cited
+  path: crates/govern/aep-domain/src/artifact.rs
+- confidence: inferred
+  path: website/docs/concepts/waves.md
+revision: 9
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-09T22:07:26Z", actor: "human:timo", revision: 6}
+- {from: "proposed", to: "active", at: "2026-11-09T22:07:27Z", actor: "human:timo", revision: 7}
 ---
 ## What is wrong
 
@@ -49,3 +64,11 @@ surfaces at merge — which is the outcome the scoping step exists to prevent.
   and never placed in one wave.
 - The same two, spelled with and without a trailing separator, give the same answer.
 - A story scoped to a sibling file of that directory is still disjoint from it.
+
+## Triage 2026-11-09
+
+Still present at `824869fec`. `crates/edge/aep-cli/src/planning/waves.rs:206` places a story with `surfaces[wave].contains(path)`, an exact string match, and `:256` finds a collision with `entry.path == left.path`. The doc comment at `crates/govern/aep-domain/src/artifact.rs:1747-1750` and the `waves --help` text say nothing is normalised; both change with the fix.
+
+Reproduced with aep 0.79.0 in a throwaway store: four stories scoped to `roles/`, `roles/decision.yaml`, `roles` and `roles.md` print `wave 1: story:dir story:file story:sibling story:slash` and `1 wave(s), 0 collision(s)`, exit 0.
+
+The third item of *Shape* (a file and a directory of one name) is not in *Acceptance* and is not built here: the verb reads scope entries, not the tree (coordinator's reading).
