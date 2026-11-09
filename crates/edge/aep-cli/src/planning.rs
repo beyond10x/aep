@@ -1114,10 +1114,9 @@ pub(crate) enum ArtifactCommand {
     /// `inferred`, worked out and not read anywhere. The two are kept apart because a scope that
     /// mixes them is trusted exactly where it is weakest.
     ///
-    /// **Nothing is normalised.** `crates/govern/aep-domain` and `crates/govern/aep-domain/src/artifact.rs` are
-    /// two surfaces, and `waves` reports collisions at whatever granularity is declared here. A
-    /// normaliser would have to decide that a directory contains a file, which is a claim about a
-    /// working tree the store cannot see.
+    /// **A path holds every path under it.** `waves` reports `crates/x` and `crates/x/src/lib.rs`
+    /// as a collision, compared by path component (`crates/x` does not hold `crates/x.md`), and
+    /// `crates/x/` is the same surface as `crates/x`. The path is stored as written.
     ///
     /// The `## Scope` section stays what a person reads; this is what a computation reads, and the
     /// scoper writes both.
@@ -1151,8 +1150,10 @@ pub(crate) enum ArtifactCommand {
     /// inventing one would be worse than saying so.
     ///
     /// **It reads and prints.** Choosing which wave to run is the operator's, and so is deciding
-    /// that a reported collision may be worked anyway. Granularity is whatever the entries say:
-    /// nothing here normalises `crates/x/src/lib.rs` to `crates/x`.
+    /// that a reported collision may be worked anyway. A path holds every path under it, by
+    /// component and with a trailing `/` ignored: `crates/x` collides with `crates/x/src/lib.rs`,
+    /// printed as the narrower path, and not with `crates/x.md`. Only the entries are read, never
+    /// the working tree.
     Waves {
         /// Where the plan is and how to render.
         #[command(flatten)]

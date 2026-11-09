@@ -1744,10 +1744,12 @@ impl fmt::Display for ScopeConfidence {
 /// safe one. Here it is a field, so `aep artifact waves` can derive the answer and name what it
 /// excluded.
 ///
-/// **Nothing is normalised.** `crates/govern/aep-domain` and `crates/govern/aep-domain/src/artifact.rs` are two
-/// surfaces, and the verb reports collisions at whatever granularity the entries declare. A
-/// normaliser would have to decide that a directory contains a file, which is a claim about a
-/// working tree this crate cannot see and must not guess at.
+/// **A path holds every path under it.** The verb compares entries by path component, so
+/// `crates/govern/aep-domain` collides with `crates/govern/aep-domain/src/artifact.rs` and with
+/// neither `crates/govern/aep-domain.md` nor `crates/govern/aep-domain-x`, and a trailing `/` does
+/// not change the answer. That is read off the entries alone: this crate cannot see a working tree,
+/// so the path is stored as written and nothing here decides whether it names a file or a
+/// directory.
 ///
 /// The document form is a mapping, and the bare path is accepted on the way in:
 ///
@@ -3786,9 +3788,9 @@ mod tests {
         );
     }
 
-    /// The one rule the path has, and the reason it has no others: the verb reports collisions at
-    /// the declared granularity and normalises nothing, so `crates/x` and `crates/x/src/lib.rs` are
-    /// two surfaces on purpose.
+    /// The one rule the path has, and the reason it has no others: the path is stored as written,
+    /// at any granularity, and deciding that `crates/x` holds `crates/x/src/lib.rs` is the verb's
+    /// comparison, not a rewrite of the entry.
     #[test]
     fn a_scope_entry_refuses_an_empty_path_and_accepts_any_granularity() {
         assert!(ScopeEntry::from_node(&Node::Text(String::new())).is_err());

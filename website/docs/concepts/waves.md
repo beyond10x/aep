@@ -40,8 +40,11 @@ scope:
 ```
 
 Scope is a **story** field. Other kinds are refused, because a task inherits the scope of the story
-it decomposes. Nothing is normalized: `src` and `src/checkout.rs` are two different surfaces, and
-collisions are reported at whatever granularity you declared.
+it decomposes. A path is a prefix of every path under it, compared by path component: `src`
+contains `src/checkout.rs`, so a story scoped to the directory and one scoped to the file collide.
+`src` does not contain `src.md` or `srcx/main.rs`. A trailing `/` changes nothing: `src` and `src/`
+are one surface. `waves` reads the scope entries, not your files, so it cannot tell a file from a
+directory of the same name.
 
 ## Waves
 
@@ -59,9 +62,10 @@ unassessed: story:pay-by-card
 
 The rules:
 
-- Inside one wave, no two stories share a scope path.
+- Inside one wave, no two stories share a scope path, and no story's path contains another's.
 - A story is never in the same wave as anything it `depends_on`, and never in an earlier one.
-- Every pair that shares a path is printed as a `collision`. An inferred entry **counts** as a
+- Every pair that shares a path is printed as a `collision`, with the narrower path: a story on
+  `src` and one on `src/checkout.rs` print `src/checkout.rs`. An inferred entry **counts** as a
   collision, because placing two stories together on the strength of a guess is exactly the mistake
   this command exists to catch.
 - A story with no scope is printed under `unassessed` and is **never placed**. An unassessed story
