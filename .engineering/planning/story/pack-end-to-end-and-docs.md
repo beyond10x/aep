@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:pack-end-to-end-and-docs
 kind: story
-status: draft
+status: active
 title: A 1000-story store packs and unpacks with every answer unchanged, and the docs say how
 relations:
 - decomposes: epic:store-pack-closed-artifacts
@@ -10,7 +10,10 @@ relations:
 - serves: vision:O2
 - depends_on: story:pack-and-unpack-verbs
 - depends_on: story:validate-checks-packs
-revision: 2
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
+- {from: "proposed", to: "active", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
 ---
 # Story: a 1000-story store packs and unpacks with every answer unchanged, and the docs say how
 
@@ -30,8 +33,10 @@ The CLI reference rows and the changelog lines belong to the stories that add ea
 
 ## Acceptance
 
-On a generated store of at least 1000 closed stories with evidence, `pack`, a commit and
-`unpack --all` change the tracked file count and nothing any read verb prints. Checked by:
+A reader of the store's documentation can pack and unpack a 1000-story store as written, and only
+the tracked file count changes. Checked by (the generated store holds implemented, rejected and
+archived stories, archived review-results with findings blocks, and open stories relating to closed
+ones):
 
 - an end-to-end test that prints the tracked file count under `.engineering` before `pack`, after
   `pack` and its commit, and after `unpack --all`; it asserts the after-pack count equals the before

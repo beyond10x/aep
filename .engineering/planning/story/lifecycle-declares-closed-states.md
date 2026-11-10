@@ -2,13 +2,16 @@
 format: aep.planning-md/3
 id: story:lifecycle-declares-closed-states
 kind: story
-status: draft
+status: active
 title: A lifecycle document declares which of its states are closed
 relations:
 - decomposes: epic:store-pack-closed-artifacts
 - informed_by: architecture-design:store-pack
 - serves: vision:O2
-revision: 2
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-10T10:17:35Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":3}}}
+- {from: "proposed", to: "active", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":3}}}
 ---
 # Story: a lifecycle document declares which of its states are closed
 
@@ -31,8 +34,8 @@ the document has to say it.
 
 ## Acceptance
 
-`aep plan artifact lifecycle <kind>` prints the closed set its lifecycle document declares plus its
-terminal states, and nothing else counts as closed. Checked by:
+A kind's closed set is exactly the states its lifecycle document lists under `closed:` plus its
+terminal states, everywhere the tooling reads, prints, validates or publishes it. Checked by:
 
 - a CLI test asserting the printed closed line for `story` (`implemented`, `rejected`, `archived`),
   `review-result` (`archived`) and `approval-record` (none);

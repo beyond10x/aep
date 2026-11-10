@@ -6,7 +6,7 @@ status: draft
 title: 'Packing closed artifacts: aep.pack/1, one read overlay, unpack, validate'
 relations:
 - designs: epic:store-pack-closed-artifacts
-revision: 2
+revision: 3
 ---
 # Design: packing closed artifacts out of the working tree
 
@@ -52,6 +52,7 @@ Every verb reads loose files through a handful of functions; nothing else in the
 | evidence files as records | `crates/edge/aep-cli/src/planning.rs` `evidence_problems` | `validate` |
 | Git history of a path | `crates/edge/aep-cli/src/planning/git_record.rs` `committed_versions` (the walk stops at a deletion and at the add), `cat_file_batch` | `validate` immutability of evidence and review-results, redaction replay |
 | evidence directory listing | `crates/edge/aep-cli/src/planning.rs` `redact` (`records` closure) | `redact` |
+| uncommitted evidence changes | `crates/edge/aep-cli/src/planning/git_record.rs` `changed_evidence` (`diff HEAD --diff-filter=MTD`) | `validate` |
 | the store version | `crates/govern/aep-domain/src/project.rs` `ProjectVersion`, `PROJECT_VERSION_V5`, `GitStore` (no fields) | every verb |
 
 `aep plan store migrate git` on a `/5` store only drops duplicate transitions (operator's request);

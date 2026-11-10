@@ -2,13 +2,16 @@
 format: aep.planning-md/3
 id: story:pack-format-and-overlay-read
 kind: story
-status: draft
+status: active
 title: Every reader answers over packed records as over loose files
 relations:
 - decomposes: epic:store-pack-closed-artifacts
 - informed_by: architecture-design:store-pack
 - serves: vision:O2
-revision: 2
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
+- {from: "proposed", to: "active", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
 ---
 # Story: every reader answers over packed records as over loose files
 
@@ -33,9 +36,9 @@ The pack module (parse, render, digest, path grammar) is owned here; `pack`/`unp
 
 ## Acceptance
 
-Every read verb prints byte-identical output over a fixture store whether its closed artifacts and
-their evidence are loose or held in a pack written by this story's pack module, and every write that
-would rewrite a packed artifact refuses by name and writes nothing. Checked by:
+Every verb treats a packed record as the same record it was when loose. Checked by (the fixture
+holding a pack is `version: aep.project/6`, and the move into the pack is committed before any
+`validate` runs, so this story does not depend on `story:validate-checks-packs`):
 
 - a CLI test comparing captured stdout and exit codes of `list`, `list --status implemented`,
   `graph`, `show <id>`, `history <id>`, `explain <id>`, `findings <id>`, `review-value`, `blocked`,
@@ -53,6 +56,9 @@ would rewrite a packed artifact refuses by name and writes nothing. Checked by:
   record, a length past the end, an unsorted or repeated path, and a path outside the grammar
   (`planning/<kind>/<name>.md`, `evidence/<kind>/<name>/<file>.json`; no `..`, absolute, backslash,
   empty or dot segment, control character), each with a stable code;
+- a test of the overlay's holder lookup: for a path, it lists every place that holds it (the loose
+  file and each pack), with the bytes each holds; a fixture with two packs (as two branches that
+  packed different artifacts leave behind) reads both;
 - a test that `version: aep.project/6` loads and every verb that accepts `/5` accepts it, and that
   `version: aep.project/7` is refused with `unsupported_protocol_version` naming the version (the
   mechanism by which aep 0.79.0 refuses `/6`).
@@ -69,5 +75,6 @@ would rewrite a packed artifact refuses by name and writes nothing. Checked by:
 
 - Writing packs from the store, unpacking: `story:pack-and-unpack-verbs`.
 - `validate`'s checks of pack integrity and provenance, and the Git history walk across a pack
-  commit: `story:validate-checks-packs`. Fixtures here commit loose files only, or commit no packed
-  review-result, so this story's `validate` runs do not depend on that walk.
+  commit: `story:validate-checks-packs`. This story owns the holder lookup both
+  `story:pack-and-unpack-verbs` and `story:validate-checks-packs` use; they call it and do not add
+  their own.

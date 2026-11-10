@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:validate-checks-packs
 kind: story
-status: draft
+status: active
 title: validate holds every pack to the bytes it replaced
 relations:
 - decomposes: epic:store-pack-closed-artifacts
@@ -10,7 +10,10 @@ relations:
 - serves: vision:O2
 - depends_on: story:pack-format-and-overlay-read
 - depends_on: story:lifecycle-declares-closed-states
-revision: 2
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":5}}}
+- {from: "proposed", to: "active", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":5}}}
 ---
 # Story: `validate` holds every pack to the bytes it replaced
 
@@ -54,6 +57,9 @@ naming the pack file and the record path where one exists. Checked by CLI tests,
 - an evidence file that had two different committed versions while loose (the first committed
   version differs from the last) and was then packed: refused (immutability), as it is today while
   loose — the history walk crosses the pack commit;
+- a pack written and the loose files removed but not yet committed: `validate` does not report the
+  packed evidence files as rewritten (`git_record::changed_evidence` reads a deletion whose bytes a
+  pack holds as a move, not a change);
 - a packed review-result with a redaction record: `valid` (replay over the first committed version
   reproduces the packed text); the same store with a packed or loose copy that still contains the
   redacted literal: refused, and the output does not contain the literal.
