@@ -314,7 +314,7 @@ fn swap_same_length(bytes: &[u8], from: &str, to: &str) -> Vec<u8> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Invariant 2: digest verification on every read.
+// The store-pack invariant on digests: digest verification on every read.
 // ---------------------------------------------------------------------------------------------
 
 /// A record's bytes changed in place in its pack, its header digest and the pack's file name left
@@ -492,7 +492,7 @@ fn git_ceiling_directories_does_not_skip_pack_provenance() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Invariant 3: no read or write outside `.engineering`, never through a symbolic link.
+// The store-pack invariant on paths: no read or write outside `.engineering`, never through a symbolic link.
 // ---------------------------------------------------------------------------------------------
 
 /// `.engineering/planning` replaced in the working tree by a symbolic link to a directory outside
@@ -571,7 +571,7 @@ fn unpack_refuses_ids_and_pack_names_outside_the_grammar_and_writes_nothing() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Invariant 4: a redacted literal is never re-exposed.
+// The store-pack invariant on redaction: a redacted literal is never re-exposed.
 // ---------------------------------------------------------------------------------------------
 
 const LITERAL: &str = "Zorblax";
