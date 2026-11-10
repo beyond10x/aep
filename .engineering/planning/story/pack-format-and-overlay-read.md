@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:pack-format-and-overlay-read
 kind: story
-status: active
+status: implemented
 title: Every reader answers over packed records as over loose files
 relations:
 - decomposes: epic:store-pack-closed-artifacts
@@ -51,10 +51,11 @@ scope:
   path: crates/plan/aep-backend-markdown/tests/pack_adversary.rs
 - confidence: cited
   path: website/docs/reference/project-file.md
-revision: 21
+revision: 22
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
+- {from: "active", to: "implemented", at: "2026-11-10T19:36:14Z", actor: "human:timo", revision: 22, decided_on: {"recorded":{"test_result":1,"review_outcome":14,"verification":2}}}
 ---
 # Story: every reader answers over packed records as over loose files
 

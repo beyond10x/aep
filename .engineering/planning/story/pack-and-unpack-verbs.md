@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:pack-and-unpack-verbs
 kind: story
-status: active
+status: implemented
 title: aep plan store pack and unpack move closed work in and out of packs
 relations:
 - decomposes: epic:store-pack-closed-artifacts
@@ -35,10 +35,11 @@ scope:
   path: crates/plan/aep-backend-markdown/src/pack.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 19
+revision: 20
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
+- {from: "active", to: "implemented", at: "2026-11-10T19:36:16Z", actor: "human:timo", revision: 20, decided_on: {"recorded":{"test_result":1,"review_outcome":16,"verification":2}}}
 ---
 # Story: `aep plan store pack` and `unpack` move closed work in and out of packs
 

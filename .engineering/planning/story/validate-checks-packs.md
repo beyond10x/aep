@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:validate-checks-packs
 kind: story
-status: active
+status: implemented
 title: validate holds every pack to the bytes it replaced
 relations:
 - decomposes: epic:store-pack-closed-artifacts
@@ -33,10 +33,11 @@ scope:
   path: crates/govern/aep-domain/src/error.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 16
+revision: 17
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":5}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":5}}}
+- {from: "active", to: "implemented", at: "2026-11-10T19:36:19Z", actor: "human:timo", revision: 17, decided_on: {"recorded":{"test_result":1,"review_outcome":15,"verification":2}}}
 ---
 # Story: `validate` holds every pack to the bytes it replaced
 
