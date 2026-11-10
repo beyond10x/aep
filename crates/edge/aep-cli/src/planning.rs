@@ -250,14 +250,7 @@ impl StoreLocation {
 /// `aep.project/5` lays them out. Anywhere else it is `evidence` inside `planning` itself, so two
 /// stores that share a parent never share, and count, each other's records.
 pub(crate) fn evidence_beside(planning: &Path) -> PathBuf {
-    let evidence = aep_domain::project::GIT_EVIDENCE_DIRECTORY;
-    let absolute = std::path::absolute(planning).unwrap_or_else(|_| planning.to_path_buf());
-    match absolute.parent() {
-        Some(parent) if parent.file_name() == Some(project_directory().as_ref()) => {
-            planning.parent().map_or_else(|| parent.join(evidence), |p| p.join(evidence))
-        }
-        _ => planning.join(evidence),
-    }
+    aep_backend_markdown::pack::evidence_beside(planning, project_directory())
 }
 
 /// The plan the project whose planning directory `path` is names, when `path`'s parent is a
@@ -754,10 +747,48 @@ fn open(args: &StoreLocation, with_backend: bool) -> Result<Opened> {
 /// ladders the writing verbs carry — so a caller that only reads may pass a location that answers
 /// nothing else.
 pub(crate) fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) -> Result<Opened> {
+    open_plan_reporting(plan, args, with_backend, true)
+}
+
+/// Refuses a store with a pack that does not parse, naming the pack file and the problem.
+///
+/// For a read that does not go through [`open_plan`]: a history reads the packs directly, and a
+/// pack it cannot read is records it would otherwise report as none.
+fn refuse_unparsed_packs(root: &Path, evidence: &Path) -> Result<()> {
+    let overlay = aep_backend_markdown::pack::Overlay::new(root, evidence);
+    for pack in overlay.packs() {
+        if let Err(error) = pack.pack() {
+            bail!("{}: not a pack: {error}", pack.file().display());
+        }
+    }
+    Ok(())
+}
+
+/// [`open_plan`], where `refuse_packs` says whether a pack that does not parse refuses the read.
+///
+/// Every read verb refuses: a pack that does not parse hides the records it holds, so any answer
+/// over the rest would be an answer over a store nobody can see whole. `validate` is the one caller
+/// that passes `false`, because it reports the pack as a problem of its own.
+fn open_plan_reporting(
+    plan: Plan,
+    args: &StoreLocation,
+    with_backend: bool,
+    refuse_packs: bool,
+) -> Result<Opened> {
     match &plan {
         Plan::Git { root, evidence } => {
             let store = MarkdownStore::open(root.clone()).with_evidence(evidence.clone());
             let report = store.load();
+            if refuse_packs {
+                if let Some(failure) = report.failures.iter().find(|failure| {
+                    failure
+                        .path
+                        .extension()
+                        .is_some_and(|extension| extension == aep_backend_markdown::pack::EXTENSION)
+                }) {
+                    bail!("{failure}");
+                }
+            }
             if with_backend {
                 require_clean(&store, &report)?;
             } else {
@@ -1947,7 +1978,7 @@ pub(crate) fn declared_membership(root: &Path) -> Result<aep_domain::workspace::
 /// Refuses an unreadable store rather than seeding a partial one: an entity surface answering
 /// about nine of ten artifacts, with nothing saying which one is missing, is worse than an error.
 pub(crate) fn graph_at(root: &Path) -> Result<ArtifactGraph> {
-    let store = MarkdownStore::open(root);
+    let store = MarkdownStore::open(root).with_evidence(evidence_beside(root));
     let report = store.load();
     require_clean(&store, &report)?;
     let repository = root
@@ -6105,7 +6136,7 @@ fn validate(
     strict: bool,
     outcome_within: u64,
 ) -> Result<ExitCode> {
-    let opened = open(&args.location, false)?;
+    let opened = open_plan_reporting(args.location.plan()?, &args.location, false, false)?;
     let registry = args.lifecycles()?;
     let required_since = args.location.findings_required_since()?;
     let mut summary = findings(&opened, &registry, &args.repository_root(), required_since);
@@ -6615,8 +6646,15 @@ fn review_problems(
         if differs.is_empty() {
             continue;
         }
-        let records: Vec<_> = aep_backend_markdown::journal::redaction_records_git(evidence, id)
-            .into_iter()
+        let records: Vec<_> = match aep_backend_markdown::journal::redaction_records_git(evidence, id)
+        {
+            Ok(records) => records,
+            Err(error) => {
+                problems.push(format!("{id}: its redaction records do not read: {error}"));
+                continue;
+            }
+        }
+        .into_iter()
             .filter(|(_, entry)| entry.revision > first.frontmatter.revision)
             .collect();
         if records.is_empty() {
@@ -7948,6 +7986,7 @@ fn history(args: &StoreArgs, id: &str) -> Result<ExitCode> {
     let id = artifact_id(id)?;
     let plan = args.location.plan()?;
     if let Plan::Git { root, evidence } = &plan {
+        refuse_unparsed_packs(root, evidence)?;
         // The document's own transitions and its evidence files: no backend, no journal.
         let (entries, unreadable) =
             aep_backend_markdown::journal::history_git(root, evidence, &id);

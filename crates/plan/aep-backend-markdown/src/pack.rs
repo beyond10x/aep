@@ -203,6 +203,9 @@ pub fn check_path(path: &str) -> Result<(), PackError> {
             "" => return refuse("has an empty segment"),
             "." => return refuse("has a `.` segment"),
             ".." => return refuse("has a `..` segment"),
+            // Readers skip dot-names (a write's temporary file is one), so a record the parser
+            // admitted under one would be held and never listed.
+            dotted if dotted.starts_with('.') => return refuse("has a segment starting with `.`"),
             _ => {}
         }
     }
@@ -384,6 +387,10 @@ fn record_line(line: &[u8], position: usize) -> Result<(&str, usize, &str), Pack
     if length.is_empty() || !length.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(malformed("has a length that is not a number"));
     }
+    // One spelling per length, so a pack that parses is the bytes `render` writes for its records.
+    if length.len() > 1 && length.starts_with('0') {
+        return Err(malformed("has a length with a leading zero"));
+    }
     let length: usize = length
         .parse()
         .map_err(|_| malformed("has a length that is not a number"))?;
@@ -461,6 +468,30 @@ impl PackFile {
     #[must_use]
     pub fn pack(&self) -> &Result<Arc<Pack>, PackError> {
         &self.pack
+    }
+}
+
+/// The evidence directory of a Git-native store whose documents are in `planning`, and so, beside
+/// it, where its packs are: the one derivation every reader of the store uses.
+///
+/// Inside a project directory (`project_directory`, `.engineering` by default) it is the sibling
+/// `evidence`. Anywhere else it is `evidence` inside `planning` itself, so two stores that share a
+/// parent never share, and count, each other's records.
+#[must_use]
+pub fn evidence_beside(planning: &Path, project_directory: &str) -> PathBuf {
+    let evidence = aep_domain::project::GIT_EVIDENCE_DIRECTORY;
+    let absolute = std::path::absolute(planning).unwrap_or_else(|_| planning.to_path_buf());
+    match absolute.parent() {
+        Some(parent)
+            if parent
+                .file_name()
+                .is_some_and(|name| name == project_directory) =>
+        {
+            planning
+                .parent()
+                .map_or_else(|| parent.join(evidence), |sibling| sibling.join(evidence))
+        }
+        _ => planning.join(evidence),
     }
 }
 
@@ -582,17 +613,13 @@ impl Overlay {
         Self::new(planning, evidence)
     }
 
-    /// The overlay for a store known only by its planning directory: `<project>/planning` has
-    /// `<project>/evidence` beside it, any other directory keeps `evidence` inside itself.
+    /// The overlay for a store known only by its planning directory: the evidence directory is
+    /// [`evidence_beside`], with the default project directory.
     ///
     /// A caller that knows the evidence directory passes it to [`Self::new`] instead.
     pub fn beside_planning(planning: impl Into<PathBuf>) -> Self {
         let planning = planning.into();
-        let evidence = if planning.file_name().is_some_and(|name| name == "planning") {
-            planning.with_file_name("evidence")
-        } else {
-            planning.join("evidence")
-        };
+        let evidence = evidence_beside(&planning, aep_domain::project::PROJECT_DIRECTORY);
         Self::new(planning, evidence)
     }
 

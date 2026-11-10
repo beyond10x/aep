@@ -562,7 +562,14 @@ fn evidence_files(evidence: &Path) -> usize {
 /// only a connection answers, and [`reaches_a_network`] is what reports that instead.
 fn absent(plan: &Plan) -> Option<String> {
     match plan {
-        Plan::Git { root, .. } if !root.is_dir() => Some(root.display().to_string()),
+        // A store whose every artifact is packed has no planning directory in a clone: Git keeps
+        // no empty directory. It is absent only when no pack is there either.
+        Plan::Git { root, evidence } if !root.is_dir() => {
+            let packed = !aep_backend_markdown::pack::Overlay::new(root.clone(), evidence.clone())
+                .packs()
+                .is_empty();
+            (!packed).then(|| root.display().to_string())
+        }
         Plan::Sqlite { path } if !path.is_file() => Some(path.display().to_string()),
         _ => None,
     }

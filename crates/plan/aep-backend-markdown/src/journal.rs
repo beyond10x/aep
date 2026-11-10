@@ -426,16 +426,22 @@ pub fn read_git(root: &Path, evidence: &Path) -> (Vec<Entry>, usize) {
     let overlay = Overlay::new(root, evidence);
     let mut entries = Vec::new();
     let mut unreadable = 0;
-    for kind in subdirectories(&overlay, "planning") {
-        for file in files_with(&overlay, &format!("planning/{kind}"), "md") {
+    for kind in listed(subdirectories(&overlay, "planning"), &mut unreadable) {
+        for file in listed(
+            files_with(&overlay, &format!("planning/{kind}"), "md"),
+            &mut unreadable,
+        ) {
             match document_entries(&overlay, &format!("planning/{kind}/{file}")) {
                 Some(found) => entries.extend(found),
                 None => unreadable += 1,
             }
         }
     }
-    for kind in subdirectories(&overlay, "evidence") {
-        for name in subdirectories(&overlay, &format!("evidence/{kind}")) {
+    for kind in listed(subdirectories(&overlay, "evidence"), &mut unreadable) {
+        for name in listed(
+            subdirectories(&overlay, &format!("evidence/{kind}")),
+            &mut unreadable,
+        ) {
             let (found, skipped) = evidence_in(&overlay, &format!("evidence/{kind}/{name}"));
             entries.extend(found);
             unreadable += skipped;
@@ -514,23 +520,24 @@ pub fn evidence_records_git(
 ) -> (Vec<(PathBuf, Entry)>, usize) {
     let overlay = Overlay::new(root, evidence);
     let document = format!("planning/{}/{}.md", artifact.namespace(), artifact.name());
+    let mut records = Vec::new();
+    let mut unreadable = 0;
     let directories: Vec<String> = if overlay.exists(&document).unwrap_or(false) {
         vec![evidence_directory(artifact)]
     } else {
-        subdirectories(&overlay, "evidence")
-            .iter()
-            .flat_map(|kind| {
-                subdirectories(&overlay, &format!("evidence/{kind}"))
-                    .into_iter()
-                    .map(|name| format!("evidence/{kind}/{name}"))
-                    .collect::<Vec<_>>()
-            })
-            .collect()
+        let mut found = Vec::new();
+        for kind in listed(subdirectories(&overlay, "evidence"), &mut unreadable) {
+            for name in listed(
+                subdirectories(&overlay, &format!("evidence/{kind}")),
+                &mut unreadable,
+            ) {
+                found.push(format!("evidence/{kind}/{name}"));
+            }
+        }
+        found
     };
-    let mut records = Vec::new();
-    let mut unreadable = 0;
     for directory in directories {
-        for file in files_with(&overlay, &directory, "json") {
+        for file in listed(files_with(&overlay, &directory, "json"), &mut unreadable) {
             let path = overlay.loose_path(&format!("{directory}/{file}"));
             match read_entry(&overlay, &format!("{directory}/{file}")) {
                 Some(entry) if matches!(entry.change, Change::Evidence { .. }) => {
@@ -559,11 +566,18 @@ pub fn evidence_records_git(
 /// Read from the artifact's own `evidence/<namespace>/<name>/` only: a redaction rewrites that
 /// artifact's document, and a record filed anywhere else is one `validate` already reports as
 /// misfiled. A file that does not read, and a record about another artifact, is not one.
-#[must_use]
-pub fn redaction_records_git(evidence: &Path, artifact: &ArtifactId) -> Vec<(PathBuf, Entry)> {
+///
+/// # Errors
+///
+/// A pack that does not parse, or a directory that cannot be listed: the records it holds cannot
+/// be told from records there are none of.
+pub fn redaction_records_git(
+    evidence: &Path,
+    artifact: &ArtifactId,
+) -> std::io::Result<Vec<(PathBuf, Entry)>> {
     let overlay = Overlay::for_evidence(evidence);
     let directory = evidence_directory(artifact);
-    let mut records: Vec<(PathBuf, Entry)> = files_with(&overlay, &directory, "json")
+    let mut records: Vec<(PathBuf, Entry)> = files_with(&overlay, &directory, "json")?
         .into_iter()
         .filter_map(|file| {
             let store_path = format!("{directory}/{file}");
@@ -577,7 +591,7 @@ pub fn redaction_records_git(evidence: &Path, artifact: &ArtifactId) -> Vec<(Pat
             .cmp(&right.at)
             .then_with(|| left_path.file_name().cmp(&right_path.file_name()))
     });
-    records
+    Ok(records)
 }
 
 /// The order a Git-native history answers entries in: `at`, then artifact, then revision.
@@ -661,7 +675,7 @@ pub fn write_evidence_occurrence(
             ))
         }
     };
-    let names = files_with(&overlay, &store_directory, "json");
+    let names = files_with(&overlay, &store_directory, "json")?;
     // A record already written under any sequence number is the same record: writing it again
     // (a recovered batch) answers that file instead of adding a second one.
     // A file of that name holding other bytes is a record somebody rewrote, and is refused.
@@ -746,7 +760,7 @@ fn document_entries(overlay: &Overlay, store_path: &str) -> Option<Vec<Entry>> {
 fn evidence_in(overlay: &Overlay, directory: &str) -> (Vec<Entry>, usize) {
     let mut entries = Vec::new();
     let mut unreadable = 0;
-    for file in files_with(overlay, directory, "json") {
+    for file in listed(files_with(overlay, directory, "json"), &mut unreadable) {
         match read_entry(overlay, &format!("{directory}/{file}")) {
             Some(entry)
                 if matches!(
@@ -763,13 +777,22 @@ fn evidence_in(overlay: &Overlay, directory: &str) -> (Vec<Entry>, usize) {
 }
 
 /// The directories directly under `directory`, loose and packed, sorted. Dot-names are skipped.
-fn subdirectories(overlay: &Overlay, directory: &str) -> Vec<String> {
-    overlay.directories(directory).unwrap_or_default()
+fn subdirectories(overlay: &Overlay, directory: &str) -> std::io::Result<Vec<String>> {
+    overlay.directories(directory)
 }
 
 /// The files directly under `directory` with `extension`, loose and packed, sorted.
-fn files_with(overlay: &Overlay, directory: &str, extension: &str) -> Vec<String> {
-    overlay.files(directory, extension).unwrap_or_default()
+fn files_with(overlay: &Overlay, directory: &str, extension: &str) -> std::io::Result<Vec<String>> {
+    overlay.files(directory, extension)
+}
+
+/// A listing that read, or nothing and one more unreadable: a listing that failed (a pack that
+/// does not parse) is never an empty directory.
+fn listed(listing: std::io::Result<Vec<String>>, unreadable: &mut usize) -> Vec<String> {
+    listing.unwrap_or_else(|_| {
+        *unreadable += 1;
+        Vec::new()
+    })
 }
 
 /// The order a Git-native history is answered in: `at`, then artifact, then revision.

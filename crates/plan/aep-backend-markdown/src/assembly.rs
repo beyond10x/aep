@@ -60,7 +60,12 @@ impl Assembly {
     pub fn read<'a>(members: impl IntoIterator<Item = (MemberName, &'a Path)>) -> Self {
         let mut assembly = Self::default();
         for (name, root) in members {
-            let report = MarkdownStore::open(root).load();
+            let report = MarkdownStore::open(root)
+                .with_evidence(crate::pack::evidence_beside(
+                    root,
+                    aep_domain::project::PROJECT_DIRECTORY,
+                ))
+                .load();
             for id in report.documents.keys() {
                 assembly
                     .index

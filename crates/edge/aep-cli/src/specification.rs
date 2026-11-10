@@ -242,7 +242,7 @@ fn specifications(store: &Path) -> Result<Vec<(PathBuf, PlanningDocument)>> {
     // The loose files and the records of every pack, as one tree: a closed specification that was
     // packed is still a specification in the store. Sorted by the overlay, so two machines read
     // the same store the same way (invariant *Decisions are deterministic*).
-    let overlay = aep_backend_markdown::pack::Overlay::beside_planning(store);
+    let overlay = aep_backend_markdown::pack::Overlay::new(store, crate::planning::evidence_beside(store));
     let unreadable = |error: &dyn std::fmt::Display| {
         anyhow::anyhow!(
             "no specification artifacts at {}: {error}. `spec-driven` asks for one before \
