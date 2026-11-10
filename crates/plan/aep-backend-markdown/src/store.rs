@@ -126,6 +126,14 @@ impl MarkdownStore {
                 });
             }
         }
+        // A path two places hold with different bytes is refused by every reader, naming both; the
+        // documents that read are still loaded, so `validate` reports on them.
+        if let Some(error) = overlay.first_conflict() {
+            report.failures.push(StoreFailure {
+                path: self.root.clone(),
+                detail: format!("{PACK_FAILURE}: {error}"),
+            });
+        }
         // A pack that does not read hides the records it holds; reading on would report them as
         // missing, and a write would create them again.
         if !report.failures.is_empty() {

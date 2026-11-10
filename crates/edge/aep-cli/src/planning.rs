@@ -761,6 +761,9 @@ fn refuse_unparsed_packs(root: &Path, evidence: &Path) -> Result<()> {
             bail!("{}: not a pack: {error}", pack.file().display());
         }
     }
+    if let Some(error) = overlay.first_conflict() {
+        bail!("{error}");
+    }
     Ok(())
 }
 

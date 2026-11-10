@@ -204,6 +204,34 @@ pub(crate) const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
     "GIT_CONFIG_COUNT",
 ];
 
+/// The variables of [`REDIRECTING_GIT_VARIABLES`] that choose which repository, index, object store
+/// or namespace `git` reads, and where discovery stops. The rest of that list (`GIT_CONFIG`,
+/// `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`) injects configuration, and is not here: a `safe.directory`
+/// given in the environment is what lets `git` read a repository at all, and stripping it would make
+/// provenance silently unavailable. The `origin` reader wants the whole list, because a configuration
+/// standing in for the repository's own decides which remote it reads.
+pub(crate) const REPOSITORY_SELECTING_GIT_VARIABLES: [&str; 8] = [
+    "GIT_DIR",
+    "GIT_COMMON_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+];
+
+/// A `git` process that reads the repository its working directory is in, wherever the environment
+/// points, but keeps the configuration the environment gives it (see
+/// [`REPOSITORY_SELECTING_GIT_VARIABLES`]).
+pub(crate) fn repository_git() -> std::process::Command {
+    let mut command = std::process::Command::new("git");
+    for name in REPOSITORY_SELECTING_GIT_VARIABLES {
+        command.env_remove(name);
+    }
+    command
+}
+
 /// A `git` process with every variable in [`REDIRECTING_GIT_VARIABLES`] removed, so the repository
 /// it reads is the one its working directory is in and nothing the caller exported changes which,
 /// or where Git stops looking.

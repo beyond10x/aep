@@ -852,17 +852,49 @@ impl Overlay {
             return Ok(None);
         };
         if let Some(other) = holders.iter().find(|holder| holder.bytes != first.bytes) {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!(
-                    "`{path}` is held with different bytes by {} and by {}; \
-                     a copy to keep has to be chosen before it can be read",
-                    self.describe(path, &first.place),
-                    self.describe(path, &other.place)
-                ),
-            ));
+            return Err(self.conflict(path, &first.place, &other.place));
         }
         Ok(holders.into_iter().next().map(|holder| holder.bytes))
+    }
+
+    /// The first path of a pack that is held in another place with different bytes, as the error
+    /// [`Self::read`] answers it with, or `None` when no such path exists (or when a pack does not
+    /// verify, which [`Self::packs`] reports).
+    #[must_use]
+    pub fn first_conflict(&self) -> Option<io::Error> {
+        let parsed = self.parsed().ok()?;
+        let mut first: BTreeMap<&str, (Place, &[u8])> = BTreeMap::new();
+        for (name, pack) in &parsed {
+            for record in pack.records() {
+                let place = Place::Packed(name.clone());
+                let held = first
+                    .entry(record.path.as_str())
+                    .or_insert_with(|| (place.clone(), record.bytes.as_slice()));
+                if held.1 != record.bytes.as_slice() {
+                    return Some(self.conflict(record.path.as_str(), &held.0, &place));
+                }
+            }
+        }
+        for (path, (place, bytes)) in &first {
+            if let Ok(loose) = std::fs::read(self.loose_path(path)) {
+                if loose != *bytes {
+                    return Some(self.conflict(path, &Place::Loose, place));
+                }
+            }
+        }
+        None
+    }
+
+    fn conflict(&self, path: &str, first: &Place, other: &Place) -> io::Error {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!(
+                "`{path}` is held with different bytes by {} and by {}; \
+                 a copy to keep has to be chosen before it can be read",
+                self.describe(path, first),
+                self.describe(path, other)
+            ),
+        )
     }
 
     /// Where a copy is, as an error spells it: the loose file or the pack file.
