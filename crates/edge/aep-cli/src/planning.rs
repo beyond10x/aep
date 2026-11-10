@@ -6885,6 +6885,32 @@ fn pack_problems(
         }
     }
 
+    // 3. The packs directory is the one beside `planning` and `evidence`, not a link to elsewhere.
+    let mut packs_unsafe = false;
+    if let Some(base) = &engineering {
+        let directory = overlay.packs_directory();
+        if std::fs::symlink_metadata(directory).is_ok_and(|metadata| metadata.is_symlink()) {
+            packs_unsafe = true;
+            problems.push(pack_problem(
+                Code::PackPathUnsafe,
+                directory.display(),
+                "the packs directory is a symbolic link; packs are read from the store only",
+            ));
+        } else if let (Ok(real), Ok(expected)) = (
+            std::fs::canonicalize(directory),
+            std::fs::canonicalize(base).map(|base| base.join(aep_backend_markdown::pack::PACKS_DIRECTORY)),
+        ) {
+            if real != expected {
+                packs_unsafe = true;
+                problems.push(pack_problem(
+                    Code::PackPathUnsafe,
+                    directory.display(),
+                    "the packs directory resolves outside the store",
+                ));
+            }
+        }
+    }
+
     // 1-3. Each pack as a file.
     // Where each path is held, in the order the places are met: a loose file first.
     let mut held: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
@@ -6964,7 +6990,8 @@ fn pack_problems(
     }
 
     // 5. Each record equals the last committed blob before the commit that added its pack.
-    if let Some(base) = &engineering {
+    let mut shallow: Option<String> = None;
+    if let Some(base) = engineering.as_ref().filter(|_| !packs_unsafe) {
         for (location, pack) in &parsed_packs {
             let relatives: Vec<Option<String>> = pack
                 .records()
@@ -6984,10 +7011,21 @@ fn pack_problems(
                 })
                 .collect();
             let asked: Vec<&str> = relatives.iter().flatten().map(String::as_str).collect();
-            let Some(blobs) =
-                git_record::blobs_before_pack(base, Path::new(location), &asked)
-            else {
-                continue;
+            let blobs = match git_record::blobs_before_pack(base, Path::new(location), &asked) {
+                git_record::Provenance::Unversioned => continue,
+                git_record::Provenance::Shallow => {
+                    shallow.get_or_insert_with(|| location.clone());
+                    continue;
+                }
+                git_record::Provenance::Failed(reason) => {
+                    problems.push(pack_problem(
+                        Code::PackRecordNotCommittedBytes,
+                        location,
+                        format!("provenance could not be checked: {reason}"),
+                    ));
+                    continue;
+                }
+                git_record::Provenance::Blobs(blobs) => blobs,
             };
             let mut blobs = blobs.into_iter();
             for (record, relative) in pack.records().iter().zip(&relatives) {
@@ -7027,17 +7065,90 @@ fn pack_problems(
         }
     }
 
+    if let Some(location) = shallow {
+        problems.push(pack_problem(
+            Code::PackHistoryShallow,
+            location,
+            "this is a shallow clone and the history before the commit that added the pack was \
+             not fetched, so what its records replaced cannot be proven; run `git fetch \
+             --unshallow` (in CI, `fetch-depth: 0`) and validate again",
+        ));
+    }
+
+    // 5 (continued). A committed pack gone from the working tree loses its records unless
+    // something else still holds the same bytes.
+    if let Some(base) = engineering.as_ref().filter(|_| !packs_unsafe) {
+        let present: BTreeSet<String> = packs
+            .iter()
+            .filter_map(|file| file.file().file_name())
+            .filter_map(|name| name.to_str().map(str::to_owned))
+            .collect();
+        for (name, bytes) in
+            git_record::committed_packs(base, overlay.packs_directory()).unwrap_or_default()
+        {
+            if present.contains(&name) {
+                continue;
+            }
+            let location = overlay.packs_directory().join(&name).display().to_string();
+            let lost: Vec<String> = match aep_backend_markdown::pack::Pack::parse(&bytes) {
+                Ok(gone) => gone
+                    .records()
+                    .iter()
+                    .filter(|record| {
+                        let in_a_pack = held.get(record.path()).is_some_and(|places| {
+                            places.iter().any(|(_, held)| held == record.bytes())
+                        });
+                        let loose = std::fs::read(overlay.loose_path(record.path()))
+                            .is_ok_and(|loose| loose == record.bytes());
+                        !in_a_pack && !loose
+                    })
+                    .map(|record| format!("`{}`", record.path().escape_debug()))
+                    .collect(),
+                Err(_) => vec!["its records (the committed pack does not parse)".to_owned()],
+            };
+            if !lost.is_empty() {
+                problems.push(pack_problem(
+                    Code::PackLost,
+                    location,
+                    format!(
+                        "the committed pack {name} is gone from the working tree and no loose \
+                         file or other pack holds {} of its records: {}",
+                        lost.len(),
+                        lost.join(", ")
+                    ),
+                ));
+            }
+        }
+    }
+
     // 6. A packed artifact is closed for its kind; packed evidence is about the artifact its
     // directory names.
     for (location, pack) in &parsed_packs {
         for record in pack.records() {
             let path = record.path();
             let Ok(text) = std::str::from_utf8(record.bytes()) else {
+                problems.push(pack_problem(
+                    Code::PackRecordUnreadable,
+                    location,
+                    format!("`{}` is not UTF-8 text", path.escape_debug()),
+                ));
                 continue;
             };
             if path.starts_with("planning/") {
-                let Ok(document) = PlanningDocument::parse(text, None) else {
-                    continue;
+                let document = match PlanningDocument::parse(text, None) {
+                    Ok(document) => document,
+                    Err(error) => {
+                        problems.push(pack_problem(
+                            Code::PackRecordUnreadable,
+                            location,
+                            format!(
+                                "`{}` does not parse as an artifact, so its status cannot be \
+                                 checked: {error}",
+                                path.escape_debug()
+                            ),
+                        ));
+                        continue;
+                    }
                 };
                 let front = &document.frontmatter;
                 let closed = registry
@@ -7061,6 +7172,14 @@ fn pack_problems(
                 path.split('/').collect::<Vec<_>>().as_slice()
             {
                 let Ok(entry) = serde_json::from_str::<Entry>(text) else {
+                    problems.push(pack_problem(
+                        Code::PackRecordUnreadable,
+                        location,
+                        format!(
+                            "`{}` does not parse as an evidence record",
+                            path.escape_debug()
+                        ),
+                    ));
                     continue;
                 };
                 if !matches!(entry.change, Change::Evidence { .. } | Change::Redaction { .. }) {

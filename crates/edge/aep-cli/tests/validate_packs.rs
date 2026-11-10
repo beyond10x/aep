@@ -567,6 +567,40 @@ fn a_pack_written_and_the_loose_files_removed_but_not_committed_reports_no_rewri
     assert!(!text.contains("differs from its committed blob"), "{text}");
 }
 
+#[test]
+fn a_packed_artifact_that_is_not_utf_8_is_refused_by_code() {
+    let project = loose_store("not-utf8");
+    let path = "planning/story/closed-b.md";
+    let mut bytes = std::fs::read(engineering(&project).join(path)).expect("reads");
+    bytes.push(0xff);
+    std::fs::write(engineering(&project).join(path), &bytes).expect("writable");
+    commit(&project, "closed-b with a byte that is not text");
+    let name = pack_away(&project, &[path.to_owned()]);
+    commit(&project, "pack it");
+    refused(
+        &project,
+        &["pack_record_unreadable"],
+        Some(&format!("{name}.pack")),
+    );
+}
+
+#[test]
+fn a_pack_removed_with_its_records_restored_loose_is_not_a_loss() {
+    let (project, old) = packed_store("unpacked");
+    for (path, bytes) in parsed(&project, &old) {
+        let file = engineering(&project).join(&path);
+        std::fs::create_dir_all(file.parent().expect("a parent")).expect("writable");
+        std::fs::write(file, bytes).expect("writable");
+    }
+    std::fs::remove_file(pack_file(&project, &old)).expect("removable");
+    std::fs::write(
+        engineering(&project).join("project.yaml"),
+        project_file(&project, "aep.project/5"),
+    )
+    .expect("writable");
+    valid(&project);
+}
+
 const ACME_BODY: &str = "## Verdict\n\nAcme approved it; ACME signed; acme paid.\n";
 
 /// A committed store with a review of `subject` that said `ACME_BODY`, redacted, archived and

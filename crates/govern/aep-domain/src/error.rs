@@ -415,6 +415,15 @@ validation_codes! {
 
     /// The project version disagrees with whether the store holds packs.
     PackVersionDisagrees => "pack_version_disagrees",
+
+    /// A shallow clone lacks the history that says what a pack's records replaced.
+    PackHistoryShallow => "pack_history_shallow",
+
+    /// A committed pack is gone from the working tree and nothing else holds its records.
+    PackLost => "pack_lost",
+
+    /// A packed record is not UTF-8 or does not parse as the kind of record its path names.
+    PackRecordUnreadable => "pack_record_unreadable",
 }
 
 impl fmt::Display for ValidationCode {

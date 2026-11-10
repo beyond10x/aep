@@ -289,24 +289,48 @@ pub(super) enum Committed {
     Never,
 }
 
+/// What [`blobs_before_pack`] found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Provenance {
+    /// There is no history to read at all: not a work tree, or one that ignores the store. The
+    /// only case the check is skipped in, as the other history checks are.
+    Unversioned,
+    /// The commit that added the pack is a shallow clone's boundary: the history that would say
+    /// what the records replaced was not fetched.
+    Shallow,
+    /// Git could not answer; the check is refused, never skipped.
+    Failed(String),
+    /// One answer per path asked about, in order.
+    Blobs(Vec<Committed>),
+}
+
 /// For each of `paths` (relative to `base`, the directory the pack's `packs` directory is in), the
 /// last committed blob at that path before the commit that added `pack` — `HEAD` when the pack is
-/// not committed. `None` when there is no history to read: not a work tree, or one that ignores
-/// the store.
+/// not committed.
+///
+/// Every `git` call runs in `base` with pathspecs relative to it, so the answer is the enclosing
+/// repository's and never that of a repository nested in the packs directory.
 ///
 /// A path deleted before that commit, as when the loose file was removed in one commit and the
 /// pack added in a later one, answers with the last version it had.
-pub(super) fn blobs_before_pack(
-    base: &Path,
-    pack: &Path,
-    paths: &[&str],
-) -> Option<Vec<Committed>> {
+pub(super) fn blobs_before_pack(base: &Path, pack: &Path, paths: &[&str]) -> Provenance {
     if unversioned(base) {
-        return None;
+        return Provenance::Unversioned;
     }
-    let (directory, file) = (pack.parent()?, pack.file_name()?.to_str()?);
-    let added = String::from_utf8(git(
-        directory,
+    let Some(file) = pack.strip_prefix(base).ok().and_then(|relative| {
+        relative
+            .components()
+            .map(|part| part.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+            .map(|parts| parts.join("/"))
+    }) else {
+        return Provenance::Failed(format!(
+            "the pack is not inside {}, where its history is read",
+            base.display()
+        ));
+    };
+    let Some(added) = git(
+        base,
         &[
             "log",
             "--no-renames",
@@ -314,11 +338,26 @@ pub(super) fn blobs_before_pack(
             "--format=%H",
             "-1",
             "--",
-            file,
+            &file,
         ],
-    )?)
-    .ok()?;
-    let added = added.trim();
+    ) else {
+        // A work tree with no commit yet has an empty history, which is an answer.
+        return if git(base, &["rev-parse", "--verify", "--quiet", "HEAD"]).is_none() {
+            Provenance::Blobs(vec![Committed::Never; paths.len()])
+        } else {
+            Provenance::Failed("`git log` could not read the history of the pack".to_owned())
+        };
+    };
+    let added = String::from_utf8_lossy(&added).trim().to_owned();
+    if !added.is_empty() {
+        match shallow_boundary(base) {
+            Some(boundary) if boundary.contains(&added) => return Provenance::Shallow,
+            Some(_) => {}
+            None => {
+                return Provenance::Failed("git could not say whether the clone is shallow".into())
+            }
+        }
+    }
     let revision = if added.is_empty() {
         "HEAD".to_owned()
     } else {
@@ -329,7 +368,7 @@ pub(super) fn blobs_before_pack(
         .map(|found| found.trim().to_owned())
     else {
         // Nothing before the pack's commit (or no commit at all): nothing to equal.
-        return Some(vec![Committed::Never; paths.len()]);
+        return Provenance::Blobs(vec![Committed::Never; paths.len()]);
     };
     let mut requests = String::new();
     for path in paths {
@@ -338,7 +377,9 @@ pub(super) fn blobs_before_pack(
         requests.push_str(path);
         requests.push('\n');
     }
-    let blobs = cat_file_batch(base, &requests)?;
+    let Some(blobs) = cat_file_batch(base, &requests) else {
+        return Provenance::Failed("`git cat-file` could not read the committed blobs".to_owned());
+    };
     let mut found = Vec::new();
     for (path, blob) in paths.iter().zip(blobs) {
         if let Some(blob) = blob {
@@ -368,7 +409,47 @@ pub(super) fn blobs_before_pack(
         });
         found.push(blob.map_or(Committed::Never, Committed::Blob));
     }
-    Some(found)
+    Provenance::Blobs(found)
+}
+
+/// Every pack `HEAD` commits under `packs` (relative to `base`), as the file name and the bytes
+/// committed. `None` when there is no history to read, or no commit yet.
+#[allow(clippy::case_sensitive_file_extension_comparisons)] // A pack's extension is exactly `.pack`.
+pub(super) fn committed_packs(base: &Path, packs: &Path) -> Option<Vec<(String, Vec<u8>)>> {
+    if unversioned(base) {
+        return None;
+    }
+    git(base, &["rev-parse", "--verify", "--quiet", "HEAD"])?;
+    let directory = packs
+        .strip_prefix(base)
+        .ok()?
+        .components()
+        .map(|part| part.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()?
+        .join("/");
+    let listed = git(base, &["ls-tree", "--name-only", "HEAD", &format!("{directory}/")])?;
+    let listed = String::from_utf8_lossy(&listed);
+    let files: Vec<&str> = listed
+        .lines()
+        .filter(|line| line.ends_with(".pack"))
+        .collect();
+    let mut requests = String::new();
+    for file in &files {
+        requests.push_str("HEAD:./");
+        requests.push_str(file);
+        requests.push('\n');
+    }
+    let blobs = cat_file_batch(base, &requests)?;
+    Some(
+        files
+            .iter()
+            .zip(blobs)
+            .filter_map(|(file, blob)| {
+                let name = file.rsplit('/').next()?.to_owned();
+                Some((name, blob?))
+            })
+            .collect(),
+    )
 }
 
 /// What the history says about when one path was added in its current incarnation.
