@@ -20,7 +20,8 @@
 //! # The three rules
 //!
 //! 1. **Inside a wave, no two stories share a scope path.** A story that would collide is placed in
-//!    the first later wave where it does not, and the pair is reported.
+//!    the first later wave where it does not, and the pair is reported. Two paths are shared when
+//!    one is the other or a directory holding it, compared by path component — see [`narrower`].
 //! 2. **A dependency is an ordering constraint, never a filter.** A story is placed strictly after
 //!    every story it depends on — including through a story that was not itself placed, so an
 //!    unassessed link in the chain cannot make a dependency disappear.
@@ -87,7 +88,8 @@ pub(crate) struct Collision {
     pub(crate) a: String,
     /// The higher of the two ids.
     pub(crate) b: String,
-    /// The path they both declare.
+    /// The surface they share: the narrower of the two entries in its normal spelling — the file
+    /// when one side declares its directory — or, as declared, an entry no comparison can place.
     pub(crate) path: String,
     /// `inferred` when either side worked the path out rather than reading it.
     ///
@@ -183,7 +185,9 @@ fn pack<'a>(
 ) -> Vec<Wave> {
     let mut placed_in: BTreeMap<&str, usize> = BTreeMap::new();
     let mut members: Vec<Vec<&str>> = Vec::new();
-    let mut surfaces: Vec<BTreeSet<&str>> = Vec::new();
+    // A list rather than a set: membership is containment, not equality, so a lookup by key
+    // would miss `roles/` holding `roles/decision.yaml`.
+    let mut surfaces: Vec<Vec<&str>> = Vec::new();
     for id in order {
         let floor = frontier
             .get(id)
@@ -201,9 +205,13 @@ fn pack<'a>(
         loop {
             while members.len() <= wave {
                 members.push(Vec::new());
-                surfaces.push(BTreeSet::new());
+                surfaces.push(Vec::new());
             }
-            if paths.iter().all(|path| !surfaces[wave].contains(path)) {
+            if paths.iter().all(|path| {
+                surfaces[wave]
+                    .iter()
+                    .all(|taken| narrower(taken, path).is_none())
+            }) {
                 break;
             }
             wave += 1;
@@ -236,7 +244,8 @@ fn pack<'a>(
         .collect()
 }
 
-/// Every pair of assessable candidates that shares a path, once per shared path.
+/// Every pair of assessable candidates that shares a path, once per shared path. A directory shares
+/// every path under it, and the path reported is the narrower one (see [`narrower`]).
 ///
 /// Every such pair is reported, not only the pairs the packing happened to try: a pair separated by
 /// a dependency is still a pair that could never have run together, and a reader deciding whether
@@ -249,30 +258,103 @@ fn collisions_among(
     let mut collisions = Vec::new();
     for (index, a) in ids.iter().enumerate() {
         for b in ids.iter().skip(index + 1) {
+            // Keyed by the shared path, so `roles` and `roles/` on one side meeting
+            // `roles/decision.yaml` on the other is one collision and not two; inferred wins when
+            // any entry behind it was a guess.
+            let mut shared: BTreeMap<String, ScopeConfidence> = BTreeMap::new();
             for left in &by_id[a].scope {
-                let Some(right) = by_id[b]
-                    .scope
-                    .iter()
-                    .find(|entry| entry.path == left.path)
-                else {
-                    continue;
-                };
-                collisions.push(Collision {
-                    a: (*a).to_owned(),
-                    b: (*b).to_owned(),
-                    path: left.path.clone(),
-                    confidence: if left.confidence == ScopeConfidence::Inferred
+                for right in &by_id[b].scope {
+                    let Some(path) = narrower(&left.path, &right.path) else {
+                        continue;
+                    };
+                    let confidence = if left.confidence == ScopeConfidence::Inferred
                         || right.confidence == ScopeConfidence::Inferred
                     {
                         ScopeConfidence::Inferred
                     } else {
                         ScopeConfidence::Cited
-                    },
+                    };
+                    shared
+                        .entry(path)
+                        .and_modify(|known| {
+                            if confidence == ScopeConfidence::Inferred {
+                                *known = ScopeConfidence::Inferred;
+                            }
+                        })
+                        .or_insert(confidence);
+                }
+            }
+            for (path, confidence) in shared {
+                collisions.push(Collision {
+                    a: (*a).to_owned(),
+                    b: (*b).to_owned(),
+                    path,
+                    confidence,
                 });
             }
         }
     }
     collisions
+}
+
+/// The surface two declared paths share — the narrower of the two, in its normal spelling — or
+/// `None` when they are disjoint.
+///
+/// By path component, so `roles` holds `roles/decision.yaml` and holds neither `roles.md` nor
+/// `rolesx/lookup.yaml`; empty and `.` components are dropped, so `roles`, `roles/`, `./roles` and
+/// `roles//` are one surface whichever spelling a scoper wrote, and `.` is the repository root,
+/// which holds every path. Only the entries are read, never a working tree, so a file and a
+/// directory of one name are one surface here: that errs towards keeping two stories apart.
+///
+/// An entry the entries alone cannot place — one with a `..` component, or a glob — is shared with
+/// every other entry and reported as declared: unknown is not disjoint.
+fn narrower(left: &str, right: &str) -> Option<String> {
+    match (components(left), components(right)) {
+        (None, _) => Some(left.to_owned()),
+        (_, None) => Some(right.to_owned()),
+        (Some(l), Some(r)) => {
+            if r.starts_with(&l) {
+                Some(spelled(&r))
+            } else if l.starts_with(&r) {
+                Some(spelled(&l))
+            } else {
+                None
+            }
+        }
+    }
+}
+
+/// Whether two declared paths name one surface: equal components, or the same spelling when the
+/// comparison cannot place them. `scope --add` and `--remove` match entries by this.
+pub(crate) fn one_surface(left: &str, right: &str) -> bool {
+    match (components(left), components(right)) {
+        (Some(l), Some(r)) => l == r,
+        _ => left == right,
+    }
+}
+
+/// The path's components without empty and `.` ones, or `None` when a component is `..` or a glob
+/// (`*`, `?`), which no component comparison can place.
+fn components(path: &str) -> Option<Vec<&str>> {
+    let mut parts = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => return None,
+            glob if glob.contains(['*', '?']) => return None,
+            part => parts.push(part),
+        }
+    }
+    Some(parts)
+}
+
+/// The normal spelling of a component list: joined by `/`, and `.` for the repository root.
+fn spelled(parts: &[&str]) -> String {
+    if parts.is_empty() {
+        ".".to_owned()
+    } else {
+        parts.join("/")
+    }
 }
 
 /// Fills `into` with the assessable stories reachable from `id` through `depends_on`.
@@ -513,5 +595,59 @@ mod tests {
             &["story:elsewhere"],
         )]);
         assert_eq!(placed(&derivation), vec![vec!["story:only"]]);
+    }
+
+    /// A directory holds every path under it, by component: `roles` and `roles/` are one surface
+    /// that contains `roles/decision.yaml`, and neither contains `roles.md` or `rolesx/lookup.yaml`.
+    #[test]
+    fn a_directory_collides_with_what_it_contains_and_not_with_a_sibling_that_shares_its_prefix() {
+        let derivation = derive(&[
+            candidate("story:dir", &[("roles/", ScopeConfidence::Cited)], &[]),
+            candidate(
+                "story:file",
+                &[("roles/decision.yaml", ScopeConfidence::Cited)],
+                &[],
+            ),
+            candidate("story:bare", &[("roles", ScopeConfidence::Inferred)], &[]),
+            candidate("story:sibling", &[("roles.md", ScopeConfidence::Cited)], &[]),
+            candidate(
+                "story:neighbour",
+                &[("rolesx/lookup.yaml", ScopeConfidence::Cited)],
+                &[],
+            ),
+        ]);
+        assert_eq!(
+            placed(&derivation),
+            vec![
+                vec!["story:bare", "story:neighbour", "story:sibling"],
+                vec!["story:dir"],
+                vec!["story:file"],
+            ],
+            "the three spellings of one directory never share a wave; the siblings join the first"
+        );
+        let pairs: Vec<(&str, &str, &str, ScopeConfidence)> = derivation
+            .collisions
+            .iter()
+            .map(|c| (c.a.as_str(), c.b.as_str(), c.path.as_str(), c.confidence))
+            .collect();
+        assert_eq!(
+            pairs,
+            vec![
+                ("story:bare", "story:dir", "roles", ScopeConfidence::Inferred),
+                (
+                    "story:bare",
+                    "story:file",
+                    "roles/decision.yaml",
+                    ScopeConfidence::Inferred
+                ),
+                (
+                    "story:dir",
+                    "story:file",
+                    "roles/decision.yaml",
+                    ScopeConfidence::Cited
+                ),
+            ],
+            "each pair is named with the narrower surface, the one both land on"
+        );
     }
 }

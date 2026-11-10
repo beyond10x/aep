@@ -623,6 +623,300 @@ fn waves_leaves_every_byte_of_the_store_where_it_was() {
     );
 }
 
+/// A directory contains every file under it, so a story scoped to `roles/` and one scoped to
+/// `roles/decision.yaml` land on one surface. Compared as strings they read as disjoint and a wave
+/// put them together, which is the collision the verb exists to report before the merge does.
+#[test]
+fn a_directory_and_a_file_inside_it_collide_and_never_share_a_wave() {
+    let store = store_of(
+        "aep-waves-directory",
+        &[("dir", &["roles/"]), ("file", &["roles/decision.yaml"])],
+    );
+    let at = printable(&store);
+    let printed = make(&["plan", "artifact", "waves", "--store", at]);
+
+    assert!(
+        printed.contains("wave 1\n  story:dir\nwave 2\n  story:file\n"),
+        "a directory and a file inside it are never in one wave: {printed}"
+    );
+    assert!(
+        printed.contains("collision: story:dir story:file roles/decision.yaml\n"),
+        "the pair is named with the surface both land on, the file: {printed}"
+    );
+    assert!(
+        printed.ends_with("2 wave(s), 1 collision(s), 0 unassessed\n"),
+        "{printed}"
+    );
+}
+
+/// `roles` and `roles/` are one spelling choice, not two surfaces: a story that wrote one must not
+/// read as disjoint from a story that wrote the other, and against a file inside the directory both
+/// spellings give the same answer, byte for byte.
+#[test]
+fn a_trailing_separator_does_not_change_the_answer() {
+    let with = store_of(
+        "aep-waves-separator-with",
+        &[("dir", &["roles/"]), ("file", &["roles/decision.yaml"])],
+    );
+    let without = store_of(
+        "aep-waves-separator-without",
+        &[("dir", &["roles"]), ("file", &["roles/decision.yaml"])],
+    );
+    let printed_with = make(&["plan", "artifact", "waves", "--store", printable(&with)]);
+    let printed_without = make(&["plan", "artifact", "waves", "--store", printable(&without)]);
+    assert_eq!(
+        printed_with, printed_without,
+        "`roles/` and `roles` must give the same answer against `roles/decision.yaml`"
+    );
+    assert!(
+        printed_without.contains("collision: story:dir story:file roles/decision.yaml\n"),
+        "{printed_without}"
+    );
+
+    let both = store_of(
+        "aep-waves-separator-both",
+        &[("slash", &["roles/"]), ("bare", &["roles"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&both)]);
+    assert!(
+        printed.contains("wave 1\n  story:bare\nwave 2\n  story:slash\n"),
+        "the two spellings of one directory are one surface: {printed}"
+    );
+    assert!(
+        printed.contains("collision: story:bare story:slash roles\n"),
+        "{printed}"
+    );
+}
+
+/// Containment is by path component, not by leading characters: `roles` holds `roles/x.yaml` but
+/// not its sibling file `roles.md`, nor the neighbouring directory `rolesx/`.
+#[test]
+fn a_sibling_of_the_directory_stays_disjoint_from_it() {
+    let store = store_of(
+        "aep-waves-sibling",
+        &[
+            ("dir", &["roles/"]),
+            ("sibling", &["roles.md"]),
+            ("neighbour", &["rolesx/lookup.yaml"]),
+        ],
+    );
+    let at = printable(&store);
+    let printed = make(&["plan", "artifact", "waves", "--store", at]);
+
+    assert!(
+        printed.contains("wave 1\n  story:dir\n  story:neighbour\n  story:sibling\n"),
+        "{printed}"
+    );
+    assert!(
+        printed.ends_with("1 wave(s), 0 collision(s), 0 unassessed\n"),
+        "a shared leading string is not a shared surface: {printed}"
+    );
+}
+
+/// `./roles/` is `roles/` spelled with a leading current-directory component, so it holds
+/// `roles/decision.yaml` exactly as `roles/` does. Compared as text after only a trailing `/` is
+/// cut, the two read as disjoint and share a wave.
+#[test]
+fn a_leading_current_directory_component_names_the_same_surface() {
+    let store = store_of(
+        "aep-waves-dot-slash",
+        &[("dir", &["./roles/"]), ("file", &["roles/decision.yaml"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.contains("wave 1\n  story:dir\nwave 2\n  story:file\n"),
+        "`./roles/` holds `roles/decision.yaml`, so they never share a wave: {printed}"
+    );
+    assert!(
+        printed.ends_with("2 wave(s), 1 collision(s), 0 unassessed\n"),
+        "{printed}"
+    );
+}
+
+/// `roles//decision.yaml` is the file `roles/decision.yaml`: an empty component names nothing.
+#[test]
+fn a_doubled_separator_names_the_same_surface() {
+    let store = store_of(
+        "aep-waves-double-slash",
+        &[
+            ("doubled", &["roles//decision.yaml"]),
+            ("single", &["roles/decision.yaml"]),
+        ],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.contains("wave 1\n  story:doubled\nwave 2\n  story:single\n"),
+        "one file spelled two ways is one surface: {printed}"
+    );
+    assert!(
+        printed.ends_with("2 wave(s), 1 collision(s), 0 unassessed\n"),
+        "{printed}"
+    );
+}
+
+/// `.` is the repository root, a repository-relative path that holds every other one: a story
+/// scoped to the whole tree collides with every story.
+#[test]
+fn the_repository_root_holds_every_path() {
+    let store = store_of(
+        "aep-waves-root",
+        &[("everything", &["."]), ("file", &["roles/decision.yaml"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.contains("wave 1\n  story:everything\nwave 2\n  story:file\n"),
+        "a story on the whole tree never shares a wave: {printed}"
+    );
+}
+
+/// The commit makes `roles` and `roles/` one surface, so a story that wrote both spellings has
+/// declared one surface, and its collision with another story on that surface is one collision —
+/// "once per pair and path". Both spellings reach the store through `scope --add`, which dedups by
+/// string.
+#[test]
+fn one_surface_spelled_twice_in_one_story_is_one_collision() {
+    let store = store_of(
+        "aep-waves-spelled-twice",
+        &[("both", &["roles", "?roles/"]), ("other", &["roles"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert_eq!(
+        printed.matches("collision:").count(),
+        1,
+        "one pair on one surface is one collision: {printed}"
+    );
+    assert!(
+        printed.contains("collision: story:both story:other roles (inferred)\n"),
+        "the one collision carries the weaker confidence behind it: {printed}"
+    );
+}
+
+/// `scope --add` replaces an entry for a path already declared, "never doubled: two entries for one
+/// surface would be a document saying two things about it". `roles/` is now the surface `roles`
+/// is, so adding it replaces rather than doubles.
+#[test]
+fn scope_add_of_the_other_spelling_of_a_surface_replaces_the_entry() {
+    let store = store_of("aep-scope-spelled-twice", &[("both", &["roles"])]);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:both",
+        "--add",
+        "roles/",
+        "--inferred",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/both.md")).expect("the document");
+    assert_eq!(
+        document.matches("path: roles").count(),
+        1,
+        "one surface is one entry: {document}"
+    );
+}
+
+/// Three stories nested inside one another are three pairs, each named with its narrower path, and
+/// the packing puts each in its own wave.
+#[test]
+fn three_nested_scopes_are_three_collisions_in_id_order() {
+    let store = store_of(
+        "aep-waves-nested",
+        &[
+            ("a", &["roles"]),
+            ("b", &["roles/x"]),
+            ("c", &["roles/x/y.yaml"]),
+        ],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.contains("wave 1\n  story:a\nwave 2\n  story:b\nwave 3\n  story:c\n"),
+        "{printed}"
+    );
+    assert!(
+        printed.contains(
+            "collision: story:a story:b roles/x\n\
+             collision: story:a story:c roles/x/y.yaml\n\
+             collision: story:b story:c roles/x/y.yaml\n"
+        ),
+        "{printed}"
+    );
+}
+
+/// A store written before `roles` and `roles/` were one surface may hold both spellings in one
+/// story (the earlier rule kept them as two entries on purpose). Adding a third spelling of that
+/// surface must leave one entry for it, not two identical ones: `--add` replaces only the first
+/// entry it finds.
+#[test]
+fn scope_add_over_two_held_spellings_of_one_surface_leaves_one_entry() {
+    let store = scratch("aep-scope-held-twice");
+    hand_written(&store, "both", &["roles", "roles/"], None);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:both",
+        "--add",
+        "./roles",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/both.md")).expect("the document");
+    assert_eq!(
+        document.matches("path:").count(),
+        1,
+        "one surface is one entry: {document}"
+    );
+}
+
+/// The same story, adding the surface in a spelling it already holds byte for byte.
+#[test]
+fn scope_add_of_a_held_spelling_over_two_held_spellings_leaves_one_entry() {
+    let store = scratch("aep-scope-held-twice-exact");
+    hand_written(&store, "both", &["roles", "roles/"], None);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:both",
+        "--add",
+        "roles/",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/both.md")).expect("the document");
+    assert_eq!(
+        document.matches("path:").count(),
+        1,
+        "one surface is one entry, never two identical ones: {document}"
+    );
+}
+
+/// `--add` of two spellings of one surface in one command records one entry.
+#[test]
+fn scope_add_of_two_spellings_in_one_command_records_one_entry() {
+    let store = scratch("aep-scope-two-in-one");
+    hand_written(&store, "one", &[], None);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:one",
+        "--add",
+        "roles",
+        "--add",
+        "./roles/",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/one.md")).expect("the document");
+    assert_eq!(document.matches("path:").count(), 1, "{document}");
+}
+
 /// The recorded answer, byte for byte.
 ///
 /// A committed store with waves, a dependency across them, a cited collision, an inferred one and
@@ -646,4 +940,74 @@ fn the_fixture_store_prints_the_recorded_answer_byte_for_byte() {
             "`waves --format {format}` no longer prints what {recorded} records"
         );
     }
+}
+
+/// A `..` component names a surface the entries alone cannot place, so the comparison cannot say
+/// the two are disjoint: unknown is not false, and the pair is kept apart and reported.
+#[test]
+fn a_parent_component_cannot_be_compared_and_collides() {
+    let store = store_of(
+        "aep-waves-parent",
+        &[("climbs", &["roles/../x.yaml"]), ("plain", &["x.yaml"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.contains("wave 1\n  story:climbs\nwave 2\n  story:plain\n"),
+        "a path the comparison cannot place never shares a wave: {printed}"
+    );
+    assert!(
+        printed.contains("collision: story:climbs story:plain roles/../x.yaml\n"),
+        "the collision names the entry that could not be compared: {printed}"
+    );
+}
+
+/// A glob is not a path: `roles/*` may match `roles/x.yaml`, so the pair is kept apart.
+#[test]
+fn a_glob_cannot_be_compared_and_collides() {
+    let store = store_of(
+        "aep-waves-glob",
+        &[("pattern", &["roles/*"]), ("file", &["roles/x.yaml"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.contains("wave 1\n  story:file\nwave 2\n  story:pattern\n"),
+        "a glob never shares a wave with a path it may match: {printed}"
+    );
+}
+
+/// `scope --remove` takes a surface, so either spelling removes the entry for it.
+#[test]
+fn scope_remove_takes_either_spelling_of_a_surface() {
+    let store = store_of("aep-scope-remove-spelling", &[("dir", &["roles/"])]);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:dir",
+        "--remove",
+        "roles",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/dir.md")).expect("the document");
+    assert!(
+        !document.contains("path: roles"),
+        "removing `roles` removes `roles/`: {document}"
+    );
+}
+
+/// `[` is a literal character in a real path, such as a dynamic route: it is compared like any
+/// other component, so a story on one shares a wave with a story elsewhere.
+#[test]
+fn a_bracket_in_a_path_is_a_literal_character() {
+    let store = store_of(
+        "aep-waves-bracket",
+        &[("route", &["app/[id]/page.tsx"]), ("lib", &["lib/x.rs"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.ends_with("1 wave(s), 0 collision(s), 0 unassessed\n"),
+        "a bracketed path collides only with what it holds: {printed}"
+    );
 }

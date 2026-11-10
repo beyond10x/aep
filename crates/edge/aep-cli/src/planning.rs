@@ -1114,10 +1114,10 @@ pub(crate) enum ArtifactCommand {
     /// `inferred`, worked out and not read anywhere. The two are kept apart because a scope that
     /// mixes them is trusted exactly where it is weakest.
     ///
-    /// **Nothing is normalised.** `crates/govern/aep-domain` and `crates/govern/aep-domain/src/artifact.rs` are
-    /// two surfaces, and `waves` reports collisions at whatever granularity is declared here. A
-    /// normaliser would have to decide that a directory contains a file, which is a claim about a
-    /// working tree the store cannot see.
+    /// **A path holds every path under it.** `waves` reports `crates/x` and `crates/x/src/lib.rs`
+    /// as a collision, compared by path component (`crates/x` does not hold `crates/x.md`), and
+    /// `crates/x/` and `./crates/x` are the same surface as `crates/x`, so adding one replaces the
+    /// other and removing either removes it. The path is stored as written.
     ///
     /// The `## Scope` section stays what a person reads; this is what a computation reads, and the
     /// scoper writes both.
@@ -1151,8 +1151,10 @@ pub(crate) enum ArtifactCommand {
     /// inventing one would be worse than saying so.
     ///
     /// **It reads and prints.** Choosing which wave to run is the operator's, and so is deciding
-    /// that a reported collision may be worked anyway. Granularity is whatever the entries say:
-    /// nothing here normalises `crates/x/src/lib.rs` to `crates/x`.
+    /// that a reported collision may be worked anyway. A path holds every path under it, by
+    /// component and with empty and `.` components ignored: `crates/x` collides with
+    /// `crates/x/src/lib.rs`, printed as the narrower path, and not with `crates/x.md`. Only the
+    /// entries are read, never the working tree.
     Waves {
         /// Where the plan is and how to render.
         #[command(flatten)]
@@ -4380,16 +4382,19 @@ fn scope(
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         // A path already declared is **replaced**, never doubled: two entries for one surface would
         // be a document saying two things about it, and a computation reading it would pick one.
-        match entries.iter_mut().find(|held| held.path == entry.path) {
-            Some(held) => held.clone_from(&entry),
-            None => entries.push(entry.clone()),
-        }
+        // One surface is compared as `waves` compares it, so `roles/` replaces `roles`, and every
+        // held spelling of it goes, including two an older store kept apart.
+        entries.retain(|held| !waves::one_surface(&held.path, &entry.path));
+        entries.push(entry.clone());
         added.push(entry);
     }
     let mut removed: Vec<String> = Vec::new();
     for path in remove {
-        if entries.iter().any(|held| &held.path == path) {
-            entries.retain(|held| &held.path != path);
+        if entries
+            .iter()
+            .any(|held| waves::one_surface(&held.path, path))
+        {
+            entries.retain(|held| !waves::one_surface(&held.path, path));
             removed.push(path.clone());
         }
     }
