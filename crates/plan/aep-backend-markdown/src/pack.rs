@@ -30,9 +30,12 @@
 //! its length and its modification time; a verb that reads every artifact does not parse every pack
 //! once per artifact.
 //!
-//! `parse` checks the structure and not the digests: whether a record's bytes match its header
-//! ([`PackRecord::digest_matches`]) and whether the name matches the content ([`Pack::name`]
-//! against the file's stem) are `validate`'s to report, naming the pack.
+//! `parse` checks the structure and not the digests, but no reader of the overlay serves a record
+//! whose digests were not checked: [`PackFile::verified`] is a pack that parses, whose every
+//! record matches its header ([`PackRecord::digest_matches`]) and whose file name is its content
+//! ([`Pack::name`] against the file's stem). A pack that fails either is refused as one that does
+//! not parse is, and the check is cached with the parse. [`Overlay::packs`] still lists such a
+//! pack with its parse, so `validate` reports it under its own codes.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -78,6 +81,10 @@ pub enum PackCode {
     PathInvalid,
     /// The pack file could not be read.
     Unreadable,
+    /// A record's bytes are not the ones its header digest is of.
+    RecordDigestDiffers,
+    /// The file is not named for the digest of its content.
+    NameNotDigest,
 }
 
 impl PackCode {
@@ -95,6 +102,8 @@ impl PackCode {
             Self::PathRepeated => "pack_path_repeated",
             Self::PathInvalid => "pack_path_invalid",
             Self::Unreadable => "pack_unreadable",
+            Self::RecordDigestDiffers => "pack_record_digest_differs",
+            Self::NameNotDigest => "pack_name_not_digest",
         }
     }
 }
@@ -473,6 +482,7 @@ pub struct PackFile {
     name: String,
     file: PathBuf,
     pack: Result<Arc<Pack>, PackError>,
+    integrity: Option<PackError>,
 }
 
 impl PackFile {
@@ -492,6 +502,21 @@ impl PackFile {
     #[must_use]
     pub fn pack(&self) -> &Result<Arc<Pack>, PackError> {
         &self.pack
+    }
+
+    /// The parsed pack when it can be read from: it parsed, every record matches its header
+    /// digest and its file name is the digest of its content. Otherwise why not.
+    ///
+    /// # Errors
+    ///
+    /// The parse refusal, or the first record whose bytes fail their digest, or the name that is
+    /// not the content's.
+    pub fn verified(&self) -> Result<&Arc<Pack>, PackError> {
+        let pack = self.pack.as_ref().map_err(Clone::clone)?;
+        match &self.integrity {
+            Some(error) => Err(error.clone()),
+            None => Ok(pack),
+        }
     }
 }
 
@@ -555,13 +580,41 @@ impl Holder {
     }
 }
 
-type Cache = BTreeMap<PathBuf, (u64, Option<u128>, Arc<Pack>)>;
+type Cache = BTreeMap<PathBuf, (u64, Option<u128>, Arc<Pack>, Option<PackError>)>;
 
 /// Parsed packs of this process, by file. A pack is never edited in place, so length and
 /// modification time say whether the entry is still the file.
 static PARSED: Mutex<Cache> = Mutex::new(BTreeMap::new());
 
-fn load(file: &Path) -> Result<Arc<Pack>, PackError> {
+/// The first way a parsed pack at `file` is not what its header and its name say.
+fn integrity(file: &Path, pack: &Pack) -> Option<PackError> {
+    if let Some(record) = pack
+        .records()
+        .iter()
+        .find(|record| !record.digest_matches())
+    {
+        return Some(PackError::new(
+            PackCode::RecordDigestDiffers,
+            format!(
+                "`{}` is not the bytes its header digest is of",
+                record.path().escape_debug()
+            ),
+        ));
+    }
+    let stem = file.file_stem().and_then(|stem| stem.to_str());
+    (stem != Some(pack.name())).then(|| {
+        PackError::new(
+            PackCode::NameNotDigest,
+            format!(
+                "the file is named `{}` and its content is `{}`",
+                stem.unwrap_or_default(),
+                pack.name()
+            ),
+        )
+    })
+}
+
+fn load(file: &Path) -> Result<(Arc<Pack>, Option<PackError>), PackError> {
     let unreadable = |error: &io::Error| {
         PackError::new(
             PackCode::Unreadable,
@@ -575,22 +628,26 @@ fn load(file: &Path) -> Result<Arc<Pack>, PackError> {
         .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|elapsed| elapsed.as_nanos());
     let length = metadata.len();
-    if let Some((held_length, held_modified, pack)) = PARSED
+    if let Some((held_length, held_modified, pack, flaw)) = PARSED
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
         .get(file)
     {
         if *held_length == length && *held_modified == modified {
-            return Ok(Arc::clone(pack));
+            return Ok((Arc::clone(pack), flaw.clone()));
         }
     }
     let bytes = std::fs::read(file).map_err(|error| unreadable(&error))?;
     let pack = Arc::new(Pack::parse(&bytes)?);
+    let flaw = integrity(file, &pack);
     PARSED
         .lock()
         .unwrap_or_else(PoisonError::into_inner)
-        .insert(file.to_path_buf(), (length, modified, Arc::clone(&pack)));
-    Ok(pack)
+        .insert(
+            file.to_path_buf(),
+            (length, modified, Arc::clone(&pack), flaw.clone()),
+        );
+    Ok((pack, flaw))
 }
 
 /// The loose files of a store and every record of every pack in it, read as one tree.
@@ -599,11 +656,13 @@ fn load(file: &Path) -> Result<Arc<Pack>, PackError> {
 /// `planning/` or `evidence/`. Holding an overlay costs nothing and touches no disk; each call reads
 /// what is there at that moment.
 ///
-/// **Which copy answers.** A path held loose and in a pack, or in two packs, is read from the loose
-/// file first and then from the packs in name order; `validate` is what refuses two copies that
-/// differ, and [`Self::holders`] is what shows it every copy.
+/// **Which copy answers.** A path held in two places (loose and in a pack, or in two packs) with
+/// identical bytes is read as that one copy. With different bytes it is not read at all:
+/// [`Self::read`] fails with an [`io::ErrorKind::InvalidData`] error naming both places, as
+/// `validate` and `unpack` refuse it. [`Self::holders`] is what shows every copy.
 ///
-/// **Errors.** A pack that does not parse is not skipped: the read that reaches it fails with an
+/// **Errors.** A pack that does not parse, a record that fails its digest and a file name that is
+/// not its content's digest are not skipped: the read that reaches the pack fails with an
 /// [`io::ErrorKind::InvalidData`] error naming the pack file and its [`PackCode`]. [`Self::packs`]
 /// is the call that reports every pack, parsed or not.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -685,6 +744,7 @@ impl Overlay {
         let refused = |file: PathBuf, detail: String| PackFile {
             name: file.to_string_lossy().into_owned(),
             pack: Err(PackError::new(PackCode::Unreadable, detail)),
+            integrity: None,
             file,
         };
         let entries = match std::fs::read_dir(&self.packs) {
@@ -721,19 +781,27 @@ impl Overlay {
                 continue;
             };
             let name = name.to_owned();
-            let pack = load(&file);
-            found.push(PackFile { name, file, pack });
+            let (pack, integrity) = match load(&file) {
+                Ok((pack, integrity)) => (Ok(pack), integrity),
+                Err(error) => (Err(error), None),
+            };
+            found.push(PackFile {
+                name,
+                file,
+                pack,
+                integrity,
+            });
         }
         found.sort_by(|left, right| left.name.cmp(&right.name));
         found
     }
 
-    /// The parsed packs, in name order, or the first refusal as an error naming the file.
+    /// The verified packs, in name order, or the first refusal as an error naming the file.
     fn parsed(&self) -> io::Result<Vec<(String, Arc<Pack>)>> {
         let mut parsed = Vec::new();
         for file in self.packs() {
-            match file.pack {
-                Ok(pack) => parsed.push((file.name, pack)),
+            match file.verified() {
+                Ok(pack) => parsed.push((file.name.clone(), Arc::clone(pack))),
                 Err(error) => {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidData,
@@ -776,13 +844,33 @@ impl Overlay {
     ///
     /// # Errors
     ///
-    /// As [`Self::holders`].
+    /// As [`Self::holders`], and a path held in two places with different bytes: the error names
+    /// both places.
     pub fn read(&self, path: &str) -> io::Result<Option<Vec<u8>>> {
-        Ok(self
-            .holders(path)?
-            .into_iter()
-            .next()
-            .map(|holder| holder.bytes))
+        let holders = self.holders(path)?;
+        let Some(first) = holders.first() else {
+            return Ok(None);
+        };
+        if let Some(other) = holders.iter().find(|holder| holder.bytes != first.bytes) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "`{path}` is held with different bytes by {} and by {}; \
+                     a copy to keep has to be chosen before it can be read",
+                    self.describe(path, &first.place),
+                    self.describe(path, &other.place)
+                ),
+            ));
+        }
+        Ok(holders.into_iter().next().map(|holder| holder.bytes))
+    }
+
+    /// Where a copy is, as an error spells it: the loose file or the pack file.
+    fn describe(&self, path: &str, place: &Place) -> String {
+        match place {
+            Place::Loose => self.loose_path(path).display().to_string(),
+            Place::Packed(name) => self.packs.join(file_name(name)).display().to_string(),
+        }
     }
 
     /// The names of the packs that hold `path`, in name order.

@@ -165,6 +165,7 @@ fn packs_directory(project: &Path) -> PathBuf {
 }
 
 /// The pack file names, sorted.
+#[allow(clippy::case_sensitive_file_extension_comparisons)] // A pack's extension is exactly `.pack`.
 fn packs(project: &Path) -> Vec<String> {
     let mut found: Vec<String> = std::fs::read_dir(packs_directory(project))
         .map(|entries| {
@@ -769,4 +770,140 @@ fn no_read_verb_prints_a_redacted_literal_a_two_branch_unpack_merge_leaves_packe
             output.status.code()
         );
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fixes of the review: the evidence link, a `/5` store that holds packs.
+// ---------------------------------------------------------------------------------------------
+
+/// `.engineering/evidence` replaced by a symbolic link to a directory outside the repository:
+/// `pack` refuses, touches nothing behind the link and packs none of its records.
+#[test]
+fn pack_never_follows_a_symbolically_linked_evidence_directory() {
+    let project = loose_store("linked-evidence");
+    let outside = scratch_root().join("store-pack-security-linked-evidence-outside");
+    if outside.exists() {
+        std::fs::remove_dir_all(&outside).expect("removable");
+    }
+    std::fs::rename(engineering(&project).join("evidence"), &outside).expect("movable");
+    symlink(&outside, engineering(&project).join("evidence")).expect("links");
+    let before = files(&outside);
+    assert!(
+        !before.is_empty(),
+        "precondition: the linked directory holds the evidence"
+    );
+
+    let output = store(&project, &["pack"]);
+    let text = said(&output);
+    assert_eq!(output.status.code(), Some(1), "`pack` is refused: {text}");
+    assert!(text.contains("symbolic link"), "{text}");
+    assert_eq!(
+        files(&outside),
+        before,
+        "files behind the link are as they were: {text}"
+    );
+    assert!(
+        packs(&project).is_empty(),
+        "no pack was written: {:?}",
+        packs(&project)
+    );
+}
+
+/// `unpack` refuses the same links, and writes nothing.
+#[test]
+fn unpack_never_follows_a_symbolically_linked_planning_directory() {
+    let project = packed_store("unpack-linked-planning");
+    let outside = scratch_root().join("store-pack-security-unpack-linked-planning-outside");
+    if outside.exists() {
+        std::fs::remove_dir_all(&outside).expect("removable");
+    }
+    std::fs::rename(engineering(&project).join("planning"), &outside).expect("movable");
+    symlink(&outside, engineering(&project).join("planning")).expect("links");
+    let before = files(&outside);
+    let packs_before = files(&packs_directory(&project));
+
+    let output = store(&project, &["unpack", "--all"]);
+    let text = said(&output);
+    assert_eq!(output.status.code(), Some(1), "`unpack` is refused: {text}");
+    assert!(text.contains("symbolic link"), "{text}");
+    assert_eq!(files(&outside), before, "{text}");
+    assert_eq!(files(&packs_directory(&project)), packs_before, "{text}");
+}
+
+/// The project file of a packed store, set back to `aep.project/5`, as a merge that took the other
+/// side's `project.yaml` leaves it.
+fn packed_store_selecting_v5(name: &str) -> PathBuf {
+    let project = packed_store(name);
+    let file = engineering(&project).join("project.yaml");
+    let text = std::fs::read_to_string(&file).expect("reads");
+    assert!(
+        text.contains("version: aep.project/6"),
+        "precondition: {text}"
+    );
+    std::fs::write(
+        &file,
+        text.replace("version: aep.project/6", "version: aep.project/5"),
+    )
+    .expect("writable");
+    commit(&project, "a merge that took the /5 project file");
+    project
+}
+
+fn selected_version(project: &Path) -> String {
+    std::fs::read_to_string(engineering(project).join("project.yaml"))
+        .expect("reads")
+        .lines()
+        .find(|line| line.starts_with("version:"))
+        .expect("a version line")
+        .to_owned()
+}
+
+/// A `/5` store that holds packs: the readers keep every record, `validate` refuses it as
+/// `pack_version_disagrees`, and `pack` leaves the version that matches.
+#[test]
+fn pack_on_a_v5_store_that_holds_packs_leaves_v6() {
+    let project = packed_store_selecting_v5("v5-pack");
+    let shown = artifact(&project, &["show", "story:closed-a"]);
+    assert!(
+        shown.status.success(),
+        "no record is lost: {}",
+        said(&shown)
+    );
+    let validate = artifact(&project, &["validate"]);
+    assert_eq!(validate.status.code(), Some(1), "{}", said(&validate));
+    assert!(
+        said(&validate).contains("pack_version_disagrees"),
+        "{}",
+        said(&validate)
+    );
+
+    let output = store(&project, &["pack"]);
+    assert!(output.status.success(), "{}", said(&output));
+    assert_eq!(selected_version(&project), "version: aep.project/6");
+    let validate = artifact(&project, &["validate"]);
+    assert!(validate.status.success(), "{}", said(&validate));
+}
+
+/// `unpack` of one artifact from a `/5` store that holds packs leaves `/6`: packs remain.
+#[test]
+fn unpack_on_a_v5_store_that_holds_packs_leaves_v6_while_packs_remain() {
+    let project = packed_store_selecting_v5("v5-unpack-some");
+    let output = store(&project, &["unpack", "story:closed-a"]);
+    assert!(output.status.success(), "{}", said(&output));
+    assert_eq!(selected_version(&project), "version: aep.project/6");
+    assert!(!packs(&project).is_empty(), "a pack remains");
+    let validate = artifact(&project, &["validate"]);
+    assert!(validate.status.success(), "{}", said(&validate));
+}
+
+/// `unpack --all` of a `/5` store that holds packs leaves `/5`: none remain.
+#[test]
+fn unpack_all_on_a_v5_store_that_holds_packs_leaves_v5() {
+    let project = packed_store_selecting_v5("v5-unpack-all");
+    let output = store(&project, &["unpack", "--all"]);
+    assert!(output.status.success(), "{}", said(&output));
+    assert_eq!(selected_version(&project), "version: aep.project/5");
+    assert!(packs(&project).is_empty(), "no pack remains");
+    let validate = artifact(&project, &["validate"]);
+    assert!(validate.status.success(), "{}", said(&validate));
 }

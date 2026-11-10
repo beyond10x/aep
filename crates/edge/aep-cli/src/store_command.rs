@@ -190,7 +190,7 @@ pub(crate) fn planning_scope(
 /// Variables that make a `git` process read a repository, a configuration or an object store other
 /// than the one `--git-dir` names. An inherited one (a hook, a wrapper, a parent `git -c`) would
 /// change which `origin` is read, or hide it.
-const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
+pub(crate) const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
     "GIT_DIR",
     "GIT_COMMON_DIR",
     "GIT_WORK_TREE",
@@ -203,6 +203,17 @@ const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
     "GIT_CONFIG_PARAMETERS",
     "GIT_CONFIG_COUNT",
 ];
+
+/// A `git` process with every variable in [`REDIRECTING_GIT_VARIABLES`] removed, so the repository
+/// it reads is the one its working directory is in and nothing the caller exported changes which,
+/// or where Git stops looking.
+pub(crate) fn isolated_git() -> std::process::Command {
+    let mut command = std::process::Command::new("git");
+    for name in REDIRECTING_GIT_VARIABLES {
+        command.env_remove(name);
+    }
+    command
+}
 
 /// The `origin` remote's URL in the repository whose common directory is `common`, or `None` when
 /// it has none or `git` cannot be run. The answer is `git remote get-url origin`: the first of

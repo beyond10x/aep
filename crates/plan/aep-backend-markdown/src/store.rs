@@ -119,7 +119,7 @@ impl MarkdownStore {
 
         let overlay = self.overlay();
         for pack in overlay.packs() {
-            if let Err(error) = pack.pack() {
+            if let Err(error) = pack.verified() {
                 report.failures.push(StoreFailure {
                     path: pack.file().to_path_buf(),
                     detail: format!("{PACK_FAILURE}: {error}"),
