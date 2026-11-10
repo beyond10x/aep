@@ -16,6 +16,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - A lifecycle document may list `closed:` states; a kind's closed set is those plus every state with no successor, `aep plan artifact lifecycle <kind>` and the contract's `LifecycleDescriptor` publish it, and a `closed:` state the transitions do not declare is refused at load. aep 0.79.x refuses a protocol tree whose lifecycles carry `closed:`.
 - The planning-store design, concept and reference pages describe packed stores (`aep.pack/1`, `aep.project/6`, `pack`, `unpack`, read-time verification, what stays loose), and an end-to-end test packs and unpacks 1000 closed stories with identical `validate`, `list`, `graph`, `history`, `explain` and `findings` answers.
 
+## [0.79.1] - 2026-11-10
+
 ### Fixed
 
 - `aep plan artifact waves` compares scope entries by path component: a story scoped to a directory (`roles/`) now overlaps one scoped to a file inside it (`roles/decision.yaml`), `roles`, `roles/` and `./roles` are one surface, and `.` holds every path; they computed as disjoint and could share a wave. An entry with a `..` component or a glob collides with every entry, and `aep plan artifact scope --add` and `--remove` treat two spellings of one surface as one entry.
@@ -1878,7 +1880,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.79.0...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.79.1...HEAD
+[0.79.1]: https://github.com/beyond10x/aep/compare/0.79.0...0.79.1
 [0.79.0]: https://github.com/beyond10x/aep/compare/0.78.0...0.79.0
 [0.78.0]: https://github.com/beyond10x/aep/compare/0.77.1...0.78.0
 [0.77.1]: https://github.com/beyond10x/aep/compare/0.77.0...0.77.1
