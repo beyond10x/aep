@@ -368,3 +368,78 @@ fn a_closed_state_the_transitions_do_not_declare_is_refused_when_the_tree_loads(
     assert!(failure.contains("implemented"), "{failure}");
     assert!(failure.contains("story.yaml"), "{failure}");
 }
+
+/// A state with no successor is terminal, and so closed, whether or not the document writes it a
+/// `[]` row. `LOG` ends at `archived`, named only as `active`'s target, which is how every ladder
+/// in this file is written; the story's rule is "a terminal state (no successor) is always closed".
+#[test]
+fn a_last_state_named_only_as_a_target_is_closed() {
+    let root = tree("closed-target-only", &[("log.yaml", LOG)]);
+    let outcome = load_tree_report(&root);
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+
+    let log = outcome
+        .registry
+        .lifecycles()
+        .for_kind_exact(&ArtifactKind::parse("log").expect("kind"))
+        .expect("the log ladder registered")
+        .clone();
+    assert!(
+        !log.permits_transition(&ArtifactStatus::Archived, &ArtifactStatus::Active)
+            && !log.permits_transition(&ArtifactStatus::Archived, &ArtifactStatus::Draft),
+        "`archived` has no successor in this ladder"
+    );
+    assert_eq!(
+        log.closed_states(),
+        std::collections::BTreeSet::from([ArtifactStatus::Archived]),
+        "a status with nowhere to go is closed"
+    );
+    assert!(log.is_closed(&ArtifactStatus::Archived));
+
+    clean(&root);
+}
+
+/// Validation accumulates: a `closed:` list naming two states the ladder lacks is refused naming
+/// both, not only the first. Copying a story's `closed: [implemented, rejected]` onto a ladder
+/// that has neither is the case that reaches it.
+#[test]
+fn every_undeclared_closed_state_is_named_in_the_refusal() {
+    let root = tree(
+        "undeclared-closed-two",
+        &[(
+            "review-result.yaml",
+            "kind: review-result\ninitial: active\ntransitions:\n  active: [archived]\n  archived: []\nclosed: [implemented, rejected]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    let failure = outcome.failures[0].to_string();
+    assert!(failure.contains("unknown_state"), "{failure}");
+    assert!(failure.contains("implemented"), "{failure}");
+    assert!(failure.contains("rejected"), "{failure}");
+
+    clean(&root);
+}
+
+/// The contract (`lifecycle-file.md`, the refusal's own wording) is that each `closed:` entry is a
+/// status `transitions` declares. `initial` is not `transitions`: a state named only there is not
+/// one the transitions declare.
+#[test]
+fn a_closed_state_named_only_as_initial_is_refused() {
+    let root = tree(
+        "closed-initial-only",
+        &[(
+            "task.yaml",
+            "kind: task\ninitial: draft\ntransitions:\n  active: [archived]\n  archived: []\nclosed: [draft]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    let failure = outcome.failures[0].to_string();
+    assert!(failure.contains("unknown_state"), "{failure}");
+    assert!(failure.contains("draft"), "{failure}");
+
+    clean(&root);
+}
