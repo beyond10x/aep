@@ -16,6 +16,10 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - A lifecycle document may list `closed:` states; a kind's closed set is those plus every state with no successor, `aep plan artifact lifecycle <kind>` and the contract's `LifecycleDescriptor` publish it, and a `closed:` state the transitions do not declare is refused at load. aep 0.79.x refuses a protocol tree whose lifecycles carry `closed:`.
 - The planning-store design, concept and reference pages describe packed stores (`aep.pack/1`, `aep.project/6`, `pack`, `unpack`, read-time verification, what stays loose), and an end-to-end test packs and unpacks 1000 closed stories with identical `validate`, `list`, `graph`, `history`, `explain` and `findings` answers.
 
+### Fixed
+
+- `aep plan artifact relate`, `unrelate`, `new`, `move`, `evidence` and `redact` no longer refuse long artifact ids with "invalid idempotency key" or "invalid request identifier": an envelope identifier over the 200-character cap keeps a prefix and ends in the first 16 hex characters of the SHA-256 of the full name, and identifiers at or under the cap are unchanged.
+
 ## [0.79.1] - 2026-11-10
 
 ### Fixed
