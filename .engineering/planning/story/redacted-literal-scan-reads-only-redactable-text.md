@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:redacted-literal-scan-reads-only-redactable-text
 kind: story
-status: active
+status: implemented
 title: validate reports a redacted literal in transition actor ids, which redact never rewrites
 relations:
 - serves: vision:O2
@@ -11,10 +11,11 @@ scope:
   path: crates/edge/aep-cli/src/planning.rs
 - confidence: cited
   path: crates/edge/aep-cli/tests/validate_packs.rs
-revision: 6
+revision: 7
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T21:08:55Z", actor: "human:timo", revision: 2}
 - {from: "proposed", to: "active", at: "2026-11-10T21:08:57Z", actor: "human:timo", revision: 3}
+- {from: "active", to: "implemented", at: "2026-11-10T22:33:44Z", actor: "human:timo", revision: 7, decided_on: {"recorded":{"test_result":1,"review_outcome":1,"verification":1}}}
 ---
 ## Problem
 
