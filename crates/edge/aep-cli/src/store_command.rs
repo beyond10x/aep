@@ -11,6 +11,8 @@ use anyhow::Result;
 use clap::Subcommand;
 
 mod migrate_git;
+mod pack;
+mod unpack;
 
 /// What to do with the selected planning store.
 #[derive(Debug, Subcommand)]
@@ -21,6 +23,22 @@ pub(crate) enum StoreCommand {
         #[command(subcommand)]
         command: MigrateCommand,
     },
+    /// Move closed artifacts and their evidence into one pack under `.engineering/packs/`.
+    ///
+    /// Packs every closed artifact whose bytes Git has committed unchanged at `HEAD`, with every
+    /// evidence file in its evidence directory, writes one new `aep.pack/1` file, removes the loose
+    /// files it packed and any loose copy a pack already holds byte for byte, and sets
+    /// `project.yaml` to `aep.project/6`. Closed is what the artifact kind's lifecycle declares.
+    /// Candidates that are untracked or differ from `HEAD` are named and kept. Refuses outside a
+    /// Git work tree; with nothing eligible it writes nothing and says so.
+    Pack(pack::PackArgs),
+    /// Write packed artifacts and their evidence back as loose files, byte for byte.
+    ///
+    /// Rewrites each pack that held them without them, under its new name (a pack left empty is
+    /// removed), and returns `project.yaml` to `aep.project/5` when no pack remains. A path a merge
+    /// left both loose and packed keeps the loose copy; a path two packs hold with different bytes
+    /// and no loose copy is refused naming both, unless `--from <pack-name>` chooses.
+    Unpack(unpack::UnpackArgs),
 }
 
 /// The layouts a store migrates to.
@@ -262,6 +280,8 @@ pub(crate) fn run(command: StoreCommand) -> Result<ExitCode> {
         StoreCommand::Migrate {
             command: MigrateCommand::Git(args),
         } => migrate_git::run(&args),
+        StoreCommand::Pack(args) => pack::run(&args),
+        StoreCommand::Unpack(args) => unpack::run(&args),
     }
 }
 

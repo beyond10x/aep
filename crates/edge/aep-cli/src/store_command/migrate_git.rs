@@ -238,8 +238,14 @@ struct Carrier {
 
 /// The `.engineering/` directory `--engineering` names, or the discovered project's.
 fn engineering_of(args: &GitArgs) -> Result<PathBuf> {
-    if let Some(path) = &args.engineering {
-        return Ok(path.clone());
+    discover_engineering(args.engineering.as_deref())
+}
+
+/// The `.engineering/` directory `explicit` names, or the discovered project's: what every verb of
+/// the `aep plan store` group resolves its `--engineering` flag through.
+pub(super) fn discover_engineering(explicit: Option<&Path>) -> Result<PathBuf> {
+    if let Some(path) = explicit {
+        return Ok(path.to_path_buf());
     }
     let here = std::env::current_dir().context("reading the working directory")?;
     let directory = aep_project::project::project_directory();
@@ -255,7 +261,7 @@ fn engineering_of(args: &GitArgs) -> Result<PathBuf> {
 }
 
 /// The lifecycles the migrated project's protocol tree declares, for each kind's initial state.
-fn lifecycles_of(config: &ProjectConfig, engineering: &Path) -> Result<LifecycleRegistry> {
+pub(super) fn lifecycles_of(config: &ProjectConfig, engineering: &Path) -> Result<LifecycleRegistry> {
     let tree = aep_project::project::resolve_protocols(&config.protocols, engineering)
         .map_err(|error| anyhow::anyhow!("{error}"))
         .context("resolving the project's protocol source")?;

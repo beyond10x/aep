@@ -272,8 +272,9 @@ enum GovernCommand {
 #[derive(Debug, Subcommand)]
 #[allow(clippy::large_enum_variant)] // Clap owns this closed command tree; boxing changes its API.
 enum PlanCommand {
-    /// Move the selected planning store to another layout: `migrate git` turns an `aep.project/1`
-    /// Markdown plan into the Git-native `aep.project/5` one.
+    /// Change the layout of the selected planning store: `migrate git` turns an `aep.project/1`
+    /// Markdown plan into the Git-native `aep.project/5` one; `pack` and `unpack` move closed
+    /// artifacts and their evidence into and out of `aep.pack/1` files.
     Store {
         /// Which store operation to perform.
         #[command(subcommand)]

@@ -443,6 +443,30 @@ pub fn render<P: AsRef<str>, B: AsRef<[u8]>>(records: &[(P, B)]) -> Result<Vec<u
     Ok(out)
 }
 
+/// The bytes of `pack` without the records at `dropped`, or `None` when nothing is left.
+///
+/// The records that stay keep their bytes, so the result is what [`render`] makes of the remaining
+/// set: its name is the name the rewritten pack is written under. A pack is never edited in place.
+///
+/// # Errors
+///
+/// As [`render`]; a pack that parsed holds paths that pass, so a refusal here is a bug.
+pub fn render_without(
+    pack: &Pack,
+    dropped: &std::collections::BTreeSet<String>,
+) -> Result<Option<Vec<u8>>, PackError> {
+    let kept: Vec<(&str, &[u8])> = pack
+        .records()
+        .iter()
+        .filter(|record| !dropped.contains(record.path()))
+        .map(|record| (record.path(), record.bytes()))
+        .collect();
+    if kept.is_empty() {
+        return Ok(None);
+    }
+    render(&kept).map(Some)
+}
+
 /// One pack file in the packs directory, parsed or refused.
 #[derive(Debug, Clone)]
 pub struct PackFile {
