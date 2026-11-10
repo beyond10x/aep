@@ -18,7 +18,10 @@ use aep_domain::project::{ProjectVersion, GIT_EVIDENCE_DIRECTORY, GIT_PLANNING_D
 use anyhow::{Context, Result};
 use clap::Args;
 
-use super::pack::{ensure_attributes_removed, print_counts, write_atomic, write_pack, Store};
+use super::pack::{
+    checkout_bytes, ensure_attributes_removed, open_repo, print_counts, write_atomic, write_pack,
+    Store,
+};
 
 /// The arguments of `aep plan store unpack`.
 #[derive(Debug, Clone, Args)]
@@ -223,6 +226,7 @@ fn no_pack(args: &UnpackArgs, store: &Store) -> Result<ExitCode> {
 
 pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
     let store = Store::open(args.engineering.as_deref())?;
+    let repo = open_repo(&store.engineering, store.overlay.packs_directory())?;
     let _fence = if args.dry_run {
         None
     } else {
@@ -283,8 +287,12 @@ pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
 
     for (path, bytes) in &plan.restore {
         let file = store.overlay.loose_path(path);
-        write_atomic(&file, bytes)?;
-        if fs::read(&file).ok().as_deref() != Some(bytes.as_slice()) {
+        let written = match &repo {
+            Some(repo) => checkout_bytes(repo, path, bytes)?,
+            None => bytes.clone(),
+        };
+        write_atomic(&file, &written)?;
+        if fs::read(&file).ok().as_deref() != Some(written.as_slice()) {
             anyhow::bail!("{} does not read back as written", file.display());
         }
     }

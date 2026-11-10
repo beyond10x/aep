@@ -12,7 +12,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode};
+use std::io::Write as _;
+use std::process::{Command, ExitCode, Stdio};
 
 use aep_backend_markdown::pack::{self, Overlay, Pack, Place};
 use aep_backend_markdown::PlanningDocument;
@@ -264,7 +265,7 @@ fn git(engineering: &Path) -> Command {
 }
 
 /// The Git work tree around `.engineering`.
-struct Repo {
+pub(super) struct Repo {
     /// The work tree's top directory.
     top: PathBuf,
     /// `.engineering`'s path below the top, with a trailing `/`, or empty at the top.
@@ -283,29 +284,37 @@ fn git_text(engineering: &Path, args: &[&str]) -> Option<String> {
 /// `.engineering` or `.engineering/packs` that is a symbolic link or resolves outside the work
 /// tree: the records would leave what Git tracks.
 fn require_work_tree(engineering: &Path, packs: &Path) -> Result<Repo> {
-    let inside = git_text(engineering, &["rev-parse", "--is-inside-work-tree"]);
-    let top = git_text(engineering, &["rev-parse", "--show-toplevel"]);
-    let (Some("true"), Some(top)) = (inside.as_deref(), top) else {
-        anyhow::bail!(
+    open_repo(engineering, packs)?.with_context(|| {
+        format!(
             "{} is not inside a Git work tree; `pack` packs only bytes Git has committed, so it \
              needs one; nothing was written",
             engineering.display()
-        );
+        )
+    })
+}
+
+/// [`require_work_tree`]'s checks for a verb that also runs outside a work tree: `None` when there
+/// is none. A symbolic link at `.engineering` or `.engineering/packs` is refused either way.
+pub(super) fn open_repo(engineering: &Path, packs: &Path) -> Result<Option<Repo>> {
+    for location in [engineering, packs] {
+        if fs::symlink_metadata(location).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+            anyhow::bail!(
+                "{} is a symbolic link; packs are written only inside the Git work tree; nothing \
+                 was written",
+                location.display()
+            );
+        }
+    }
+    let inside = git_text(engineering, &["rev-parse", "--is-inside-work-tree"]);
+    let top = git_text(engineering, &["rev-parse", "--show-toplevel"]);
+    let (Some("true"), Some(top)) = (inside.as_deref(), top) else {
+        return Ok(None);
     };
     let prefix = git_text(engineering, &["rev-parse", "--show-prefix"]).unwrap_or_default();
     let top = PathBuf::from(top);
     let canonical_top = top
         .canonicalize()
         .with_context(|| format!("resolving {}", top.display()))?;
-    for location in [engineering, packs] {
-        if fs::symlink_metadata(location).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
-            anyhow::bail!(
-                "{} is a symbolic link; `pack` writes only inside the Git work tree; nothing was \
-                 written",
-                location.display()
-            );
-        }
-    }
     let resolved = engineering
         .canonicalize()
         .with_context(|| format!("resolving {}", engineering.display()))?;
@@ -316,7 +325,44 @@ fn require_work_tree(engineering: &Path, packs: &Path) -> Result<Repo> {
             canonical_top.display()
         );
     }
-    Ok(Repo { top, prefix })
+    Ok(Some(Repo { top, prefix }))
+}
+
+/// The bytes a checkout of `bytes` at `path` (relative to `.engineering`) leaves in the work tree:
+/// the record stored as a blob, then read back through Git filters and attributes.
+pub(super) fn checkout_bytes(repo: &Repo, path: &str, bytes: &[u8]) -> Result<Vec<u8>> {
+    let mut hash = git(&repo.top)
+        .args(["hash-object", "-w", "--no-filters", "--stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("running git")?;
+    let mut stdin = hash.stdin.take().context("git stdin")?;
+    let input = bytes.to_vec();
+    let feeder = std::thread::spawn(move || stdin.write_all(&input));
+    let output = hash.wait_with_output().context("running git")?;
+    feeder.join().map_err(|_| anyhow::anyhow!("feeding git"))?.context("feeding git")?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "`git hash-object` refused: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    let oid = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let shown = git(&repo.top)
+        .args(["cat-file", "--filters"])
+        .arg(format!("--path={}{path}", repo.prefix))
+        .arg(&oid)
+        .output()
+        .context("running git")?;
+    if !shown.status.success() {
+        anyhow::bail!(
+            "`git cat-file --filters` refused: {}",
+            String::from_utf8_lossy(&shown.stderr).trim()
+        );
+    }
+    Ok(shown.stdout)
 }
 
 /// A path `HEAD` holds: its mode and blob id.
@@ -364,6 +410,38 @@ fn head_blobs(engineering: &Path) -> Result<BTreeMap<String, Committed>> {
                     },
                 );
             }
+        }
+    }
+    Ok(found)
+}
+
+/// The `filter` or `ident` attribute Git applies to each path (relative to `.engineering`), for the
+/// paths that have one. Their committed bytes are filter output, which a pack must never hold.
+fn filter_attributes(repo: &Repo, paths: &[String]) -> Result<BTreeMap<String, String>> {
+    let mut found = BTreeMap::new();
+    for chunk in paths.chunks(256) {
+        let output = git(&repo.top)
+            .args(["check-attr", "-z", "filter", "ident", "--"])
+            .args(chunk.iter().map(|path| format!("{}{path}", repo.prefix)))
+            .output()
+            .context("running git")?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "`git check-attr` refused: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+        }
+        let fields: Vec<String> = output
+            .stdout
+            .split(|byte| *byte == 0)
+            .map(|field| String::from_utf8_lossy(field).into_owned())
+            .collect();
+        for triple in fields.as_chunks::<3>().0 {
+            if matches!(triple[2].as_str(), "unspecified" | "unset") {
+                continue;
+            }
+            let path = triple[0].strip_prefix(repo.prefix.as_str()).unwrap_or(&triple[0]);
+            found.entry(path.to_owned()).or_insert_with(|| triple[1].clone());
         }
     }
     Ok(found)
@@ -655,11 +733,15 @@ fn plan(store: &Store, repo: &Repo) -> Result<Plan> {
     // tree's top) against `HEAD`'s; the pack takes the committed bytes, never the working file's.
     let paths: Vec<String> = candidates.into_iter().collect();
     let ids = blob_ids(repo, &paths)?;
+    let filtered = filter_attributes(repo, &paths)?;
     let mut checked: BTreeMap<String, Checked> = BTreeMap::new();
     let mut eligible: Vec<(String, String)> = Vec::new();
     for (path, id) in paths.into_iter().zip(ids) {
         let verdict = match committed.get(&path) {
             None => Some("untracked".to_owned()),
+            Some(_) if filtered.contains_key(&path) => {
+                Some(format!("filtered by Git ({})", filtered[&path]))
+            }
             Some(held) if held.mode != "100644" => Some(format!("mode {}", held.mode)),
             Some(held) if held.oid != id => Some("differs from HEAD".to_owned()),
             Some(_) => {
