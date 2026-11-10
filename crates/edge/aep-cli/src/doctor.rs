@@ -540,25 +540,20 @@ fn planning_store(
 
 /// How many evidence records a Git-native store keeps: the `.json` files under
 /// `<evidence>/<kind>/<name>/`. A directory that is not there holds none.
+/// Counted through the overlay, so a record held in a pack is one the store keeps.
 fn evidence_files(evidence: &Path) -> usize {
-    fn below(directory: &Path, depth: usize) -> usize {
-        let Ok(entries) = std::fs::read_dir(directory) else {
-            return 0;
-        };
-        entries
-            .filter_map(Result::ok)
-            .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
-            .map(|entry| entry.path())
-            .map(|path| match depth {
-                0 => usize::from(
-                    path.is_file() && path.extension().is_some_and(|found| found == "json"),
-                ),
-                _ if path.is_dir() => below(&path, depth - 1),
-                _ => 0,
-            })
-            .sum()
-    }
-    below(evidence, 2)
+    let overlay = aep_backend_markdown::pack::Overlay::for_evidence(evidence);
+    let directories = |directory: &str| overlay.directories(directory).unwrap_or_default();
+    directories("evidence")
+        .into_iter()
+        .flat_map(|kind| {
+            directories(&format!("evidence/{kind}"))
+                .into_iter()
+                .map(move |name| format!("evidence/{kind}/{name}"))
+                .collect::<Vec<_>>()
+        })
+        .map(|directory| overlay.files(&directory, "json").unwrap_or_default().len())
+        .sum()
 }
 
 /// Where a plan says it is, when nothing is there.

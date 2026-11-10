@@ -161,6 +161,13 @@ fn selected_layout(text: &str, selector_path: &Path) -> Result<Selected> {
     if version == PROJECT_VERSION_V5 {
         return Ok(Selected::GitNative);
     }
+    if version == aep_domain::project::PROJECT_VERSION_V6 {
+        anyhow::bail!(
+            "{} is `{version}`, a store that keeps closed artifacts in packs; its repair would \
+             write a loose copy of a packed artifact. Run `aep plan store unpack --all` first",
+            selector_path.display()
+        );
+    }
     if version != PROJECT_VERSION_V1 {
         anyhow::bail!(
             "{} is `{version}`; this build migrates `{PROJECT_VERSION_V1}` to \

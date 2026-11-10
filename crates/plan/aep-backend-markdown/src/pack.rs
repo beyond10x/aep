@@ -608,9 +608,10 @@ impl Overlay {
     /// whatever those directories are called.
     #[must_use]
     pub fn loose_path(&self, path: &str) -> PathBuf {
-        let (root, rest) = match path.split_once('/').or_else(|| {
-            matches!(path, "planning" | "evidence").then_some((path, ""))
-        }) {
+        let (root, rest) = match path
+            .split_once('/')
+            .or_else(|| matches!(path, "planning" | "evidence").then_some((path, "")))
+        {
             Some(("planning", rest)) => (&self.planning, rest),
             Some(("evidence", rest)) => (&self.evidence, rest),
             _ => (&self.planning, path),

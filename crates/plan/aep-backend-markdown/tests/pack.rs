@@ -7,7 +7,11 @@ use aep_backend_markdown::pack::{self, Holder, Overlay, Pack, PackCode, Place};
 use sha2::{Digest as _, Sha256};
 
 fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write as _;
+    bytes.iter().fold(String::new(), |mut out, byte| {
+        write!(out, "{byte:02x}").expect("a String takes a write");
+        out
+    })
 }
 
 fn sha(bytes: &[u8]) -> String {
@@ -284,10 +288,10 @@ fn the_overlay_lists_every_place_that_holds_a_path_with_the_bytes_each_holds() {
         only_b,
         vec![Holder::new(Place::Packed(second), b"only b".to_vec())]
     );
-    assert!(overlay
-        .holders("planning/story/none.md")
-        .expect("lists")
-        .is_empty());
+    assert_eq!(
+        overlay.holders("planning/story/none.md").expect("lists"),
+        Vec::<Holder>::new()
+    );
 }
 
 #[test]
