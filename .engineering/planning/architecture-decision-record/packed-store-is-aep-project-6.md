@@ -2,12 +2,14 @@
 format: aep.planning-md/3
 id: architecture-decision-record:packed-store-is-aep-project-6
 kind: architecture-decision-record
-status: proposed
+status: accepted
 title: A store that holds a pack is aep.project/6
 relations:
 - decides: epic:store-pack-closed-artifacts
 - informed_by: architecture-design:store-pack
-revision: 1
+revision: 2
+transitions:
+- {from: "proposed", to: "accepted", at: "2026-11-10T10:41:09Z", actor: "human:timo", revision: 2}
 ---
 # Decision: a store that holds a pack is `aep.project/6`
 
