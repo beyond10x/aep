@@ -75,6 +75,7 @@ fn runbook_lifecycle() -> LifecycleDescriptor {
         // A ladder that only says which moves are legal costs no evidence.
         requires: Vec::new(),
         or: Vec::new(),
+        closed: vec![ArtifactStatus::Archived],
         initial: ArtifactStatus::Draft,
         statuses: vec![
             ArtifactStatus::Draft,

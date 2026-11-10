@@ -45,6 +45,10 @@ pub struct LifecycleDescriptor {
     /// paid by any of these.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub or: Vec<(ArtifactStatus, EvidenceKind, Vec<EvidenceKind>)>,
+    /// The statuses that count as closed: those the ladder declares closed plus every status with
+    /// no successor. Empty for a ladder with neither.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub closed: Vec<ArtifactStatus>,
 }
 
 /// A command this type accepts.

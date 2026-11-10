@@ -61,6 +61,11 @@ fn specification() -> TypeDescriptor {
         // A ladder that only says which moves are legal costs no evidence.
         requires: Vec::new(),
         or: Vec::new(),
+        closed: vec![
+            ArtifactStatus::Implemented,
+            ArtifactStatus::Rejected,
+            ArtifactStatus::Archived,
+        ],
         initial: ArtifactStatus::Draft,
         statuses: vec![
             ArtifactStatus::Draft,

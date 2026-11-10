@@ -2310,18 +2310,22 @@ impl ArtifactLifecycle {
         self.transitions.get(status).is_some_and(BTreeSet::is_empty)
     }
 
-    /// The closed statuses: those the document lists under `closed` plus every terminal one.
+    /// The closed statuses: those the document lists under `closed` plus every status with no
+    /// successor.
     ///
+    /// "No successor" is a status with an empty row or no row at all, so a last state named only as
+    /// a target is closed too; that differs from [`is_terminal`](ArtifactLifecycle::is_terminal),
+    /// which asks for the empty row and which this leaves as it was. The statuses considered are
+    /// those [`statuses`](ArtifactLifecycle::statuses) lists.
     /// [`permissive`](ArtifactLifecycle::permissive) has none, for the reason it has no terminal
     /// rung.
     #[must_use]
     pub fn closed_states(&self) -> BTreeSet<ArtifactStatus> {
         let mut closed = self.closed.clone();
         closed.extend(
-            self.transitions
-                .iter()
-                .filter(|(_, to)| to.is_empty())
-                .map(|(from, _)| from.clone()),
+            self.statuses()
+                .into_iter()
+                .filter(|status| self.has_no_successor(status)),
         );
         closed
     }
@@ -2329,16 +2333,26 @@ impl ArtifactLifecycle {
     /// `true` when `status` is closed for this kind.
     #[must_use]
     pub fn is_closed(&self, status: &ArtifactStatus) -> bool {
-        self.closed.contains(status) || self.is_terminal(status)
+        self.closed.contains(status) || self.has_no_successor(status)
     }
 
-    /// The `closed` entries this ladder does not declare, in order.
+    fn has_no_successor(&self, status: &ArtifactStatus) -> bool {
+        self.statuses().contains(status)
+            && self.transitions.get(status).is_none_or(BTreeSet::is_empty)
+    }
+
+    /// The `closed` entries `transitions` does not declare, in order.
+    ///
+    /// A state is declared by `transitions` when it is a row's key or any row's target; `initial`
+    /// alone does not declare it.
     #[must_use]
     pub fn undeclared_closed(&self) -> Vec<ArtifactStatus> {
-        let declared = self.statuses();
         self.closed
             .iter()
-            .filter(|status| !declared.contains(status))
+            .filter(|status| {
+                !self.transitions.contains_key(*status)
+                    && !self.transitions.values().any(|to| to.contains(*status))
+            })
             .cloned()
             .collect()
     }

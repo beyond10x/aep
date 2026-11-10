@@ -95,24 +95,29 @@ impl Registry {
         &mut self,
         lifecycle: ArtifactLifecycle,
     ) -> Result<(), ValidationError> {
-        if let Some(state) = lifecycle.undeclared_closed().first() {
+        let undeclared = lifecycle.undeclared_closed();
+        if !undeclared.is_empty() {
             let owner = lifecycle
                 .kind
                 .as_ref()
                 .map_or("the fallback lifecycle".to_owned(), |kind| {
                     format!("the `{}` lifecycle", kind.as_str())
                 });
+            let names = undeclared
+                .iter()
+                .map(|state| format!("`{}`", state.as_str()))
+                .collect::<Vec<_>>()
+                .join(", ");
             return Err(ValidationError::new(
                 ValidationCode::UnknownState,
                 "lifecycle.closed",
                 format!(
-                    "{owner} lists `{}` under `closed`, and its `transitions` do not declare that \
-                     state",
-                    state.as_str()
+                    "{owner} lists {names} under `closed`, and its `transitions` do not declare \
+                     that state"
                 ),
             )
             .with_hint(
-                "name a state the ladder has, or add it to `transitions`; a closed state is one \
+                "name states the ladder has, or add them to `transitions`; a closed state is one \
                  the ladder declares",
             ));
         }

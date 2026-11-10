@@ -372,6 +372,7 @@ pub fn describe(
             .collect(),
         requires,
         or,
+        closed: lifecycle.closed_states().into_iter().collect(),
     })
 }
 
