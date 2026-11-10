@@ -1746,8 +1746,9 @@ impl fmt::Display for ScopeConfidence {
 ///
 /// **A path holds every path under it.** The verb compares entries by path component, so
 /// `crates/govern/aep-domain` collides with `crates/govern/aep-domain/src/artifact.rs` and with
-/// neither `crates/govern/aep-domain.md` nor `crates/govern/aep-domain-x`, and a trailing `/` does
-/// not change the answer. That is read off the entries alone: this crate cannot see a working tree,
+/// neither `crates/govern/aep-domain.md` nor `crates/govern/aep-domain-x`; empty and `.` components
+/// do not change the answer, `.` is the repository root holding every path, and an entry with a
+/// `..` component or a glob collides with every entry because it cannot be compared. That is read off the entries alone: this crate cannot see a working tree,
 /// so the path is stored as written and nothing here decides whether it names a file or a
 /// directory.
 ///

@@ -88,8 +88,8 @@ pub(crate) struct Collision {
     pub(crate) a: String,
     /// The higher of the two ids.
     pub(crate) b: String,
-    /// The surface they share: the narrower of the two entries, as declared — the file when one
-    /// side declares its directory.
+    /// The surface they share: the narrower of the two entries in its normal spelling — the file
+    /// when one side declares its directory — or, as declared, an entry no comparison can place.
     pub(crate) path: String,
     /// `inferred` when either side worked the path out rather than reading it.
     ///
@@ -261,7 +261,7 @@ fn collisions_among(
             // Keyed by the shared path, so `roles` and `roles/` on one side meeting
             // `roles/decision.yaml` on the other is one collision and not two; inferred wins when
             // any entry behind it was a guess.
-            let mut shared: BTreeMap<&str, ScopeConfidence> = BTreeMap::new();
+            let mut shared: BTreeMap<String, ScopeConfidence> = BTreeMap::new();
             for left in &by_id[a].scope {
                 for right in &by_id[b].scope {
                     let Some(path) = narrower(&left.path, &right.path) else {
@@ -288,7 +288,7 @@ fn collisions_among(
                 collisions.push(Collision {
                     a: (*a).to_owned(),
                     b: (*b).to_owned(),
-                    path: path.to_owned(),
+                    path,
                     confidence,
                 });
             }
@@ -297,36 +297,64 @@ fn collisions_among(
     collisions
 }
 
-/// The surface two declared paths share — the narrower of the two, as declared — or `None` when
-/// they are disjoint. Two spellings of one surface answer with `left`.
+/// The surface two declared paths share — the narrower of the two, in its normal spelling — or
+/// `None` when they are disjoint.
 ///
 /// By path component, so `roles` holds `roles/decision.yaml` and holds neither `roles.md` nor
-/// `rolesx/lookup.yaml`; and with a trailing `/` ignored, so `roles` and `roles/` are one surface
-/// whichever spelling a scoper wrote. Only the entries are read, never a working tree, so a file
-/// and a directory of one name are one surface here: that errs towards keeping two stories apart.
-fn narrower<'a>(left: &'a str, right: &'a str) -> Option<&'a str> {
-    let (l, r) = (bare(left), bare(right));
-    if l == r {
-        Some(left)
-    } else if within(l, r) {
-        Some(right)
-    } else if within(r, l) {
-        Some(left)
-    } else {
-        None
+/// `rolesx/lookup.yaml`; empty and `.` components are dropped, so `roles`, `roles/`, `./roles` and
+/// `roles//` are one surface whichever spelling a scoper wrote, and `.` is the repository root,
+/// which holds every path. Only the entries are read, never a working tree, so a file and a
+/// directory of one name are one surface here: that errs towards keeping two stories apart.
+///
+/// An entry the entries alone cannot place — one with a `..` component, or a glob — is shared with
+/// every other entry and reported as declared: unknown is not disjoint.
+fn narrower(left: &str, right: &str) -> Option<String> {
+    match (components(left), components(right)) {
+        (None, _) => Some(left.to_owned()),
+        (_, None) => Some(right.to_owned()),
+        (Some(l), Some(r)) => {
+            if r.starts_with(&l) {
+                Some(spelled(&r))
+            } else if l.starts_with(&r) {
+                Some(spelled(&l))
+            } else {
+                None
+            }
+        }
     }
 }
 
-/// Whether `inner` lies strictly under the directory `outer`, both without a trailing `/`.
-fn within(outer: &str, inner: &str) -> bool {
-    inner
-        .strip_prefix(outer)
-        .is_some_and(|rest| rest.starts_with('/'))
+/// Whether two declared paths name one surface: equal components, or the same spelling when the
+/// comparison cannot place them. `scope --add` and `--remove` match entries by this.
+pub(crate) fn one_surface(left: &str, right: &str) -> bool {
+    match (components(left), components(right)) {
+        (Some(l), Some(r)) => l == r,
+        _ => left == right,
+    }
 }
 
-/// The path without its trailing separators: `roles/` and `roles` name one directory.
-fn bare(path: &str) -> &str {
-    path.trim_end_matches('/')
+/// The path's components without empty and `.` ones, or `None` when a component is `..` or a glob
+/// (`*`, `?`, `[`), which no component comparison can place.
+fn components(path: &str) -> Option<Vec<&str>> {
+    let mut parts = Vec::new();
+    for part in path.split('/') {
+        match part {
+            "" | "." => {}
+            ".." => return None,
+            glob if glob.contains(['*', '?', '[']) => return None,
+            part => parts.push(part),
+        }
+    }
+    Some(parts)
+}
+
+/// The normal spelling of a component list: joined by `/`, and `.` for the repository root.
+fn spelled(parts: &[&str]) -> String {
+    if parts.is_empty() {
+        ".".to_owned()
+    } else {
+        parts.join("/")
+    }
 }
 
 /// Fills `into` with the assessable stories reachable from `id` through `depends_on`.

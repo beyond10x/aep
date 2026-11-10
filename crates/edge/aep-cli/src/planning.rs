@@ -1116,7 +1116,8 @@ pub(crate) enum ArtifactCommand {
     ///
     /// **A path holds every path under it.** `waves` reports `crates/x` and `crates/x/src/lib.rs`
     /// as a collision, compared by path component (`crates/x` does not hold `crates/x.md`), and
-    /// `crates/x/` is the same surface as `crates/x`. The path is stored as written.
+    /// `crates/x/` and `./crates/x` are the same surface as `crates/x`, so adding one replaces the
+    /// other and removing either removes it. The path is stored as written.
     ///
     /// The `## Scope` section stays what a person reads; this is what a computation reads, and the
     /// scoper writes both.
@@ -1151,7 +1152,7 @@ pub(crate) enum ArtifactCommand {
     ///
     /// **It reads and prints.** Choosing which wave to run is the operator's, and so is deciding
     /// that a reported collision may be worked anyway. A path holds every path under it, by
-    /// component and with a trailing `/` ignored: `crates/x` collides with `crates/x/src/lib.rs`,
+    /// component and with empty and `.` components ignored: `crates/x` collides with `crates/x/src/lib.rs`,
     /// printed as the narrower path, and not with `crates/x.md`. Only the entries are read, never
     /// the working tree.
     Waves {
@@ -4381,7 +4382,11 @@ fn scope(
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         // A path already declared is **replaced**, never doubled: two entries for one surface would
         // be a document saying two things about it, and a computation reading it would pick one.
-        match entries.iter_mut().find(|held| held.path == entry.path) {
+        // One surface is compared as `waves` compares it, so `roles/` replaces `roles`.
+        match entries
+            .iter_mut()
+            .find(|held| waves::one_surface(&held.path, &entry.path))
+        {
             Some(held) => held.clone_from(&entry),
             None => entries.push(entry.clone()),
         }
@@ -4389,8 +4394,11 @@ fn scope(
     }
     let mut removed: Vec<String> = Vec::new();
     for path in remove {
-        if entries.iter().any(|held| &held.path == path) {
-            entries.retain(|held| &held.path != path);
+        if entries
+            .iter()
+            .any(|held| waves::one_surface(&held.path, path))
+        {
+            entries.retain(|held| !waves::one_surface(&held.path, path));
             removed.push(path.clone());
         }
     }
