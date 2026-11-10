@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-10T19:59:02Z",
+  "actor": "human:timo",
+  "artifact": "story:write-verbs-refuse-long-artifact-ids",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator run on fix/write-verbs-long-artifact-ids at 113e3122b (main a3458e015 merged in): aep-cli long_artifact_ids, planning_cli, git_store, cross_member_relations, store_pack, validate_packs, aep-cli lib, aep-backend-memory, aep-domain lib: 774 tests passed in 12 binaries; clippy and fmt over the three packages exit 0"
+  }
+}

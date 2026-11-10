@@ -11,7 +11,11 @@ scope:
   path: crates/edge/aep-cli/src/planning.rs
 - confidence: cited
   path: crates/edge/aep-cli/tests/long_artifact_ids.rs
-revision: 5
+- confidence: cited
+  path: crates/govern/aep-domain/src/ids.rs
+- confidence: cited
+  path: crates/plan/aep-backend-memory/src/seed.rs
+revision: 6
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T18:04:10Z", actor: "human:timo", revision: 3}
 - {from: "proposed", to: "active", at: "2026-11-10T18:04:11Z", actor: "human:timo", revision: 4}
