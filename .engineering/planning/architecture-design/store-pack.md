@@ -6,7 +6,7 @@ status: draft
 title: 'Packing closed artifacts: aep.pack/1, one read overlay, unpack, validate'
 relations:
 - designs: epic:store-pack-closed-artifacts
-revision: 3
+revision: 4
 ---
 # Design: packing closed artifacts out of the working tree
 
@@ -153,8 +153,13 @@ committed store twice, on two machines, writes the same file. `unpack` writes th
   by two packs with identical bytes, which `validate` admits.
 - One branch packs X, the other changes loose X: Git reports a modify/delete conflict on X's file, as
   it reports any concurrent change today (R4 holds).
-- Two branches unpack from the same pack: each deletes the pack and adds a different rewrite. The
-  merge is clean and may leave a path both loose and packed, or packed twice with different bytes.
+- Two branches unpack from the same pack: each deletes the pack and adds a different rewrite. With
+  Git's default rename detection the merge is not clean: Git pairs each rewrite with the deleted
+  pack by similarity and reports rename/delete and modify/delete conflicts on the pack files
+  (observed in the `pack`/`unpack` unit's merge test). The resolution is to keep both new packs and
+  remove the old one (`git rm` the old name, `git add` both new names); merging with
+  `-c merge.renames=false` avoids the conflict. The merged tree may then leave a path both loose and
+  packed, or packed twice with different bytes.
   `validate` refuses a path held in two places with **different** bytes, naming both places;
   `aep plan store unpack <id>` resolves it (loose copy kept, packed copies removed; with no loose
   copy, `--from <pack-name>` chooses).
