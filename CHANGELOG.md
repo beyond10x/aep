@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.80.0] - 2026-11-10
+
 ### Added
 
 - `aep plan store pack [--dry-run]` moves closed artifacts and their evidence, whose bytes Git has committed unchanged, into one content-addressed `aep.pack/1` file under `.engineering/packs/` and sets `aep.project/6`; `aep plan store unpack <id>… | --all [--from <pack>] [--dry-run]` restores them as `git checkout` writes them, rewrites the packs that held them, and returns the store to `aep.project/5` when no pack remains. Both refuse a symbolic link at `.engineering`, `planning`, `evidence` or `packs`, and run on an `aep.project/5` store that holds packs. Nothing is deleted from the record.
@@ -1885,7 +1887,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.79.1...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.0...HEAD
+[0.80.0]: https://github.com/beyond10x/aep/compare/0.79.1...0.80.0
 [0.79.1]: https://github.com/beyond10x/aep/compare/0.79.0...0.79.1
 [0.79.0]: https://github.com/beyond10x/aep/compare/0.78.0...0.79.0
 [0.78.0]: https://github.com/beyond10x/aep/compare/0.77.1...0.78.0
