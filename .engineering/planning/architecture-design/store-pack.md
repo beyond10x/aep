@@ -6,7 +6,7 @@ status: draft
 title: 'Packing closed artifacts: aep.pack/1, one read overlay, unpack, validate'
 relations:
 - designs: epic:store-pack-closed-artifacts
-revision: 1
+revision: 2
 ---
 # Design: packing closed artifacts out of the working tree
 
@@ -127,7 +127,9 @@ same documents and the same evidence and prints the same output. Per verb:
 - **`aep plan store unpack <id>… | --all [--dry-run]`** writes the artifact file and its packed
   evidence files back to their original paths, byte for byte, and rewrites each pack that held them
   without them (new name, old file removed; a pack left empty is removed). When a loose file already
-  holds that path, unpack keeps the loose file and only removes the packed copy. When no pack
+  holds that path, unpack keeps the loose file and only removes the packed copies. When two packs
+  hold the path with different bytes and no loose file does, unpack refuses naming both packs;
+  `unpack <id> --from <pack-name>` restores that pack's copy and removes the others. When no pack
   remains, `project.yaml` returns to `aep.project/5`.
 - **`aep plan store pack [--dry-run]`** writes one new pack with every eligible record, removes the
   loose files it packed, and sets `project.yaml` to `aep.project/6`. A record already held
@@ -153,7 +155,8 @@ committed store twice, on two machines, writes the same file. `unpack` writes th
 - Two branches unpack from the same pack: each deletes the pack and adds a different rewrite. The
   merge is clean and may leave a path both loose and packed, or packed twice with different bytes.
   `validate` refuses a path held in two places with **different** bytes, naming both places;
-  `aep plan store unpack <id>` resolves it (loose copy kept, packed copies removed).
+  `aep plan store unpack <id>` resolves it (loose copy kept, packed copies removed; with no loose
+  copy, `--from <pack-name>` chooses).
 
 ## What `validate` checks about packs
 
