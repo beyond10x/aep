@@ -10,12 +10,12 @@ description: Every field of .engineering/project.yaml, the file that makes a rep
 working directory upwards, up to twelve levels. `AEP_PROJECT_DIR` renames `.engineering`. Unknown
 keys are refused.
 
-{/* generated:release-pin:begin commit=81d80288038e85dd30a1c54ce9c7f25e38b42ae0 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin commit=546375349c6ebb1ce64dac6b1923bff557009e80 — kept by `cargo xtask status` */}
 ```yaml
 version: aep.project/5                 # the store format; see below
 protocol: adp/1                        # the protocol the project runs under
 profile: development.standard          # the profile whose rules apply
-protocols: git+https://github.com/beyond10x/aep#81d80288038e85dd30a1c54ce9c7f25e38b42ae0
+protocols: git+https://github.com/beyond10x/aep#546375349c6ebb1ce64dac6b1923bff557009e80
 planning_scope: shop                   # required by aep.project/5
 store:
   git: {}                              # the Git-native store, the default
@@ -29,11 +29,11 @@ providers:                             # optional: link patterns for external re
 
 | Field | Required | Default | Meaning |
 |---|---|---|---|
-| `version` | yes | | `aep.project/5`. `aep.project/1` (also what a file with no `version` is) and `aep.project/2`–`/4` are refused with the migration path. |
+| `version` | yes | | `aep.project/5`, or `aep.project/6`: the same store when closed artifacts and their evidence are held in `.engineering/packs/*.pack` (`aep.pack/1`) as well as loose files, which every verb reads as one tree. A build that does not know `/6` refuses it with `unsupported_protocol_version`; `aep plan store migrate git` refuses a `/6` store and says to run `aep plan store unpack --all` first. `aep.project/1` (also what a file with no `version` is) and `aep.project/2`–`/4` are refused with the migration path. |
 | `protocol` | yes | | the protocol reference, such as `adp/1` |
 | `profile` | yes | | the profile, such as `development.standard` |
 | `protocols` | no | `..` | where the governing documents come from: a path relative to `.engineering/`, or a `git+ssh://`, `git+https://` or `git+file://` URL pinned to a 40-hex commit after `#` |
-| `planning_scope` | with `/5` | | the store's name, 1–255 UTF-8 bytes including a non-whitespace character; `reverse init` and `migrate git` set it to `--planning-scope`, else the `origin` remote's repository name, else the primary checkout's directory name, else (outside Git) the directory holding `.engineering/` |
+| `planning_scope` | with `/5` and `/6` | | the store's name, 1–255 UTF-8 bytes including a non-whitespace character; `reverse init` and `migrate git` set it to `--planning-scope`, else the `origin` remote's repository name, else the primary checkout's directory name, else (outside Git) the directory holding `.engineering/` |
 | `store` | no | `git: {}` | where the plan is kept; see below |
 | `summary` | no | | one line for people; nothing reads it |
 | `providers` | no | | a URL pattern per external system, each containing `{key}`; a pattern without `{key}` is refused |

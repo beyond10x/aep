@@ -69,13 +69,14 @@ pub const CATALOG: &[StoreEntry] = &[
     StoreEntry {
         kind: StoreKind::GitNative,
         name: "Git-native",
-        project_version: "aep.project/5",
+        project_version: "aep.project/5 – aep.project/6",
         selector: "store: { git: {} }",
         requires: Some("planning_scope: <scope>"),
         status: StoreStatus::Supported { since: "0.62.0" },
         note: "The default. One Markdown file per artifact under `.engineering/planning/` and one \
                evidence file per record under `.engineering/evidence/`; Git is the history. \
-               `store` may be omitted.",
+               `store` may be omitted. `aep.project/6` is the same store after `aep plan store pack` \
+               moved its closed artifacts into `.engineering/packs/`.",
     },
     StoreEntry {
         kind: StoreKind::Sqlite,
@@ -223,7 +224,11 @@ mod tests {
             }
             let mut document = format!(
                 "version: {}\nprotocol: adp/1\nprofile: development.standard\n",
-                entry.project_version
+                entry
+                    .project_version
+                    .split(" – ")
+                    .next()
+                    .unwrap_or(entry.project_version)
             );
             if let Some(requires) = entry.requires {
                 document.push_str(&requires.replace("<scope>", "catalog-test"));

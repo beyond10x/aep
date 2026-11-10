@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-10T12:17:26Z",
+  "actor": "human:timo",
+  "artifact": "story:lifecycle-declares-closed-states",
+  "kind": "story",
+  "revision": 23,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "review-result:store-pack-adversary-closed-states-pass-2",
+    "review": "review-result:store-pack-adversary-closed-states-pass-2",
+    "outcome": "no-op"
+  }
+}

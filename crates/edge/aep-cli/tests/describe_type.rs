@@ -168,3 +168,66 @@ fn the_descriptor_edges_are_what_protocol_artifact_lifecycle_prints() {
         );
     }
 }
+
+/// The closed set the kernel publishes in a type's descriptor is the one `aep plan artifact
+/// lifecycle <kind>` prints, for every kind this repository declares a ladder for, in the same order.
+/// The story's acceptance: the closed set is the same "everywhere the tooling reads, prints,
+/// validates or publishes it".
+#[test]
+fn the_descriptor_closed_set_is_what_protocol_artifact_lifecycle_prints() {
+    let ladders = ladders();
+    let backend = EntityBackend::shaped(
+        entity_store::MemoryStore::new(),
+        Identity::with_lifecycles(ladders.clone()),
+    )
+    .expect("opens");
+
+    for kind in described_kinds(&ladders) {
+        let printed = Command::new(env!("CARGO_BIN_EXE_aep"))
+            .args([
+                "plan",
+                "artifact",
+                "lifecycle",
+                kind.as_str(),
+                "--format",
+                "json",
+            ])
+            .arg("--root")
+            .arg(root())
+            .arg("--store")
+            .arg(root().join(".engineering/planning"))
+            .current_dir(root())
+            .output()
+            .expect("the protocol binary runs");
+        assert!(
+            printed.status.success(),
+            "{kind}: {}",
+            String::from_utf8_lossy(&printed.stderr)
+        );
+        let view: serde_json::Value =
+            serde_json::from_slice(&printed.stdout).expect("JSON from the lifecycle verb");
+        let printed_closed: Vec<String> =
+            serde_json::from_value(view["closed"].clone()).expect("a closed list");
+
+        let described: Vec<String> = describe(&backend, kind)
+            .closed
+            .iter()
+            .map(|status| status.as_str().to_owned())
+            .collect();
+        assert!(
+            !described.is_empty(),
+            "{kind}: every shipped ladder ends somewhere"
+        );
+        assert_eq!(described, printed_closed, "{kind}: the closed sets differ");
+    }
+
+    let story: BTreeSet<String> = describe(&backend, &ArtifactKind::Story)
+        .closed
+        .iter()
+        .map(|status| status.as_str().to_owned())
+        .collect();
+    assert_eq!(
+        story,
+        BTreeSet::from(["implemented", "rejected", "archived"].map(str::to_owned))
+    );
+}

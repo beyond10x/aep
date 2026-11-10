@@ -54,6 +54,10 @@ pub const EVENT_LOG_PROJECT_VERSIONS: [&str; 3] =
 ///
 /// See `docs/design/git-native-planning-store-v0.1.md`.
 pub const PROJECT_VERSION_V5: &str = "aep.project/5";
+/// An `aep.project/5` store that also keeps closed artifacts and their evidence in
+/// `.engineering/packs` (`aep.pack/1`). Read exactly as `/5` is; a build that does not know it
+/// refuses it with `unsupported_protocol_version`.
+pub const PROJECT_VERSION_V6: &str = "aep.project/6";
 /// The directory, relative to `.engineering`, an `aep.project/5` store keeps its artifacts in.
 pub const GIT_PLANNING_DIRECTORY: &str = "planning";
 /// The directory, relative to `.engineering`, an `aep.project/5` store keeps its evidence in.
@@ -102,6 +106,9 @@ pub enum ProjectVersion {
     /// or a `SQLite` or `PostgreSQL` database.
     #[serde(rename = "aep.project/5")]
     V5,
+    /// `aep.project/5` with closed artifacts and their evidence held in packs.
+    #[serde(rename = "aep.project/6")]
+    V6,
 }
 
 impl ProjectVersion {
@@ -110,6 +117,7 @@ impl ProjectVersion {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::V5 => PROJECT_VERSION_V5,
+            Self::V6 => PROJECT_VERSION_V6,
         }
     }
 }
@@ -1174,13 +1182,15 @@ impl TryFrom<RawProjectConfig> for ProjectConfig {
 
         let version = if raw.version == PROJECT_VERSION_V5 {
             ProjectVersion::V5
+        } else if raw.version == PROJECT_VERSION_V6 {
+            ProjectVersion::V6
         } else {
             errors.push(
                 ValidationError::new(
                     ValidationCode::UnsupportedProtocolVersion,
                     "project.version",
                     format!(
-                        "this build reads `{PROJECT_VERSION_V5}`, not `{}`",
+                        "this build reads `{PROJECT_VERSION_V5}` and `{PROJECT_VERSION_V6}`, not `{}`",
                         raw.version
                     ),
                 )
@@ -1372,6 +1382,35 @@ mod tests {
         let parsed = config(&format!("{V5}{BASE}")).expect("valid");
         assert_eq!(parsed.version, ProjectVersion::V5);
         assert_eq!(parsed.store, StoreConfig::git());
+    }
+
+    #[test]
+    fn a_v6_project_loads_as_a_v5_one_does() {
+        let parsed = config(&format!(
+            "version: aep.project/6\nplanning_scope: aep\n{BASE}"
+        ))
+        .expect("valid");
+        assert_eq!(parsed.version, ProjectVersion::V6);
+        assert_eq!(parsed.version.as_str(), PROJECT_VERSION_V6);
+        assert_eq!(parsed.store, StoreConfig::git());
+    }
+
+    #[test]
+    fn a_v7_project_is_refused_with_unsupported_protocol_version_naming_it() {
+        let errors = raw_config(&format!(
+            "version: aep.project/7\nplanning_scope: aep\n{BASE}"
+        ))
+        .expect_err("a version this build does not know is refused");
+        let [error] = errors.as_slice() else {
+            panic!("one refusal, not {errors:?}");
+        };
+        assert_eq!(error.code, ValidationCode::UnsupportedProtocolVersion);
+        assert_eq!(error.location, "project.version");
+        assert!(
+            error.message.contains("`aep.project/7`"),
+            "{}",
+            error.message
+        );
     }
 
     #[test]

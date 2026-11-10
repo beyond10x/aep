@@ -348,3 +348,182 @@ fn the_family_ladder_wins_over_the_fallback_and_the_fallback_answers_last() {
 
     clean(&root);
 }
+
+/// A `closed:` entry the ladder does not declare is refused at load, naming kind and state.
+#[test]
+fn a_closed_state_the_transitions_do_not_declare_is_refused_when_the_tree_loads() {
+    let root = tree(
+        "undeclared-closed",
+        &[(
+            "story.yaml",
+            "kind: story\ninitial: draft\ntransitions:\n  draft: [active]\n  active: []\nclosed: [implemented]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    let failure = outcome.failures[0].to_string();
+    assert!(failure.contains("unknown_state"), "{failure}");
+    assert!(failure.contains("story"), "{failure}");
+    assert!(failure.contains("implemented"), "{failure}");
+    assert!(failure.contains("story.yaml"), "{failure}");
+}
+
+/// A state with no successor is terminal, and so closed, whether or not the document writes it a
+/// `[]` row. `LOG` ends at `archived`, named only as `active`'s target, which is how every ladder
+/// in this file is written; the story's rule is "a terminal state (no successor) is always closed".
+#[test]
+fn a_last_state_named_only_as_a_target_is_closed() {
+    let root = tree("closed-target-only", &[("log.yaml", LOG)]);
+    let outcome = load_tree_report(&root);
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+
+    let log = outcome
+        .registry
+        .lifecycles()
+        .for_kind_exact(&ArtifactKind::parse("log").expect("kind"))
+        .expect("the log ladder registered")
+        .clone();
+    assert!(
+        !log.permits_transition(&ArtifactStatus::Archived, &ArtifactStatus::Active)
+            && !log.permits_transition(&ArtifactStatus::Archived, &ArtifactStatus::Draft),
+        "`archived` has no successor in this ladder"
+    );
+    assert_eq!(
+        log.closed_states(),
+        std::collections::BTreeSet::from([ArtifactStatus::Archived]),
+        "a status with nowhere to go is closed"
+    );
+    assert!(log.is_closed(&ArtifactStatus::Archived));
+
+    clean(&root);
+}
+
+/// Validation accumulates: a `closed:` list naming two states the ladder lacks is refused naming
+/// both, not only the first. Copying a story's `closed: [implemented, rejected]` onto a ladder
+/// that has neither is the case that reaches it.
+#[test]
+fn every_undeclared_closed_state_is_named_in_the_refusal() {
+    let root = tree(
+        "undeclared-closed-two",
+        &[(
+            "review-result.yaml",
+            "kind: review-result\ninitial: active\ntransitions:\n  active: [archived]\n  archived: []\nclosed: [implemented, rejected]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    let failure = outcome.failures[0].to_string();
+    assert!(failure.contains("unknown_state"), "{failure}");
+    assert!(failure.contains("implemented"), "{failure}");
+    assert!(failure.contains("rejected"), "{failure}");
+
+    clean(&root);
+}
+
+/// The contract (`lifecycle-file.md`, the refusal's own wording) is that each `closed:` entry is a
+/// status `transitions` declares. `initial` is not `transitions`: a state named only there is not
+/// one the transitions declare.
+#[test]
+fn a_closed_state_named_only_as_initial_is_refused() {
+    let root = tree(
+        "closed-initial-only",
+        &[(
+            "task.yaml",
+            "kind: task\ninitial: draft\ntransitions:\n  active: [archived]\n  archived: []\nclosed: [draft]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    let failure = outcome.failures[0].to_string();
+    assert!(failure.contains("unknown_state"), "{failure}");
+    assert!(failure.contains("draft"), "{failure}");
+
+    clean(&root);
+}
+
+/// The load-time check covers the kind-less fallback lifecycle too: it is the ladder every
+/// unenumerated kind is held to, so an undeclared `closed:` entry there would be closed for every
+/// one of them. The refusal says it is the fallback and names the state.
+#[test]
+fn a_fallback_lifecycle_whose_closed_names_an_undeclared_state_is_refused() {
+    let root = tree(
+        "undeclared-closed-fallback",
+        &[(
+            "fallback.yaml",
+            "initial: draft\ntransitions:\n  draft: [proposed]\n  proposed: [accepted]\nclosed: [implemented]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    let failure = outcome.failures[0].to_string();
+    assert!(failure.contains("unknown_state"), "{failure}");
+    assert!(failure.contains("fallback"), "{failure}");
+    assert!(failure.contains("implemented"), "{failure}");
+    assert!(
+        outcome.registry.lifecycles().fallback().is_none(),
+        "a refused fallback is not registered"
+    );
+
+    clean(&root);
+}
+
+/// `lifecycle-file.md` says a `closed:` entry is declared when it is "a key or a target". A state
+/// the ladder names only as a target is therefore accepted, and is closed.
+#[test]
+fn a_closed_state_named_only_as_a_target_is_accepted() {
+    let root = tree(
+        "closed-target-declared",
+        &[(
+            "log.yaml",
+            "kind: log\ninitial: draft\ntransitions:\n  draft: [active, rejected]\n  active: [archived]\n  archived: []\nclosed: [rejected]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+
+    let log = outcome
+        .registry
+        .lifecycles()
+        .for_kind_exact(&ArtifactKind::parse("log").expect("kind"))
+        .expect("the log ladder registered")
+        .clone();
+    assert_eq!(
+        log.closed_states(),
+        std::collections::BTreeSet::from([ArtifactStatus::Rejected, ArtifactStatus::Archived])
+    );
+
+    clean(&root);
+}
+
+/// A status the ladder does not mention is never closed: not on a declared ladder, and not on the
+/// permissive one a kind without a lifecycle gets ("a kind with no lifecycle has no closed state").
+/// `closed_states()` only walks the ladder's own statuses, so it cannot see this; `is_closed` is
+/// asked about any status an artifact carries.
+#[test]
+fn a_status_the_ladder_does_not_mention_is_not_closed() {
+    let root = tree("closed-unmentioned", &[("log.yaml", LOG)]);
+    let outcome = load_tree_report(&root);
+    assert!(outcome.failures.is_empty(), "{:?}", outcome.failures);
+    let log = outcome
+        .registry
+        .lifecycles()
+        .for_kind_exact(&ArtifactKind::parse("log").expect("kind"))
+        .expect("the log ladder registered")
+        .clone();
+
+    let invented = ArtifactStatus::Other("correction-owed".to_owned());
+    assert!(!log.is_closed(&ArtifactStatus::Implemented));
+    assert!(!log.is_closed(&invented));
+
+    let permissive = aep_domain::artifact::ArtifactLifecycle::permissive();
+    assert!(!permissive.is_closed(&invented));
+    for status in ArtifactStatus::ALL {
+        assert!(!permissive.is_closed(status), "{status:?}");
+    }
+
+    clean(&root);
+}

@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-10T15:51:04Z",
+  "actor": "human:timo",
+  "artifact": "story:validate-checks-packs",
+  "kind": "story",
+  "revision": 14,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator re-run on feat/store-pack-closed-artifacts at 5901992a3 after merge (fresh build): aep-cli validate_packs+validate_packs_adversary+validate_packs_adversary_2+git_store+store_pack_overlay(+adversary, +adversary_2)+record_redaction_adversary+planning_cli, aep-domain lib: 522 tests passed, every binary exit 0"
+  }
+}

@@ -13,11 +13,32 @@
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+
+/// Whether the repository around `directory` is only the one the environment names: no `.git` is
+/// above it and a variable that selects a repository is set. Such a store is read through that
+/// variable, as it was before packs; any other store is read from where it is.
+fn selected_by_environment(directory: &Path) -> bool {
+    let directory = std::path::absolute(directory).unwrap_or_else(|_| directory.to_path_buf());
+    !repository_above(&directory)
+        && ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]
+            .iter()
+            .any(|name| std::env::var_os(name).is_some())
+}
+
+/// A `git` process for `directory`: it never answers rewritten history, and where a repository is
+/// above `directory` it reads that one whatever the environment selects.
+fn git_command(directory: &Path) -> std::process::Command {
+    if selected_by_environment(directory) {
+        crate::store_command::committed_history_git()
+    } else {
+        crate::store_command::repository_git()
+    }
+}
 
 /// Runs `git -C <directory> <args>` and returns its standard output, or `None` when it fails.
 fn git(directory: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let output = Command::new("git")
+    let output = git_command(directory)
         .arg("-C")
         .arg(directory)
         .args(args)
@@ -35,6 +56,8 @@ fn git(directory: &Path, args: &[&str]) -> Option<Vec<u8>> {
 /// below answers as it does outside a work tree. Without this, the same store validated
 /// differently depending on whether the build directory happened to sit inside a checkout.
 fn unversioned(directory: &Path) -> bool {
+    // Named by its absolute path, so `.` is the directory it is and has a name to ask about.
+    let directory = &std::path::absolute(directory).unwrap_or_else(|_| directory.to_path_buf());
     let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
         return true;
     };
@@ -45,6 +68,99 @@ fn unversioned(directory: &Path) -> bool {
         || git(parent, &["check-ignore", "--quiet", name]).is_some()
 }
 
+/// Whether the history of a directory can be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Versioning {
+    /// No repository holds the directory, or the one that does ignores it: there is no history to
+    /// compare with, and a check that needs one is skipped.
+    Unversioned,
+    /// A repository holds it and answers.
+    Versioned,
+    /// A repository holds it and Git cannot answer — an ownership refusal, no `git` program, any
+    /// error. Never the same as [`Self::Unversioned`]: a check that needs the history is refused.
+    Failed(String),
+}
+
+/// Whether some directory from `start` upwards has a `.git`. `start` is absolute. The environment
+/// does not stop the walk: provenance cannot be switched off by `GIT_CEILING_DIRECTORIES`, and the
+/// `git` processes below run with it removed (and the other repository-selecting variables).
+fn repository_above(start: &Path) -> bool {
+    let mut current = Some(start);
+    while let Some(directory) = current {
+        // What Git itself takes for a repository: a `.git` file, or a directory that is one. A
+        // stub `.git` (an empty directory) is stepped over, as Git steps over it.
+        let dot_git = directory.join(".git");
+        if dot_git.is_file()
+            || (dot_git.join("HEAD").exists()
+                && dot_git.join("objects").is_dir()
+                && dot_git.join("refs").is_dir())
+        {
+            return true;
+        }
+        current = directory.parent();
+    }
+    false
+}
+
+/// [`Versioning`] of `directory`, decided by where a repository exists and not by whether Git
+/// could be asked: only the absence of a repository, or its ignoring the directory, skips.
+pub(super) fn versioning(directory: &Path) -> Versioning {
+    let Ok(directory) = std::path::absolute(directory) else {
+        return Versioning::Failed(format!("{} has no absolute path", directory.display()));
+    };
+    if !repository_above(&directory) {
+        // The environment names a repository and nothing in the tree is one: the history is there
+        // and cannot be trusted to be this store's, so the check refuses and is never skipped.
+        return if selected_by_environment(&directory) {
+            Versioning::Failed(
+                "no `.git` is above the store and the environment selects a repository \
+                 (`GIT_DIR`, `GIT_WORK_TREE` or `GIT_COMMON_DIR`)"
+                    .to_owned(),
+            )
+        } else {
+            Versioning::Unversioned
+        };
+    }
+    let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
+        return Versioning::Unversioned;
+    };
+    let Some(name) = name.to_str() else {
+        return Versioning::Failed(format!("{} is not UTF-8", directory.display()));
+    };
+    let probe = crate::store_command::repository_git()
+        .arg("-C")
+        .arg(&directory)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+    match probe {
+        Err(error) => return Versioning::Failed(format!("`git` cannot be run: {error}")),
+        Ok(output) if !output.status.success() => {
+            return Versioning::Failed(
+                "a repository holds the store and `git` cannot read it (an ownership refusal, or \
+                 a damaged repository)"
+                    .to_owned(),
+            )
+        }
+        Ok(output) if output.stdout.trim_ascii() != b"true" => return Versioning::Unversioned,
+        Ok(_) => {}
+    }
+    match crate::store_command::repository_git()
+        .arg("-C")
+        .arg(parent)
+        .args(["check-ignore", "--quiet", name])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+    {
+        Ok(status) if status.code() == Some(0) => Versioning::Unversioned,
+        Ok(status) if status.code() == Some(1) => Versioning::Versioned,
+        Ok(_) => Versioning::Failed("`git check-ignore` could not answer".to_owned()),
+        Err(error) => Versioning::Failed(format!("`git` cannot be run: {error}")),
+    }
+}
+
 /// Every committed version of each of `paths` (relative to `root`), oldest first, keyed by the
 /// same relative path.
 ///
@@ -52,9 +168,14 @@ fn unversioned(directory: &Path) -> bool {
 /// commit that added it, so a file deleted and later re-created is judged from its re-creation. A
 /// path with no committed version is absent from the map. `None` means there is no history to
 /// read at all: not a work tree.
+///
+/// A path in `packed` (spelled as in `paths`) is one a pack holds: a deletion that is its newest
+/// event is the commit that moved it into the pack, not the end of the file, and the walk goes on
+/// past it to the versions the file had while loose.
 pub(super) fn committed_versions(
     root: &Path,
     paths: &[&str],
+    packed: &std::collections::BTreeSet<&str>,
 ) -> Option<BTreeMap<String, Vec<Vec<u8>>>> {
     if unversioned(root) {
         return None;
@@ -97,6 +218,11 @@ pub(super) fn committed_versions(
             continue;
         }
         if status.starts_with('D') {
+            if packed.contains(path.strip_prefix(prefix).unwrap_or(path)) {
+                // Moved into a pack: the file goes on in the pack, and its loose history before
+                // this commit is its history.
+                continue;
+            }
             // The newest event is a deletion: whatever is on disk now was never committed.
             finished.insert(path);
             continue;
@@ -138,7 +264,7 @@ pub(super) fn committed_versions(
 /// The contents `git cat-file --batch` answers for each request line, in order; a missing object
 /// is `None`.
 fn cat_file_batch(root: &Path, requests: &str) -> Option<Vec<Option<Vec<u8>>>> {
-    let mut child = Command::new("git")
+    let mut child = git_command(root)
         .arg("-C")
         .arg(root)
         .args(["cat-file", "--batch"])
@@ -181,31 +307,274 @@ fn cat_file_batch(root: &Path, requests: &str) -> Option<Vec<Option<Vec<u8>>>> {
 /// retyped or deleted — as a path relative to the repository root.
 ///
 /// An evidence file is written once and never again (§ 5), so the only honest difference from
-/// `HEAD` is a new file, and a new file is untracked and not listed here.
+/// `HEAD` is a new file, and a new file is untracked and not listed here. A deletion whose bytes a
+/// pack holds is a **move** into that pack, not a change, and is not listed: `pack` writes the
+/// pack and removes the loose files before anything is committed.
 pub(super) fn changed_evidence(evidence: &Path) -> Vec<String> {
-    let (Some(parent), Some(pathspec)) = (evidence.parent(), evidence.to_str()) else {
+    let (Some(parent), Some(name)) = (evidence.parent(), evidence.file_name()) else {
         return Vec::new();
     };
-    if !evidence.is_dir() || unversioned(evidence) {
+    let Some(name) = name.to_str() else {
+        return Vec::new();
+    };
+    if !parent.is_dir() || unversioned(evidence) {
         return Vec::new();
     }
     let arguments = [
         "diff",
         "--no-renames",
-        "--name-only",
+        "--relative",
+        "--name-status",
         "--diff-filter=MTD",
         "HEAD",
         "--",
-        pathspec,
+        name,
     ];
     let Some(output) = git(parent, &arguments) else {
         return Vec::new();
     };
-    String::from_utf8_lossy(&output)
-        .lines()
-        .filter(|line| !line.is_empty())
-        .map(ToOwned::to_owned)
+    let prefix = git(parent, &["rev-parse", "--show-prefix"])
+        .and_then(|prefix| String::from_utf8(prefix).ok())
+        .unwrap_or_default();
+    let prefix = prefix.trim_end_matches('\n');
+    let output = String::from_utf8_lossy(&output);
+    let mut changed: Vec<String> = Vec::new();
+    let mut deleted: Vec<&str> = Vec::new();
+    for line in output.lines() {
+        let Some((status, path)) = line.split_once('\t') else {
+            continue;
+        };
+        if status.starts_with('D') {
+            deleted.push(path);
+        } else {
+            changed.push(path.to_owned());
+        }
+    }
+    if !deleted.is_empty() {
+        let moved = moved_into_packs(evidence, parent, &deleted);
+        changed.extend(
+            deleted
+                .iter()
+                .zip(moved)
+                .filter(|(_, moved)| !moved)
+                .map(|(path, _)| (*path).to_owned()),
+        );
+    }
+    let mut changed: Vec<String> = changed
+        .into_iter()
+        .map(|path| format!("{prefix}{path}"))
+        .collect();
+    changed.sort();
+    changed
+}
+
+/// For each of `deleted` (relative to `parent`, the directory beside `evidence`), whether some
+/// pack holds exactly the bytes `HEAD` committed there.
+fn moved_into_packs(evidence: &Path, parent: &Path, deleted: &[&str]) -> Vec<bool> {
+    use aep_backend_markdown::pack::{Overlay, Place};
+    let overlay = Overlay::for_evidence(evidence);
+    let mut requests = String::new();
+    for path in deleted {
+        requests.push_str("HEAD:./");
+        requests.push_str(path);
+        requests.push('\n');
+    }
+    let blobs = cat_file_batch(parent, &requests).unwrap_or_default();
+    deleted
+        .iter()
+        .enumerate()
+        .map(|(index, path)| {
+            let Some(Some(committed)) = blobs.get(index) else {
+                return false;
+            };
+            overlay.holders(path).is_ok_and(|holders| {
+                holders.iter().any(|holder| {
+                    matches!(holder.place(), Place::Packed(_)) && holder.bytes() == committed
+                })
+            })
+        })
         .collect()
+}
+
+/// What the history says a packed record's original file held.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Committed {
+    /// The last committed blob at the path, before the commit that added the pack.
+    Blob(Vec<u8>),
+    /// No commit before that one holds the path.
+    Never,
+}
+
+/// What [`blobs_before_pack`] found.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Provenance {
+    /// There is no history to read at all: not a work tree, or one that ignores the store. The
+    /// only case the check is skipped in, as the other history checks are.
+    Unversioned,
+    /// The commit that added the pack is a shallow clone's boundary: the history that would say
+    /// what the records replaced was not fetched.
+    Shallow,
+    /// Git could not answer; the check is refused, never skipped.
+    Failed(String),
+    /// One answer per path asked about, in order.
+    Blobs(Vec<Committed>),
+}
+
+/// For each of `paths` (relative to `base`, the directory the pack's `packs` directory is in), the
+/// last committed blob at that path before the commit that added `pack` — `HEAD` when the pack is
+/// not committed.
+///
+/// Every `git` call runs in `base` with pathspecs relative to it, so the answer is the enclosing
+/// repository's and never that of a repository nested in the packs directory.
+///
+/// A path deleted before that commit, as when the loose file was removed in one commit and the
+/// pack added in a later one, answers with the last version it had.
+pub(super) fn blobs_before_pack(base: &Path, pack: &Path, paths: &[&str]) -> Provenance {
+    match versioning(base) {
+        Versioning::Unversioned => return Provenance::Unversioned,
+        Versioning::Failed(reason) => return Provenance::Failed(reason),
+        Versioning::Versioned => {}
+    }
+    let Some(boundary) = shallow_boundary(base) else {
+        return Provenance::Failed("git could not say whether the clone is shallow".to_owned());
+    };
+    let shallow = !boundary.is_empty();
+    let Some(file) = pack.strip_prefix(base).ok().and_then(|relative| {
+        relative
+            .components()
+            .map(|part| part.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+            .map(|parts| parts.join("/"))
+    }) else {
+        return Provenance::Failed(format!(
+            "the pack is not inside {}, where its history is read",
+            base.display()
+        ));
+    };
+    let Some(added) = git(
+        base,
+        &[
+            "log",
+            "--no-renames",
+            "--diff-filter=A",
+            "--format=%H",
+            "-1",
+            "--",
+            &file,
+        ],
+    ) else {
+        // A work tree with no commit yet has an empty history, which is an answer.
+        return if git(base, &["rev-parse", "--verify", "--quiet", "HEAD"]).is_none() {
+            Provenance::Blobs(vec![Committed::Never; paths.len()])
+        } else {
+            Provenance::Failed("`git log` could not read the history of the pack".to_owned())
+        };
+    };
+    let added = String::from_utf8_lossy(&added).trim().to_owned();
+    if boundary.contains(&added) {
+        return Provenance::Shallow;
+    }
+    let revision = if added.is_empty() {
+        "HEAD".to_owned()
+    } else {
+        format!("{added}^")
+    };
+    let Some(commit) = git(base, &["rev-parse", "--verify", "--quiet", &revision])
+        .and_then(|found| String::from_utf8(found).ok())
+        .map(|found| found.trim().to_owned())
+    else {
+        // Nothing before the pack's commit (or no commit at all): nothing to equal — unless the
+        // clone is shallow, where it is the history that was not fetched.
+        return if shallow && !paths.is_empty() {
+            Provenance::Shallow
+        } else {
+            Provenance::Blobs(vec![Committed::Never; paths.len()])
+        };
+    };
+    let mut requests = String::new();
+    for path in paths {
+        requests.push_str(&commit);
+        requests.push_str(":./");
+        requests.push_str(path);
+        requests.push('\n');
+    }
+    let Some(blobs) = cat_file_batch(base, &requests) else {
+        return Provenance::Failed("`git cat-file` could not read the committed blobs".to_owned());
+    };
+    let mut found = Vec::new();
+    for (path, blob) in paths.iter().zip(blobs) {
+        if let Some(blob) = blob {
+            found.push(Committed::Blob(blob));
+            continue;
+        }
+        // Not at that commit: the last commit before it that wrote the path, if any.
+        let last = git(
+            base,
+            &[
+                "log",
+                "--no-renames",
+                "--diff-filter=AMT",
+                "--format=%H",
+                "-1",
+                &commit,
+                "--",
+                path,
+            ],
+        )
+        .and_then(|last| String::from_utf8(last).ok())
+        .map(|last| last.trim().to_owned())
+        .filter(|last| !last.is_empty());
+        let blob = last.and_then(|last| {
+            cat_file_batch(base, &format!("{last}:./{path}\n"))
+                .and_then(|mut blobs| blobs.pop().flatten())
+        });
+        found.push(blob.map_or(Committed::Never, Committed::Blob));
+    }
+    if shallow && found.contains(&Committed::Never) {
+        // The walk reached the shallow boundary without finding the blob.
+        return Provenance::Shallow;
+    }
+    Provenance::Blobs(found)
+}
+
+/// Every pack `HEAD` commits under `packs` (relative to `base`), as the file name and the bytes
+/// committed. `None` when there is no history to read, or no commit yet.
+#[allow(clippy::case_sensitive_file_extension_comparisons)] // A pack's extension is exactly `.pack`.
+pub(super) fn committed_packs(base: &Path, packs: &Path) -> Option<Vec<(String, Vec<u8>)>> {
+    if versioning(base) != Versioning::Versioned {
+        return None;
+    }
+    git(base, &["rev-parse", "--verify", "--quiet", "HEAD"])?;
+    let directory = packs
+        .strip_prefix(base)
+        .ok()?
+        .components()
+        .map(|part| part.as_os_str().to_str())
+        .collect::<Option<Vec<_>>>()?
+        .join("/");
+    let listed = git(base, &["ls-tree", "--name-only", "HEAD", &format!("{directory}/")])?;
+    let listed = String::from_utf8_lossy(&listed);
+    let files: Vec<&str> = listed
+        .lines()
+        .filter(|line| line.ends_with(".pack"))
+        .collect();
+    let mut requests = String::new();
+    for file in &files {
+        requests.push_str("HEAD:./");
+        requests.push_str(file);
+        requests.push('\n');
+    }
+    let blobs = cat_file_batch(base, &requests)?;
+    Some(
+        files
+            .iter()
+            .zip(blobs)
+            .filter_map(|(file, blob)| {
+                let name = file.rsplit('/').next()?.to_owned();
+                Some((name, blob?))
+            })
+            .collect(),
+    )
 }
 
 /// What the history says about when one path was added in its current incarnation.

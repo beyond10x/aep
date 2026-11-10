@@ -250,14 +250,7 @@ impl StoreLocation {
 /// `aep.project/5` lays them out. Anywhere else it is `evidence` inside `planning` itself, so two
 /// stores that share a parent never share, and count, each other's records.
 pub(crate) fn evidence_beside(planning: &Path) -> PathBuf {
-    let evidence = aep_domain::project::GIT_EVIDENCE_DIRECTORY;
-    let absolute = std::path::absolute(planning).unwrap_or_else(|_| planning.to_path_buf());
-    match absolute.parent() {
-        Some(parent) if parent.file_name() == Some(project_directory().as_ref()) => {
-            planning.parent().map_or_else(|| parent.join(evidence), |p| p.join(evidence))
-        }
-        _ => planning.join(evidence),
-    }
+    aep_backend_markdown::pack::evidence_beside(planning, project_directory())
 }
 
 /// The plan the project whose planning directory `path` is names, when `path`'s parent is a
@@ -422,7 +415,9 @@ impl DrivenPlan {
 impl aep_driver::PlanSource for DrivenPlan {
     fn load(&self) -> StoreReport {
         match &self.plan {
-            Plan::Git { root, .. } => MarkdownStore::open(root.clone()).load(),
+            Plan::Git { root, evidence } => MarkdownStore::open(root.clone())
+                .with_evidence(evidence.clone())
+                .load(),
             durable => match durable.open_backend() {
                 Ok(Some(backend)) => match report_from_backend(&backend) {
                     Ok(report) => report,
@@ -752,10 +747,46 @@ fn open(args: &StoreLocation, with_backend: bool) -> Result<Opened> {
 /// ladders the writing verbs carry — so a caller that only reads may pass a location that answers
 /// nothing else.
 pub(crate) fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) -> Result<Opened> {
+    open_plan_reporting(plan, args, with_backend, true)
+}
+
+/// Refuses a store with a pack that does not parse, naming the pack file and the problem.
+///
+/// For a read that does not go through [`open_plan`]: a history reads the packs directly, and a
+/// pack it cannot read is records it would otherwise report as none.
+fn refuse_unparsed_packs(root: &Path, evidence: &Path) -> Result<()> {
+    let overlay = aep_backend_markdown::pack::Overlay::new(root, evidence);
+    for pack in overlay.packs() {
+        if let Err(error) = pack.verified() {
+            bail!("{}: not a pack: {error}", pack.file().display());
+        }
+    }
+    if let Some(error) = overlay.first_conflict() {
+        bail!("{error}");
+    }
+    Ok(())
+}
+
+/// [`open_plan`], where `refuse_packs` says whether a pack that does not parse refuses the read.
+///
+/// Every read verb refuses: a pack that does not parse hides the records it holds, so any answer
+/// over the rest would be an answer over a store nobody can see whole. `validate` is the one caller
+/// that passes `false`, because it reports the pack as a problem of its own.
+fn open_plan_reporting(
+    plan: Plan,
+    args: &StoreLocation,
+    with_backend: bool,
+    refuse_packs: bool,
+) -> Result<Opened> {
     match &plan {
         Plan::Git { root, evidence } => {
-            let store = MarkdownStore::open(root.clone());
+            let store = MarkdownStore::open(root.clone()).with_evidence(evidence.clone());
             let report = store.load();
+            if refuse_packs {
+                if let Some(failure) = report.failures.iter().find(|failure| failure.is_pack()) {
+                    bail!("{failure}");
+                }
+            }
             if with_backend {
                 require_clean(&store, &report)?;
             } else {
@@ -1945,7 +1976,7 @@ pub(crate) fn declared_membership(root: &Path) -> Result<aep_domain::workspace::
 /// Refuses an unreadable store rather than seeding a partial one: an entity surface answering
 /// about nine of ten artifacts, with nothing saying which one is missing, is worse than an error.
 pub(crate) fn graph_at(root: &Path) -> Result<ArtifactGraph> {
-    let store = MarkdownStore::open(root);
+    let store = MarkdownStore::open(root).with_evidence(evidence_beside(root));
     let report = store.load();
     require_clean(&store, &report)?;
     let repository = root
@@ -2211,6 +2242,19 @@ fn create_through_a_command(
     let result = block_on(backend.execute(envelope)).map_err(|error| {
         let detail = error.to_string();
         if detail.contains("already addresses an entity") {
+            if let Some(packs) = packed_holders(&opened.plan, &front.id) {
+                return anyhow::anyhow!(
+                    "`{}` is packed in {} and already exists; an id addresses one artifact, so it \
+                     is not created again (`aep plan store unpack {}` restores the file)",
+                    front.id,
+                    packs
+                        .iter()
+                        .map(|name| format!(".engineering/packs/{name}.pack"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    front.id
+                );
+            }
             anyhow::anyhow!(
                 "`{}` already exists at {} — creating over a document is how a plan item's body \
                  disappears, and there is no undo in a tool that has not committed anything",
@@ -2226,6 +2270,18 @@ fn create_through_a_command(
     };
 
     Ok((opened.path_of(&front.id), created.revision.get()))
+}
+
+/// The packs that hold `id`'s document, when the plan is a Git-native store and any does.
+fn packed_holders(plan: &Plan, id: &ArtifactId) -> Option<Vec<String>> {
+    let Plan::Git { root, evidence } = plan else {
+        return None;
+    };
+    let overlay = aep_backend_markdown::pack::Overlay::new(root.clone(), evidence.clone());
+    let packs = overlay
+        .packed_in(&format!("planning/{}", relative_path_for(id)))
+        .ok()?;
+    (!packs.is_empty()).then_some(packs)
 }
 
 fn write_through_a_command(
@@ -3924,15 +3980,16 @@ fn redact_literal(
         .get(&id)
         .with_context(|| opened.missing(&id))?;
     let (changes, count) = redacted_text(&id, &stored.document, literal, with)?;
+    // Through the overlay: a record already packed is one the redaction did not write.
+    let overlay = aep_backend_markdown::pack::Overlay::for_evidence(&evidence);
     let records = |directory: &Path| -> BTreeSet<PathBuf> {
-        std::fs::read_dir(directory)
-            .map(|entries| {
-                entries
-                    .filter_map(Result::ok)
-                    .map(|entry| entry.path())
-                    .collect()
-            })
+        let store_directory = format!("evidence/{}/{}", id.namespace(), id.name());
+        overlay
+            .list(&store_directory)
             .unwrap_or_default()
+            .into_iter()
+            .map(|(name, _)| directory.join(name))
+            .collect()
     };
     let directory = evidence.join(id.namespace()).join(id.name());
     let before = records(&directory);
@@ -6077,7 +6134,7 @@ fn validate(
     strict: bool,
     outcome_within: u64,
 ) -> Result<ExitCode> {
-    let opened = open(&args.location, false)?;
+    let opened = open_plan_reporting(args.location.plan()?, &args.location, false, false)?;
     let registry = args.lifecycles()?;
     let required_since = args.location.findings_required_since()?;
     let mut summary = findings(&opened, &registry, &args.repository_root(), required_since);
@@ -6428,7 +6485,13 @@ fn git_findings(
         .chain(reviews.iter().map(|stored| stored.relative_path.as_str()))
         .collect();
     let paths: Vec<&str> = paths.into_iter().collect();
-    let history = git_record::committed_versions(root, &paths);
+    // A document a pack holds went on past the commit that moved it there.
+    let packed_paths = packed_store_paths(root, evidence);
+    let packed: BTreeSet<&str> = packed_paths
+        .iter()
+        .filter_map(|path| path.strip_prefix("planning/"))
+        .collect();
+    let history = git_record::committed_versions(root, &paths, &packed);
     for stored in &unanchored {
         let front = &stored.document.frontmatter;
         // Outside a work tree there is no record to decide from, and the walk is held to
@@ -6446,6 +6509,7 @@ fn git_findings(
         problems.extend(review_problems(&reviews, history, evidence));
     }
     problems.extend(evidence_problems(evidence));
+    problems.extend(pack_problems(root, evidence, report, registry));
     problems.extend(
         git_record::changed_evidence(evidence)
             .into_iter()
@@ -6587,8 +6651,15 @@ fn review_problems(
         if differs.is_empty() {
             continue;
         }
-        let records: Vec<_> = aep_backend_markdown::journal::redaction_records_git(evidence, id)
-            .into_iter()
+        let records: Vec<_> = match aep_backend_markdown::journal::redaction_records_git(evidence, id)
+        {
+            Ok(records) => records,
+            Err(error) => {
+                problems.push(format!("{id}: its redaction records do not read: {error}"));
+                continue;
+            }
+        }
+        .into_iter()
             .filter(|(_, entry)| entry.revision > first.frontmatter.revision)
             .collect();
         if records.is_empty() {
@@ -6732,34 +6803,577 @@ fn walk_problems(
     problems
 }
 
+/// The store paths (`planning/<kind>/<name>.md`, `evidence/<kind>/<name>/<file>.json`) the parsed
+/// packs of the store hold.
+fn packed_store_paths(root: &Path, evidence: &Path) -> BTreeSet<String> {
+    aep_backend_markdown::pack::Overlay::new(root, evidence)
+        .packs()
+        .iter()
+        .filter_map(|file| file.pack().as_ref().ok())
+        .flat_map(|pack| pack.records().iter().map(|record| record.path().to_owned()))
+        .collect()
+}
+
+/// One pack problem, as `validate` prints it: the stable code, where, and what.
+fn pack_problem(
+    code: aep_domain::error::ValidationCode,
+    location: impl std::fmt::Display,
+    message: impl std::fmt::Display,
+) -> String {
+    aep_domain::error::ValidationError::new(code, location.to_string(), message.to_string())
+        .to_string()
+}
+
+/// What `validate` says about the packs of a Git-native store
+/// (`architecture-design:store-pack`, *What `validate` checks about packs*):
+///
+/// 1. each pack parses as `aep.pack/1` and is named by its content;
+/// 2. each record's bytes are the ones its header digest is of;
+/// 3. each path is in the store's grammar, and no pack is a symbolic link;
+/// 4. a path held in two places is refused unless the bytes are identical;
+/// 5. each record equals the last committed blob at its original path before the commit that added
+///    its pack (`HEAD` when it is not committed), and a packed evidence record had one committed
+///    version while it was loose, as one that is still loose has;
+/// 6. a packed artifact is at a closed status of its kind, and a packed evidence record is about
+///    the artifact its directory names;
+/// 7. no copy of an artifact, loose or packed, still holds a literal a redaction record removed;
+/// 8. the project version agrees with whether the store holds packs.
+///
+/// Every refusal carries its own [`aep_domain::error::ValidationCode`] and names the pack file, and
+/// the record path where there is one. No line prints a record's text.
+#[allow(clippy::too_many_lines)] // One check after another, in the design's order.
+fn pack_problems(
+    root: &Path,
+    evidence: &Path,
+    report: &StoreReport,
+    registry: &aep_engine::Registry,
+) -> Vec<String> {
+    use aep_backend_markdown::journal::{Change, Entry};
+    use aep_backend_markdown::pack::{self, Overlay, PackCode, Place};
+    use aep_domain::error::ValidationCode as Code;
+    use aep_domain::project::ProjectVersion;
+
+    // Named by absolute paths from here on, so `--store .` is the store `--store <path>` names.
+    let root = std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf());
+    let evidence = std::path::absolute(evidence).unwrap_or_else(|_| evidence.to_path_buf());
+    let (root, evidence) = (root.as_path(), evidence.as_path());
+    let overlay = Overlay::new(root, evidence);
+    let packs = overlay.packs();
+    let mut problems = Vec::new();
+    let engineering = overlay.packs_directory().parent().map(Path::to_path_buf);
+
+    // 8. The version says whether the store holds packs.
+    if let Some(engineering) = &engineering {
+        if let Ok(Some(config)) = project_config(engineering) {
+            let project_file = engineering.join(aep_domain::project::PROJECT_FILE);
+            match (config.version, packs.is_empty()) {
+                (ProjectVersion::V5, false) => problems.push(pack_problem(
+                    Code::PackVersionDisagrees,
+                    project_file.display(),
+                    format!(
+                        "this store is `{}` and holds {} pack(s) in {}; a store with packs is `{}`",
+                        ProjectVersion::V5.as_str(),
+                        packs.len(),
+                        overlay.packs_directory().display(),
+                        ProjectVersion::V6.as_str()
+                    ),
+                )),
+                (ProjectVersion::V6, true) => problems.push(pack_problem(
+                    Code::PackVersionDisagrees,
+                    project_file.display(),
+                    format!(
+                        "this store is `{}` and holds no pack; a store with none is `{}`",
+                        ProjectVersion::V6.as_str(),
+                        ProjectVersion::V5.as_str()
+                    ),
+                )),
+                _ => {}
+            }
+        }
+    }
+
+    // 3. The packs directory is the one beside `planning` and `evidence`, not a link to elsewhere.
+    let mut packs_unsafe = false;
+    if let Some(base) = &engineering {
+        let directory = overlay.packs_directory();
+        if std::fs::symlink_metadata(directory).is_ok_and(|metadata| metadata.is_symlink()) {
+            packs_unsafe = true;
+            problems.push(pack_problem(
+                Code::PackPathUnsafe,
+                directory.display(),
+                "the packs directory is a symbolic link; packs are read from the store only",
+            ));
+        } else if let (Ok(real), Ok(expected)) = (
+            std::fs::canonicalize(directory),
+            std::fs::canonicalize(base).map(|base| base.join(aep_backend_markdown::pack::PACKS_DIRECTORY)),
+        ) {
+            if real != expected {
+                packs_unsafe = true;
+                problems.push(pack_problem(
+                    Code::PackPathUnsafe,
+                    directory.display(),
+                    "the packs directory resolves outside the store",
+                ));
+            }
+        }
+    }
+
+    // 1-3. Each pack as a file.
+    // Where each path is held, in the order the places are met: a loose file first.
+    let mut held: BTreeMap<String, Vec<(String, Vec<u8>)>> = BTreeMap::new();
+    let mut parsed_packs = Vec::new();
+    for file in &packs {
+        let location = file.file().display().to_string();
+        if std::fs::symlink_metadata(file.file()).is_ok_and(|metadata| metadata.is_symlink()) {
+            problems.push(pack_problem(
+                Code::PackPathUnsafe,
+                &location,
+                "a pack is never a symbolic link",
+            ));
+            continue;
+        }
+        let pack = match file.pack() {
+            Ok(pack) => pack,
+            Err(error) => {
+                let code = if error.code() == PackCode::PathInvalid {
+                    Code::PackPathUnsafe
+                } else {
+                    Code::PackNotParsed
+                };
+                problems.push(pack_problem(code, &location, error.detail()));
+                continue;
+            }
+        };
+        if pack.name() != file.name() {
+            problems.push(pack_problem(
+                Code::PackNameNotDigest,
+                &location,
+                format!(
+                    "the file is named `{}` and its content is `{}`",
+                    file.name(),
+                    pack.name()
+                ),
+            ));
+        }
+        for record in pack.records() {
+            if let Err(error) = pack::check_path(record.path()) {
+                problems.push(pack_problem(Code::PackPathUnsafe, &location, error.detail()));
+                continue;
+            }
+            if !record.digest_matches() {
+                problems.push(pack_problem(
+                    Code::PackRecordDigestDiffers,
+                    &location,
+                    format!(
+                        "`{}` is not the bytes its header digest is of",
+                        record.path().escape_debug()
+                    ),
+                ));
+            }
+            held.entry(record.path().to_owned())
+                .or_default()
+                .push((location.clone(), record.bytes().to_vec()));
+        }
+        parsed_packs.push((location, pack));
+    }
+
+    // 4. A path held in two places is refused unless the bytes are identical.
+    for (path, places) in &mut held {
+        let loose = overlay.loose_path(path);
+        if let Ok(bytes) = std::fs::read(&loose) {
+            places.insert(0, (loose.display().to_string(), bytes));
+        }
+        let (first_place, first_bytes) = places[0].clone();
+        for (place, _) in places.iter().skip(1).filter(|(_, bytes)| *bytes != first_bytes) {
+            problems.push(pack_problem(
+                Code::PackPathHeldTwice,
+                place,
+                format!(
+                    "`{}` is held by {first_place} and by {place} with different bytes",
+                    path.escape_debug()
+                ),
+            ));
+        }
+    }
+
+    // 5. Each record equals the last committed blob before the commit that added its pack.
+    let mut shallow: Option<String> = None;
+    // Only the absence of a repository skips the history checks; one Git cannot read is refused.
+    let history_readable = match engineering.as_deref().map(git_record::versioning) {
+        Some(git_record::Versioning::Failed(reason)) => {
+            problems.push(pack_problem(
+                Code::PackRecordNotCommittedBytes,
+                overlay.packs_directory().display(),
+                format!("provenance could not be checked: {reason}"),
+            ));
+            false
+        }
+        Some(git_record::Versioning::Versioned) => true,
+        _ => false,
+    };
+    if let Some(base) = engineering
+        .as_ref()
+        .filter(|_| !packs_unsafe && history_readable)
+    {
+        for (location, pack) in &parsed_packs {
+            let relatives: Vec<Option<String>> = pack
+                .records()
+                .iter()
+                .map(|record| {
+                    overlay
+                        .loose_path(record.path())
+                        .strip_prefix(base)
+                        .ok()
+                        .and_then(|relative| {
+                            relative
+                                .components()
+                                .map(|part| part.as_os_str().to_str())
+                                .collect::<Option<Vec<_>>>()
+                        })
+                        .map(|parts| parts.join("/"))
+                })
+                .collect();
+            let asked: Vec<&str> = relatives.iter().flatten().map(String::as_str).collect();
+            let blobs = match git_record::blobs_before_pack(base, Path::new(location), &asked) {
+                git_record::Provenance::Unversioned => continue,
+                git_record::Provenance::Shallow => {
+                    shallow.get_or_insert_with(|| location.clone());
+                    continue;
+                }
+                git_record::Provenance::Failed(reason) => {
+                    problems.push(pack_problem(
+                        Code::PackRecordNotCommittedBytes,
+                        location,
+                        format!("provenance could not be checked: {reason}"),
+                    ));
+                    continue;
+                }
+                git_record::Provenance::Blobs(blobs) => blobs,
+            };
+            let mut blobs = blobs.into_iter();
+            for (record, relative) in pack.records().iter().zip(&relatives) {
+                if relative.is_none() {
+                    problems.push(pack_problem(
+                        Code::PackRecordNotCommittedBytes,
+                        location,
+                        format!(
+                            "`{}` has no original path inside the store to compare with",
+                            record.path().escape_debug()
+                        ),
+                    ));
+                    continue;
+                }
+                match blobs.next() {
+                    Some(git_record::Committed::Blob(blob)) if blob == record.bytes() => {}
+                    Some(git_record::Committed::Blob(_)) => problems.push(pack_problem(
+                        Code::PackRecordNotCommittedBytes,
+                        location,
+                        format!(
+                            "`{}` differs from the last committed blob at its original path \
+                             before the commit that added this pack",
+                            record.path().escape_debug()
+                        ),
+                    )),
+                    _ => problems.push(pack_problem(
+                        Code::PackRecordNotCommittedBytes,
+                        location,
+                        format!(
+                            "`{}` has no committed blob at its original path before the commit \
+                             that added this pack",
+                            record.path().escape_debug()
+                        ),
+                    )),
+                }
+            }
+        }
+    }
+
+    if let Some(location) = shallow {
+        problems.push(pack_problem(
+            Code::PackHistoryShallow,
+            location,
+            "this is a shallow clone and the history before the commit that added the pack was \
+             not fetched, so what its records replaced cannot be proven; run `git fetch \
+             --unshallow` (in CI, `fetch-depth: 0`) and validate again",
+        ));
+    }
+
+    // 5 (continued). A committed pack gone from the working tree loses its records unless
+    // something else still holds the same bytes.
+    if let Some(base) = engineering
+        .as_ref()
+        .filter(|_| !packs_unsafe && history_readable)
+    {
+        let present: BTreeSet<String> = packs
+            .iter()
+            .filter_map(|file| file.file().file_name())
+            .filter_map(|name| name.to_str().map(str::to_owned))
+            .collect();
+        for (name, bytes) in
+            git_record::committed_packs(base, overlay.packs_directory()).unwrap_or_default()
+        {
+            if present.contains(&name) {
+                continue;
+            }
+            let location = overlay.packs_directory().join(&name).display().to_string();
+            let lost: Vec<String> = match aep_backend_markdown::pack::Pack::parse(&bytes) {
+                Ok(gone) => gone
+                    .records()
+                    .iter()
+                    .filter(|record| {
+                        let in_a_pack = held.get(record.path()).is_some_and(|places| {
+                            places.iter().any(|(_, held)| held == record.bytes())
+                        });
+                        let loose = std::fs::read(overlay.loose_path(record.path()))
+                            .is_ok_and(|loose| loose == record.bytes());
+                        !in_a_pack && !loose
+                    })
+                    .map(|record| format!("`{}`", record.path().escape_debug()))
+                    .collect(),
+                Err(_) => vec!["its records (the committed pack does not parse)".to_owned()],
+            };
+            if !lost.is_empty() {
+                problems.push(pack_problem(
+                    Code::PackLost,
+                    location,
+                    format!(
+                        "the committed pack {name} is gone from the working tree and no loose \
+                         file or other pack holds {} of its records: {}",
+                        lost.len(),
+                        lost.join(", ")
+                    ),
+                ));
+            }
+        }
+    }
+
+    // 6. A packed artifact is closed for its kind; packed evidence is about the artifact its
+    // directory names.
+    for (location, pack) in &parsed_packs {
+        for record in pack.records() {
+            let path = record.path();
+            let Ok(text) = std::str::from_utf8(record.bytes()) else {
+                problems.push(pack_problem(
+                    Code::PackRecordUnreadable,
+                    location,
+                    format!("`{}` is not UTF-8 text", path.escape_debug()),
+                ));
+                continue;
+            };
+            if path.starts_with("planning/") {
+                let document = match PlanningDocument::parse(text, None) {
+                    Ok(document) => document,
+                    Err(error) => {
+                        problems.push(pack_problem(
+                            Code::PackRecordUnreadable,
+                            location,
+                            format!(
+                                "`{}` does not parse as an artifact, so its status cannot be \
+                                 checked: {error}",
+                                path.escape_debug()
+                            ),
+                        ));
+                        continue;
+                    }
+                };
+                let front = &document.frontmatter;
+                let closed = registry
+                    .lifecycles()
+                    .for_kind(&front.kind)
+                    .is_some_and(|ladder| ladder.is_closed(&front.status));
+                if !closed {
+                    problems.push(pack_problem(
+                        Code::PackArtifactNotClosed,
+                        location,
+                        format!(
+                            "`{}` is {} `{}`, which is not a closed status of its kind; only \
+                             closed artifacts are packed",
+                            path.escape_debug(),
+                            front.kind,
+                            front.status
+                        ),
+                    ));
+                }
+            } else if let ["evidence", kind, name, _file] =
+                path.split('/').collect::<Vec<_>>().as_slice()
+            {
+                let Ok(entry) = serde_json::from_str::<Entry>(text) else {
+                    problems.push(pack_problem(
+                        Code::PackRecordUnreadable,
+                        location,
+                        format!(
+                            "`{}` does not parse as an evidence record",
+                            path.escape_debug()
+                        ),
+                    ));
+                    continue;
+                };
+                if !matches!(entry.change, Change::Evidence { .. } | Change::Redaction { .. }) {
+                    continue;
+                }
+                let expected = format!("{kind}:{name}");
+                if entry.artifact.to_string() != expected {
+                    problems.push(pack_problem(
+                        Code::PackEvidenceMisfiled,
+                        location,
+                        format!(
+                            "`{}` is about {}, and is filed under {expected}",
+                            path.escape_debug(),
+                            entry.artifact
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    // 5 (continued). A packed evidence record had one committed version while it was loose.
+    if let Some(base) = engineering.as_ref().filter(|_| history_readable) {
+        let packed_evidence: Vec<&str> = held
+            .keys()
+            .map(String::as_str)
+            .filter(|path| path.starts_with("evidence/"))
+            .collect();
+        let packed: BTreeSet<&str> = packed_evidence.iter().copied().collect();
+        if let Some(history) = git_record::committed_versions(base, &packed_evidence, &packed) {
+            for (path, versions) in &history {
+                if versions.first() != versions.last() {
+                    let place = held
+                        .get(path)
+                        .and_then(|places| places.last())
+                        .map_or_else(String::new, |(place, _)| place.clone());
+                    problems.push(pack_problem(
+                        Code::PackRecordRewritten,
+                        place,
+                        format!(
+                            "`{}` had {} committed versions while it was loose, and the first \
+                             differs from the last — evidence is written once and never \
+                             rewritten",
+                            path.escape_debug(),
+                            versions.len()
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    // 7. No copy of an artifact re-exposes a literal a redaction record removed.
+    {
+        // The documents that read, and the documents a pack holds that do not (a path held in two
+        // places with different bytes is refused by every reader, and is the case this check is
+        // for): each with the id its path names.
+        let mut documents: BTreeMap<String, ArtifactId> = report
+            .documents
+            .values()
+            .map(|stored| {
+                (
+                    format!("planning/{}", stored.relative_path),
+                    stored.document.frontmatter.id.clone(),
+                )
+            })
+            .collect();
+        for path in held.keys() {
+            let named = path
+                .strip_prefix("planning/")
+                .and_then(|rest| rest.strip_suffix(".md"))
+                .and_then(|rest| rest.split_once('/'))
+                .and_then(|(kind, name)| ArtifactId::new(format!("{kind}:{name}")).ok());
+            if let Some(id) = named {
+                documents.entry(path.clone()).or_insert(id);
+            }
+        }
+        for (store_path, id) in &documents {
+            let Ok(records) = aep_backend_markdown::journal::redaction_records_git(evidence, id)
+            else {
+                continue;
+            };
+            let Ok(holders) = overlay.holders(store_path) else {
+                continue;
+            };
+            for (record_path, entry) in &records {
+                let Change::Redaction {
+                    literal_sha256,
+                    literal_chars,
+                    ..
+                } = &entry.change
+                else {
+                    continue;
+                };
+                for holder in &holders {
+                    let text = String::from_utf8_lossy(holder.bytes());
+                    let (_, found) =
+                        record_redaction::replace_digest(&text, literal_sha256, *literal_chars, "");
+                    if found == 0 {
+                        continue;
+                    }
+                    let place = match holder.place() {
+                        Place::Loose => overlay.loose_path(store_path).display().to_string(),
+                        Place::Packed(name) => overlay
+                            .packs_directory()
+                            .join(pack::file_name(name))
+                            .display()
+                            .to_string(),
+                    };
+                    problems.push(pack_problem(
+                        Code::PackRedactedLiteralExposed,
+                        place,
+                        format!(
+                            "this copy of {id} (`{}`) still holds a literal the redaction record \
+                             {} removed",
+                            store_path.escape_debug(),
+                            record_path.display()
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+    problems
+}
+
 /// Every evidence file that does not read as a record about the artifact its directory names.
 fn evidence_problems(evidence: &Path) -> Vec<String> {
     use aep_backend_markdown::journal::{Change, Entry};
+    use aep_backend_markdown::pack::Overlay;
 
-    fn children(directory: &Path) -> Vec<PathBuf> {
-        let Ok(entries) = std::fs::read_dir(directory) else {
-            return Vec::new();
-        };
-        let mut found: Vec<PathBuf> = entries
-            .filter_map(Result::ok)
-            .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
-            .map(|entry| entry.path())
-            .collect();
-        found.sort();
-        found
+    // The loose evidence files and the records of every pack, as one tree: a packed record is the
+    // record it was when loose, and is checked as one.
+    let overlay = Overlay::for_evidence(evidence);
+    // A pack that does not parse is `pack_problems`' to report, naming it; what it holds cannot be
+    // listed here.
+    if overlay.packs().iter().any(|pack| pack.verified().is_err()) {
+        return Vec::new();
     }
+    // A directory that cannot be listed is a problem of its own, never an empty directory.
+    let children = |directory: &str, problems: &mut Vec<String>| -> Vec<(String, bool)> {
+        overlay.list(directory).unwrap_or_else(|error| {
+            problems.push(format!(
+                "{}: not an evidence record: {error}",
+                overlay.loose_path(directory).display()
+            ));
+            Vec::new()
+        })
+    };
 
     let mut problems = Vec::new();
-    for kind in children(evidence).into_iter().filter(|path| path.is_dir()) {
-        for name in children(&kind).into_iter().filter(|path| path.is_dir()) {
-            let expected = format!(
-                "{}:{}",
-                kind.file_name().unwrap_or_default().to_string_lossy(),
-                name.file_name().unwrap_or_default().to_string_lossy()
-            );
-            for path in children(&name) {
-                let read = std::fs::read_to_string(&path)
+    for (kind, _) in children("evidence", &mut problems)
+        .into_iter()
+        .filter(|(_, is_directory)| *is_directory)
+    {
+        for (name, _) in children(&format!("evidence/{kind}"), &mut problems)
+            .into_iter()
+            .filter(|(_, is_directory)| *is_directory)
+        {
+            let expected = format!("{kind}:{name}");
+            for (file, _) in children(&format!("evidence/{kind}/{name}"), &mut problems) {
+                let store_path = format!("evidence/{kind}/{name}/{file}");
+                let path = overlay.loose_path(&store_path);
+                let read = overlay
+                    .read(&store_path)
                     .map_err(|error| error.to_string())
+                    .and_then(|bytes| bytes.ok_or_else(|| "is not a file".to_owned()))
+                    .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))
                     .and_then(|text| {
                         serde_json::from_str::<Entry>(&text).map_err(|error| error.to_string())
                     });
@@ -7100,6 +7714,11 @@ fn lifecycle(args: &StoreArgs, kind: &str) -> Result<ExitCode> {
                 )
             })
             .collect(),
+        closed: lifecycle
+            .closed_states()
+            .iter()
+            .map(|status| status.as_str().to_owned())
+            .collect(),
     };
 
     match args.format {
@@ -7115,6 +7734,12 @@ fn lifecycle(args: &StoreArgs, kind: &str) -> Result<ExitCode> {
             for (from, to) in &view.transitions {
                 let to: Vec<&str> = to.iter().map(String::as_str).collect();
                 outln!("  {from} -> {}", render_list(&to));
+            }
+            let closed: Vec<&str> = view.closed.iter().map(String::as_str).collect();
+            if closed.is_empty() {
+                outln!("closed: none");
+            } else {
+                outln!("closed: {}", render_list(&closed));
             }
         }
         Format::Yaml | Format::Json => crate::print_serialised(&view, args.format)?,
@@ -7907,6 +8532,7 @@ fn history(args: &StoreArgs, id: &str) -> Result<ExitCode> {
     let id = artifact_id(id)?;
     let plan = args.location.plan()?;
     if let Plan::Git { root, evidence } = &plan {
+        refuse_unparsed_packs(root, evidence)?;
         // The document's own transitions and its evidence files: no backend, no journal.
         let (entries, unreadable) =
             aep_backend_markdown::journal::history_git(root, evidence, &id);
@@ -9215,6 +9841,7 @@ struct Lifecycle {
     declared: bool,
     initial: String,
     transitions: BTreeMap<String, Vec<String>>,
+    closed: Vec<String>,
 }
 
 #[cfg(test)]

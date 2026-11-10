@@ -237,29 +237,40 @@ fn named(rule: &ArtifactRequirement) -> ArtifactRequirement {
 /// graph, because what this verb needs is the **body** — the graph carries frontmatter and edges,
 /// and the requirements are in the prose.
 fn specifications(store: &Path) -> Result<Vec<(PathBuf, PlanningDocument)>> {
-    let directory = store.join(ArtifactKind::Specification.as_str());
-    let entries = match std::fs::read_dir(&directory) {
-        Ok(entries) => entries,
-        Err(error) => bail!(
+    let kind = ArtifactKind::Specification.as_str();
+    let directory = store.join(kind);
+    // The loose files and the records of every pack, as one tree: a closed specification that was
+    // packed is still a specification in the store. Sorted by the overlay, so two machines read
+    // the same store the same way (invariant *Decisions are deterministic*).
+    let overlay = aep_backend_markdown::pack::Overlay::new(store, crate::planning::evidence_beside(store));
+    let unreadable = |error: &dyn std::fmt::Display| {
+        anyhow::anyhow!(
             "no specification artifacts at {}: {error}. `spec-driven` asks for one before \
              implementation, so a run with none has nothing to be decided against",
             directory.display()
-        ),
+        )
     };
-
-    // Collected and sorted rather than taken in directory order: two machines must read the same
-    // store the same way, and `read_dir` promises no order at all (invariant *Decisions are
-    // deterministic*).
-    let mut paths: Vec<PathBuf> = entries
-        .filter_map(std::result::Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "md"))
-        .collect();
-    paths.sort();
+    let names = overlay
+        .files(&format!("planning/{kind}"), "md")
+        .map_err(|error| unreadable(&error))?;
+    if names.is_empty() && !directory.is_dir() {
+        return Err(unreadable(&"No such file or directory (os error 2)"));
+    }
 
     let mut found = Vec::new();
-    for path in paths {
-        let text = std::fs::read_to_string(&path)
+    for name in names {
+        let path = directory.join(&name);
+        let text = overlay
+            .read(&format!("planning/{kind}/{name}"))
+            .and_then(|bytes| {
+                bytes.map_or_else(
+                    || Err(std::io::Error::from(std::io::ErrorKind::NotFound)),
+                    |bytes| {
+                        String::from_utf8(bytes)
+                            .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))
+                    },
+                )
+            })
             .with_context(|| format!("reading {}", path.display()))?;
         let document = PlanningDocument::parse(&text, Some(&path.display().to_string()))
             .with_context(|| format!("{} is not a planning document", path.display()))?;

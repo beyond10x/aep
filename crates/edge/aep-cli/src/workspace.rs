@@ -153,11 +153,24 @@ pub(crate) fn assemble(root: &Path) -> Result<(Assembly, Vec<String>)> {
         }
     }
 
-    let assembly = Assembly::read(
+    let assembly = Assembly::read_in(
+        project_directory(),
         roots
             .iter()
             .map(|(name, path)| (name.clone(), path.as_path())),
     );
+    // A pack that does not parse hides the records it holds, so a member that has one is not
+    // answered over: the same refusal every read verb of one store gives.
+    for member in assembly.members() {
+        if let Some(failure) = member
+            .report
+            .failures
+            .iter()
+            .find(|failure| failure.is_pack())
+        {
+            anyhow::bail!("{}: {failure}", member.name);
+        }
+    }
     Ok((assembly, unresolved))
 }
 

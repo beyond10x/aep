@@ -42,6 +42,7 @@ descriptions:                     # status -> one line, shown by `board --format
 | `requires` | no | map of status → list of `{evidence, or, at_least}` | evidence records of that kind, held for the artifact, needed to reach the status; `or` lists further kinds any one of which pays instead, each against `at_least` on its own |
 | `when` | no | map of status → `{after, before}` | each names a **front-matter key** of the artifact holding a date; `after: due` means *not until the instant is past this artifact's `due`* |
 | `descriptions` | no | map of status → string | what being at the status means |
+| `closed` | no | list of statuses | the statuses that count as closed, besides every status with no successor (mapped to `[]` or named only as a target), which is always closed; each must be a state `transitions` declares (a key or a target; `initial` alone does not count), or the tree is refused at load with `unknown_state` naming every one that is not; a kind with no lifecycle has no closed status |
 
 Unknown keys are refused. `when` compares against the instant `move --at` gives, which defaults to
 now. An empty guard constrains nothing.

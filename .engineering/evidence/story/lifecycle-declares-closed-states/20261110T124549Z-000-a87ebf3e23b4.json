@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-10T12:45:49Z",
+  "actor": "human:timo",
+  "artifact": "story:lifecycle-declares-closed-states",
+  "kind": "story",
+  "revision": 23,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator re-run on feat/store-pack-closed-artifacts at cefa09ac after merge (fresh build): aep-domain lib 324 ok, aep-engine lifecycle_fallback 13 ok, aep-cli planning_cli 114 ok + describe_type 3 ok, aep-contract 22+2 ok, aep-profile-development 44+1 ok, aep-profile-operations 49+1 ok; all exit 0"
+  }
+}
