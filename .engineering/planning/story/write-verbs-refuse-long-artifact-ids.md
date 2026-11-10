@@ -2,9 +2,19 @@
 format: aep.planning-md/3
 id: story:write-verbs-refuse-long-artifact-ids
 kind: story
-status: draft
+status: active
 title: 'Write verbs refuse two long artifact ids: the derived idempotency key exceeds 200 characters'
-revision: 2
+relations:
+- serves: vision:O2
+scope:
+- confidence: cited
+  path: crates/edge/aep-cli/src/planning.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/long_artifact_ids.rs
+revision: 5
+transitions:
+- {from: "draft", to: "proposed", at: "2026-11-10T18:04:10Z", actor: "human:timo", revision: 3}
+- {from: "proposed", to: "active", at: "2026-11-10T18:04:11Z", actor: "human:timo", revision: 4}
 ---
 ## Problem
 
