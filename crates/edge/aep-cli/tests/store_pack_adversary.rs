@@ -523,3 +523,146 @@ fn pack_interrupted_while_removing_loose_files_keeps_every_record_and_the_rerun_
     store_ok(&project, &["unpack", "--all"]);
     assert_eq!(git(&project, &["status", "--porcelain"]), "");
 }
+
+// Pass 2: the fix packs the committed blob bytes and compares the working file through Git's
+// filters. Where Git's filters make the working file differ from the blob, that is no longer the
+// same thing as "the bytes the store reads".
+
+/// Every record file under `planning` and `evidence`, as the store reads it: through the overlay of
+/// loose files and packs.
+fn records_read(project: &Path, paths: &[String]) -> Vec<(String, Option<Vec<u8>>)> {
+    let overlay = pack::Overlay::new(
+        engineering(project).join("planning"),
+        engineering(project).join("evidence"),
+    );
+    paths
+        .iter()
+        .map(|path| (path.clone(), overlay.read(path).expect("the overlay reads")))
+        .collect()
+}
+
+/// The store-relative paths of every loose record file.
+fn record_paths(project: &Path) -> Vec<String> {
+    files(&engineering(project))
+        .into_iter()
+        .map(|(path, _)| path)
+        .filter(|path| path.starts_with("planning/") || path.starts_with("evidence/"))
+        .collect()
+}
+
+/// A store whose committed `.gitattributes` checks the planning and evidence files out with CRLF,
+/// in every clone on every system. Git sees the work tree clean, so `pack` packs the committed LF
+/// blobs and removes the CRLF working files, and `unpack --all` writes the LF bytes back. The
+/// acceptance: `unpack --all` after `pack` leaves `git status --porcelain` empty, and the opposite
+/// verb restores every file byte for byte. Git reports every restored file modified (its size no
+/// longer matches the index), and the bytes are not the ones `pack` removed.
+#[test]
+fn unpack_all_after_pack_on_an_eol_crlf_store_leaves_git_status_empty_and_the_bytes_restored() {
+    let project = loose_store("eol-crlf");
+    std::fs::write(
+        project.join(".gitattributes"),
+        "*.md text eol=crlf\n*.json text eol=crlf\n",
+    )
+    .expect("writes");
+    commit(&project, "check the store's files out with CRLF");
+    // Check every record out again, as a fresh clone would: CRLF in the work tree.
+    for directory in ["planning", "evidence"] {
+        std::fs::remove_dir_all(engineering(&project).join(directory)).expect("removable");
+    }
+    git(&project, &["checkout", "--", ".engineering"]);
+    assert_eq!(
+        git(&project, &["status", "--porcelain"]),
+        "",
+        "Git sees it clean"
+    );
+    let before = files(&engineering(&project));
+    assert!(
+        before
+            .iter()
+            .any(|(path, bytes)| path == "planning/story/closed-a.md"
+                && bytes.windows(2).any(|pair| pair == b"\r\n")),
+        "the fixture checks out CRLF"
+    );
+
+    store_ok(&project, &["pack"]);
+    store_ok(&project, &["unpack", "--all"]);
+    assert_eq!(
+        git(&project, &["status", "--porcelain"]),
+        "",
+        "the round trip leaves Git's view unchanged"
+    );
+    assert_eq!(
+        files(&engineering(&project)),
+        before,
+        "the round trip restores every file byte for byte"
+    );
+}
+
+/// A clean/smudge filter on the store's files: a stand-in for git-crypt or transcrypt, where the
+/// committed blob is the encoded form and the work tree holds the plain one. Git sees the work tree
+/// clean, so `pack` packs the committed, encoded blobs and removes the plain working files; every
+/// record the store reads afterwards is the encoded text (`show` no longer finds the artifact,
+/// `validate` reports evidence that does not parse). Before the fix these files were kept as
+/// "differs from HEAD". `pack` must leave what the store reads unchanged.
+#[test]
+fn pack_leaves_every_record_the_store_reads_unchanged_when_git_filters_the_working_files() {
+    let project = loose_store("filtered");
+    let rot13 = "tr A-Za-z N-ZA-Mn-za-m";
+    git(&project, &["config", "filter.rot13.clean", rot13]);
+    git(&project, &["config", "filter.rot13.smudge", rot13]);
+    std::fs::write(
+        project.join(".gitattributes"),
+        ".engineering/planning/** filter=rot13\n.engineering/evidence/** filter=rot13\n",
+    )
+    .expect("writes");
+    git(&project, &["add", "--renormalize", ".engineering"]);
+    commit(&project, "encode the store's files in Git");
+    let blob = git(
+        &project,
+        &[
+            "cat-file",
+            "-p",
+            "HEAD:.engineering/planning/story/closed-a.md",
+        ],
+    );
+    assert!(
+        blob.contains("vq: fgbel:pybfrq-n"),
+        "the blob is encoded: {blob}"
+    );
+    assert_eq!(
+        git(&project, &["status", "--porcelain"]),
+        "",
+        "Git sees it clean"
+    );
+    let paths = record_paths(&project);
+    let before = records_read(&project, &paths);
+
+    store_ok(&project, &["pack"]);
+    assert_eq!(
+        records_read(&project, &paths),
+        before,
+        "the store reads every record as it did before `pack`"
+    );
+}
+
+/// `pack` now refuses a `.engineering/packs` that is a symbolic link; `unpack` does not. With the
+/// packs directory moved outside the repository behind a link, `unpack story:closed-a` writes the
+/// rewritten pack and deletes the old one there, outside the Git work tree. It must refuse, as
+/// `pack` does, and write nothing.
+#[test]
+fn unpack_refuses_a_packs_directory_that_is_a_symbolic_link() {
+    let project = loose_store("unpack-packs-symlink");
+    store_ok(&project, &["pack"]);
+    let outside = scratch("unpack-packs-symlink-outside");
+    std::fs::rename(engineering(&project).join("packs"), &outside).expect("movable");
+    symlink(&outside, engineering(&project).join("packs")).expect("links");
+    let before = files(&outside);
+
+    let output = store(&project, &["unpack", "story:closed-a"]);
+    assert_eq!(output.status.code(), Some(1), "{}", said(&output));
+    assert_eq!(
+        files(&outside),
+        before,
+        "nothing is written outside the repository"
+    );
+}
