@@ -41,3 +41,6 @@ website/static/lab/
 .engineering/runs/
 .engineering/.aep-planning-writer*.lock
 .engineering/migrations/
+
+# Body files for `aep plan artifact ... --from`, written by a session before the CLI records them.
+.engineering/drafts/
