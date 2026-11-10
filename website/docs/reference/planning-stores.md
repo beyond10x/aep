@@ -16,7 +16,7 @@ page disagrees with it. A release marked *next release* is not tagged yet.
 
 | Store | `version` | `store` selector | Also requires | Since | Notes |
 |---|---|---|---|---|---|
-| Git-native | `aep.project/5` | `store: { git: {} }` | `planning_scope: <scope>` | 0.62.0 | The default. One Markdown file per artifact under `.engineering/planning/` and one evidence file per record under `.engineering/evidence/`; Git is the history. `store` may be omitted. |
+| Git-native | `aep.project/5 – aep.project/6` | `store: { git: {} }` | `planning_scope: <scope>` | 0.62.0 | The default. One Markdown file per artifact under `.engineering/planning/` and one evidence file per record under `.engineering/evidence/`; Git is the history. `store` may be omitted. `aep.project/6` is the same store after `aep plan store pack` moved its closed artifacts into `.engineering/packs/`. |
 | SQLite | `aep.project/5` | `store: { sqlite: { path: <path> } }` | `planning_scope: <scope>` | 0.30.0 | One database file; the path is relative to `.engineering/`. |
 | PostgreSQL | `aep.project/5` | `store: { postgres: { url: <url> } }` | `planning_scope: <scope>` | 0.30.0 | A database reached by a libpq connection string or URL. |
 
@@ -32,3 +32,11 @@ page disagrees with it. A release marked *next release* is not tagged yet.
 [The Git-native planning store](../concepts/planning-store.md) describes the default store's
 layout, and [migrating an older store](../guides/migrate-an-older-store.md) walks through a
 migration.
+
+## Packed stores
+
+A Git-native store that has run `aep plan store pack` is `aep.project/6`: closed artifacts and their
+evidence live in `aep.pack/1` files under `.engineering/packs/`, and every read verb answers as it did
+before. `aep plan store unpack --all` returns the store to `aep.project/5`. A build that does not
+know `aep.project/6` refuses the store by name. See
+[packing closed work](../concepts/planning-store.md#packing-closed-work).
