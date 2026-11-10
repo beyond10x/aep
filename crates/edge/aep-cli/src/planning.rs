@@ -7100,6 +7100,11 @@ fn lifecycle(args: &StoreArgs, kind: &str) -> Result<ExitCode> {
                 )
             })
             .collect(),
+        closed: lifecycle
+            .closed_states()
+            .iter()
+            .map(|status| status.as_str().to_owned())
+            .collect(),
     };
 
     match args.format {
@@ -7115,6 +7120,12 @@ fn lifecycle(args: &StoreArgs, kind: &str) -> Result<ExitCode> {
             for (from, to) in &view.transitions {
                 let to: Vec<&str> = to.iter().map(String::as_str).collect();
                 outln!("  {from} -> {}", render_list(&to));
+            }
+            let closed: Vec<&str> = view.closed.iter().map(String::as_str).collect();
+            if closed.is_empty() {
+                outln!("closed: none");
+            } else {
+                outln!("closed: {}", render_list(&closed));
             }
         }
         Format::Yaml | Format::Json => crate::print_serialised(&view, args.format)?,
@@ -9215,6 +9226,7 @@ struct Lifecycle {
     declared: bool,
     initial: String,
     transitions: BTreeMap<String, Vec<String>>,
+    closed: Vec<String>,
 }
 
 #[cfg(test)]

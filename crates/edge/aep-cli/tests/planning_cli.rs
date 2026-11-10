@@ -6838,3 +6838,79 @@ fn adversary_prose_quoting_an_example_block_in_a_longer_fence_is_not_ambiguous_w
         PROSE_MESSAGES
     );
 }
+
+/// The closed set is read from each kind's lifecycle document and printed by the lifecycle verb.
+#[test]
+fn the_lifecycle_verb_prints_the_closed_states_of_each_kind() {
+    let closed_line = |kind: &str| {
+        let out = aep(&["plan", "artifact", "lifecycle", kind]);
+        assert_eq!(code(&out), 0, "{}", stderr(&out));
+        stdout(&out)
+            .lines()
+            .find(|line| line.starts_with("closed:"))
+            .unwrap_or_else(|| panic!("no closed line for {kind}: {}", stdout(&out)))
+            .to_owned()
+    };
+
+    let story = closed_line("story");
+    for state in ["implemented", "rejected", "archived"] {
+        assert!(story.contains(state), "{story}");
+    }
+    assert_eq!(closed_line("review-result"), "closed: archived");
+    assert_eq!(closed_line("approval-record"), "closed: none");
+
+    let structured = aep(&[
+        "plan",
+        "artifact",
+        "lifecycle",
+        "review-result",
+        "--format",
+        "json",
+    ]);
+    assert_eq!(code(&structured), 0, "{}", stderr(&structured));
+    assert!(
+        stdout(&structured).contains("\"closed\""),
+        "{}",
+        stdout(&structured)
+    );
+}
+
+/// Every shipped ladder with an `implemented` or `rejected` state lists it under `closed:`.
+#[test]
+fn every_shipped_ladder_with_an_implemented_or_rejected_state_declares_it_closed() {
+    let directory = root().join("artifacts/lifecycles");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&directory).expect("the lifecycles directory reads") {
+        let path = entry.expect("an entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).expect("readable");
+        let document: serde_yaml::Value = serde_yaml::from_str(&text).expect("parses");
+        let mentions = |state: &str| {
+            document
+                .get("transitions")
+                .and_then(serde_yaml::Value::as_mapping)
+                .is_some_and(|map| {
+                    map.iter().any(|(from, to)| {
+                        from.as_str() == Some(state)
+                            || to
+                                .as_sequence()
+                                .is_some_and(|list| list.iter().any(|v| v.as_str() == Some(state)))
+                    })
+                })
+        };
+        let closed: Vec<&str> = document
+            .get("closed")
+            .and_then(serde_yaml::Value::as_sequence)
+            .map(|list| list.iter().filter_map(serde_yaml::Value::as_str).collect())
+            .unwrap_or_default();
+        for state in ["implemented", "rejected"] {
+            if mentions(state) {
+                assert!(closed.contains(&state), "{path:?} does not close `{state}`");
+                checked += 1;
+            }
+        }
+    }
+    assert!(checked > 0, "no ladder was checked");
+}

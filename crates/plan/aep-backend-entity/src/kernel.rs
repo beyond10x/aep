@@ -372,6 +372,7 @@ pub fn describe(
             .collect(),
         requires,
         or,
+        closed: lifecycle.closed_states().into_iter().collect(),
     })
 }
 
@@ -500,6 +501,7 @@ mod tests {
             requires: BTreeMap::new(),
             descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
+            closed: BTreeSet::new(),
         }
     }
 

@@ -7,6 +7,14 @@
     "initial"
   ],
   "properties": {
+    "closed": {
+      "description": "The statuses that count as closed, beyond the terminal ones.\n\nEmpty by default, which leaves a document without it loading exactly as before. A terminal status is closed whether or not it is listed; this list is for a rung that has a successor and is still closed, such as a story's `implemented`, which only `archived` follows. A ladder cannot say that structurally, so the document says it. Every state named here must be one the ladder declares ([`undeclared_closed`](ArtifactLifecycle::undeclared_closed)).",
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/ArtifactStatus"
+      },
+      "uniqueItems": true
+    },
     "descriptions": {
       "description": "For each status, one line saying what being at it means.\n\nEmpty by default, and absence is not a defect: a ladder whose rung names say enough needs nothing here. It exists because a rendered board has a column heading and no room to explain it, and the alternative every consumer reached for was a hard-coded map of status to blurb living beside the renderer — a second copy of the vocabulary, in a file nothing validates, which goes stale the first time a ladder invents a rung.\n\nA description is prose about *this* ladder's rung, so `draft` on a story and `draft` on a decision may say different things, and neither has to say anything.",
       "type": "object",
