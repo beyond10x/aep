@@ -119,7 +119,7 @@ impl MarkdownStore {
 
         let overlay = self.overlay();
         for pack in overlay.packs() {
-            if let Err(error) = pack.pack() {
+            if let Err(error) = pack.verified() {
                 report.failures.push(StoreFailure {
                     path: pack.file().to_path_buf(),
                     detail: format!("{PACK_FAILURE}: {error}"),
@@ -130,6 +130,14 @@ impl MarkdownStore {
         // missing, and a write would create them again.
         if !report.failures.is_empty() {
             return report;
+        }
+        // A path two places hold with different bytes is refused by every reader, naming both; the
+        // documents that read are still loaded, so `validate` reports on them.
+        if let Some(error) = overlay.first_conflict() {
+            report.failures.push(StoreFailure {
+                path: self.root.clone(),
+                detail: format!("{HELD_TWICE_FAILURE}{error}"),
+            });
         }
 
         let mut files = Vec::new();
@@ -399,13 +407,17 @@ pub struct StoreFailure {
 /// What a [`StoreFailure`] about a pack says first.
 const PACK_FAILURE: &str = "is not a pack";
 
+/// What a [`StoreFailure`] about a path held twice says first: the marker [`StoreFailure::is_pack`]
+/// matches, followed by the refusal itself.
+const HELD_TWICE_FAILURE: &str = "held twice: ";
+
 impl StoreFailure {
     /// Whether this is a pack the read refused (one that does not parse, or a packs directory that
     /// cannot be listed) rather than a document: what it hides is records, so a read verb refuses
     /// to answer over it.
     #[must_use]
     pub fn is_pack(&self) -> bool {
-        self.detail.starts_with(PACK_FAILURE)
+        self.detail.starts_with(PACK_FAILURE) || self.detail.starts_with(HELD_TWICE_FAILURE)
     }
 }
 

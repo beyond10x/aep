@@ -279,6 +279,8 @@ pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
     print_counts(before, after);
     if remaining.is_empty() && store.config.version != ProjectVersion::V5 {
         outln!("project.yaml: aep.project/6 -> aep.project/5");
+    } else if !remaining.is_empty() && store.config.version != ProjectVersion::V6 {
+        outln!("project.yaml: aep.project/5 -> aep.project/6");
     }
     if args.dry_run {
         outln!("dry run: nothing was written");
@@ -311,6 +313,8 @@ pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
     if remaining.is_empty() {
         ensure_attributes_removed(&directory)?;
         store.set_version(ProjectVersion::V5)?;
+    } else {
+        store.set_version(ProjectVersion::V6)?;
     }
     outln!(
         "restored {} file(s); rewrote {} pack(s); {} pack(s) remain",

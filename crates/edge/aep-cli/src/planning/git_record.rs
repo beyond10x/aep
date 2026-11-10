@@ -13,11 +13,32 @@
 use std::collections::BTreeMap;
 use std::io::Write as _;
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
+
+/// Whether the repository around `directory` is only the one the environment names: no `.git` is
+/// above it and a variable that selects a repository is set. Such a store is read through that
+/// variable, as it was before packs; any other store is read from where it is.
+fn selected_by_environment(directory: &Path) -> bool {
+    let directory = std::path::absolute(directory).unwrap_or_else(|_| directory.to_path_buf());
+    !repository_above(&directory)
+        && ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR"]
+            .iter()
+            .any(|name| std::env::var_os(name).is_some())
+}
+
+/// A `git` process for `directory`: it never answers rewritten history, and where a repository is
+/// above `directory` it reads that one whatever the environment selects.
+fn git_command(directory: &Path) -> std::process::Command {
+    if selected_by_environment(directory) {
+        crate::store_command::committed_history_git()
+    } else {
+        crate::store_command::repository_git()
+    }
+}
 
 /// Runs `git -C <directory> <args>` and returns its standard output, or `None` when it fails.
 fn git(directory: &Path, args: &[&str]) -> Option<Vec<u8>> {
-    let output = Command::new("git")
+    let output = git_command(directory)
         .arg("-C")
         .arg(directory)
         .args(args)
@@ -60,21 +81,12 @@ pub(super) enum Versioning {
     Failed(String),
 }
 
-/// Whether some directory from `start` upwards has a `.git`, stopping where
-/// `GIT_CEILING_DIRECTORIES` says Git stops. `start` is absolute.
+/// Whether some directory from `start` upwards has a `.git`. `start` is absolute. The environment
+/// does not stop the walk: provenance cannot be switched off by `GIT_CEILING_DIRECTORIES`, and the
+/// `git` processes below run with it removed (and the other repository-selecting variables).
 fn repository_above(start: &Path) -> bool {
-    let ceilings: Vec<std::path::PathBuf> = std::env::var_os("GIT_CEILING_DIRECTORIES")
-        .map(|listed| {
-            std::env::split_paths(&listed)
-                .filter(|path| !path.as_os_str().is_empty())
-                .collect()
-        })
-        .unwrap_or_default();
     let mut current = Some(start);
     while let Some(directory) = current {
-        if ceilings.iter().any(|ceiling| ceiling == directory) {
-            return false;
-        }
         // What Git itself takes for a repository: a `.git` file, or a directory that is one. A
         // stub `.git` (an empty directory) is stepped over, as Git steps over it.
         let dot_git = directory.join(".git");
@@ -97,7 +109,17 @@ pub(super) fn versioning(directory: &Path) -> Versioning {
         return Versioning::Failed(format!("{} has no absolute path", directory.display()));
     };
     if !repository_above(&directory) {
-        return Versioning::Unversioned;
+        // The environment names a repository and nothing in the tree is one: the history is there
+        // and cannot be trusted to be this store's, so the check refuses and is never skipped.
+        return if selected_by_environment(&directory) {
+            Versioning::Failed(
+                "no `.git` is above the store and the environment selects a repository \
+                 (`GIT_DIR`, `GIT_WORK_TREE` or `GIT_COMMON_DIR`)"
+                    .to_owned(),
+            )
+        } else {
+            Versioning::Unversioned
+        };
     }
     let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
         return Versioning::Unversioned;
@@ -105,7 +127,7 @@ pub(super) fn versioning(directory: &Path) -> Versioning {
     let Some(name) = name.to_str() else {
         return Versioning::Failed(format!("{} is not UTF-8", directory.display()));
     };
-    let probe = Command::new("git")
+    let probe = crate::store_command::repository_git()
         .arg("-C")
         .arg(&directory)
         .args(["rev-parse", "--is-inside-work-tree"])
@@ -124,7 +146,7 @@ pub(super) fn versioning(directory: &Path) -> Versioning {
         Ok(output) if output.stdout.trim_ascii() != b"true" => return Versioning::Unversioned,
         Ok(_) => {}
     }
-    match Command::new("git")
+    match crate::store_command::repository_git()
         .arg("-C")
         .arg(parent)
         .args(["check-ignore", "--quiet", name])
@@ -242,7 +264,7 @@ pub(super) fn committed_versions(
 /// The contents `git cat-file --batch` answers for each request line, in order; a missing object
 /// is `None`.
 fn cat_file_batch(root: &Path, requests: &str) -> Option<Vec<Option<Vec<u8>>>> {
-    let mut child = Command::new("git")
+    let mut child = git_command(root)
         .arg("-C")
         .arg(root)
         .args(["cat-file", "--batch"])

@@ -190,7 +190,7 @@ pub(crate) fn planning_scope(
 /// Variables that make a `git` process read a repository, a configuration or an object store other
 /// than the one `--git-dir` names. An inherited one (a hook, a wrapper, a parent `git -c`) would
 /// change which `origin` is read, or hide it.
-const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
+pub(crate) const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
     "GIT_DIR",
     "GIT_COMMON_DIR",
     "GIT_WORK_TREE",
@@ -203,6 +203,70 @@ const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
     "GIT_CONFIG_PARAMETERS",
     "GIT_CONFIG_COUNT",
 ];
+
+/// The variables of [`REDIRECTING_GIT_VARIABLES`] that choose which repository, index, object store
+/// or namespace `git` reads, and where discovery stops. The rest of that list (`GIT_CONFIG`,
+/// `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`) injects configuration, and is not here: a `safe.directory`
+/// given in the environment is what lets `git` read a repository at all, and stripping it would make
+/// provenance silently unavailable. The `origin` reader wants the whole list, because a configuration
+/// standing in for the repository's own decides which remote it reads.
+///
+/// The environment can neither redirect nor rewrite history for provenance: these eight choose the
+/// repository, and [`HISTORY_REWRITING_GIT_VARIABLES`] with `GIT_NO_REPLACE_OBJECTS=1` stop it from
+/// showing other commits, blobs or boundaries than the ones committed.
+pub(crate) const REPOSITORY_SELECTING_GIT_VARIABLES: [&str; 8] = [
+    "GIT_DIR",
+    "GIT_COMMON_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_NAMESPACE",
+    "GIT_CEILING_DIRECTORIES",
+];
+
+/// Variables that make `git` answer other history than the repository holds: a graft file, a
+/// replacement-ref namespace and a shallow file each change which commits and blobs a revision
+/// names.
+pub(crate) const HISTORY_REWRITING_GIT_VARIABLES: [&str; 3] = [
+    "GIT_GRAFT_FILE",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_SHALLOW_FILE",
+];
+
+/// A `git` process that cannot be made to answer other history than is committed: the variables in
+/// [`HISTORY_REWRITING_GIT_VARIABLES`] are removed and replacement objects are switched off.
+/// Repository selection is left to the caller.
+pub(crate) fn committed_history_git() -> std::process::Command {
+    let mut command = std::process::Command::new("git");
+    for name in HISTORY_REWRITING_GIT_VARIABLES {
+        command.env_remove(name);
+    }
+    command.env("GIT_NO_REPLACE_OBJECTS", "1");
+    command
+}
+
+/// [`committed_history_git`] that also reads the repository its working directory is in, wherever
+/// the environment points, and keeps the configuration the environment gives it (see
+/// [`REPOSITORY_SELECTING_GIT_VARIABLES`]).
+pub(crate) fn repository_git() -> std::process::Command {
+    let mut command = committed_history_git();
+    for name in REPOSITORY_SELECTING_GIT_VARIABLES {
+        command.env_remove(name);
+    }
+    command
+}
+
+/// A `git` process with every variable in [`REDIRECTING_GIT_VARIABLES`] removed, so the repository
+/// it reads is the one its working directory is in and nothing the caller exported changes which,
+/// or where Git stops looking.
+pub(crate) fn isolated_git() -> std::process::Command {
+    let mut command = std::process::Command::new("git");
+    for name in REDIRECTING_GIT_VARIABLES {
+        command.env_remove(name);
+    }
+    command
+}
 
 /// The `origin` remote's URL in the repository whose common directory is `common`, or `None` when
 /// it has none or `git` cannot be run. The answer is `git remote get-url origin`: the first of

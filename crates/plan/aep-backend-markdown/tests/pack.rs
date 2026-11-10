@@ -338,15 +338,18 @@ fn a_store_with_two_packs_reads_both_as_one_tree() {
 }
 
 #[test]
-fn a_loose_copy_answers_a_read_before_a_packed_one() {
+fn a_path_held_loose_and_packed_with_different_bytes_is_refused_naming_both() {
     let (root, overlay) = engineering("loose-first");
     fs::create_dir_all(root.join("planning/story")).expect("writable");
     fs::write(root.join("planning/story/a.md"), b"loose").expect("writable");
     write_pack(&root, &[("planning/story/a.md", b"packed".as_slice())]);
-    assert_eq!(
-        overlay.read("planning/story/a.md").expect("reads"),
-        Some(b"loose".to_vec())
-    );
+    let error = overlay
+        .read("planning/story/a.md")
+        .expect_err("two different copies are never read as one");
+    let said = error.to_string();
+    assert!(said.contains("planning/story/a.md"), "{said}");
+    assert!(said.contains(".pack"), "{said}");
+    assert!(said.contains("different bytes"), "{said}");
 }
 
 #[test]

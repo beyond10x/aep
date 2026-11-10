@@ -92,7 +92,7 @@ impl Store {
         let mut parsed = Vec::new();
         let mut refused = Vec::new();
         for file in self.overlay.packs() {
-            match file.pack() {
+            match file.verified() {
                 Ok(pack) => parsed.push((file.name().to_owned(), std::sync::Arc::clone(pack))),
                 Err(error) => refused.push(format!("{}: {error}", file.file().display())),
             }
@@ -162,17 +162,58 @@ fn swap_version(text: &str, from: &str, to: &str) -> Result<String> {
 }
 
 /// Writes `bytes` to `path` through a dot-named temporary file in the same directory.
+///
+/// The temporary is created exclusively (`O_EXCL`), so a file or a link already at its name is never
+/// opened, followed or overwritten: the name carries the process id and a counter, and a name that
+/// is taken is replaced by the next.
 pub(super) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<()> {
+    static SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    write_atomic_named(path, bytes, || {
+        SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    })
+}
+
+/// [`write_atomic`] with the source of the temporary's serial numbers given.
+fn write_atomic_named(path: &Path, bytes: &[u8], mut serial: impl FnMut() -> u64) -> Result<()> {
     let directory = path.parent().context("a path with no directory")?;
     fs::create_dir_all(directory).with_context(|| format!("creating {}", directory.display()))?;
     let name = path
         .file_name()
         .context("a path with no file name")?
         .to_string_lossy();
-    let temporary = directory.join(format!(".{name}.{}.pack.tmp", std::process::id()));
-    fs::write(&temporary, bytes).with_context(|| format!("writing {}", temporary.display()))?;
-    fs::rename(&temporary, path).with_context(|| format!("replacing {}", path.display()))?;
-    Ok(())
+    let mut attempts = 0_u32;
+    let (temporary, mut file) = loop {
+        let temporary = directory.join(format!(
+            ".{name}.{}.{}.pack.tmp",
+            std::process::id(),
+            serial()
+        ));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+        {
+            Ok(file) => break (temporary, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists && attempts < 1000 => {
+                attempts += 1;
+            }
+            Err(error) => {
+                return Err(error).with_context(|| format!("creating {}", temporary.display()))
+            }
+        }
+    };
+    let written = file
+        .write_all(bytes)
+        .and_then(|()| file.sync_all())
+        .with_context(|| format!("writing {}", temporary.display()));
+    drop(file);
+    let renamed = written.and_then(|()| {
+        fs::rename(&temporary, path).with_context(|| format!("replacing {}", path.display()))
+    });
+    if renamed.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    renamed
 }
 
 /// Writes a pack under its name and reads it back: it must parse, carry the name its bytes earn
@@ -213,6 +254,17 @@ pub(super) fn ensure_attributes_removed(packs: &Path) -> Result<()> {
     // Non-empty (a file this verb did not write) stays.
     let _ = fs::remove_dir(packs);
     Ok(())
+}
+
+/// Whether `file`, with its directory resolved through every link, is still inside `engineering`
+/// resolved: a file that is not is never written or removed.
+pub(super) fn stays_in_store(engineering: &Path, file: &Path) -> bool {
+    let (Ok(root), Some(directory)) = (engineering.canonicalize(), file.parent()) else {
+        return false;
+    };
+    directory
+        .canonicalize()
+        .is_ok_and(|resolved| resolved.starts_with(root))
 }
 
 /// Prints the file counts under `planning`, `evidence` and `packs`, before and after.
@@ -256,10 +308,7 @@ fn count_files(directory: &Path) -> usize {
 /// A `git` process for the repository around `engineering`, isolated from the caller's repository
 /// selection.
 fn git(engineering: &Path) -> Command {
-    let mut command = Command::new("git");
-    for name in super::REDIRECTING_GIT_VARIABLES {
-        command.env_remove(name);
-    }
+    let mut command = super::isolated_git();
     command.arg("-C").arg(engineering);
     command
 }
@@ -294,9 +343,12 @@ fn require_work_tree(engineering: &Path, packs: &Path) -> Result<Repo> {
 }
 
 /// [`require_work_tree`]'s checks for a verb that also runs outside a work tree: `None` when there
-/// is none. A symbolic link at `.engineering` or `.engineering/packs` is refused either way.
+/// is none. A symbolic link at `.engineering`, `.engineering/packs`, `.engineering/planning` or
+/// `.engineering/evidence` is refused either way.
 pub(super) fn open_repo(engineering: &Path, packs: &Path) -> Result<Option<Repo>> {
-    for location in [engineering, packs] {
+    let planning = engineering.join(GIT_PLANNING_DIRECTORY);
+    let evidence = engineering.join(GIT_EVIDENCE_DIRECTORY);
+    for location in [engineering, packs, planning.as_path(), evidence.as_path()] {
         if fs::symlink_metadata(location).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
             anyhow::bail!(
                 "{} is a symbolic link; packs are written only inside the Git work tree; nothing \
@@ -899,6 +951,14 @@ pub(crate) fn run(args: &PackArgs) -> Result<ExitCode> {
         for (path, why) in &plan.kept {
             outln!("  keep {path}: {why}");
         }
+        // A `/5` store that holds packs is a `/6` one, whether or not this run packs more.
+        if !args.dry_run
+            && store.config.version != ProjectVersion::V6
+            && !store.parsed_packs()?.is_empty()
+        {
+            store.set_version(ProjectVersion::V6)?;
+            outln!("project.yaml: {PROJECT_VERSION_V5} -> {PROJECT_VERSION_V6}");
+        }
         outln!("nothing to pack: no closed artifact has bytes Git has committed unchanged");
         return Ok(ExitCode::SUCCESS);
     }
@@ -922,6 +982,13 @@ pub(crate) fn run(args: &PackArgs) -> Result<ExitCode> {
     for path in &plan.removals {
         let file = store.overlay.loose_path(path);
         // A file changed since the plan was read is not the file that was packed: keep it.
+        if !stays_in_store(&store.engineering, &file) {
+            anyhow::bail!(
+                "{} resolves outside {}; it was not removed",
+                file.display(),
+                store.engineering.display()
+            );
+        }
         let unchanged = blob_ids(&repo, std::slice::from_ref(path))
             .is_ok_and(|ids| plan.oids.get(path) == ids.first());
         if !unchanged {
@@ -948,4 +1015,59 @@ pub(crate) fn run(args: &PackArgs) -> Result<ExitCode> {
     }
     print_counts(before, after);
     Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_atomic_named;
+
+    fn directory(name: &str) -> std::path::PathBuf {
+        let directory = std::env::temp_dir().join(format!("aep-write-atomic-{}-{name}", std::process::id()));
+        if directory.exists() {
+            std::fs::remove_dir_all(&directory).expect("the previous scratch is removable");
+        }
+        std::fs::create_dir_all(&directory).expect("the scratch is writable");
+        directory
+    }
+
+    #[test]
+    fn write_atomic_never_opens_a_file_or_link_already_at_the_temporary_name() {
+        let directory = directory("taken");
+        let victim = directory.join("victim");
+        std::fs::write(&victim, b"keep me").expect("writable");
+        let name = format!(".target.{}", std::process::id());
+        std::os::unix::fs::symlink(&victim, directory.join(format!("{name}.0.pack.tmp")))
+            .expect("links");
+        std::fs::write(directory.join(format!("{name}.1.pack.tmp")), b"keep me too")
+            .expect("writable");
+        let mut serial = 0_u64;
+        write_atomic_named(&directory.join("target"), b"new bytes", || {
+            serial += 1;
+            serial - 1
+        })
+        .expect("writes under the next free name");
+        assert_eq!(std::fs::read(&victim).expect("reads"), b"keep me");
+        assert_eq!(
+            std::fs::read(directory.join(format!("{name}.1.pack.tmp"))).expect("reads"),
+            b"keep me too"
+        );
+        assert_eq!(
+            std::fs::read(directory.join("target")).expect("reads"),
+            b"new bytes"
+        );
+    }
+
+    #[test]
+    fn write_atomic_names_differ_between_calls_in_one_process() {
+        let directory = directory("serial");
+        for _ in 0..2 {
+            super::write_atomic(&directory.join("target"), b"bytes").expect("writes");
+        }
+        assert_eq!(std::fs::read(directory.join("target")).expect("reads"), b"bytes");
+        assert_eq!(
+            std::fs::read_dir(&directory).expect("lists").count(),
+            1,
+            "no temporary is left behind"
+        );
+    }
 }

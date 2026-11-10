@@ -757,9 +757,12 @@ pub(crate) fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) ->
 fn refuse_unparsed_packs(root: &Path, evidence: &Path) -> Result<()> {
     let overlay = aep_backend_markdown::pack::Overlay::new(root, evidence);
     for pack in overlay.packs() {
-        if let Err(error) = pack.pack() {
+        if let Err(error) = pack.verified() {
             bail!("{}: not a pack: {error}", pack.file().display());
         }
+    }
+    if let Some(error) = overlay.first_conflict() {
+        bail!("{error}");
     }
     Ok(())
 }
@@ -7257,14 +7260,35 @@ fn pack_problems(
 
     // 7. No copy of an artifact re-exposes a literal a redaction record removed.
     {
-        for stored in report.documents.values() {
-            let id = &stored.document.frontmatter.id;
+        // The documents that read, and the documents a pack holds that do not (a path held in two
+        // places with different bytes is refused by every reader, and is the case this check is
+        // for): each with the id its path names.
+        let mut documents: BTreeMap<String, ArtifactId> = report
+            .documents
+            .values()
+            .map(|stored| {
+                (
+                    format!("planning/{}", stored.relative_path),
+                    stored.document.frontmatter.id.clone(),
+                )
+            })
+            .collect();
+        for path in held.keys() {
+            let named = path
+                .strip_prefix("planning/")
+                .and_then(|rest| rest.strip_suffix(".md"))
+                .and_then(|rest| rest.split_once('/'))
+                .and_then(|(kind, name)| ArtifactId::new(format!("{kind}:{name}")).ok());
+            if let Some(id) = named {
+                documents.entry(path.clone()).or_insert(id);
+            }
+        }
+        for (store_path, id) in &documents {
             let Ok(records) = aep_backend_markdown::journal::redaction_records_git(evidence, id)
             else {
                 continue;
             };
-            let store_path = format!("planning/{}", stored.relative_path);
-            let Ok(holders) = overlay.holders(&store_path) else {
+            let Ok(holders) = overlay.holders(store_path) else {
                 continue;
             };
             for (record_path, entry) in &records {
@@ -7284,7 +7308,7 @@ fn pack_problems(
                         continue;
                     }
                     let place = match holder.place() {
-                        Place::Loose => overlay.loose_path(&store_path).display().to_string(),
+                        Place::Loose => overlay.loose_path(store_path).display().to_string(),
                         Place::Packed(name) => overlay
                             .packs_directory()
                             .join(pack::file_name(name))
@@ -7318,7 +7342,7 @@ fn evidence_problems(evidence: &Path) -> Vec<String> {
     let overlay = Overlay::for_evidence(evidence);
     // A pack that does not parse is `pack_problems`' to report, naming it; what it holds cannot be
     // listed here.
-    if overlay.packs().iter().any(|pack| pack.pack().is_err()) {
+    if overlay.packs().iter().any(|pack| pack.verified().is_err()) {
         return Vec::new();
     }
     // A directory that cannot be listed is a problem of its own, never an empty directory.
