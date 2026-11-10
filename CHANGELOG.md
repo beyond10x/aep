@@ -10,6 +10,7 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ### Added
 
+- `aep.project/6`: a store may hold closed artifacts and their evidence in `.engineering/packs/*.pack` (`aep.pack/1`, content-addressed), and every reader answers over packed and loose records as one store; writes to a packed artifact refuse naming `aep plan store unpack <id>`, a pack that does not parse fails read verbs naming it, and `aep plan store migrate git` refuses a `/6` store.
 - A lifecycle document may list `closed:` states; a kind's closed set is those plus every state with no successor, `aep plan artifact lifecycle <kind>` and the contract's `LifecycleDescriptor` publish it, and a `closed:` state the transitions do not declare is refused at load. aep 0.79.x refuses a protocol tree whose lifecycles carry `closed:`.
 
 ### Fixed

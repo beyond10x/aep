@@ -250,14 +250,7 @@ impl StoreLocation {
 /// `aep.project/5` lays them out. Anywhere else it is `evidence` inside `planning` itself, so two
 /// stores that share a parent never share, and count, each other's records.
 pub(crate) fn evidence_beside(planning: &Path) -> PathBuf {
-    let evidence = aep_domain::project::GIT_EVIDENCE_DIRECTORY;
-    let absolute = std::path::absolute(planning).unwrap_or_else(|_| planning.to_path_buf());
-    match absolute.parent() {
-        Some(parent) if parent.file_name() == Some(project_directory().as_ref()) => {
-            planning.parent().map_or_else(|| parent.join(evidence), |p| p.join(evidence))
-        }
-        _ => planning.join(evidence),
-    }
+    aep_backend_markdown::pack::evidence_beside(planning, project_directory())
 }
 
 /// The plan the project whose planning directory `path` is names, when `path`'s parent is a
@@ -422,7 +415,9 @@ impl DrivenPlan {
 impl aep_driver::PlanSource for DrivenPlan {
     fn load(&self) -> StoreReport {
         match &self.plan {
-            Plan::Git { root, .. } => MarkdownStore::open(root.clone()).load(),
+            Plan::Git { root, evidence } => MarkdownStore::open(root.clone())
+                .with_evidence(evidence.clone())
+                .load(),
             durable => match durable.open_backend() {
                 Ok(Some(backend)) => match report_from_backend(&backend) {
                     Ok(report) => report,
@@ -752,10 +747,43 @@ fn open(args: &StoreLocation, with_backend: bool) -> Result<Opened> {
 /// ladders the writing verbs carry — so a caller that only reads may pass a location that answers
 /// nothing else.
 pub(crate) fn open_plan(plan: Plan, args: &StoreLocation, with_backend: bool) -> Result<Opened> {
+    open_plan_reporting(plan, args, with_backend, true)
+}
+
+/// Refuses a store with a pack that does not parse, naming the pack file and the problem.
+///
+/// For a read that does not go through [`open_plan`]: a history reads the packs directly, and a
+/// pack it cannot read is records it would otherwise report as none.
+fn refuse_unparsed_packs(root: &Path, evidence: &Path) -> Result<()> {
+    let overlay = aep_backend_markdown::pack::Overlay::new(root, evidence);
+    for pack in overlay.packs() {
+        if let Err(error) = pack.pack() {
+            bail!("{}: not a pack: {error}", pack.file().display());
+        }
+    }
+    Ok(())
+}
+
+/// [`open_plan`], where `refuse_packs` says whether a pack that does not parse refuses the read.
+///
+/// Every read verb refuses: a pack that does not parse hides the records it holds, so any answer
+/// over the rest would be an answer over a store nobody can see whole. `validate` is the one caller
+/// that passes `false`, because it reports the pack as a problem of its own.
+fn open_plan_reporting(
+    plan: Plan,
+    args: &StoreLocation,
+    with_backend: bool,
+    refuse_packs: bool,
+) -> Result<Opened> {
     match &plan {
         Plan::Git { root, evidence } => {
-            let store = MarkdownStore::open(root.clone());
+            let store = MarkdownStore::open(root.clone()).with_evidence(evidence.clone());
             let report = store.load();
+            if refuse_packs {
+                if let Some(failure) = report.failures.iter().find(|failure| failure.is_pack()) {
+                    bail!("{failure}");
+                }
+            }
             if with_backend {
                 require_clean(&store, &report)?;
             } else {
@@ -1945,7 +1973,7 @@ pub(crate) fn declared_membership(root: &Path) -> Result<aep_domain::workspace::
 /// Refuses an unreadable store rather than seeding a partial one: an entity surface answering
 /// about nine of ten artifacts, with nothing saying which one is missing, is worse than an error.
 pub(crate) fn graph_at(root: &Path) -> Result<ArtifactGraph> {
-    let store = MarkdownStore::open(root);
+    let store = MarkdownStore::open(root).with_evidence(evidence_beside(root));
     let report = store.load();
     require_clean(&store, &report)?;
     let repository = root
@@ -2211,6 +2239,19 @@ fn create_through_a_command(
     let result = block_on(backend.execute(envelope)).map_err(|error| {
         let detail = error.to_string();
         if detail.contains("already addresses an entity") {
+            if let Some(packs) = packed_holders(&opened.plan, &front.id) {
+                return anyhow::anyhow!(
+                    "`{}` is packed in {} and already exists; an id addresses one artifact, so it \
+                     is not created again (`aep plan store unpack {}` restores the file)",
+                    front.id,
+                    packs
+                        .iter()
+                        .map(|name| format!(".engineering/packs/{name}.pack"))
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    front.id
+                );
+            }
             anyhow::anyhow!(
                 "`{}` already exists at {} — creating over a document is how a plan item's body \
                  disappears, and there is no undo in a tool that has not committed anything",
@@ -2226,6 +2267,18 @@ fn create_through_a_command(
     };
 
     Ok((opened.path_of(&front.id), created.revision.get()))
+}
+
+/// The packs that hold `id`'s document, when the plan is a Git-native store and any does.
+fn packed_holders(plan: &Plan, id: &ArtifactId) -> Option<Vec<String>> {
+    let Plan::Git { root, evidence } = plan else {
+        return None;
+    };
+    let overlay = aep_backend_markdown::pack::Overlay::new(root.clone(), evidence.clone());
+    let packs = overlay
+        .packed_in(&format!("planning/{}", relative_path_for(id)))
+        .ok()?;
+    (!packs.is_empty()).then_some(packs)
 }
 
 fn write_through_a_command(
@@ -3924,15 +3977,16 @@ fn redact_literal(
         .get(&id)
         .with_context(|| opened.missing(&id))?;
     let (changes, count) = redacted_text(&id, &stored.document, literal, with)?;
+    // Through the overlay: a record already packed is one the redaction did not write.
+    let overlay = aep_backend_markdown::pack::Overlay::for_evidence(&evidence);
     let records = |directory: &Path| -> BTreeSet<PathBuf> {
-        std::fs::read_dir(directory)
-            .map(|entries| {
-                entries
-                    .filter_map(Result::ok)
-                    .map(|entry| entry.path())
-                    .collect()
-            })
+        let store_directory = format!("evidence/{}/{}", id.namespace(), id.name());
+        overlay
+            .list(&store_directory)
             .unwrap_or_default()
+            .into_iter()
+            .map(|(name, _)| directory.join(name))
+            .collect()
     };
     let directory = evidence.join(id.namespace()).join(id.name());
     let before = records(&directory);
@@ -6077,7 +6131,7 @@ fn validate(
     strict: bool,
     outcome_within: u64,
 ) -> Result<ExitCode> {
-    let opened = open(&args.location, false)?;
+    let opened = open_plan_reporting(args.location.plan()?, &args.location, false, false)?;
     let registry = args.lifecycles()?;
     let required_since = args.location.findings_required_since()?;
     let mut summary = findings(&opened, &registry, &args.repository_root(), required_since);
@@ -6587,8 +6641,15 @@ fn review_problems(
         if differs.is_empty() {
             continue;
         }
-        let records: Vec<_> = aep_backend_markdown::journal::redaction_records_git(evidence, id)
-            .into_iter()
+        let records: Vec<_> = match aep_backend_markdown::journal::redaction_records_git(evidence, id)
+        {
+            Ok(records) => records,
+            Err(error) => {
+                problems.push(format!("{id}: its redaction records do not read: {error}"));
+                continue;
+            }
+        }
+        .into_iter()
             .filter(|(_, entry)| entry.revision > first.frontmatter.revision)
             .collect();
         if records.is_empty() {
@@ -6735,31 +6796,51 @@ fn walk_problems(
 /// Every evidence file that does not read as a record about the artifact its directory names.
 fn evidence_problems(evidence: &Path) -> Vec<String> {
     use aep_backend_markdown::journal::{Change, Entry};
+    use aep_backend_markdown::pack::Overlay;
 
-    fn children(directory: &Path) -> Vec<PathBuf> {
-        let Ok(entries) = std::fs::read_dir(directory) else {
-            return Vec::new();
-        };
-        let mut found: Vec<PathBuf> = entries
-            .filter_map(Result::ok)
-            .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
-            .map(|entry| entry.path())
-            .collect();
-        found.sort();
-        found
+    // The loose evidence files and the records of every pack, as one tree: a packed record is the
+    // record it was when loose, and is checked as one.
+    let overlay = Overlay::for_evidence(evidence);
+    if let Some(refused) = overlay
+        .packs()
+        .into_iter()
+        .find_map(|pack| pack.pack().as_ref().err().cloned().map(|error| (pack, error)))
+    {
+        return vec![format!(
+            "{}: not a pack: {}",
+            refused.0.file().display(),
+            refused.1
+        )];
     }
+    // A directory that cannot be listed is a problem of its own, never an empty directory.
+    let children = |directory: &str, problems: &mut Vec<String>| -> Vec<(String, bool)> {
+        overlay.list(directory).unwrap_or_else(|error| {
+            problems.push(format!(
+                "{}: not an evidence record: {error}",
+                overlay.loose_path(directory).display()
+            ));
+            Vec::new()
+        })
+    };
 
     let mut problems = Vec::new();
-    for kind in children(evidence).into_iter().filter(|path| path.is_dir()) {
-        for name in children(&kind).into_iter().filter(|path| path.is_dir()) {
-            let expected = format!(
-                "{}:{}",
-                kind.file_name().unwrap_or_default().to_string_lossy(),
-                name.file_name().unwrap_or_default().to_string_lossy()
-            );
-            for path in children(&name) {
-                let read = std::fs::read_to_string(&path)
+    for (kind, _) in children("evidence", &mut problems)
+        .into_iter()
+        .filter(|(_, is_directory)| *is_directory)
+    {
+        for (name, _) in children(&format!("evidence/{kind}"), &mut problems)
+            .into_iter()
+            .filter(|(_, is_directory)| *is_directory)
+        {
+            let expected = format!("{kind}:{name}");
+            for (file, _) in children(&format!("evidence/{kind}/{name}"), &mut problems) {
+                let store_path = format!("evidence/{kind}/{name}/{file}");
+                let path = overlay.loose_path(&store_path);
+                let read = overlay
+                    .read(&store_path)
                     .map_err(|error| error.to_string())
+                    .and_then(|bytes| bytes.ok_or_else(|| "is not a file".to_owned()))
+                    .and_then(|bytes| String::from_utf8(bytes).map_err(|error| error.to_string()))
                     .and_then(|text| {
                         serde_json::from_str::<Entry>(&text).map_err(|error| error.to_string())
                     });
@@ -7918,6 +7999,7 @@ fn history(args: &StoreArgs, id: &str) -> Result<ExitCode> {
     let id = artifact_id(id)?;
     let plan = args.location.plan()?;
     if let Plan::Git { root, evidence } = &plan {
+        refuse_unparsed_packs(root, evidence)?;
         // The document's own transitions and its evidence files: no backend, no journal.
         let (entries, unreadable) =
             aep_backend_markdown::journal::history_git(root, evidence, &id);

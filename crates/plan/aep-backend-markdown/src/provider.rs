@@ -143,29 +143,18 @@ impl PlanStore for MarkdownProvider {
 
     fn kinds(&self) -> Result<Vec<String>, StoreError> {
         let root = self.store.root();
-        let entries = match fs::read_dir(root) {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(backend("listing", root, &error)),
-        };
-        let mut kinds = Vec::new();
-        for entry in entries {
-            let entry = entry.map_err(|error| backend("listing", root, &error))?;
-            let name = entry.file_name();
-            let Some(name) = name.to_str() else {
-                continue;
-            };
-            if name.starts_with('.') || !entry.path().is_dir() {
-                continue;
-            }
-            // Evidence kept under the documents' own root is not a kind of document.
-            if self.evidence == entry.path() {
-                continue;
-            }
-            kinds.push(name.to_owned());
-        }
-        kinds.sort();
-        Ok(kinds)
+        let overlay = self.store.overlay();
+        let listed = overlay
+            .directories("planning")
+            .map_err(|error| backend("listing", root, &error))?;
+        // Evidence and packs kept under the documents' own root are not kinds of document.
+        Ok(listed
+            .into_iter()
+            .filter(|name| {
+                let path = overlay.loose_path(&format!("planning/{name}"));
+                path != self.evidence && path != overlay.packs_directory()
+            })
+            .collect())
     }
 }
 
@@ -183,9 +172,10 @@ impl MarkdownProvider {
     /// `commit` writes the document — with a status move appended to its `transitions` — and, for
     /// an observation, one evidence file. Neither directory need exist yet.
     pub fn open_git(root: impl Into<PathBuf>, evidence: impl Into<PathBuf>) -> Self {
+        let evidence = evidence.into();
         Self {
-            store: MarkdownStore::open(root),
-            evidence: evidence.into(),
+            store: MarkdownStore::open(root).with_evidence(evidence.clone()),
+            evidence,
         }
     }
 
@@ -308,11 +298,16 @@ impl MarkdownProvider {
     /// The document for `entity`/`id`, if there is one, parsed.
     fn read(&self, entity: &str, id: &str) -> Result<Option<PlanningDocument>, StoreError> {
         let path = self.store.root().join(entity).join(format!("{id}.md"));
-        let text = match fs::read_to_string(&path) {
-            Ok(text) => text,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        let bytes = match self
+            .store
+            .overlay()
+            .read(&format!("planning/{entity}/{id}.md"))
+        {
+            Ok(Some(bytes)) => bytes,
+            Ok(None) => return Ok(None),
             Err(error) => return Err(backend("reading", &path, &error)),
         };
+        let text = String::from_utf8(bytes).map_err(|error| backend("reading", &path, &error))?;
         PlanningDocument::parse(&text, Some(&Self::relative(entity, id)))
             .map(Some)
             .map_err(|error| backend("parsing", &path, &error))
@@ -705,28 +700,15 @@ impl StateProvider for MarkdownProvider {
     fn ids(&self, entity: &str) -> Result<Vec<String>, StoreError> {
         self.recover_pending()?;
         let directory = self.store.root().join(entity);
-        let entries = match fs::read_dir(&directory) {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(error) => return Err(backend("listing", &directory, &error)),
-        };
-        let mut ids = Vec::new();
-        for entry in entries {
-            let entry = entry.map_err(|error| backend("listing", &directory, &error))?;
-            let name = entry.file_name();
-            let Some(name) = name.to_str() else {
-                continue;
-            };
-            // A temporary a write goes through starts with a dot and is not a document yet.
-            if name.starts_with('.') {
-                continue;
-            }
-            if let Some(stem) = name.strip_suffix(".md") {
-                ids.push(stem.to_owned());
-            }
-        }
-        ids.sort();
-        Ok(ids)
+        let names = self
+            .store
+            .overlay()
+            .files(&format!("planning/{entity}"), "md")
+            .map_err(|error| backend("listing", &directory, &error))?;
+        Ok(names
+            .into_iter()
+            .filter_map(|name| name.strip_suffix(".md").map(str::to_owned))
+            .collect())
     }
 }
 
@@ -790,6 +772,17 @@ impl AtomicBatchStore for MarkdownProvider {
                     .read(&instance.entity, &instance.id)?
                     .map(|document| instance_of(&instance.entity, &instance.id, &document));
                 view.insert(key.clone(), held);
+            }
+            // A packed artifact is not rewritten in place; refused here, before the intent is
+            // published, so a refusal leaves no pending batch behind.
+            if let (Some(Some(held)), Ok((effective, _))) =
+                (view.get(&key), Self::effective(&commit.decision))
+            {
+                if held != &effective {
+                    self.store
+                        .refuse_packed(&Self::relative(&instance.entity, &instance.id))
+                        .map_err(|error| StoreError::Backend(error.to_string()))?;
+                }
             }
             check(
                 &instance.entity,
