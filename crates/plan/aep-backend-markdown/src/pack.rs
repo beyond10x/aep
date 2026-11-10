@@ -651,28 +651,55 @@ impl Overlay {
     }
 
     /// Every pack file, parsed or refused, in name order.
+    ///
+    /// A packs directory that is not there is no packs. One that is there and cannot be listed, a
+    /// `packs` that is not a directory, an entry that cannot be read and a pack file whose name is
+    /// not UTF-8 are each a refused pack, named by its path: what they hide is records, and a
+    /// reader must not take them for records there are none of.
     #[must_use]
     pub fn packs(&self) -> Vec<PackFile> {
-        let Ok(entries) = std::fs::read_dir(&self.packs) else {
-            return Vec::new();
+        let refused = |file: PathBuf, detail: String| PackFile {
+            name: file.to_string_lossy().into_owned(),
+            pack: Err(PackError::new(PackCode::Unreadable, detail)),
+            file,
         };
-        let mut found: Vec<PackFile> = entries
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.extension()
-                    .is_some_and(|extension| extension == EXTENSION)
-                    && !path
-                        .file_name()
-                        .is_some_and(|name| name.to_string_lossy().starts_with('.'))
-                    && path.is_file()
-            })
-            .filter_map(|file| {
-                let name = file.file_stem()?.to_str()?.to_owned();
-                let pack = load(&file);
-                Some(PackFile { name, file, pack })
-            })
-            .collect();
+        let entries = match std::fs::read_dir(&self.packs) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Vec::new(),
+            Err(error) => {
+                let detail = format!("{} cannot be listed: {error}", self.packs.display());
+                return vec![refused(self.packs.clone(), detail)];
+            }
+        };
+        let mut found: Vec<PackFile> = Vec::new();
+        for entry in entries {
+            let file = match entry {
+                Ok(entry) => entry.path(),
+                Err(error) => {
+                    let detail = format!("{} cannot be listed: {error}", self.packs.display());
+                    found.push(refused(self.packs.clone(), detail));
+                    continue;
+                }
+            };
+            if file
+                .extension()
+                .is_none_or(|extension| extension != EXTENSION)
+                || file
+                    .file_name()
+                    .is_some_and(|name| name.to_string_lossy().starts_with('.'))
+                || !file.is_file()
+            {
+                continue;
+            }
+            let Some(name) = file.file_stem().and_then(|stem| stem.to_str()) else {
+                let detail = format!("{} has a name that is not UTF-8", file.display());
+                found.push(refused(file, detail));
+                continue;
+            };
+            let name = name.to_owned();
+            let pack = load(&file);
+            found.push(PackFile { name, file, pack });
+        }
         found.sort_by(|left, right| left.name.cmp(&right.name));
         found
     }
@@ -767,7 +794,11 @@ impl Overlay {
                 for entry in entries {
                     let entry = entry?;
                     let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
-                        continue;
+                        // Skipping it would list the directory without a file that is there.
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("{} has a name that is not UTF-8", entry.path().display()),
+                        ));
                     };
                     if name.starts_with('.') {
                         continue;

@@ -122,7 +122,7 @@ impl MarkdownStore {
             if let Err(error) = pack.pack() {
                 report.failures.push(StoreFailure {
                     path: pack.file().to_path_buf(),
-                    detail: format!("is not a pack: {error}"),
+                    detail: format!("{PACK_FAILURE}: {error}"),
                 });
             }
         }
@@ -394,6 +394,19 @@ pub struct StoreFailure {
     pub path: PathBuf,
     /// What is wrong with it.
     pub detail: String,
+}
+
+/// What a [`StoreFailure`] about a pack says first.
+const PACK_FAILURE: &str = "is not a pack";
+
+impl StoreFailure {
+    /// Whether this is a pack the read refused (one that does not parse, or a packs directory that
+    /// cannot be listed) rather than a document: what it hides is records, so a read verb refuses
+    /// to answer over it.
+    #[must_use]
+    pub fn is_pack(&self) -> bool {
+        self.detail.starts_with(PACK_FAILURE)
+    }
 }
 
 impl fmt::Display for StoreFailure {

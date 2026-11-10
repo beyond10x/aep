@@ -58,13 +58,21 @@ impl Assembly {
     /// checked out is a normal condition on a machine that checked out a different subset.
     #[must_use]
     pub fn read<'a>(members: impl IntoIterator<Item = (MemberName, &'a Path)>) -> Self {
+        Self::read_in(aep_domain::project::PROJECT_DIRECTORY, members)
+    }
+
+    /// [`Self::read`] for a workspace whose project directory is `project_directory`
+    /// (`AEP_PROJECT_DIR`): each member keeps its packs beside its store, where its own reads
+    /// find them.
+    #[must_use]
+    pub fn read_in<'a>(
+        project_directory: &str,
+        members: impl IntoIterator<Item = (MemberName, &'a Path)>,
+    ) -> Self {
         let mut assembly = Self::default();
         for (name, root) in members {
             let report = MarkdownStore::open(root)
-                .with_evidence(crate::pack::evidence_beside(
-                    root,
-                    aep_domain::project::PROJECT_DIRECTORY,
-                ))
+                .with_evidence(crate::pack::evidence_beside(root, project_directory))
                 .load();
             for id in report.documents.keys() {
                 assembly

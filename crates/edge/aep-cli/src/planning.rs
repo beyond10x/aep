@@ -780,12 +780,7 @@ fn open_plan_reporting(
             let store = MarkdownStore::open(root.clone()).with_evidence(evidence.clone());
             let report = store.load();
             if refuse_packs {
-                if let Some(failure) = report.failures.iter().find(|failure| {
-                    failure
-                        .path
-                        .extension()
-                        .is_some_and(|extension| extension == aep_backend_markdown::pack::EXTENSION)
-                }) {
+                if let Some(failure) = report.failures.iter().find(|failure| failure.is_pack()) {
                     bail!("{failure}");
                 }
             }
@@ -6817,21 +6812,28 @@ fn evidence_problems(evidence: &Path) -> Vec<String> {
             refused.1
         )];
     }
-    let children = |directory: &str| -> Vec<(String, bool)> {
-        overlay.list(directory).unwrap_or_default()
+    // A directory that cannot be listed is a problem of its own, never an empty directory.
+    let children = |directory: &str, problems: &mut Vec<String>| -> Vec<(String, bool)> {
+        overlay.list(directory).unwrap_or_else(|error| {
+            problems.push(format!(
+                "{}: not an evidence record: {error}",
+                overlay.loose_path(directory).display()
+            ));
+            Vec::new()
+        })
     };
 
     let mut problems = Vec::new();
-    for (kind, _) in children("evidence")
+    for (kind, _) in children("evidence", &mut problems)
         .into_iter()
         .filter(|(_, is_directory)| *is_directory)
     {
-        for (name, _) in children(&format!("evidence/{kind}"))
+        for (name, _) in children(&format!("evidence/{kind}"), &mut problems)
             .into_iter()
             .filter(|(_, is_directory)| *is_directory)
         {
             let expected = format!("{kind}:{name}");
-            for (file, _) in children(&format!("evidence/{kind}/{name}")) {
+            for (file, _) in children(&format!("evidence/{kind}/{name}"), &mut problems) {
                 let store_path = format!("evidence/{kind}/{name}/{file}");
                 let path = overlay.loose_path(&store_path);
                 let read = overlay
