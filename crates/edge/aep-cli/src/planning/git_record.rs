@@ -35,6 +35,8 @@ fn git(directory: &Path, args: &[&str]) -> Option<Vec<u8>> {
 /// below answers as it does outside a work tree. Without this, the same store validated
 /// differently depending on whether the build directory happened to sit inside a checkout.
 fn unversioned(directory: &Path) -> bool {
+    // Named by its absolute path, so `.` is the directory it is and has a name to ask about.
+    let directory = &std::path::absolute(directory).unwrap_or_else(|_| directory.to_path_buf());
     let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
         return true;
     };
@@ -43,6 +45,98 @@ fn unversioned(directory: &Path) -> bool {
     };
     git(parent, &["rev-parse", "--is-inside-work-tree"]).is_none()
         || git(parent, &["check-ignore", "--quiet", name]).is_some()
+}
+
+/// Whether the history of a directory can be read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Versioning {
+    /// No repository holds the directory, or the one that does ignores it: there is no history to
+    /// compare with, and a check that needs one is skipped.
+    Unversioned,
+    /// A repository holds it and answers.
+    Versioned,
+    /// A repository holds it and Git cannot answer — an ownership refusal, no `git` program, any
+    /// error. Never the same as [`Self::Unversioned`]: a check that needs the history is refused.
+    Failed(String),
+}
+
+/// Whether some directory from `start` upwards has a `.git`, stopping where
+/// `GIT_CEILING_DIRECTORIES` says Git stops. `start` is absolute.
+fn repository_above(start: &Path) -> bool {
+    let ceilings: Vec<std::path::PathBuf> = std::env::var_os("GIT_CEILING_DIRECTORIES")
+        .map(|listed| {
+            std::env::split_paths(&listed)
+                .filter(|path| !path.as_os_str().is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut current = Some(start);
+    while let Some(directory) = current {
+        if ceilings.iter().any(|ceiling| ceiling == directory) {
+            return false;
+        }
+        // What Git itself takes for a repository: a `.git` file, or a directory that is one. A
+        // stub `.git` (an empty directory) is stepped over, as Git steps over it.
+        let dot_git = directory.join(".git");
+        if dot_git.is_file()
+            || (dot_git.join("HEAD").exists()
+                && dot_git.join("objects").is_dir()
+                && dot_git.join("refs").is_dir())
+        {
+            return true;
+        }
+        current = directory.parent();
+    }
+    false
+}
+
+/// [`Versioning`] of `directory`, decided by where a repository exists and not by whether Git
+/// could be asked: only the absence of a repository, or its ignoring the directory, skips.
+pub(super) fn versioning(directory: &Path) -> Versioning {
+    let Ok(directory) = std::path::absolute(directory) else {
+        return Versioning::Failed(format!("{} has no absolute path", directory.display()));
+    };
+    if !repository_above(&directory) {
+        return Versioning::Unversioned;
+    }
+    let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
+        return Versioning::Unversioned;
+    };
+    let Some(name) = name.to_str() else {
+        return Versioning::Failed(format!("{} is not UTF-8", directory.display()));
+    };
+    let probe = Command::new("git")
+        .arg("-C")
+        .arg(&directory)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output();
+    match probe {
+        Err(error) => return Versioning::Failed(format!("`git` cannot be run: {error}")),
+        Ok(output) if !output.status.success() => {
+            return Versioning::Failed(
+                "a repository holds the store and `git` cannot read it (an ownership refusal, or \
+                 a damaged repository)"
+                    .to_owned(),
+            )
+        }
+        Ok(output) if output.stdout.trim_ascii() != b"true" => return Versioning::Unversioned,
+        Ok(_) => {}
+    }
+    match Command::new("git")
+        .arg("-C")
+        .arg(parent)
+        .args(["check-ignore", "--quiet", name])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+    {
+        Ok(status) if status.code() == Some(0) => Versioning::Unversioned,
+        Ok(status) if status.code() == Some(1) => Versioning::Versioned,
+        Ok(_) => Versioning::Failed("`git check-ignore` could not answer".to_owned()),
+        Err(error) => Versioning::Failed(format!("`git` cannot be run: {error}")),
+    }
 }
 
 /// Every committed version of each of `paths` (relative to `root`), oldest first, keyed by the
@@ -314,9 +408,15 @@ pub(super) enum Provenance {
 /// A path deleted before that commit, as when the loose file was removed in one commit and the
 /// pack added in a later one, answers with the last version it had.
 pub(super) fn blobs_before_pack(base: &Path, pack: &Path, paths: &[&str]) -> Provenance {
-    if unversioned(base) {
-        return Provenance::Unversioned;
+    match versioning(base) {
+        Versioning::Unversioned => return Provenance::Unversioned,
+        Versioning::Failed(reason) => return Provenance::Failed(reason),
+        Versioning::Versioned => {}
     }
+    let Some(boundary) = shallow_boundary(base) else {
+        return Provenance::Failed("git could not say whether the clone is shallow".to_owned());
+    };
+    let shallow = !boundary.is_empty();
     let Some(file) = pack.strip_prefix(base).ok().and_then(|relative| {
         relative
             .components()
@@ -349,14 +449,8 @@ pub(super) fn blobs_before_pack(base: &Path, pack: &Path, paths: &[&str]) -> Pro
         };
     };
     let added = String::from_utf8_lossy(&added).trim().to_owned();
-    if !added.is_empty() {
-        match shallow_boundary(base) {
-            Some(boundary) if boundary.contains(&added) => return Provenance::Shallow,
-            Some(_) => {}
-            None => {
-                return Provenance::Failed("git could not say whether the clone is shallow".into())
-            }
-        }
+    if boundary.contains(&added) {
+        return Provenance::Shallow;
     }
     let revision = if added.is_empty() {
         "HEAD".to_owned()
@@ -367,8 +461,13 @@ pub(super) fn blobs_before_pack(base: &Path, pack: &Path, paths: &[&str]) -> Pro
         .and_then(|found| String::from_utf8(found).ok())
         .map(|found| found.trim().to_owned())
     else {
-        // Nothing before the pack's commit (or no commit at all): nothing to equal.
-        return Provenance::Blobs(vec![Committed::Never; paths.len()]);
+        // Nothing before the pack's commit (or no commit at all): nothing to equal — unless the
+        // clone is shallow, where it is the history that was not fetched.
+        return if shallow && !paths.is_empty() {
+            Provenance::Shallow
+        } else {
+            Provenance::Blobs(vec![Committed::Never; paths.len()])
+        };
     };
     let mut requests = String::new();
     for path in paths {
@@ -409,6 +508,10 @@ pub(super) fn blobs_before_pack(base: &Path, pack: &Path, paths: &[&str]) -> Pro
         });
         found.push(blob.map_or(Committed::Never, Committed::Blob));
     }
+    if shallow && found.contains(&Committed::Never) {
+        // The walk reached the shallow boundary without finding the blob.
+        return Provenance::Shallow;
+    }
     Provenance::Blobs(found)
 }
 
@@ -416,7 +519,7 @@ pub(super) fn blobs_before_pack(base: &Path, pack: &Path, paths: &[&str]) -> Pro
 /// committed. `None` when there is no history to read, or no commit yet.
 #[allow(clippy::case_sensitive_file_extension_comparisons)] // A pack's extension is exactly `.pack`.
 pub(super) fn committed_packs(base: &Path, packs: &Path) -> Option<Vec<(String, Vec<u8>)>> {
-    if unversioned(base) {
+    if versioning(base) != Versioning::Versioned {
         return None;
     }
     git(base, &["rev-parse", "--verify", "--quiet", "HEAD"])?;

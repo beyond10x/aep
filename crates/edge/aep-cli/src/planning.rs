@@ -6850,6 +6850,10 @@ fn pack_problems(
     use aep_domain::error::ValidationCode as Code;
     use aep_domain::project::ProjectVersion;
 
+    // Named by absolute paths from here on, so `--store .` is the store `--store <path>` names.
+    let root = std::path::absolute(root).unwrap_or_else(|_| root.to_path_buf());
+    let evidence = std::path::absolute(evidence).unwrap_or_else(|_| evidence.to_path_buf());
+    let (root, evidence) = (root.as_path(), evidence.as_path());
     let overlay = Overlay::new(root, evidence);
     let packs = overlay.packs();
     let mut problems = Vec::new();
@@ -6991,7 +6995,23 @@ fn pack_problems(
 
     // 5. Each record equals the last committed blob before the commit that added its pack.
     let mut shallow: Option<String> = None;
-    if let Some(base) = engineering.as_ref().filter(|_| !packs_unsafe) {
+    // Only the absence of a repository skips the history checks; one Git cannot read is refused.
+    let history_readable = match engineering.as_deref().map(git_record::versioning) {
+        Some(git_record::Versioning::Failed(reason)) => {
+            problems.push(pack_problem(
+                Code::PackRecordNotCommittedBytes,
+                overlay.packs_directory().display(),
+                format!("provenance could not be checked: {reason}"),
+            ));
+            false
+        }
+        Some(git_record::Versioning::Versioned) => true,
+        _ => false,
+    };
+    if let Some(base) = engineering
+        .as_ref()
+        .filter(|_| !packs_unsafe && history_readable)
+    {
         for (location, pack) in &parsed_packs {
             let relatives: Vec<Option<String>> = pack
                 .records()
@@ -7077,7 +7097,10 @@ fn pack_problems(
 
     // 5 (continued). A committed pack gone from the working tree loses its records unless
     // something else still holds the same bytes.
-    if let Some(base) = engineering.as_ref().filter(|_| !packs_unsafe) {
+    if let Some(base) = engineering
+        .as_ref()
+        .filter(|_| !packs_unsafe && history_readable)
+    {
         let present: BTreeSet<String> = packs
             .iter()
             .filter_map(|file| file.file().file_name())
@@ -7202,7 +7225,7 @@ fn pack_problems(
     }
 
     // 5 (continued). A packed evidence record had one committed version while it was loose.
-    if let Some(base) = &engineering {
+    if let Some(base) = engineering.as_ref().filter(|_| history_readable) {
         let packed_evidence: Vec<&str> = held
             .keys()
             .map(String::as_str)
@@ -7233,7 +7256,7 @@ fn pack_problems(
     }
 
     // 7. No copy of an artifact re-exposes a literal a redaction record removed.
-    if !packs.is_empty() {
+    {
         for stored in report.documents.values() {
             let id = &stored.document.frontmatter.id;
             let Ok(records) = aep_backend_markdown::journal::redaction_records_git(evidence, id)
