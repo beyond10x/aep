@@ -18,7 +18,7 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ### Fixed
 
-- `aep plan artifact validate` no longer reports `pack_redacted_literal_exposed` for a literal that a copy holds only outside its title, summary, `prose_only` reason and body, such as in a transition's actor id: the scan reads the fields `redact` rewrites, and a copy that does not parse is still searched whole.
+- `aep plan artifact validate` no longer reports `pack_redacted_literal_exposed` for a literal that a copy holds only outside its title, summary, `prose_only` reason and body, such as in a transition's actor id: the scan reads the free text a person writes, and a copy that does not parse is still searched whole.
 - `aep plan artifact relate`, `unrelate`, `new`, `move`, `evidence` and `redact` and the store's seeding no longer refuse long artifact ids with "invalid idempotency key" or "invalid request identifier": an envelope identifier over the 200-character cap keeps a prefix and ends in 16 hex digits of FNV-1a over the full name, and identifiers at or under the cap are unchanged.
 
 ## [0.79.1] - 2026-11-10
