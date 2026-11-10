@@ -7271,11 +7271,13 @@ fn pack_problems(
 
     // 7. No copy of an artifact re-exposes a literal a redaction record removed.
     //
-    // A copy that parses as a planning document is searched in its title, its summary and its
-    // body: exactly the fields `redact` rewrites and the replay of the record's count covers. The
-    // rest of the file (a transition's actor, an owner, a tag) is not redactable text, so a
-    // literal that is also a name there is not an exposure. A copy that does not parse is searched
-    // whole, because nothing says which part of it is prose.
+    // A copy that parses as a planning document is searched in its title, its summary, its
+    // `prose_only` reason and its body: the fields `redact` rewrites and the replay of the
+    // record's count covers, plus the review's `prose_only` reason, which is free text an
+    // operator writes and which a copy can carry the literal in. The rest of the file (a
+    // transition's actor, an owner, a tag) is not redactable text, so a literal that is also a name
+    // there is not an exposure. A copy that does not parse is searched whole, because nothing
+    // says which part of it is prose.
     {
         // The documents that read, and the documents a pack holds that do not (a path held in two
         // places with different bytes is refused by every reader, and is the case this check is
@@ -7325,7 +7327,11 @@ fn pack_problems(
                     let found = match PlanningDocument::parse(&text, None) {
                         Ok(document) => {
                             let front = &document.frontmatter;
-                            [front.title.as_deref(), front.summary.as_deref()]
+                            [
+                                front.title.as_deref(),
+                                front.summary.as_deref(),
+                                front.prose_only.as_deref(),
+                            ]
                                 .into_iter()
                                 .flatten()
                                 .chain([document.body.as_str()])
