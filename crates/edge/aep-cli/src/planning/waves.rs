@@ -334,14 +334,14 @@ pub(crate) fn one_surface(left: &str, right: &str) -> bool {
 }
 
 /// The path's components without empty and `.` ones, or `None` when a component is `..` or a glob
-/// (`*`, `?`, `[`), which no component comparison can place.
+/// (`*`, `?`), which no component comparison can place.
 fn components(path: &str) -> Option<Vec<&str>> {
     let mut parts = Vec::new();
     for part in path.split('/') {
         match part {
             "" | "." => {}
             ".." => return None,
-            glob if glob.contains(['*', '?', '[']) => return None,
+            glob if glob.contains(['*', '?']) => return None,
             part => parts.push(part),
         }
     }

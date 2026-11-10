@@ -844,6 +844,79 @@ fn three_nested_scopes_are_three_collisions_in_id_order() {
     );
 }
 
+/// A store written before `roles` and `roles/` were one surface may hold both spellings in one
+/// story (the earlier rule kept them as two entries on purpose). Adding a third spelling of that
+/// surface must leave one entry for it, not two identical ones: `--add` replaces only the first
+/// entry it finds.
+#[test]
+fn scope_add_over_two_held_spellings_of_one_surface_leaves_one_entry() {
+    let store = scratch("aep-scope-held-twice");
+    hand_written(&store, "both", &["roles", "roles/"], None);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:both",
+        "--add",
+        "./roles",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/both.md")).expect("the document");
+    assert_eq!(
+        document.matches("path:").count(),
+        1,
+        "one surface is one entry: {document}"
+    );
+}
+
+/// The same story, adding the surface in a spelling it already holds byte for byte.
+#[test]
+fn scope_add_of_a_held_spelling_over_two_held_spellings_leaves_one_entry() {
+    let store = scratch("aep-scope-held-twice-exact");
+    hand_written(&store, "both", &["roles", "roles/"], None);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:both",
+        "--add",
+        "roles/",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/both.md")).expect("the document");
+    assert_eq!(
+        document.matches("path:").count(),
+        1,
+        "one surface is one entry, never two identical ones: {document}"
+    );
+}
+
+/// `--add` of two spellings of one surface in one command records one entry.
+#[test]
+fn scope_add_of_two_spellings_in_one_command_records_one_entry() {
+    let store = scratch("aep-scope-two-in-one");
+    hand_written(&store, "one", &[], None);
+    let at = printable(&store);
+    make(&[
+        "plan",
+        "artifact",
+        "scope",
+        "story:one",
+        "--add",
+        "roles",
+        "--add",
+        "./roles/",
+        "--store",
+        at,
+    ]);
+    let document = std::fs::read_to_string(store.join("story/one.md")).expect("the document");
+    assert_eq!(document.matches("path:").count(), 1, "{document}");
+}
+
 /// The recorded answer, byte for byte.
 ///
 /// A committed store with waves, a dependency across them, a cited collision, an inferred one and
@@ -921,5 +994,20 @@ fn scope_remove_takes_either_spelling_of_a_surface() {
     assert!(
         !document.contains("path: roles"),
         "removing `roles` removes `roles/`: {document}"
+    );
+}
+
+/// `[` is a literal character in a real path, such as a dynamic route: it is compared like any
+/// other component, so a story on one shares a wave with a story elsewhere.
+#[test]
+fn a_bracket_in_a_path_is_a_literal_character() {
+    let store = store_of(
+        "aep-waves-bracket",
+        &[("route", &["app/[id]/page.tsx"]), ("lib", &["lib/x.rs"])],
+    );
+    let printed = make(&["plan", "artifact", "waves", "--store", printable(&store)]);
+    assert!(
+        printed.ends_with("1 wave(s), 0 collision(s), 0 unassessed\n"),
+        "a bracketed path collides only with what it holds: {printed}"
     );
 }

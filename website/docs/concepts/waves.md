@@ -42,11 +42,12 @@ scope:
 Scope is a **story** field. Other kinds are refused, because a task inherits the scope of the story
 it decomposes. A path is a prefix of every path under it, compared by path component: `src`
 contains `src/checkout.rs`, so a story scoped to the directory and one scoped to the file collide.
-`src` does not contain `src.md` or `srcx/main.rs`. Empty and `.` components change nothing: `src`,
-`src/` and `./src` are one surface, and `scope --add` or `--remove` takes either spelling. `.` is the
-repository root and contains every path. A path with a `..` component or a glob (`*`, `?`, `[`)
-cannot be compared, so it collides with every other path. `waves` reads the scope entries, not your files, so it cannot tell a file from a
-directory of the same name.
+`src` does not contain `src.md` or `srcx/main.rs`. Empty and `.` components change nothing:
+`src`, `src/` and `./src` are one surface, and `scope --add` or `--remove` takes any spelling.
+`.` is the repository root and contains every path. A path with a `..` component or a glob (`*`,
+`?`) cannot be compared, so it collides with every other path; `[` is read as a literal character,
+as in `app/[id]/page.tsx`. `waves` reads the scope entries, not your files, so it cannot tell a
+file from a directory of the same name.
 
 ## Waves
 

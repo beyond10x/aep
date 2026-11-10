@@ -1152,9 +1152,9 @@ pub(crate) enum ArtifactCommand {
     ///
     /// **It reads and prints.** Choosing which wave to run is the operator's, and so is deciding
     /// that a reported collision may be worked anyway. A path holds every path under it, by
-    /// component and with empty and `.` components ignored: `crates/x` collides with `crates/x/src/lib.rs`,
-    /// printed as the narrower path, and not with `crates/x.md`. Only the entries are read, never
-    /// the working tree.
+    /// component and with empty and `.` components ignored: `crates/x` collides with
+    /// `crates/x/src/lib.rs`, printed as the narrower path, and not with `crates/x.md`. Only the
+    /// entries are read, never the working tree.
     Waves {
         /// Where the plan is and how to render.
         #[command(flatten)]
@@ -4382,14 +4382,10 @@ fn scope(
             .map_err(|error| anyhow::anyhow!("{error}"))?;
         // A path already declared is **replaced**, never doubled: two entries for one surface would
         // be a document saying two things about it, and a computation reading it would pick one.
-        // One surface is compared as `waves` compares it, so `roles/` replaces `roles`.
-        match entries
-            .iter_mut()
-            .find(|held| waves::one_surface(&held.path, &entry.path))
-        {
-            Some(held) => held.clone_from(&entry),
-            None => entries.push(entry.clone()),
-        }
+        // One surface is compared as `waves` compares it, so `roles/` replaces `roles`, and every
+        // held spelling of it goes, including two an older store kept apart.
+        entries.retain(|held| !waves::one_surface(&held.path, &entry.path));
+        entries.push(entry.clone());
         added.push(entry);
     }
     let mut removed: Vec<String> = Vec::new();
