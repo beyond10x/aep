@@ -374,6 +374,10 @@ fn a_rename_conflict_between_two_unpacks_resolved_by_keeping_both_packs_leaves_p
     }
     store_ok(&project, &["unpack", "story:closed-a"]);
     store_ok(&project, &["unpack", "story:closed-b"]);
+    // closed-d, closed-e and closed-f are still packed in both kept packs, so the store stays /6
+    // until they are unpacked too; then it returns to /5.
+    assert_eq!(project_version(&project), "version: aep.project/6");
+    store_ok(&project, &["unpack", "--all"]);
     assert_eq!(project_version(&project), "version: aep.project/5");
 }
 
