@@ -9,29 +9,43 @@ relations:
 - informed_by: architecture-design:store-pack
 - serves: vision:O2
 scope:
-- confidence: inferred
+- confidence: cited
   path: crates/edge/aep-cli/src/doctor.rs
 - confidence: cited
   path: crates/edge/aep-cli/src/planning.rs
-- confidence: inferred
+- confidence: cited
   path: crates/edge/aep-cli/src/specification.rs
-- confidence: inferred
+- confidence: cited
   path: crates/edge/aep-cli/src/store_command/migrate_git.rs
+- confidence: cited
+  path: crates/edge/aep-cli/src/workspace.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_overlay.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_overlay_adversary.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_overlay_adversary_2.rs
 - confidence: cited
   path: crates/govern/aep-domain/src/project.rs
 - confidence: cited
+  path: crates/plan/aep-backend-markdown/src/assembly.rs
+- confidence: cited
   path: crates/plan/aep-backend-markdown/src/journal.rs
-- confidence: inferred
+- confidence: cited
   path: crates/plan/aep-backend-markdown/src/lib.rs
-- confidence: inferred
+- confidence: cited
   path: crates/plan/aep-backend-markdown/src/pack.rs
 - confidence: cited
   path: crates/plan/aep-backend-markdown/src/provider.rs
 - confidence: cited
   path: crates/plan/aep-backend-markdown/src/store.rs
 - confidence: cited
+  path: crates/plan/aep-backend-markdown/tests/pack.rs
+- confidence: cited
+  path: crates/plan/aep-backend-markdown/tests/pack_adversary.rs
+- confidence: cited
   path: website/docs/reference/project-file.md
-revision: 19
+revision: 20
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
