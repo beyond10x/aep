@@ -8,7 +8,30 @@ relations:
 - decomposes: epic:store-pack-closed-artifacts
 - informed_by: architecture-design:store-pack
 - serves: vision:O2
-revision: 5
+scope:
+- confidence: inferred
+  path: crates/edge/aep-cli/src/doctor.rs
+- confidence: cited
+  path: crates/edge/aep-cli/src/planning.rs
+- confidence: inferred
+  path: crates/edge/aep-cli/src/specification.rs
+- confidence: inferred
+  path: crates/edge/aep-cli/src/store_command/migrate_git.rs
+- confidence: cited
+  path: crates/govern/aep-domain/src/project.rs
+- confidence: cited
+  path: crates/plan/aep-backend-markdown/src/journal.rs
+- confidence: inferred
+  path: crates/plan/aep-backend-markdown/src/lib.rs
+- confidence: inferred
+  path: crates/plan/aep-backend-markdown/src/pack.rs
+- confidence: cited
+  path: crates/plan/aep-backend-markdown/src/provider.rs
+- confidence: cited
+  path: crates/plan/aep-backend-markdown/src/store.rs
+- confidence: cited
+  path: website/docs/reference/project-file.md
+revision: 19
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
@@ -78,3 +101,26 @@ holding a pack is `version: aep.project/6`, and the move into the pack is commit
   commit: `story:validate-checks-packs`. This story owns the holder lookup both
   `story:pack-and-unpack-verbs` and `story:validate-checks-packs` use; they call it and do not add
   their own.
+
+## Scope
+
+Derived 2026-11-10 by `story-scoper`. Every line is **cited** (read from the story or the tree) or
+**inferred** (a reading that could be wrong).
+
+- **Primary surface:** `crates/plan/aep-backend-markdown` (the new pack module, the overlay, and every Git-native reader and writer) — cited
+- **Files:** `crates/plan/aep-backend-markdown/src/store.rs`: `MarkdownStore::load` (:89, its `report.files_read += 1` at :109), `collect_documents` (:421), `MarkdownStore::create` (:216, `path.exists()`), `MarkdownStore::update` (:231, `!path.is_file()` gives `StoreError::Missing`) — cited
+- **Files:** `crates/plan/aep-backend-markdown/src/provider.rs`: `PlanStore::kinds` (:144, `read_dir`), `MarkdownProvider::read` (:309), `StateProvider::ids` (:705, `read_dir`); the packed-target refusal goes in `Store::commit` (:743, the `existing.is_some()` branch that calls `update`), and `AtomicBatchStore::commit_batch` (:776) reaches it through `recover_pending`/`apply_recoverable` — cited for the readers, inferred for where the refusal goes
+- **Files:** `crates/plan/aep-backend-markdown/src/journal.rs`: `read_git` (:423), `history_git` (:451, `document.is_file()` at :455 chooses between one artifact's directory and the whole store), `evidence_on_hand_git` (:483), `evidence_records_git` (:508, `is_file` at :516), `redaction_records_git` (:559), `write_evidence_occurrence` (:620, the sequence and "already written" checks via `files_with` at :658 and :672, `path.exists()` at :687), private `document_entries` (:719), `evidence_in` (:733), `subdirectories` (:756), `files_with` (:761), `listed` (:768) — cited
+- **Files:** `crates/edge/aep-cli/src/planning.rs`: `evidence_problems` (:6736, its own `children` `read_dir` walk, called from `git_findings` :6448) and the `records` closure in `redact_literal` (:3927, `read_dir` on `evidence/<ns>/<name>`) — cited
+- **Files:** `crates/govern/aep-domain/src/project.rs`: `ProjectVersion` (:100, gains `V6`), `ProjectVersion::as_str` (:110), `PROJECT_VERSION_V5` (:56, a sibling `PROJECT_VERSION_V6` is added), the version branch of `impl TryFrom<RawProjectConfig> for ProjectConfig` (:1175–1190, whose `else` is the `unsupported_protocol_version` refusal for `/7`), and the tests in the same file (:1368ff) — cited
+- **Symbols:** new module `crates/plan/aep-backend-markdown/src/pack.rs` (parse, render, digest, path grammar, the holder lookup) and its `pub mod` line in `crates/plan/aep-backend-markdown/src/lib.rs` (:90–100) — inferred, the file name is a guess
+- **Also likely:** `crates/edge/aep-cli/src/planning.rs` `create_through_a_command` (:2175): the overlay makes a packed id hydrate, so `new` fails on the contract's "already addresses an entity", and the mapping at :2213 prints "already exists at <path>" without naming the pack; the story's *Shared surfaces* line does not list this symbol — inferred
+- **Also likely:** `crates/edge/aep-cli/src/doctor.rs` `evidence_files` (:543), a separate `read_dir` count of evidence `.json` files that `doctor` reports for a `Plan::Git` (:502) — inferred, a store reader the design's table leaves out
+- **Also likely:** `crates/edge/aep-cli/src/specification.rs` `specifications` (:239), which reads `<planning>/specification/*.md` straight from disk with `read_dir`; a closed specification that gets packed would disappear from it — inferred, a store reader the design's table leaves out
+- **Also likely:** `crates/edge/aep-cli/src/store_command/migrate_git.rs` `selected_layout` (:146): it accepts only `/5` (:161) and refuses `/6` ("this build migrates /1 to /5"); on `/5` its repair rewrites documents with `fs::write` (:605), which bypasses the provider's refusal — inferred
+- **Documents:** `CHANGELOG.md` (`## [Unreleased]` / `### Added`, one line) and `website/docs/reference/project-file.md` (the `version` row at :32 and the example at :15) — cited
+- **Not touched, by reading:** `projection.rs` `documents_of` (:512) reads only through `kinds`/`ids`/`load` and counts `files_read` per instance, so it follows the provider; `assembly.rs`, `aep-driver/src/run.rs` (`PlanSource for MarkdownStore`), `DrivenPlan::load`, `open_plan` and `graph_at` reach the store only through `MarkdownStore::load`; `Opened::judged_evidence`/`log`/`history`/`entries_from_the_contract` call `journal.rs` only; `planning/git_record.rs` (`committed_versions`, `first_committed`, `changed_evidence`) is the history walk, which the story puts out of scope; `schemas/generated/project.schema.json` types `version` as a free string (:166), so it does not need regenerating — cited
+- **Confidence:** high for the backend files, `planning.rs` and `project.rs` (named by the story or the design and confirmed by grep); medium for doctor, specification, migrate_git and `create_through_a_command` (found by grep and not named by either)
+- **Would collide with:** any unit on `aep-backend-markdown`'s `store.rs`, `provider.rs` or `journal.rs`; on `aep-cli` `planning.rs` `evidence_problems`, `redact_literal` or `create_through_a_command` (`fn lifecycle` at :7082 is not touched); on `aep-domain` `project.rs` version parsing; on the `CHANGELOG.md` `[Unreleased]` section; on `website/docs/reference/project-file.md`
+- **Safety fact:** besides `git_record.rs`'s Git-history reads, every read of a Git-native store's `planning/` and `evidence/` goes through `MarkdownStore::load`/`collect_documents`, the provider's `read`/`ids`/`kinds`, the `journal.rs` readers, or four direct walks in `aep-cli` (`evidence_problems`, the redact `records` closure, doctor's `evidence_files`, `specifications`), so moving those onto the overlay covers every verb. Also, `evidence <packed-id>` writes no document, because `Store::commit` returns before `update` when the document did not change (provider.rs:766–768) — step 2 (`git grep` for `read_dir|is_file|exists|read_to_string` over the backend and `aep-cli/src`), unproven
+- **Coordinator's decision on the open points (2026-11-10):** doctor's `evidence_files` and `specifications` move onto the overlay in this story; `aep plan store migrate git` refuses an `aep.project/6` store by name, telling the caller to run `aep plan store unpack --all` first, so its repair never writes a loose copy of a packed artifact; the packs directory is derived as `<root>/../packs` beside `evidence` (no new field); `files_read` counts packed records as files read so `validate`'s count is unchanged by packing

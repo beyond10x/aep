@@ -10,7 +10,18 @@ relations:
 - serves: vision:O2
 - depends_on: story:pack-and-unpack-verbs
 - depends_on: story:validate-checks-packs
-revision: 5
+scope:
+- confidence: inferred
+  path: crates/edge/aep-cli/tests/store_pack_end_to_end.rs
+- confidence: inferred
+  path: crates/govern/aep-domain/src/store_catalog.rs
+- confidence: cited
+  path: docs/design/git-native-planning-store-v0.1.md
+- confidence: cited
+  path: website/docs/concepts/planning-store.md
+- confidence: cited
+  path: website/docs/reference/planning-stores.md
+revision: 11
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
@@ -52,3 +63,24 @@ ones):
 
 - The `aep:planning` skill and `references/store-conventions.md`, which live in `agentplugins`.
 - The CLI reference rows (`story:pack-and-unpack-verbs`) and changelog lines (each story).
+
+## Scope
+
+Derived 2026-11-10 by `story-scoper`. Every line is **cited** (read from the story or the tree) or
+**inferred** (a reading that could be wrong).
+
+- **Primary surface:** the store documentation: `docs/design/git-native-planning-store-v0.1.md`, `website/docs/concepts/planning-store.md`, `website/docs/reference/planning-stores.md` — cited, the story's Acceptance names all three
+- **Files:** `docs/design/git-native-planning-store-v0.1.md`, a new section after § 14 "Not in this design" (:380, the file is 384 lines) — inferred placement, the file is cited
+- **Files:** `website/docs/concepts/planning-store.md`, the "Older stores" version table (:115–:122) gains an `aep.project/6` row, plus a pack/unpack section near "What `validate` checks" (:94) — inferred placement, the file is cited
+- **Files:** `website/docs/reference/planning-stores.md`. Its tables (:13–:30) sit inside a generated region rendered from `aep_domain::store_catalog::CATALOG` by `xtask/src/planning_stores.rs`, and `status-check` fails a hand edit there. The `/6` text goes either in the hand-written prose after the region ends (:30–:34) or into the catalog followed by `cargo xtask status` — cited (generator and region markers read); the choice is inferred
+- **Files:** a new integration test target under `crates/edge/aep-cli/tests/`, for example `crates/edge/aep-cli/tests/store_pack_end_to_end.rs` — inferred. No large-store test, bench target or `benches/` directory exists anywhere in the repository, and xtask has no bench command. `story:repository-gate-carries-a-scale-lane` (draft, not built) is the only planned scale lane. Use a separate file: `story:pack-and-unpack-verbs` will add its own CLI tests in that directory, and a separate file keeps the two disjoint
+- **Fixture pattern:** each test file carries its own copies of `repository()`, `relative()`, `project(name)`, `run_as` and `ok`, and `aep-cli` has no shared `tests/common`. `project` makes `CARGO_TARGET_TMPDIR/<prefix>-<name>` (removed first if present), runs `git init`, and writes `project.yaml` as `aep.project/5` with `store: {git: {}}` and `protocols:` as a relative path to the repository root, so the live `artifacts/lifecycles/*.yaml` (the ones that gain `closed:`) is the protocol tree. Commits go through `run_git` with `-c user.name/user.email`, then `add -A` and `commit` — cited, `crates/edge/aep-cli/tests/git_store.rs:10-58`, `crates/edge/aep-cli/tests/store_migrate_git.rs:37-83`
+- **Fixture pattern:** hand-written store files are copied from a committed fixture tree in `a_store_written_by_0_64_0_validates_…` (`git_store.rs:731-776`, `copy_tree` at :778, source `crates/plan/aep-backend-markdown/tests/fixtures/written-by-0.64.0`). Committed review-results with findings are built by `committed_review_with` (`git_store.rs:~800-880`) — cited
+- **Generation route:** write one template of each shape through the CLI (an implemented story with evidence, a rejected story, an archived story, an archived review-result with a findings block, an open story relating to closed ones). Clone each by renaming to reach 1000 or more, then make one `git add -A` / `commit`. Running `new`/`move`/`evidence` once per story would mean about 4000 or more debug-binary spawns — inferred
+- **Gate time:** the gate runs it in `task test` = `cargo test --workspace` (`Taskfile.yml:213-216`), inside `task check`. CI's gate job has `timeout-minutes: 45` (`.github/workflows/ci.yml:32`). The repository sets no per-test budget, and no `#[ignore]` slow lane exists (the only `#[ignore]`s are child-process entry points in `crates/edge/aep-project/tests/`). The whole workspace suite was recorded at 204 s (`verification-report:ess-conformance-coverage-integrated`) — cited
+- **Gate time:** target under 30 s in a debug build. Measured with release aep 0.79.0 on this repository's own store (450 planning files, 422 evidence files): `list --status implemented` 0.04 s, `graph` 0.03 s, `validate` 0.21 s. The test makes 18 read calls plus `pack`, `unpack` and three commits of about 3000 files — inferred, the debug multiplier was not measured
+- **Also likely:** `crates/govern/aep-domain/src/store_catalog.rs:69-79`, the Git-native entry's `project_version` or `note`, only if `/6` goes into the generated table — inferred
+- **Documents:** the three pages above. `website/docs/reference/cli.md` and `CHANGELOG.md` are not in scope: the story's Context and Out of scope give them to the stories that add each change. The same goes for `website/docs/reference/project-file.md`, which `story:pack-format-and-overlay-read` claims for `aep.project/6` — cited
+- **Confidence:** high for the documents, because the story names every page and string. Medium for the test file, because the story asks for "an end-to-end test" without naming a file, and no existing large-store test exists to add it to
+- **Would collide with:** any unit editing the git-native design doc or the website store pages (concepts/planning-store, reference/planning-stores). If the catalog route is taken: any unit touching `aep_domain::store_catalog` or running `cargo xtask status`. A new file under `crates/edge/aep-cli/tests/` collides only with a unit that adds a file of the same name
+- **Safety fact:** `validate`'s Git history read is one `git log … -- <every path>` for all paths (`crates/edge/aep-cli/src/planning/git_record.rs:55-80`), not one process per file. A 1000-story/2000-evidence store therefore costs a few Git spawns per `validate`, and the argv is about 150 KB, under Linux `ARG_MAX` — step 2, unproven

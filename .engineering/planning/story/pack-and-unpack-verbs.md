@@ -10,7 +10,18 @@ relations:
 - serves: vision:O2
 - depends_on: story:lifecycle-declares-closed-states
 - depends_on: story:pack-format-and-overlay-read
-revision: 5
+scope:
+- confidence: inferred
+  path: crates/edge/aep-cli/src/app.rs
+- confidence: cited
+  path: crates/edge/aep-cli/src/store_command.rs
+- confidence: inferred
+  path: crates/edge/aep-cli/src/store_command/pack.rs
+- confidence: inferred
+  path: crates/edge/aep-cli/tests/store_pack.rs
+- confidence: cited
+  path: website/docs/reference/cli.md
+revision: 17
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}
@@ -76,3 +87,28 @@ byte for byte. Checked by CLI tests on fixture Git stores:
 
 - `validate`'s pack checks: `story:validate-checks-packs`.
 - The 1000-story end-to-end test and the store documentation: `story:pack-end-to-end-and-docs`.
+
+## Scope
+
+Derived 2026-11-10 by `story-scoper`. Every line is **cited** (read from the story or the tree) or
+**inferred** (a reading that could be wrong).
+
+- **Primary surface:** `crates/edge/aep-cli/src/store_command.rs`, the `aep plan store` verb group — cited, the design names `aep plan store pack`/`unpack` and this file holds the group
+- **Files:** `crates/edge/aep-cli/src/store_command.rs` `StoreCommand` (declared at :17, gains `Pack` and `Unpack` variants), `run` (:260, dispatch), module doc :1-6 ("the one store operation this build keeps") — cited
+- **Files:** `crates/edge/aep-cli/src/app.rs` `PlanCommand::Store` (:275-281) and its dispatch `PlanCommand::Store { command } => store_command::run(command)` (:995); the `/// Move the selected planning store to another layout` doc comment is now incomplete — inferred, the wording edit is optional
+- **Files:** `crates/edge/aep-cli/src/app.rs` `mod cli_reference` (:2874), `every_verb_the_cli_answers_has_an_entry_in_the_reference` (:2926). It walks the clap tree, so it needs no edit but fails until `cli.md` has the rows — cited
+- **Files:** new `crates/edge/aep-cli/src/store_command/pack.rs` (and `unpack.rs`, or one module), beside `store_command/migrate_git.rs` — inferred, follows the `mod migrate_git;` pattern (store_command.rs:13)
+- **Files:** new `crates/edge/aep-cli/tests/store_pack.rs`, CLI tests on fixture Git stores, modelled on `crates/edge/aep-cli/tests/store_migrate_git.rs` (`scratch`, `run_git`, `commit_all`, `contents`) — inferred
+- **Symbols to reuse, not change:** `migrate_git::git_clean` (migrate_git.rs:396, `git -C <engineering> status --porcelain -- .`, private) and the clean-tree refusal in `run` (:292-299) and `repair` (:541-548); `PlanningWriterFence::acquire` (planning_writer_fence.rs:219, taken at migrate_git.rs:290); `lifecycles_of` (migrate_git.rs:251); `selector_v5` (migrate_git.rs:897), the only project.yaml rewrite today (`serde_yaml` round trip, then `aep_schema::parse::project` reads it back); `fs::write(&selector_path, …)` at :338; `engineering_of` (:233) — cited
+- **Also likely:** `crates/edge/aep-cli/src/store_command/migrate_git.rs`, if `git_clean`, `selector_v5`, `engineering_of` or `lifecycles_of` are moved or made `pub(super)` to share them; otherwise untouched — inferred
+- **Also likely:** `crates/plan/aep-backend-markdown/src/pack.rs` (name assumed; created by `story:pack-format-and-overlay-read`), extended with a "rewrite a pack without these paths" helper and called for `render`, name, path grammar and the holder lookup — inferred, the module does not exist yet
+- **Also likely:** `crates/govern/aep-domain/src/project.rs`, read only: `PROJECT_VERSION_V5` (:56), a `PROJECT_VERSION_V6` added by the overlay story, `PROJECT_FILE` (:43), `GIT_PLANNING_DIRECTORY` (:58), `GIT_EVIDENCE_DIRECTORY` (:60) — inferred
+- **Also likely:** `crates/govern/aep-domain/src/artifact.rs`, read only: the closed-set accessor that `story:lifecycle-declares-closed-states` adds next to `ArtifactLifecycle::is_terminal` (:2298) — inferred
+- **Shared files:** `CHANGELOG.md`, `## [Unreleased]`: adds `### Added` (only `### Fixed` exists today), one line for `pack` and `unpack` — cited
+- **Shared files:** `website/docs/reference/cli.md`, section `## Plan: store, browser, workspace`: two rows after `aep plan store migrate git` (:98) — cited
+- **Shared files:** `crates/edge/aep-cli/src/planning.rs`: not changed. Pack and unpack read through the overlay and add no planning verb, and `evidence <packed-id>` is the overlay story's — inferred
+- **Shared files:** `crates/edge/aep-cli/src/planning/git_record.rs`: not changed. Its `git` (:19) is private and `committed_versions`/`changed_evidence` are `pub(super)` to `planning`, so the HEAD check belongs in `store_command`. The history walk across a pack commit is `story:validate-checks-packs` — inferred
+- **Documents:** `website/docs/reference/cli.md` and `CHANGELOG.md` only; store documentation is `story:pack-end-to-end-and-docs` — cited
+- **Confidence:** medium — the verb group, the dispatch, the reference test and the shared rows are read from the tree, but the module this story builds on is unwritten and so is the closed-set API, so the new file names are guesses
+- **Would collide with:** any unit touching the `aep plan store` command group (`store_command.rs` `StoreCommand`/`run`, `store_command/`), the `## Plan: store` table of `website/docs/reference/cli.md`, `CHANGELOG.md` `[Unreleased]`, and the `aep-backend-markdown` pack module if it is extended rather than only called
+- **Safety fact:** `pack` removes only loose files whose bytes Git has committed unchanged at `HEAD` (untracked or differing candidates are named and kept), so every byte it removes is held both by the new pack and by Git. Design *The packed representation* item 3 and the story's dry-run acceptance — level 1, stated, unproven
