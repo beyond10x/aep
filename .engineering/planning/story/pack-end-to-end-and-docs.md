@@ -11,9 +11,11 @@ relations:
 - depends_on: story:pack-and-unpack-verbs
 - depends_on: story:validate-checks-packs
 scope:
-- confidence: inferred
+- confidence: cited
   path: crates/edge/aep-cli/tests/store_pack_end_to_end.rs
-- confidence: inferred
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_end_to_end_adversary.rs
+- confidence: cited
   path: crates/govern/aep-domain/src/store_catalog.rs
 - confidence: cited
   path: docs/design/git-native-planning-store-v0.1.md
@@ -21,7 +23,7 @@ scope:
   path: website/docs/concepts/planning-store.md
 - confidence: cited
   path: website/docs/reference/planning-stores.md
-revision: 11
+revision: 12
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}

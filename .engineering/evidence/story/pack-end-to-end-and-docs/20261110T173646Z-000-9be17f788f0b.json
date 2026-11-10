@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-10T17:36:46Z",
+  "actor": "human:timo",
+  "artifact": "story:pack-end-to-end-and-docs",
+  "kind": "story",
+  "revision": 12,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator re-run on feat/store-pack-closed-artifacts at 8535d0ffc after merge: aep-cli store_pack_end_to_end (1000 closed stories; tracked files under .engineering 2234 before pack, 83 after pack, 2234 after unpack; 57.4 s) and store_pack_end_to_end_adversary, aep-domain lib store_catalog, aep-cli lib cli_reference: 9 tests passed; xtask status --check and clippy -p aep-cli -p aep-domain --all-targets -D warnings exit 0"
+  }
+}
