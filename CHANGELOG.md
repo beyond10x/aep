@@ -18,7 +18,7 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ### Fixed
 
-- `aep plan artifact relate`, `unrelate`, `new`, `move`, `evidence` and `redact` no longer refuse long artifact ids with "invalid idempotency key" or "invalid request identifier": an envelope identifier over the 200-character cap keeps a prefix and ends in the first 16 hex characters of the SHA-256 of the full name, and identifiers at or under the cap are unchanged.
+- `aep plan artifact relate`, `unrelate`, `new`, `move`, `evidence` and `redact` and the store's seeding no longer refuse long artifact ids with "invalid idempotency key" or "invalid request identifier": an envelope identifier over the 200-character cap keeps a prefix and ends in 16 hex digits of FNV-1a over the full name, and identifiers at or under the cap are unchanged.
 
 ## [0.79.1] - 2026-11-10
 

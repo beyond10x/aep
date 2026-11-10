@@ -2107,10 +2107,10 @@ fn envelope_for(
 
     let safe = name.replace([':', '/'], "-");
     let context = CommandContext::new(
-        bounded_identifier(&format!("req-{safe}"))
+        prefixed("req-", &safe)
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
-        bounded_identifier(&safe)
+        prefixed("", &safe)
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
         command_actor()?,
@@ -2120,7 +2120,7 @@ fn envelope_for(
         at,
     );
     Ok(CommandEnvelope::new(
-        bounded_identifier(&format!("cmd-{safe}"))
+        prefixed("cmd-", &safe)
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
         wire_name,
@@ -2129,31 +2129,13 @@ fn envelope_for(
     ))
 }
 
-/// An envelope identifier (request id, command id, idempotency key) derived from `name`.
-///
-/// `:` and `/` become `-`. A result at or under [`aep_domain::ids::MAX_LENGTH`] is returned as it
-/// is, so every identifier already in a journal is the one it was. A longer one keeps a prefix and
-/// ends in `-` and the first 16 hex characters of the SHA-256 of the **full** name: the same name
-/// gives the same identifier, so a replay is still recognised, and two names that share a prefix
-/// do not collide.
-fn bounded_identifier(name: &str) -> String {
-    use sha2::{Digest as _, Sha256};
-
-    let safe = name.replace([':', '/'], "-");
-    let cap = aep_domain::ids::MAX_LENGTH as usize;
-    if safe.len() <= cap {
-        return safe;
-    }
-    let mut digest = String::with_capacity(16);
-    for byte in &Sha256::digest(name.as_bytes())[..8] {
-        let _ = write!(digest, "{byte:02x}");
-    }
-    let mut keep = cap - digest.len() - 1;
-    while !safe.is_char_boundary(keep) {
-        keep -= 1;
-    }
-    let prefix = safe[..keep].trim_end_matches(|c: char| !c.is_ascii_alphanumeric());
-    format!("{prefix}-{digest}")
+/// An envelope identifier: `prefix` and `name`, with `:` and `/` already turned into `-` by the
+/// caller, bounded to the identifier cap by [`aep_domain::ids::bounded_identifier`].
+fn prefixed(prefix: &str, name: &str) -> String {
+    format!(
+        "{prefix}{}",
+        aep_domain::ids::bounded_identifier(name, prefix.len())
+    )
 }
 
 /// What a planning document states, as an entity body.
@@ -2567,10 +2549,10 @@ fn move_through_a_command(
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
         };
         let mut context = CommandContext::new(
-            bounded_identifier(&format!("req-{name}"))
+            prefixed("req-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            bounded_identifier(&format!("{name}-{to}-{}", at.epoch_millis()))
+            prefixed("", &format!("{name}-{to}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -2581,7 +2563,7 @@ fn move_through_a_command(
             context = context.executed_by(executor.clone());
         }
         CommandEnvelope::new(
-            bounded_identifier(&format!("cmd-{name}-{}", at.epoch_millis()))
+            prefixed("cmd-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.status.move/v1",
@@ -3149,11 +3131,11 @@ fn relate_through_a_command(
     let envelope = {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
-            bounded_identifier(&format!("req-{name}"))
+            prefixed("req-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             // A fresh CLI attempt gets a fresh idempotency key.
-            bounded_identifier(&format!("rel-{name}-{}", at.epoch_millis()))
+            prefixed("rel-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -3163,7 +3145,7 @@ fn relate_through_a_command(
             at,
         );
         CommandEnvelope::new(
-            bounded_identifier(&format!("cmd-{name}"))
+            prefixed("cmd-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.relation.create/v1",
@@ -3503,10 +3485,10 @@ fn unrelate_through_a_command(
     let envelope = {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
-            bounded_identifier(&format!("req-unrel-{name}"))
+            prefixed("req-unrel-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            bounded_identifier(&format!("unrel-{name}-{}", at.epoch_millis()))
+            prefixed("unrel-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -3516,7 +3498,7 @@ fn unrelate_through_a_command(
             at,
         );
         CommandEnvelope::new(
-            bounded_identifier(&format!("cmd-unrel-{name}"))
+            prefixed("cmd-unrel-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.relation.remove/v1",
@@ -3657,10 +3639,10 @@ fn update_through_a_command(
     let envelope = {
         let name = format!("{correlation}-{id}").replace([':', '/'], "-");
         let context = CommandContext::new(
-            bounded_identifier(&format!("req-{name}"))
+            prefixed("req-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            bounded_identifier(&format!("upd-{name}-{}", at.epoch_millis()))
+            prefixed("upd-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -3670,7 +3652,7 @@ fn update_through_a_command(
             at,
         );
         CommandEnvelope::new(
-            bounded_identifier(&format!("cmd-{name}-{}", at.epoch_millis()))
+            prefixed("cmd-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.entity.update/v1",
@@ -9876,47 +9858,6 @@ struct Lifecycle {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn an_envelope_identifier_at_or_under_the_cap_is_what_it_was_before() {
-        for name in [
-            "new-story:one".to_owned(),
-            "move-story:one-active-1760000000000".to_owned(),
-            format!("req-{}", "a".repeat(196)),
-        ] {
-            let before = name.replace([':', '/'], "-");
-            assert_eq!(bounded_identifier(&name), before);
-            assert!(before.len() <= 200);
-        }
-    }
-
-    #[test]
-    fn an_envelope_identifier_over_the_cap_is_bounded_deterministic_and_valid() {
-        let shared = "story:".to_owned() + &"x".repeat(200);
-        let one = format!("req-{shared}-reviews-one");
-        let other = format!("req-{shared}-reviews-two");
-
-        let bounded = bounded_identifier(&one);
-        assert_eq!(bounded, bounded_identifier(&one), "deterministic");
-        assert!(bounded.len() <= 200, "{}", bounded.len());
-        assert!(!bounded.ends_with('-'));
-        assert_ne!(
-            bounded,
-            bounded_identifier(&other),
-            "names sharing their first 200 characters stay distinct"
-        );
-        for identifier in [&bounded, &bounded_identifier(&other)] {
-            identifier
-                .parse::<aep_domain::ids::RequestId>()
-                .expect("a valid identifier");
-        }
-
-        let separated = format!("{}-{}", "y".repeat(182), "z".repeat(30));
-        let cut = bounded_identifier(&separated);
-        assert!(cut.len() <= 200 && !cut.contains("--") && cut.starts_with(&"y".repeat(182)), "{cut}");
-        cut.parse::<aep_domain::ids::CommandId>()
-            .expect("a valid identifier");
-    }
 
     /// The declared actor is taken as declared, so a driven write is the run's and not a person's.
     ///

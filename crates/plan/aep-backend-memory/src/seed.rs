@@ -207,6 +207,7 @@ fn envelope(
     at: Timestamp,
     actor: &ActorRef,
 ) -> Result<CommandEnvelope<Command>, CommandError> {
+    let name = &aep_domain::ids::bounded_identifier(name, "req-".len());
     let command_id = CommandId::new(name).map_err(|error| unusable(name, &error))?;
     let idempotency_key = IdempotencyKey::new(name).map_err(|error| unusable(name, &error))?;
     let request_id =

@@ -44,6 +44,40 @@ use crate::error::ParseError;
 /// a string the pattern accepts has one byte per character and the two counts are the same number.
 pub const MAX_LENGTH: u32 = 200;
 
+/// `name` made short enough that a caller can put up to `reserve` characters in front of it and
+/// still have an identifier of at most [`MAX_LENGTH`] characters.
+///
+/// At or under `MAX_LENGTH - reserve` it is returned unchanged, so an identifier that was already
+/// valid is the one it was. Over that it keeps a prefix of the name, drops trailing characters that
+/// are not letters or digits, and appends `-` and 16 hex digits of FNV-1a 64 over the **whole**
+/// name: the same name always gives the same result, so a replay is still recognised, and two
+/// names that share a long prefix do not collide. The digest is not a security boundary.
+///
+/// `name` is taken to be made of the characters an identifier allows. The hash is written out here
+/// so the domain crate gains no dependency.
+#[must_use]
+pub fn bounded_identifier(name: &str, reserve: usize) -> String {
+    let room = (MAX_LENGTH as usize).saturating_sub(reserve);
+    if name.len() <= room {
+        return name.to_owned();
+    }
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in name.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    let mut keep = room.saturating_sub(17);
+    while !name.is_char_boundary(keep) {
+        keep -= 1;
+    }
+    let prefix = name[..keep].trim_end_matches(|c: char| !c.is_ascii_alphanumeric());
+    if prefix.is_empty() {
+        format!("{hash:016x}")
+    } else {
+        format!("{prefix}-{hash:016x}")
+    }
+}
+
 /// Charset rule applied to an identifier.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Charset {
@@ -596,6 +630,53 @@ impl schemars::JsonSchema for SubjectRef {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_bounded_identifier_at_or_under_the_room_is_unchanged() {
+        for (name, reserve) in [
+            ("story-one".to_owned(), 4),
+            ("a".repeat(196), 4),
+            ("a".repeat(200), 0),
+        ] {
+            assert_eq!(bounded_identifier(&name, reserve), name);
+        }
+    }
+
+    #[test]
+    fn a_bounded_identifier_over_the_room_is_deterministic_and_distinct() {
+        let shared = "x".repeat(200);
+        let one = format!("{shared}-reviews-one");
+        let other = format!("{shared}-reviews-two");
+
+        let first = bounded_identifier(&one, 4);
+        assert_eq!(first, bounded_identifier(&one, 4));
+        assert_ne!(first, bounded_identifier(&other, 4));
+    }
+
+    #[test]
+    fn a_bounded_identifier_with_its_reserved_prefix_is_a_valid_identifier() {
+        let long = "y".repeat(500);
+        for reserve in [0, 4, 11] {
+            let bounded = bounded_identifier(&long, reserve);
+            assert!(bounded.len() + reserve <= MAX_LENGTH as usize);
+            let with_prefix = format!("{}{bounded}", "p".repeat(reserve));
+            assert!(RequestId::new(&with_prefix).is_ok(), "{with_prefix}");
+            assert!(CommandId::new(&with_prefix).is_ok());
+        }
+    }
+
+    #[test]
+    fn a_bounded_identifier_cut_on_a_separator_does_not_end_or_double_one() {
+        // Room is 196, so the kept prefix is 179 characters: this name has a separator there.
+        let name = format!("{}-{}", "y".repeat(178), "z".repeat(50));
+        let bounded = bounded_identifier(&name, 4);
+        assert!(bounded.starts_with(&"y".repeat(178)), "{bounded}");
+        assert!(!bounded.contains("--"), "{bounded}");
+        assert!(RequestId::new(format!("req-{bounded}")).is_ok());
+
+        let all_separators = format!("{}{}", "-".repeat(300), "a");
+        assert!(RequestId::new(bounded_identifier(&all_separators, 0)).is_ok());
+    }
 
     #[test]
     fn accepts_well_formed_identifiers() {
