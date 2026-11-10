@@ -2127,6 +2127,16 @@ pub struct ArtifactLifecycle {
     /// clock-free and its banned-token scan passing.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub when: BTreeMap<ArtifactStatus, TimeGuard>,
+
+    /// The statuses that count as closed, beyond the terminal ones.
+    ///
+    /// Empty by default, which leaves a document without it loading exactly as before. A terminal
+    /// status is closed whether or not it is listed; this list is for a rung that has a successor
+    /// and is still closed, such as a story's `implemented`, which only `archived` follows. A
+    /// ladder cannot say that structurally, so the document says it. Every state named here must
+    /// be one the ladder declares ([`undeclared_closed`](ArtifactLifecycle::undeclared_closed)).
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    pub closed: BTreeSet<ArtifactStatus>,
 }
 
 /// When a status may be reached, relative to a date the artifact itself records.
@@ -2247,6 +2257,7 @@ impl ArtifactLifecycle {
             requires: BTreeMap::new(),
             descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
+            closed: BTreeSet::new(),
         }
     }
 
@@ -2297,6 +2308,39 @@ impl ArtifactLifecycle {
     #[must_use]
     pub fn is_terminal(&self, status: &ArtifactStatus) -> bool {
         self.transitions.get(status).is_some_and(BTreeSet::is_empty)
+    }
+
+    /// The closed statuses: those the document lists under `closed` plus every terminal one.
+    ///
+    /// [`permissive`](ArtifactLifecycle::permissive) has none, for the reason it has no terminal
+    /// rung.
+    #[must_use]
+    pub fn closed_states(&self) -> BTreeSet<ArtifactStatus> {
+        let mut closed = self.closed.clone();
+        closed.extend(
+            self.transitions
+                .iter()
+                .filter(|(_, to)| to.is_empty())
+                .map(|(from, _)| from.clone()),
+        );
+        closed
+    }
+
+    /// `true` when `status` is closed for this kind.
+    #[must_use]
+    pub fn is_closed(&self, status: &ArtifactStatus) -> bool {
+        self.closed.contains(status) || self.is_terminal(status)
+    }
+
+    /// The `closed` entries this ladder does not declare, in order.
+    #[must_use]
+    pub fn undeclared_closed(&self) -> Vec<ArtifactStatus> {
+        let declared = self.statuses();
+        self.closed
+            .iter()
+            .filter(|status| !declared.contains(status))
+            .cloned()
+            .collect()
     }
 }
 
@@ -3091,6 +3135,7 @@ mod tests {
                 requires: BTreeMap::new(),
                 descriptions: BTreeMap::new(),
                 when: BTreeMap::new(),
+                closed: BTreeSet::new(),
             },
         );
 
@@ -3121,6 +3166,7 @@ mod tests {
             requires: BTreeMap::new(),
             descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
+            closed: BTreeSet::new(),
         };
         let fallback = ArtifactLifecycle {
             kind: None,
@@ -3129,6 +3175,7 @@ mod tests {
             requires: BTreeMap::new(),
             descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
+            closed: BTreeSet::new(),
         };
         registry.insert(ArtifactKind::Other("log".to_owned()), logs.clone());
         registry.set_fallback(fallback.clone());
@@ -3585,6 +3632,7 @@ mod tests {
                 requires: BTreeMap::new(),
                 descriptions: BTreeMap::new(),
                 when: BTreeMap::new(),
+                closed: BTreeSet::new(),
             },
         );
 
@@ -3649,6 +3697,7 @@ mod tests {
             requires: BTreeMap::new(),
             descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
+            closed: BTreeSet::new(),
         };
 
         assert!(
@@ -3667,6 +3716,53 @@ mod tests {
             !ArtifactLifecycle::permissive().is_terminal(&ArtifactStatus::Archived),
             "a kind with no ladder has declared no end"
         );
+    }
+
+    #[test]
+    fn a_lifecycle_without_closed_loads_as_before_and_closes_only_its_terminal_states() {
+        let ladder: ArtifactLifecycle = serde_yaml::from_str(
+            "kind: story\ninitial: draft\ntransitions:\n  draft: [active]\n  active: [archived]\n  archived: []\n",
+        )
+        .expect("a document without `closed:` loads");
+
+        assert!(ladder.closed.is_empty());
+        assert_eq!(
+            ladder.closed_states(),
+            BTreeSet::from([ArtifactStatus::Archived])
+        );
+        assert!(ladder.is_closed(&ArtifactStatus::Archived));
+        assert!(!ladder.is_closed(&ArtifactStatus::Active));
+        assert!(
+            !serde_yaml::to_string(&ladder)
+                .expect("serialises")
+                .contains("closed"),
+            "an empty set leaves the serialised form as it was"
+        );
+    }
+
+    #[test]
+    fn a_declared_closed_state_joins_the_terminal_ones_and_a_permissive_ladder_has_none() {
+        let ladder: ArtifactLifecycle = serde_yaml::from_str(
+            "kind: story\ninitial: draft\ntransitions:\n  draft: [implemented]\n  implemented: [archived]\n  archived: []\nclosed: [implemented]\n",
+        )
+        .expect("loads");
+
+        assert_eq!(
+            ladder.closed_states(),
+            BTreeSet::from([ArtifactStatus::Implemented, ArtifactStatus::Archived])
+        );
+        assert_eq!(ladder.undeclared_closed(), Vec::<ArtifactStatus>::new());
+        assert!(ArtifactLifecycle::permissive().closed_states().is_empty());
+    }
+
+    #[test]
+    fn a_closed_state_the_transitions_do_not_declare_is_reported() {
+        let ladder: ArtifactLifecycle = serde_yaml::from_str(
+            "kind: story\ninitial: draft\ntransitions:\n  draft: [active]\nclosed: [rejected]\n",
+        )
+        .expect("loads");
+
+        assert_eq!(ladder.undeclared_closed(), vec![ArtifactStatus::Rejected]);
     }
 
     #[test]

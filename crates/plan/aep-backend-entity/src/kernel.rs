@@ -500,6 +500,7 @@ mod tests {
             requires: BTreeMap::new(),
             descriptions: BTreeMap::new(),
             when: BTreeMap::new(),
+            closed: BTreeSet::new(),
         }
     }
 

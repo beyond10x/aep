@@ -348,3 +348,23 @@ fn the_family_ladder_wins_over_the_fallback_and_the_fallback_answers_last() {
 
     clean(&root);
 }
+
+/// A `closed:` entry the ladder does not declare is refused at load, naming kind and state.
+#[test]
+fn a_closed_state_the_transitions_do_not_declare_is_refused_when_the_tree_loads() {
+    let root = tree(
+        "undeclared-closed",
+        &[(
+            "story.yaml",
+            "kind: story\ninitial: draft\ntransitions:\n  draft: [active]\n  active: []\nclosed: [implemented]\n",
+        )],
+    );
+    let outcome = load_tree_report(&root);
+
+    assert_eq!(outcome.failures.len(), 1, "{:?}", outcome.failures);
+    let failure = outcome.failures[0].to_string();
+    assert!(failure.contains("unknown_state"), "{failure}");
+    assert!(failure.contains("story"), "{failure}");
+    assert!(failure.contains("implemented"), "{failure}");
+    assert!(failure.contains("story.yaml"), "{failure}");
+}

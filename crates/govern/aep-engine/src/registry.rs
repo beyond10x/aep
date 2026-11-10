@@ -95,6 +95,27 @@ impl Registry {
         &mut self,
         lifecycle: ArtifactLifecycle,
     ) -> Result<(), ValidationError> {
+        if let Some(state) = lifecycle.undeclared_closed().first() {
+            let owner = lifecycle
+                .kind
+                .as_ref()
+                .map_or("the fallback lifecycle".to_owned(), |kind| {
+                    format!("the `{}` lifecycle", kind.as_str())
+                });
+            return Err(ValidationError::new(
+                ValidationCode::UnknownState,
+                "lifecycle.closed",
+                format!(
+                    "{owner} lists `{}` under `closed`, and its `transitions` do not declare that \
+                     state",
+                    state.as_str()
+                ),
+            )
+            .with_hint(
+                "name a state the ladder has, or add it to `transitions`; a closed state is one \
+                 the ladder declares",
+            ));
+        }
         let Some(kind) = lifecycle.kind.clone() else {
             if self.lifecycles.fallback().is_some() {
                 return Err(ValidationError::new(
