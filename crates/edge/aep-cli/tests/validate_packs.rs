@@ -902,3 +902,127 @@ fn a_review_that_never_held_the_literal_in_its_actor_is_still_valid() {
     );
     valid(&project);
 }
+
+// Adversary pass 1 on the prose-only scan.
+
+/// A committed store with a review `looked` recorded `--prose-only` with `reason`, whose body is
+/// `body`, redacted of `literal`, archived and committed. `redact` rewrites the title, summary
+/// and body only, so a literal also in the prose-only reason stays there, readable by `show`.
+fn redacted_prose_only_review(name: &str, reason: &str, body: &str, literal: &str) -> PathBuf {
+    let project = project(name);
+    let file = project.join("review-body.md");
+    std::fs::write(&file, body).expect("writable");
+    ok(&project, &["new", "story", "subject", "--title", "Subject"]);
+    ok(
+        &project,
+        &[
+            "new",
+            "review-result",
+            "looked",
+            "--title",
+            "Looked at it",
+            "--relate",
+            "reviews:story:subject",
+            "--prose-only",
+            reason,
+            "--from",
+            file.to_str().expect("printable"),
+        ],
+    );
+    std::fs::remove_file(&file).expect("removable");
+    commit(&project, "review");
+    ok(
+        &project,
+        &[
+            "redact",
+            "review-result:looked",
+            "--literal",
+            literal,
+            "--with",
+            "the reviewer",
+            "--reason",
+            "names a person",
+        ],
+    );
+    ok(
+        &project,
+        &["move", "review-result:looked", "--to", "archived"],
+    );
+    commit(&project, "redact and archive");
+    let loose =
+        std::fs::read_to_string(engineering(&project).join("planning/review-result/looked.md"))
+            .expect("the review reads");
+    assert!(
+        loose.contains(&format!("prose_only: {reason}")),
+        "the prose-only reason is still in the redacted copy: {loose}"
+    );
+    project
+}
+
+const PROSE_ONLY_REASON: &str = "Quillon asked for prose only";
+const PROSE_ONLY_BODY: &str = "## Verdict\n\nQuillon approved it.\n";
+
+#[test]
+fn a_loose_copy_that_holds_the_literal_in_its_prose_only_reason_is_refused() {
+    let project = redacted_prose_only_review(
+        "adv-prose-only-loose",
+        PROSE_ONLY_REASON,
+        PROSE_ONLY_BODY,
+        "Quillon",
+    );
+    let text = refused(
+        &project,
+        &["pack_redacted_literal_exposed"],
+        Some("looked.md"),
+    );
+    assert!(
+        !text.to_lowercase().contains("quillon"),
+        "no literal in: {text}"
+    );
+}
+
+#[test]
+fn a_packed_copy_that_holds_the_literal_in_its_prose_only_reason_is_refused() {
+    let project = redacted_prose_only_review(
+        "adv-prose-only-packed",
+        PROSE_ONLY_REASON,
+        PROSE_ONLY_BODY,
+        "Quillon",
+    );
+    let pack_name = pack_review(&project);
+    let text = refused(
+        &project,
+        &["pack_redacted_literal_exposed"],
+        Some(&format!("{pack_name}.pack")),
+    );
+    assert!(
+        !text.to_lowercase().contains("quillon"),
+        "no literal in: {text}"
+    );
+}
+
+#[test]
+fn a_packed_copy_that_does_not_parse_and_holds_the_literal_is_still_refused_for_it() {
+    let (project, old) = packed_redacted_review("adv-unparseable-packed");
+    let mut records = parsed(&project, &old);
+    for (path, bytes) in &mut records {
+        if path == "planning/review-result/looked.md" {
+            let text = String::from_utf8(bytes.clone()).expect("utf-8");
+            let text = text.replace("customer A", "Acme");
+            let broken = text.strip_prefix("---\n").expect("the copy opens a fence");
+            assert!(broken.contains("Acme"), "the broken copy holds the literal");
+            *bytes = broken.as_bytes().to_vec();
+        }
+    }
+    let rendered = pack::render(&records).expect("renders");
+    let name = replace_pack(&project, &old, &rendered);
+    let text = refused(
+        &project,
+        &["pack_record_unreadable", "pack_redacted_literal_exposed"],
+        Some(&format!("{name}.pack")),
+    );
+    assert!(
+        !text.to_lowercase().contains("acme"),
+        "no literal in: {text}"
+    );
+}
