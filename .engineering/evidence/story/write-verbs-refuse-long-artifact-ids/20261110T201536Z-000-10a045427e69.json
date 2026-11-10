@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-10T20:15:36Z",
+  "actor": "human:timo",
+  "artifact": "story:write-verbs-refuse-long-artifact-ids",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "test_result",
+    "source": "CI Gate (task check) on PR #158 at c4a27de57",
+    "reference": "https://github.com/beyond10x/aep/actions/runs/42891222029/job/130092543664"
+  }
+}
