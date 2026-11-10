@@ -42,8 +42,10 @@ fn relative(from: &Path, to: &Path) -> String {
     parts.join("/")
 }
 
+/// Outside every repository: CI builds the target inside its checkout, and the case that moves `.git`
+/// out of a project needs no repository above the project to stand in for it.
 fn scratch_root() -> PathBuf {
-    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
+    let root = std::env::temp_dir().join("aep-store-pack-security-adversary-2");
     std::fs::create_dir_all(&root).expect("the target scratch is writable");
     root.canonicalize().expect("the target scratch resolves")
 }

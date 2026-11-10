@@ -2,7 +2,7 @@
 format: aep.planning-md/3
 id: story:lifecycle-declares-closed-states
 kind: story
-status: active
+status: implemented
 title: A lifecycle document declares which of its states are closed
 relations:
 - decomposes: epic:store-pack-closed-artifacts
@@ -53,10 +53,11 @@ scope:
   path: schemas/generated/artifact-lifecycle.schema.json
 - confidence: cited
   path: website/docs/reference/lifecycle-file.md
-revision: 24
+revision: 25
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:35Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":3}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":3}}}
+- {from: "active", to: "implemented", at: "2026-11-10T19:36:11Z", actor: "human:timo", revision: 25, decided_on: {"recorded":{"test_result":1,"review_outcome":8,"verification":1}}}
 ---
 # Story: a lifecycle document declares which of its states are closed
 

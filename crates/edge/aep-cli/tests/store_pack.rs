@@ -205,7 +205,11 @@ fn project_version(project: &Path) -> String {
 }
 
 fn empty_project(name: &str, protocols: &Path, git_init: bool) -> PathBuf {
-    let directory = scratch_root().join(format!("store-pack-{name}"));
+    empty_project_in(&scratch_root(), name, protocols, git_init)
+}
+
+fn empty_project_in(root: &Path, name: &str, protocols: &Path, git_init: bool) -> PathBuf {
+    let directory = root.join(format!("store-pack-{name}"));
     if directory.exists() {
         std::fs::remove_dir_all(&directory).expect("the previous scratch project is removable");
     }
@@ -262,7 +266,11 @@ fn record(project: &Path, id: &str, source: &str, at: &str) {
 /// A committed `aep.project/5` store: `closed-a` (implemented, two evidence files), `closed-b`
 /// (archived) and `open-c` (active, one evidence file).
 fn store_under(name: &str, protocols: &Path) -> PathBuf {
-    let project = empty_project(name, protocols, true);
+    store_under_in(&scratch_root(), name, protocols)
+}
+
+fn store_under_in(root: &Path, name: &str, protocols: &Path) -> PathBuf {
+    let project = empty_project_in(root, name, protocols, true);
     build_story(&project, "closed-b", &["proposed", "active", "archived"]);
     build_story(&project, "closed-a", &["proposed", "active"]);
     record(
@@ -622,7 +630,9 @@ fn pack_folds_in_later_loose_evidence_and_removes_a_loose_copy_a_pack_holds() {
 
 #[test]
 fn pack_outside_a_git_work_tree_exits_one_naming_the_reason_and_writes_nothing() {
-    let project = loose_store("no-git");
+    // Outside every repository: CI builds the target inside its checkout, and that repository would
+    // hold a project under `CARGO_TARGET_TMPDIR` once the project's own `.git` is gone.
+    let project = store_under_in(&std::env::temp_dir(), "no-git", &repository());
     std::fs::remove_dir_all(project.join(".git")).expect("removable");
     let before = files(&project);
     let output = store(&project, &["pack"]);
