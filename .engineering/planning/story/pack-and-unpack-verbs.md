@@ -11,17 +11,25 @@ relations:
 - depends_on: story:lifecycle-declares-closed-states
 - depends_on: story:pack-format-and-overlay-read
 scope:
-- confidence: inferred
+- confidence: cited
   path: crates/edge/aep-cli/src/app.rs
 - confidence: cited
   path: crates/edge/aep-cli/src/store_command.rs
-- confidence: inferred
+- confidence: cited
+  path: crates/edge/aep-cli/src/store_command/migrate_git.rs
+- confidence: cited
   path: crates/edge/aep-cli/src/store_command/pack.rs
-- confidence: inferred
+- confidence: cited
+  path: crates/edge/aep-cli/src/store_command/unpack.rs
+- confidence: cited
   path: crates/edge/aep-cli/tests/store_pack.rs
 - confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_adversary.rs
+- confidence: cited
+  path: crates/plan/aep-backend-markdown/src/pack.rs
+- confidence: cited
   path: website/docs/reference/cli.md
-revision: 17
+revision: 18
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}

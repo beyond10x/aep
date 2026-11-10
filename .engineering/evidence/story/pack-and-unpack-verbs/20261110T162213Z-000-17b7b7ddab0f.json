@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-10T16:22:13Z",
+  "actor": "human:timo",
+  "artifact": "story:pack-and-unpack-verbs",
+  "kind": "story",
+  "revision": 17,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator re-run on feat/store-pack-closed-artifacts at 285739349 after merge (fresh build): aep-cli store_pack+store_pack_adversary+store_migrate_git+store_pack_overlay+git_store+validate_packs(+adversary, +adversary_2), aep-cli lib cli_reference, aep-backend-markdown lib+pack+pack_adversary: 237 tests passed, every binary exit 0"
+  }
+}
