@@ -380,6 +380,41 @@ validation_codes! {
     /// from [`Self::EmptyChange`], which is about a branch that does nothing: these branches do
     /// something, and nothing a caller can write selects between them.
     UnreachableBranch => "unreachable_branch",
+
+    /// A pack file does not parse as `aep.pack/1`: a bad header, a malformed or truncated record,
+    /// unsorted or repeated paths, or an unreadable file.
+    PackNotParsed => "pack_not_parsed",
+
+    /// A pack file's name is not the digest of its content.
+    PackNameNotDigest => "pack_name_not_digest",
+
+    /// A record's bytes are not the ones its header digest is of.
+    PackRecordDigestDiffers => "pack_record_digest_differs",
+
+    /// A packed record is not the last committed blob at its original path before the commit that
+    /// added its pack, or there is no committed blob to equal.
+    PackRecordNotCommittedBytes => "pack_record_not_committed_bytes",
+
+    /// A packed record's path is outside the store's grammar, or the pack is a symbolic link.
+    PackPathUnsafe => "pack_path_unsafe",
+
+    /// One path is held in two places, loose and packed or in two packs, with different bytes.
+    PackPathHeldTwice => "pack_path_held_twice",
+
+    /// A packed artifact is not at a closed status of its kind.
+    PackArtifactNotClosed => "pack_artifact_not_closed",
+
+    /// A packed evidence record is about an artifact other than the one its directory names.
+    PackEvidenceMisfiled => "pack_evidence_misfiled",
+
+    /// A packed evidence record had different committed versions while it was loose.
+    PackRecordRewritten => "pack_record_rewritten",
+
+    /// A copy of an artifact, loose or packed, still holds a literal a redaction record removed.
+    PackRedactedLiteralExposed => "pack_redacted_literal_exposed",
+
+    /// The project version disagrees with whether the store holds packs.
+    PackVersionDisagrees => "pack_version_disagrees",
 }
 
 impl fmt::Display for ValidationCode {

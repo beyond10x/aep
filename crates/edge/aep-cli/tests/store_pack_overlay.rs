@@ -594,7 +594,16 @@ fn a_v6_store_loads_in_every_verb_that_accepts_v5_and_a_v7_store_is_refused_by_n
             said(&output)
         );
     }
-    ok(&project, &["validate"]);
+    // `validate` agrees the version with the packs: a `/6` store with none is refused, by code,
+    // naming the project file (`story:validate-checks-packs`).
+    let validated = aep(&project, &["validate"]);
+    assert_eq!(validated.status.code(), Some(1), "{}", said(&validated));
+    assert!(
+        said(&validated).contains("[pack_version_disagrees]")
+            && said(&validated).contains("project.yaml"),
+        "{}",
+        said(&validated)
+    );
     let doctor = Command::new(env!("CARGO_BIN_EXE_aep"))
         .args(["doctor"])
         .current_dir(&project)

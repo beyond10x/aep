@@ -52,9 +52,14 @@ fn unversioned(directory: &Path) -> bool {
 /// commit that added it, so a file deleted and later re-created is judged from its re-creation. A
 /// path with no committed version is absent from the map. `None` means there is no history to
 /// read at all: not a work tree.
+///
+/// A path in `packed` (spelled as in `paths`) is one a pack holds: a deletion that is its newest
+/// event is the commit that moved it into the pack, not the end of the file, and the walk goes on
+/// past it to the versions the file had while loose.
 pub(super) fn committed_versions(
     root: &Path,
     paths: &[&str],
+    packed: &std::collections::BTreeSet<&str>,
 ) -> Option<BTreeMap<String, Vec<Vec<u8>>>> {
     if unversioned(root) {
         return None;
@@ -97,6 +102,11 @@ pub(super) fn committed_versions(
             continue;
         }
         if status.starts_with('D') {
+            if packed.contains(path.strip_prefix(prefix).unwrap_or(path)) {
+                // Moved into a pack: the file goes on in the pack, and its loose history before
+                // this commit is its history.
+                continue;
+            }
             // The newest event is a deletion: whatever is on disk now was never committed.
             finished.insert(path);
             continue;
@@ -181,31 +191,184 @@ fn cat_file_batch(root: &Path, requests: &str) -> Option<Vec<Option<Vec<u8>>>> {
 /// retyped or deleted — as a path relative to the repository root.
 ///
 /// An evidence file is written once and never again (§ 5), so the only honest difference from
-/// `HEAD` is a new file, and a new file is untracked and not listed here.
+/// `HEAD` is a new file, and a new file is untracked and not listed here. A deletion whose bytes a
+/// pack holds is a **move** into that pack, not a change, and is not listed: `pack` writes the
+/// pack and removes the loose files before anything is committed.
 pub(super) fn changed_evidence(evidence: &Path) -> Vec<String> {
-    let (Some(parent), Some(pathspec)) = (evidence.parent(), evidence.to_str()) else {
+    let (Some(parent), Some(name)) = (evidence.parent(), evidence.file_name()) else {
         return Vec::new();
     };
-    if !evidence.is_dir() || unversioned(evidence) {
+    let Some(name) = name.to_str() else {
+        return Vec::new();
+    };
+    if !parent.is_dir() || unversioned(evidence) {
         return Vec::new();
     }
     let arguments = [
         "diff",
         "--no-renames",
-        "--name-only",
+        "--relative",
+        "--name-status",
         "--diff-filter=MTD",
         "HEAD",
         "--",
-        pathspec,
+        name,
     ];
     let Some(output) = git(parent, &arguments) else {
         return Vec::new();
     };
-    String::from_utf8_lossy(&output)
-        .lines()
-        .filter(|line| !line.is_empty())
-        .map(ToOwned::to_owned)
+    let prefix = git(parent, &["rev-parse", "--show-prefix"])
+        .and_then(|prefix| String::from_utf8(prefix).ok())
+        .unwrap_or_default();
+    let prefix = prefix.trim_end_matches('\n');
+    let output = String::from_utf8_lossy(&output);
+    let mut changed: Vec<String> = Vec::new();
+    let mut deleted: Vec<&str> = Vec::new();
+    for line in output.lines() {
+        let Some((status, path)) = line.split_once('\t') else {
+            continue;
+        };
+        if status.starts_with('D') {
+            deleted.push(path);
+        } else {
+            changed.push(path.to_owned());
+        }
+    }
+    if !deleted.is_empty() {
+        let moved = moved_into_packs(evidence, parent, &deleted);
+        changed.extend(
+            deleted
+                .iter()
+                .zip(moved)
+                .filter(|(_, moved)| !moved)
+                .map(|(path, _)| (*path).to_owned()),
+        );
+    }
+    let mut changed: Vec<String> = changed
+        .into_iter()
+        .map(|path| format!("{prefix}{path}"))
+        .collect();
+    changed.sort();
+    changed
+}
+
+/// For each of `deleted` (relative to `parent`, the directory beside `evidence`), whether some
+/// pack holds exactly the bytes `HEAD` committed there.
+fn moved_into_packs(evidence: &Path, parent: &Path, deleted: &[&str]) -> Vec<bool> {
+    use aep_backend_markdown::pack::{Overlay, Place};
+    let overlay = Overlay::for_evidence(evidence);
+    let mut requests = String::new();
+    for path in deleted {
+        requests.push_str("HEAD:./");
+        requests.push_str(path);
+        requests.push('\n');
+    }
+    let blobs = cat_file_batch(parent, &requests).unwrap_or_default();
+    deleted
+        .iter()
+        .enumerate()
+        .map(|(index, path)| {
+            let Some(Some(committed)) = blobs.get(index) else {
+                return false;
+            };
+            overlay.holders(path).is_ok_and(|holders| {
+                holders.iter().any(|holder| {
+                    matches!(holder.place(), Place::Packed(_)) && holder.bytes() == committed
+                })
+            })
+        })
         .collect()
+}
+
+/// What the history says a packed record's original file held.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum Committed {
+    /// The last committed blob at the path, before the commit that added the pack.
+    Blob(Vec<u8>),
+    /// No commit before that one holds the path.
+    Never,
+}
+
+/// For each of `paths` (relative to `base`, the directory the pack's `packs` directory is in), the
+/// last committed blob at that path before the commit that added `pack` — `HEAD` when the pack is
+/// not committed. `None` when there is no history to read: not a work tree, or one that ignores
+/// the store.
+///
+/// A path deleted before that commit, as when the loose file was removed in one commit and the
+/// pack added in a later one, answers with the last version it had.
+pub(super) fn blobs_before_pack(
+    base: &Path,
+    pack: &Path,
+    paths: &[&str],
+) -> Option<Vec<Committed>> {
+    if unversioned(base) {
+        return None;
+    }
+    let (directory, file) = (pack.parent()?, pack.file_name()?.to_str()?);
+    let added = String::from_utf8(git(
+        directory,
+        &[
+            "log",
+            "--no-renames",
+            "--diff-filter=A",
+            "--format=%H",
+            "-1",
+            "--",
+            file,
+        ],
+    )?)
+    .ok()?;
+    let added = added.trim();
+    let revision = if added.is_empty() {
+        "HEAD".to_owned()
+    } else {
+        format!("{added}^")
+    };
+    let Some(commit) = git(base, &["rev-parse", "--verify", "--quiet", &revision])
+        .and_then(|found| String::from_utf8(found).ok())
+        .map(|found| found.trim().to_owned())
+    else {
+        // Nothing before the pack's commit (or no commit at all): nothing to equal.
+        return Some(vec![Committed::Never; paths.len()]);
+    };
+    let mut requests = String::new();
+    for path in paths {
+        requests.push_str(&commit);
+        requests.push_str(":./");
+        requests.push_str(path);
+        requests.push('\n');
+    }
+    let blobs = cat_file_batch(base, &requests)?;
+    let mut found = Vec::new();
+    for (path, blob) in paths.iter().zip(blobs) {
+        if let Some(blob) = blob {
+            found.push(Committed::Blob(blob));
+            continue;
+        }
+        // Not at that commit: the last commit before it that wrote the path, if any.
+        let last = git(
+            base,
+            &[
+                "log",
+                "--no-renames",
+                "--diff-filter=AMT",
+                "--format=%H",
+                "-1",
+                &commit,
+                "--",
+                path,
+            ],
+        )
+        .and_then(|last| String::from_utf8(last).ok())
+        .map(|last| last.trim().to_owned())
+        .filter(|last| !last.is_empty());
+        let blob = last.and_then(|last| {
+            cat_file_batch(base, &format!("{last}:./{path}\n"))
+                .and_then(|mut blobs| blobs.pop().flatten())
+        });
+        found.push(blob.map_or(Committed::Never, Committed::Blob));
+    }
+    Some(found)
 }
 
 /// What the history says about when one path was added in its current incarnation.
