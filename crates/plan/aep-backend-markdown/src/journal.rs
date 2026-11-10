@@ -28,6 +28,8 @@ use aep_domain::artifact::{ArtifactId, ArtifactKind, ArtifactStatus, RelationKin
 use aep_domain::evidence::EvidenceKind;
 use aep_domain::review::ReviewOutcome;
 
+use crate::pack::Overlay;
+
 /// The store-wide log an `aep.project/1` store kept beside its documents.
 ///
 /// Nothing in this crate reads or writes it. It is named so an open can refuse a planning directory
@@ -421,19 +423,20 @@ pub fn entry_of(event: &entity_core::DomainEvent) -> Option<Entry> {
 /// make the whole history unreadable, and a caller can say so.
 #[must_use]
 pub fn read_git(root: &Path, evidence: &Path) -> (Vec<Entry>, usize) {
+    let overlay = Overlay::new(root, evidence);
     let mut entries = Vec::new();
     let mut unreadable = 0;
-    for kind in subdirectories(root) {
-        for path in files_with(&kind, "md") {
-            match document_entries(&path) {
+    for kind in subdirectories(&overlay, "planning") {
+        for file in files_with(&overlay, &format!("planning/{kind}"), "md") {
+            match document_entries(&overlay, &format!("planning/{kind}/{file}")) {
                 Some(found) => entries.extend(found),
                 None => unreadable += 1,
             }
         }
     }
-    for kind in subdirectories(evidence) {
-        for name in subdirectories(&kind) {
-            let (found, skipped) = evidence_in(&name);
+    for kind in subdirectories(&overlay, "evidence") {
+        for name in subdirectories(&overlay, &format!("evidence/{kind}")) {
+            let (found, skipped) = evidence_in(&overlay, &format!("evidence/{kind}/{name}"));
             entries.extend(found);
             unreadable += skipped;
         }
@@ -449,10 +452,9 @@ pub fn read_git(root: &Path, evidence: &Path) -> (Vec<Entry>, usize) {
 /// falling back to [`read_git`].
 #[must_use]
 pub fn history_git(root: &Path, evidence: &Path, artifact: &ArtifactId) -> (Vec<Entry>, usize) {
-    let document = root
-        .join(artifact.namespace())
-        .join(format!("{}.md", artifact.name()));
-    if !document.is_file() {
+    let overlay = Overlay::new(root, evidence);
+    let document = format!("planning/{}/{}.md", artifact.namespace(), artifact.name());
+    if !overlay.exists(&document).unwrap_or(false) {
         let (entries, unreadable) = read_git(root, evidence);
         return (
             entries
@@ -463,11 +465,11 @@ pub fn history_git(root: &Path, evidence: &Path, artifact: &ArtifactId) -> (Vec<
         );
     }
     let mut unreadable = 0;
-    let mut entries = document_entries(&document).unwrap_or_else(|| {
+    let mut entries = document_entries(&overlay, &document).unwrap_or_else(|| {
         unreadable += 1;
         Vec::new()
     });
-    let (found, skipped) = evidence_in(&evidence_directory(evidence, artifact));
+    let (found, skipped) = evidence_in(&overlay, &evidence_directory(artifact));
     entries.extend(found);
     unreadable += skipped;
     entries.retain(|entry| &entry.artifact == artifact);
@@ -510,25 +512,27 @@ pub fn evidence_records_git(
     evidence: &Path,
     artifact: &ArtifactId,
 ) -> (Vec<(PathBuf, Entry)>, usize) {
-    let document = root
-        .join(artifact.namespace())
-        .join(format!("{}.md", artifact.name()));
-    let directories = if document.is_file() {
-        vec![evidence_directory(evidence, artifact)]
+    let overlay = Overlay::new(root, evidence);
+    let document = format!("planning/{}/{}.md", artifact.namespace(), artifact.name());
+    let directories: Vec<String> = if overlay.exists(&document).unwrap_or(false) {
+        vec![evidence_directory(artifact)]
     } else {
-        subdirectories(evidence)
+        subdirectories(&overlay, "evidence")
             .iter()
-            .flat_map(|kind| subdirectories(kind))
+            .flat_map(|kind| {
+                subdirectories(&overlay, &format!("evidence/{kind}"))
+                    .into_iter()
+                    .map(|name| format!("evidence/{kind}/{name}"))
+                    .collect::<Vec<_>>()
+            })
             .collect()
     };
     let mut records = Vec::new();
     let mut unreadable = 0;
     for directory in directories {
-        for path in files_with(&directory, "json") {
-            match std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|text| serde_json::from_str::<Entry>(&text).ok())
-            {
+        for file in files_with(&overlay, &directory, "json") {
+            let path = overlay.loose_path(&format!("{directory}/{file}"));
+            match read_entry(&overlay, &format!("{directory}/{file}")) {
                 Some(entry) if matches!(entry.change, Change::Evidence { .. }) => {
                     records.push((path, entry));
                 }
@@ -557,17 +561,17 @@ pub fn evidence_records_git(
 /// misfiled. A file that does not read, and a record about another artifact, is not one.
 #[must_use]
 pub fn redaction_records_git(evidence: &Path, artifact: &ArtifactId) -> Vec<(PathBuf, Entry)> {
-    let mut records: Vec<(PathBuf, Entry)> =
-        files_with(&evidence_directory(evidence, artifact), "json")
-            .into_iter()
-            .filter_map(|path| {
-                let entry = std::fs::read_to_string(&path)
-                    .ok()
-                    .and_then(|text| serde_json::from_str::<Entry>(&text).ok())?;
-                (matches!(entry.change, Change::Redaction { .. }) && &entry.artifact == artifact)
-                    .then_some((path, entry))
-            })
-            .collect();
+    let overlay = Overlay::for_evidence(evidence);
+    let directory = evidence_directory(artifact);
+    let mut records: Vec<(PathBuf, Entry)> = files_with(&overlay, &directory, "json")
+        .into_iter()
+        .filter_map(|file| {
+            let store_path = format!("{directory}/{file}");
+            let entry = read_entry(&overlay, &store_path)?;
+            (matches!(entry.change, Change::Redaction { .. }) && &entry.artifact == artifact)
+                .then(|| (overlay.loose_path(&store_path), entry))
+        })
+        .collect();
     records.sort_by(|(left_path, left), (right_path, right)| {
         left.at
             .cmp(&right.at)
@@ -636,11 +640,17 @@ pub fn write_evidence_occurrence(
     if compact.is_empty() {
         compact.push_str("undated");
     }
-    let directory = evidence_directory(evidence, &entry.artifact);
+    // Loose files and packed records alike: a record already packed is answered, not written twice.
+    let overlay = Overlay::for_evidence(evidence);
+    let store_directory = evidence_directory(&entry.artifact);
+    let directory = overlay.loose_path(&store_directory);
     let short = &digest[..12];
-    let identical = |path: &Path| -> std::io::Result<PathBuf> {
-        if std::fs::read(path)? == text.as_bytes() {
-            Ok(path.to_path_buf())
+    let identical = |file: &str| -> std::io::Result<PathBuf> {
+        let store_path = format!("{store_directory}/{file}");
+        let path = overlay.loose_path(&store_path);
+        let held = overlay.holders(&store_path)?;
+        if held.iter().all(|holder| holder.bytes() == text.as_bytes()) && !held.is_empty() {
+            Ok(path)
         } else {
             Err(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
@@ -651,31 +661,26 @@ pub fn write_evidence_occurrence(
             ))
         }
     };
+    let names = files_with(&overlay, &store_directory, "json");
     // A record already written under any sequence number is the same record: writing it again
     // (a recovered batch) answers that file instead of adding a second one.
     // A file of that name holding other bytes is a record somebody rewrote, and is refused.
     if occurrence == 0 {
-        if let Some(existing) = files_with(&directory, "json").into_iter().find(|path| {
-            path.file_stem()
-                .and_then(|stem| stem.to_str())
-                .is_some_and(|stem| {
-                    stem.starts_with(&format!("{compact}-")) && stem.ends_with(short)
-                })
+        if let Some(existing) = names.iter().find(|name| {
+            name.strip_suffix(".json").is_some_and(|stem| {
+                stem.starts_with(&format!("{compact}-")) && stem.ends_with(short)
+            })
         }) {
-            return identical(&existing);
+            return identical(existing);
         }
     }
     // Records made in the same second sort in the order they were made: the name carries how many
     // records of that second the directory already holds. The digest alone would order them by
     // hash, and a Git-native history would then disagree with every other backend about which of
     // two same-second records came first.
-    let sequence = files_with(&directory, "json")
+    let sequence = names
         .iter()
-        .filter(|path| {
-            path.file_name()
-                .and_then(|name| name.to_str())
-                .is_some_and(|name| name.starts_with(&format!("{compact}-")))
-        })
+        .filter(|name| name.starts_with(&format!("{compact}-")))
         .count();
     let stem = if occurrence == 0 {
         format!("{compact}-{sequence:03}-{short}")
@@ -684,8 +689,8 @@ pub fn write_evidence_occurrence(
     };
     let path = directory.join(format!("{stem}.json"));
 
-    if path.exists() {
-        return identical(&path);
+    if overlay.exists(&format!("{store_directory}/{stem}.json"))? {
+        return identical(&format!("{stem}.json"));
     }
 
     std::fs::create_dir_all(&directory)?;
@@ -705,20 +710,28 @@ pub fn write_evidence_occurrence(
     let _ = std::fs::remove_file(&temporary);
     match linked {
         Ok(()) => Ok(path),
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => identical(&path),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+            identical(&format!("{stem}.json"))
+        }
         Err(error) => Err(error),
     }
 }
 
-/// Where the evidence about `artifact` is kept.
-fn evidence_directory(evidence: &Path, artifact: &ArtifactId) -> PathBuf {
-    evidence.join(artifact.namespace()).join(artifact.name())
+/// Where the evidence about `artifact` is kept, as a store path.
+fn evidence_directory(artifact: &ArtifactId) -> String {
+    format!("evidence/{}/{}", artifact.namespace(), artifact.name())
+}
+
+/// The record at `store_path`, when it reads as one.
+fn read_entry(overlay: &Overlay, store_path: &str) -> Option<Entry> {
+    let bytes = overlay.read(store_path).ok()??;
+    serde_json::from_slice::<Entry>(&bytes).ok()
 }
 
 /// The entries one document's transitions stand for, or `None` when it does not parse.
-fn document_entries(path: &Path) -> Option<Vec<Entry>> {
-    let text = std::fs::read_to_string(path).ok()?;
-    let document = crate::document::PlanningDocument::parse(&text, path.to_str()).ok()?;
+fn document_entries(overlay: &Overlay, store_path: &str) -> Option<Vec<Entry>> {
+    let text = String::from_utf8(overlay.read(store_path).ok()??).ok()?;
+    let document = crate::document::PlanningDocument::parse(&text, Some(store_path)).ok()?;
     let frontmatter = &document.frontmatter;
     Some(
         frontmatter
@@ -730,14 +743,11 @@ fn document_entries(path: &Path) -> Option<Vec<Entry>> {
 }
 
 /// The evidence records in one artifact's directory, and how many did not parse.
-fn evidence_in(directory: &Path) -> (Vec<Entry>, usize) {
+fn evidence_in(overlay: &Overlay, directory: &str) -> (Vec<Entry>, usize) {
     let mut entries = Vec::new();
     let mut unreadable = 0;
-    for path in files_with(directory, "json") {
-        match std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|text| serde_json::from_str::<Entry>(&text).ok())
-        {
+    for file in files_with(overlay, directory, "json") {
+        match read_entry(overlay, &format!("{directory}/{file}")) {
             Some(entry)
                 if matches!(
                     entry.change,
@@ -752,31 +762,14 @@ fn evidence_in(directory: &Path) -> (Vec<Entry>, usize) {
     (entries, unreadable)
 }
 
-/// The directories directly under `directory` whose names do not start with a dot, sorted.
-fn subdirectories(directory: &Path) -> Vec<PathBuf> {
-    listed(directory, Path::is_dir)
+/// The directories directly under `directory`, loose and packed, sorted. Dot-names are skipped.
+fn subdirectories(overlay: &Overlay, directory: &str) -> Vec<String> {
+    overlay.directories(directory).unwrap_or_default()
 }
 
-/// The files directly under `directory` with `extension`, not starting with a dot, sorted.
-fn files_with(directory: &Path, extension: &str) -> Vec<PathBuf> {
-    listed(directory, |path| {
-        path.is_file() && path.extension().is_some_and(|found| found == extension)
-    })
-}
-
-/// The entries under `directory` that `keep` accepts, skipping dot-names, sorted.
-fn listed(directory: &Path, keep: impl Fn(&Path) -> bool) -> Vec<PathBuf> {
-    let Ok(entries) = std::fs::read_dir(directory) else {
-        return Vec::new();
-    };
-    let mut found: Vec<PathBuf> = entries
-        .filter_map(Result::ok)
-        .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
-        .map(|entry| entry.path())
-        .filter(|path| keep(path))
-        .collect();
-    found.sort();
-    found
+/// The files directly under `directory` with `extension`, loose and packed, sorted.
+fn files_with(overlay: &Overlay, directory: &str, extension: &str) -> Vec<String> {
+    overlay.files(directory, extension).unwrap_or_default()
 }
 
 /// The order a Git-native history is answered in: `at`, then artifact, then revision.

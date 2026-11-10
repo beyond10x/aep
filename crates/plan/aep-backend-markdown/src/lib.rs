@@ -95,6 +95,7 @@ pub mod findings;
 pub mod frontmatter;
 pub mod journal;
 pub mod kernel;
+pub mod pack;
 pub mod projection;
 pub mod provider;
 pub mod store;

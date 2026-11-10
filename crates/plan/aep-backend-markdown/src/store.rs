@@ -34,9 +34,13 @@ use aep_domain::error::ValidationErrors;
 use aep_domain::workspace::Membership;
 
 use crate::document::PlanningDocument;
+use crate::pack::Overlay;
 
 /// The extension a planning document has.
 const EXTENSION: &str = "md";
+
+/// The store-path prefix of a planning document, as a pack record spells it.
+const PLANNING: &str = "planning";
 
 /// A directory of planning documents.
 ///
@@ -46,6 +50,9 @@ const EXTENSION: &str = "md";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MarkdownStore {
     root: PathBuf,
+    /// The evidence directory beside the documents, when the caller knows it. Packs are kept
+    /// beside it; see [`Overlay`].
+    evidence: Option<PathBuf>,
 }
 
 /// Distinguishes one write's temporary file from another's in the same process.
@@ -57,7 +64,28 @@ impl MarkdownStore {
     /// The directory need not exist: a project that has planned nothing yet has no
     /// `.engineering/planning/`, and that is an empty plan rather than an error.
     pub fn open(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            evidence: None,
+        }
+    }
+
+    /// The same store, with the evidence directory its packs are kept beside named.
+    ///
+    /// Without it the evidence directory is derived from the root ([`Overlay::beside_planning`]).
+    #[must_use]
+    pub fn with_evidence(mut self, evidence: impl Into<PathBuf>) -> Self {
+        self.evidence = Some(evidence.into());
+        self
+    }
+
+    /// The loose files and the packed records this store reads, as one tree.
+    #[must_use]
+    pub fn overlay(&self) -> Overlay {
+        match &self.evidence {
+            Some(evidence) => Overlay::new(self.root.clone(), evidence.clone()),
+            None => Overlay::beside_planning(self.root.clone()),
+        }
     }
 
     /// The directory the documents live in.
@@ -89,12 +117,23 @@ impl MarkdownStore {
     pub fn load(&self) -> StoreReport {
         let mut report = StoreReport::default();
 
-        if !self.root.exists() {
+        let overlay = self.overlay();
+        for pack in overlay.packs() {
+            if let Err(error) = pack.pack() {
+                report.failures.push(StoreFailure {
+                    path: pack.file().to_path_buf(),
+                    detail: format!("is not a pack: {error}"),
+                });
+            }
+        }
+        // A pack that does not read hides the records it holds; reading on would report them as
+        // missing, and a write would create them again.
+        if !report.failures.is_empty() {
             return report;
         }
 
         let mut files = Vec::new();
-        if let Err(error) = collect_documents(&self.root, &mut files) {
+        if let Err(error) = collect_documents(&overlay, PLANNING, &mut files) {
             report.failures.push(StoreFailure {
                 path: self.root.clone(),
                 detail: format!("cannot be read: {error}"),
@@ -102,14 +141,24 @@ impl MarkdownStore {
             return report;
         }
         // Sorted, so the report's failure order is the tree's order and two runs over one store
-        // print the same lines. `read_dir` promises no order at all.
+        // print the same lines.
         files.sort();
 
-        for path in files {
+        for file in files {
             report.files_read += 1;
-            let relative = relative_path(&self.root, &path);
+            let path = overlay.loose_path(&file);
+            let relative = file
+                .strip_prefix(&format!("{PLANNING}/"))
+                .unwrap_or(&file)
+                .to_owned();
 
-            let text = match fs::read_to_string(&path) {
+            let text = match overlay
+                .read(&file)
+                .and_then(|bytes| bytes.ok_or_else(|| io::Error::from(io::ErrorKind::NotFound)))
+                .and_then(|bytes| {
+                    String::from_utf8(bytes)
+                        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
+                }) {
                 Ok(text) => text,
                 Err(error) => {
                     report.failures.push(StoreFailure {
@@ -218,6 +267,7 @@ impl MarkdownStore {
         if path.exists() {
             return Err(StoreError::Exists { path });
         }
+        self.refuse_packed(&self.relative_path_for(&document.frontmatter.id))?;
         self.write(&path, &document.render())?;
         Ok(path)
     }
@@ -237,11 +287,34 @@ impl MarkdownStore {
         for segment in relative_path.split('/') {
             path.push(segment);
         }
+        self.refuse_packed(relative_path)?;
         if !path.is_file() {
             return Err(StoreError::Missing { path });
         }
         self.write(&path, &document.render())?;
         Ok(path)
+    }
+
+    /// Refuses a write to the document at `relative_path` when a pack holds it.
+    ///
+    /// A packed artifact is rewritten by unpacking it, not in place: a loose copy beside the pack
+    /// would be a second, different answer to one question.
+    pub(crate) fn refuse_packed(&self, relative_path: &str) -> Result<(), StoreError> {
+        let packs = self
+            .overlay()
+            .packed_in(&format!("{PLANNING}/{relative_path}"))
+            .map_err(|source| StoreError::Io {
+                path: self.root.clone(),
+                source,
+            })?;
+        if packs.is_empty() {
+            return Ok(());
+        }
+        let stem = relative_path.strip_suffix(".md").unwrap_or(relative_path);
+        Err(StoreError::Packed {
+            id: stem.replacen('/', ":", 1),
+            packs,
+        })
     }
 
     /// Writes `contents` to `path` through a temporary file in the same directory.
@@ -404,6 +477,22 @@ pub enum StoreError {
         path: PathBuf,
     },
 
+    /// A pack holds the artifact, and a pack is not edited in place.
+    #[error(
+        "{id} is packed in {}; run `aep plan store unpack {id}` first",
+        packs
+            .iter()
+            .map(|name| format!(".engineering/packs/{name}.pack"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )]
+    Packed {
+        /// The artifact, as `kind:name`.
+        id: String,
+        /// The names of the packs that hold it.
+        packs: Vec<String>,
+    },
+
     /// The filesystem refused.
     #[error("{}: {source}", path.display())]
     Io {
@@ -414,42 +503,20 @@ pub enum StoreError {
     },
 }
 
-/// Collects `.md` files under `directory`, recursively.
+/// Collects the store paths of `.md` files under `directory`, recursively, loose and packed.
 ///
 /// Dot-entries are skipped: a `.git` directory is not a plan, and the temporary file a write goes
 /// through is not a document yet.
-fn collect_documents(directory: &Path, into: &mut Vec<PathBuf>) -> io::Result<()> {
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        let path = entry.path();
-        let name = entry.file_name();
-        let name = name.to_string_lossy();
-        if name.starts_with('.') {
-            continue;
-        }
-        if path.is_dir() {
-            collect_documents(&path, into)?;
-            continue;
-        }
-        if path
-            .extension()
-            .and_then(|extension| extension.to_str())
-            .is_some_and(|extension| extension == EXTENSION)
-        {
+fn collect_documents(overlay: &Overlay, directory: &str, into: &mut Vec<String>) -> io::Result<()> {
+    for (name, is_directory) in overlay.list(directory)? {
+        let path = format!("{directory}/{name}");
+        if is_directory {
+            collect_documents(overlay, &path, into)?;
+        } else if name.ends_with(&format!(".{EXTENSION}")) {
             into.push(path);
         }
     }
     Ok(())
-}
-
-/// `path` relative to `root`, with `/` separators.
-fn relative_path(root: &Path, path: &Path) -> String {
-    let relative = path.strip_prefix(root).unwrap_or(path);
-    relative
-        .components()
-        .map(|component| component.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
 }
 
 #[cfg(test)]
