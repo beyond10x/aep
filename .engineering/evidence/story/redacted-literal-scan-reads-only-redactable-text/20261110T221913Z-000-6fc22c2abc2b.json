@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-10T22:19:13Z",
+  "actor": "human:timo",
+  "artifact": "story:redacted-literal-scan-reads-only-redactable-text",
+  "kind": "story",
+  "revision": 6,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator run on fix/redacted-literal-scan-prose-only at da0e3d0db: aep-cli lib, planning_cli, store_pack_security, store_pack_security_adversary, store_pack_security_adversary_2, validate_packs, validate_packs_adversary, validate_packs_adversary_2: 405 tests passed in 8 binaries; the implementor's clippy and fmt over aep-cli exit 0"
+  }
+}
