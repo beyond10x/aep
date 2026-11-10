@@ -26,10 +26,16 @@ scope:
 - confidence: cited
   path: crates/edge/aep-cli/tests/store_pack_adversary.rs
 - confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_security.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_security_adversary.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_security_adversary_2.rs
+- confidence: cited
   path: crates/plan/aep-backend-markdown/src/pack.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 18
+revision: 19
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":4}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":4}}}

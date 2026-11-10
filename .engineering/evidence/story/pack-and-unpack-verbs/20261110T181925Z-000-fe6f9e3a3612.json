@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-10T18:19:25Z",
+  "actor": "human:timo",
+  "artifact": "story:pack-and-unpack-verbs",
+  "kind": "story",
+  "revision": 19,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator re-run on feat/store-pack-closed-artifacts at 8faff4fd0 after merging the security fixes (rebuilt): aep-cli store_pack_security(+adversary, +adversary_2), store_pack(+adversary), store_pack_overlay(+adversary, +adversary_2), validate_packs(+adversary, +adversary_2), store_pack_end_to_end(+adversary), git_store, planning_cli, doctor_cli, cross_member_relations, store_migrate_git, aep-cli lib, aep-backend-markdown lib+pack+pack_adversary+assembly: 648 tests passed in 23 binaries, every step exit 0"
+  }
+}

@@ -18,6 +18,12 @@ scope:
 - confidence: cited
   path: crates/edge/aep-cli/tests/store_pack_overlay.rs
 - confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_security.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_security_adversary.rs
+- confidence: cited
+  path: crates/edge/aep-cli/tests/store_pack_security_adversary_2.rs
+- confidence: cited
   path: crates/edge/aep-cli/tests/validate_packs.rs
 - confidence: cited
   path: crates/edge/aep-cli/tests/validate_packs_adversary.rs
@@ -27,7 +33,7 @@ scope:
   path: crates/govern/aep-domain/src/error.rs
 - confidence: cited
   path: website/docs/reference/cli.md
-revision: 15
+revision: 16
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:37Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":5}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:38Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":5}}}
