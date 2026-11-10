@@ -6,7 +6,7 @@ status: draft
 title: 'Packing closed artifacts: aep.pack/1, one read overlay, unpack, validate'
 relations:
 - designs: epic:store-pack-closed-artifacts
-revision: 4
+revision: 5
 ---
 # Design: packing closed artifacts out of the working tree
 
@@ -115,6 +115,13 @@ same documents and the same evidence and prints the same output. Per verb:
 - relation resolution: a packed target resolves, so an open artifact that relates to a packed one
   stays valid and `relate <open> depends_on <packed>` works (it writes only the open artifact).
 
+**Every read verifies before it serves** (security review, rev 5). The overlay refuses a pack whose
+name is not its content digest, or any of whose records fails its header digest, exactly as it
+refuses a pack that does not parse: every read verb fails closed naming the pack, and `validate`
+reports it with its own codes. A path held in two places with different bytes is refused by every
+reader too, naming both places; a reader never picks one copy. `unpack` reads through the same check,
+so it never re-renders a record whose digest failed.
+
 ## Writes, and unpacking
 
 - `new <kind> <name>` refuses an id that is packed, naming the pack (no duplicate id).
@@ -131,7 +138,9 @@ same documents and the same evidence and prints the same output. Per verb:
   holds that path, unpack keeps the loose file and only removes the packed copies. When two packs
   hold the path with different bytes and no loose file does, unpack refuses naming both packs;
   `unpack <id> --from <pack-name>` restores that pack's copy and removes the others. When no pack
-  remains, `project.yaml` returns to `aep.project/5`.
+  remains, `project.yaml` returns to `aep.project/5`. `pack` and `unpack` also run on an
+  `aep.project/5` store that holds packs (a merge of a packed branch into an unpacked one) and leave
+  the version that matches what remains; `validate` refuses that store until they have run.
 - **`aep plan store pack [--dry-run]`** writes one new pack with every eligible record, removes the
   loose files it packed, and sets `project.yaml` to `aep.project/6`. A record already held
   byte-identically by a pack is not packed twice; its loose copy is removed. `--dry-run` writes
@@ -172,7 +181,8 @@ committed store twice, on two machines, writes the same file. `unpack` writes th
 3. Each path is a safe relative path in the store's own grammar: `planning/<kind>/<name>.md` or
    `evidence/<kind>/<name>/<file>.json`; no `..`, no absolute path, no backslash, no empty or dot
    segment, no NUL or control character. `unpack` writes only paths that pass the same check, inside
-   `.engineering`, and never follows a symbolic link.
+   `.engineering`, and never follows a symbolic link: `pack` and `unpack` refuse a symbolic link at
+   `.engineering`, `planning`, `evidence` or `packs`.
 4. A path held in two places (loose and packed, or two packs) is refused unless the bytes are
    identical.
 5. Provenance against Git: each packed record equals the last committed blob at its original path
@@ -180,7 +190,10 @@ committed store twice, on two machines, writes the same file. `unpack` writes th
    `git_record.rs` treats "deleted while a pack holds the same bytes" as a continuation, not the end
    of the file's incarnation, so immutability of review-results and evidence and the redaction replay
    (first committed version, then every redaction record) hold for packed records as for loose ones.
-   Outside a work tree the check is skipped, as the other history checks are.
+   The check is skipped only when no Git repository exists above the store; a failing Git is a
+   refusal, and neither `GIT_CEILING_DIRECTORIES` nor the redirecting Git variables (`GIT_DIR`,
+   `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_OBJECT_DIRECTORY` and the like) change which repository
+   answers (security review, rev 5).
 6. A packed artifact passes every document check a loose one does, and its status is closed for its
    kind; packed evidence belongs to the artifact whose directory names it.
 7. A redacted literal is never re-exposed: no copy of an artifact (loose or any pack) may contain a
