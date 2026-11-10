@@ -16,7 +16,7 @@ page disagrees with it. A release marked *next release* is not tagged yet.
 
 | Store | `version` | `store` selector | Also requires | Since | Notes |
 |---|---|---|---|---|---|
-| Git-native | `aep.project/5` | `store: { git: {} }` | `planning_scope: <scope>` | 0.62.0 | The default. One Markdown file per artifact under `.engineering/planning/` and one evidence file per record under `.engineering/evidence/`; Git is the history. `store` may be omitted. |
+| Git-native | `aep.project/5 – aep.project/6` | `store: { git: {} }` | `planning_scope: <scope>` | 0.62.0 | The default. One Markdown file per artifact under `.engineering/planning/` and one evidence file per record under `.engineering/evidence/`; Git is the history. `store` may be omitted. `aep.project/6` is the same store after `aep plan store pack` moved its closed artifacts into `.engineering/packs/`. |
 | SQLite | `aep.project/5` | `store: { sqlite: { path: <path> } }` | `planning_scope: <scope>` | 0.30.0 | One database file; the path is relative to `.engineering/`. |
 | PostgreSQL | `aep.project/5` | `store: { postgres: { url: <url> } }` | `planning_scope: <scope>` | 0.30.0 | A database reached by a libpq connection string or URL. |
 

@@ -129,9 +129,19 @@ changes. An open artifact keeps its edges to a packed one. A command that would 
 artifact (`move`, `body`, `set`, `relate`, `redact`) refuses and names the pack: unpack the
 artifact first. `new` refuses a packed id.
 
-`validate` also checks each pack: its format and digests, that the paths are the store's own,
-that each record matches what Git committed, that only closed artifacts are packed, and that the
-project version agrees with the packs present.
+`pack` keeps an evidence file loose when it is not a `.json` file, when a Git `filter` or `ident`
+attribute applies to it, when its mode is not 100644, or when it is a symbolic link, and says why.
+
+Every read verb verifies before it answers. It refuses a store where a path is held twice with
+different bytes, naming both places, and a pack whose record digest or name does not match its
+content, naming the pack. Never edit a pack by hand. `aep plan store unpack <id>` resolves a
+doubly held path (`--from <pack>` when two packs disagree). `validate` also checks that the
+paths are the store's own, that each record matches what Git committed, that only closed artifacts
+are packed, and that the project version agrees with the packs present.
+
+After a merge that leaves packs in an `aep.project/5` store, `validate` refuses it until
+`aep plan store pack` or `aep plan store unpack` has run; both set the matching version. Both
+refuse a symbolic link at `.engineering`, `planning`, `evidence` or `packs`.
 
 **Merging.** Branches that pack different artifacts write different packs and merge cleanly. Two
 branches that each unpack from the same pack conflict under Git's default rename detection, which

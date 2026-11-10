@@ -391,12 +391,15 @@ changes nothing about what the verbs answer.
 
 - **What a pack holds.** An artifact whose status is closed for its kind (the lifecycle's
   `closed:` list plus every terminal state, so a story is closed at `implemented`, `rejected` and
-  `archived`, and an archived `review-result` is closed) with every evidence file under its
-  `evidence/<kind>/<name>/` directory. A pack is one text file, `.engineering/packs/<name>.pack`:
+  `archived`, and an archived `review-result` is closed) with the evidence files under its
+  `evidence/<kind>/<name>/` directory that are eligible. A pack is one text file, `.engineering/packs/<name>.pack`:
   an `aep.pack/1` header line, then per record a `--- <path> <length> sha256:<hex>` line, the
   original file's bytes verbatim and a newline. Records are sorted by path; the name is the first 16
   hex digits of the SHA-256 of the pack's bytes. Only bytes Git has committed are packed; a file that
-  is untracked or differs from `HEAD` stays loose and is named in the output.
+  is untracked or differs from `HEAD` stays loose and is named in the output. `pack` also keeps an
+  evidence file loose, with the reason in the output, when it is not a `.json` file, when a Git
+  `filter` or `ident` attribute applies to it, when its mode is not 100644, or when it is a
+  symbolic link.
 - **Nothing is deleted.** The bytes of every file are in the pack and in Git history. Every reader
   goes through one overlay of loose files and packed records, so `validate`, `list`, `graph`,
   `history`, `explain` and `findings` print the same bytes with the same exit codes before packing,
@@ -411,11 +414,19 @@ changes nothing about what the verbs answer.
   would change a packed artifact (`move`, `body`, `set`, `scope`, `relate`, `redact`) refuses and
   names the pack; unpack the artifact first. `new` refuses a packed id. `evidence <id>` on a packed
   artifact adds a loose file the next `pack` folds in.
-- **`validate`.** Each pack must parse, carry matching digests and a name equal to its content
-  digest, hold only paths in the store's own grammar, agree with the last committed blob at each
-  original path, hold closed artifacts only, keep a redacted literal out of every copy, and agree
-  with the project version (a pack in a `/5` store, or a `/6` store without a pack, is refused). A
-  path held in two places with different bytes is refused.
+- **Every read verifies before it serves.** `list`, `show`, `history` and every other read verb
+  refuse a store in which a path is held twice with different bytes, naming both places;
+  `aep plan store unpack <id>` is the way out (`--from <pack-name>` when two packs disagree). They
+  also refuse a pack whose record digest or whose name does not match its content, naming the
+  pack. A pack is never edited by hand.
+- **`validate`.** Beyond the above, each pack must hold only paths in the store's own grammar,
+  agree with the last committed blob at each original path, hold closed artifacts only, keep a
+  redacted literal out of every copy, and agree with the project version (a pack in a `/5` store,
+  or a `/6` store without a pack, is refused).
+- **After a merge.** `pack` and `unpack` also run on an `aep.project/5` store that holds packs, as
+  a merge can leave it, and set the matching version; `validate` refuses that store until one of
+  them has run. Both verbs refuse a symbolic link at `.engineering`, `planning`, `evidence` or
+  `packs`.
 - **Older aep.** A build that does not know `aep.project/6` refuses every verb with
   `unsupported_protocol_version`; it does not read the store as if it were `/5`. A store that never
   packs stays `/5`.
