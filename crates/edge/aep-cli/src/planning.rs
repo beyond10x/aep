@@ -2107,10 +2107,12 @@ fn envelope_for(
 
     let safe = name.replace([':', '/'], "-");
     let context = CommandContext::new(
-        format!("req-{safe}")
+        prefixed("req-", &safe)
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
-        safe.parse().map_err(|error| anyhow::anyhow!("{error}"))?,
+        prefixed("", &safe)
+            .parse()
+            .map_err(|error| anyhow::anyhow!("{error}"))?,
         command_actor()?,
         correlation
             .parse()
@@ -2118,13 +2120,22 @@ fn envelope_for(
         at,
     );
     Ok(CommandEnvelope::new(
-        format!("cmd-{safe}")
+        prefixed("cmd-", &safe)
             .parse()
             .map_err(|error| anyhow::anyhow!("{error}"))?,
         wire_name,
         payload,
         context,
     ))
+}
+
+/// An envelope identifier: `prefix` and `name`, with `:` and `/` already turned into `-` by the
+/// caller, bounded to the identifier cap by [`aep_domain::ids::bounded_identifier`].
+fn prefixed(prefix: &str, name: &str) -> String {
+    format!(
+        "{prefix}{}",
+        aep_domain::ids::bounded_identifier(name, prefix.len())
+    )
 }
 
 /// What a planning document states, as an entity body.
@@ -2538,10 +2549,10 @@ fn move_through_a_command(
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
         };
         let mut context = CommandContext::new(
-            format!("req-{name}")
+            prefixed("req-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            format!("{name}-{to}-{}", at.epoch_millis())
+            prefixed("", &format!("{name}-{to}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -2552,7 +2563,7 @@ fn move_through_a_command(
             context = context.executed_by(executor.clone());
         }
         CommandEnvelope::new(
-            format!("cmd-{name}-{}", at.epoch_millis())
+            prefixed("cmd-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.status.move/v1",
@@ -3120,11 +3131,11 @@ fn relate_through_a_command(
     let envelope = {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
-            format!("req-{name}")
+            prefixed("req-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             // A fresh CLI attempt gets a fresh idempotency key.
-            format!("rel-{name}-{}", at.epoch_millis())
+            prefixed("rel-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -3134,7 +3145,7 @@ fn relate_through_a_command(
             at,
         );
         CommandEnvelope::new(
-            format!("cmd-{name}")
+            prefixed("cmd-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.relation.create/v1",
@@ -3474,10 +3485,10 @@ fn unrelate_through_a_command(
     let envelope = {
         let name = format!("{source}-{relation}-{target}").replace([':', '/'], "-");
         let context = CommandContext::new(
-            format!("req-unrel-{name}")
+            prefixed("req-unrel-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            format!("unrel-{name}-{}", at.epoch_millis())
+            prefixed("unrel-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -3487,7 +3498,7 @@ fn unrelate_through_a_command(
             at,
         );
         CommandEnvelope::new(
-            format!("cmd-unrel-{name}")
+            prefixed("cmd-unrel-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.relation.remove/v1",
@@ -3628,10 +3639,10 @@ fn update_through_a_command(
     let envelope = {
         let name = format!("{correlation}-{id}").replace([':', '/'], "-");
         let context = CommandContext::new(
-            format!("req-{name}")
+            prefixed("req-", &name)
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
-            format!("upd-{name}-{}", at.epoch_millis())
+            prefixed("upd-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             command_actor()?,
@@ -3641,7 +3652,7 @@ fn update_through_a_command(
             at,
         );
         CommandEnvelope::new(
-            format!("cmd-{name}-{}", at.epoch_millis())
+            prefixed("cmd-", &format!("{name}-{}", at.epoch_millis()))
                 .parse()
                 .map_err(|error| anyhow::anyhow!("{error}"))?,
             "aep.entity.update/v1",
