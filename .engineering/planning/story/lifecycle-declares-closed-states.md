@@ -27,19 +27,33 @@ scope:
   path: artifacts/lifecycles/vision.yaml
 - confidence: cited
   path: crates/edge/aep-cli/src/planning.rs
-- confidence: inferred
+- confidence: cited
+  path: crates/edge/aep-cli/tests/describe_type.rs
+- confidence: cited
   path: crates/edge/aep-cli/tests/planning_cli.rs
 - confidence: cited
   path: crates/govern/aep-domain/src/artifact.rs
-- confidence: inferred
+- confidence: cited
   path: crates/govern/aep-engine/src/registry.rs
 - confidence: cited
+  path: crates/govern/aep-engine/tests/lifecycle_fallback.rs
+- confidence: cited
   path: crates/plan/aep-backend-entity/src/kernel.rs
+- confidence: cited
+  path: crates/plan/aep-contract/src/registry.rs
+- confidence: cited
+  path: crates/profile/aep-profile-development/src/descriptor.rs
+- confidence: cited
+  path: crates/profile/aep-profile-development/tests/descriptor_closed.rs
+- confidence: cited
+  path: crates/profile/aep-profile-operations/src/descriptor.rs
+- confidence: cited
+  path: crates/profile/aep-profile-operations/tests/descriptor_closed.rs
 - confidence: cited
   path: schemas/generated/artifact-lifecycle.schema.json
 - confidence: cited
   path: website/docs/reference/lifecycle-file.md
-revision: 23
+revision: 24
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-10T10:17:35Z", actor: "human:timo", revision: 4, decided_on: {"recorded":{"review_outcome":3}}}
 - {from: "proposed", to: "active", at: "2026-11-10T10:17:36Z", actor: "human:timo", revision: 5, decided_on: {"recorded":{"review_outcome":3}}}
