@@ -203,6 +203,24 @@ fn rewritten(
     Ok(found)
 }
 
+/// No pack under `.engineering/packs`: whether the last one just went (an interrupted unpack) or
+/// there never was one, the store must not stay `/6`, and the packs directory goes.
+fn no_pack(args: &UnpackArgs, store: &Store) -> Result<ExitCode> {
+    let directory = store.overlay.packs_directory().to_path_buf();
+    let stale =
+        store.config.version != ProjectVersion::V5 || directory.join(".gitattributes").exists();
+    if !stale {
+        outln!("nothing to unpack: no pack under .engineering/packs");
+    } else if args.dry_run {
+        outln!("no pack under .engineering/packs; would return project.yaml to aep.project/5");
+    } else {
+        ensure_attributes_removed(&directory)?;
+        store.set_version(ProjectVersion::V5)?;
+        outln!("no pack remains; project.yaml selects aep.project/5");
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
 pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
     let store = Store::open(args.engineering.as_deref())?;
     let _fence = if args.dry_run {
@@ -215,8 +233,7 @@ pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
     };
     let packs = store.parsed_packs()?;
     if packs.is_empty() {
-        outln!("nothing to unpack: no pack under .engineering/packs");
-        return Ok(ExitCode::SUCCESS);
+        return no_pack(args, &store);
     }
     let plan = plan(args, &store, &packs)?;
     let rewrites = rewritten(&packs, &plan)?;

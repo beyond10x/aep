@@ -526,7 +526,7 @@ fn pack_writes_the_pack_the_dry_run_named_and_removes_the_files_it_listed() {
     assert_eq!(
         std::fs::read_to_string(engineering(&project).join("packs/.gitattributes"))
             .expect("the packs directory carries its attributes"),
-        "*.pack -text\n"
+        "*.pack -text -merge\n"
     );
     let attribute = git(
         &project,
