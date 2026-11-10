@@ -402,9 +402,9 @@ fn scope_report(findings: &BTreeMap<String, Vec<String>>) -> String {
 
 /// A live planning artifact whose machine-read `scope:` names a crate path this tree does not have.
 ///
-/// `aep artifact waves` decides which stories may be implemented at once by comparing `scope:` path
-/// strings, and it says in its own documentation that "**Nothing is normalised**… nothing here
-/// normalises `crates/x/src/lib.rs` to `crates/x`" (`crates/edge/aep-cli/src/planning.rs`). So
+/// `aep artifact waves` decides which stories may be implemented at once by comparing `scope:` paths
+/// by component: a directory holds what is under it, and nothing maps one spelling of a file to
+/// another (`crates/edge/aep-cli/src/planning/waves.rs`). So
 /// a draft that still says `crates/aep-domain/src/artifact.rs` cannot collide with a story written
 /// after the move that lands on `crates/govern/aep-domain/src/artifact.rs` — the same file, two
 /// spellings, no collision reported, both placed in one wave. That is the exact failure the verb

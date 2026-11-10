@@ -8,6 +8,10 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact waves` compares scope entries by path component: a story scoped to a directory (`roles/`) now overlaps one scoped to a file inside it (`roles/decision.yaml`), and `roles` and `roles/` are one surface; they computed as disjoint and could share a wave.
+
 ## [0.79.0] - 2026-10-30
 
 ### Added
