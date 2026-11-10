@@ -210,6 +210,10 @@ pub(crate) const REDIRECTING_GIT_VARIABLES: [&str; 11] = [
 /// given in the environment is what lets `git` read a repository at all, and stripping it would make
 /// provenance silently unavailable. The `origin` reader wants the whole list, because a configuration
 /// standing in for the repository's own decides which remote it reads.
+///
+/// The environment can neither redirect nor rewrite history for provenance: these eight choose the
+/// repository, and [`HISTORY_REWRITING_GIT_VARIABLES`] with `GIT_NO_REPLACE_OBJECTS=1` stop it from
+/// showing other commits, blobs or boundaries than the ones committed.
 pub(crate) const REPOSITORY_SELECTING_GIT_VARIABLES: [&str; 8] = [
     "GIT_DIR",
     "GIT_COMMON_DIR",
@@ -221,11 +225,32 @@ pub(crate) const REPOSITORY_SELECTING_GIT_VARIABLES: [&str; 8] = [
     "GIT_CEILING_DIRECTORIES",
 ];
 
-/// A `git` process that reads the repository its working directory is in, wherever the environment
-/// points, but keeps the configuration the environment gives it (see
+/// Variables that make `git` answer other history than the repository holds: a graft file, a
+/// replacement-ref namespace and a shallow file each change which commits and blobs a revision
+/// names.
+pub(crate) const HISTORY_REWRITING_GIT_VARIABLES: [&str; 3] = [
+    "GIT_GRAFT_FILE",
+    "GIT_REPLACE_REF_BASE",
+    "GIT_SHALLOW_FILE",
+];
+
+/// A `git` process that cannot be made to answer other history than is committed: the variables in
+/// [`HISTORY_REWRITING_GIT_VARIABLES`] are removed and replacement objects are switched off.
+/// Repository selection is left to the caller.
+pub(crate) fn committed_history_git() -> std::process::Command {
+    let mut command = std::process::Command::new("git");
+    for name in HISTORY_REWRITING_GIT_VARIABLES {
+        command.env_remove(name);
+    }
+    command.env("GIT_NO_REPLACE_OBJECTS", "1");
+    command
+}
+
+/// [`committed_history_git`] that also reads the repository its working directory is in, wherever
+/// the environment points, and keeps the configuration the environment gives it (see
 /// [`REPOSITORY_SELECTING_GIT_VARIABLES`]).
 pub(crate) fn repository_git() -> std::process::Command {
-    let mut command = std::process::Command::new("git");
+    let mut command = committed_history_git();
     for name in REPOSITORY_SELECTING_GIT_VARIABLES {
         command.env_remove(name);
     }

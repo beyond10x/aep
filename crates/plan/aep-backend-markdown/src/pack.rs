@@ -890,7 +890,8 @@ impl Overlay {
             io::ErrorKind::InvalidData,
             format!(
                 "`{path}` is held with different bytes by {} and by {}; \
-                 a copy to keep has to be chosen before it can be read",
+                 a copy to keep has to be chosen \
+                 (`aep plan store unpack <id> --from <pack>`) before it can be read",
                 self.describe(path, first),
                 self.describe(path, other)
             ),
