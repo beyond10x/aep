@@ -106,6 +106,42 @@ It also **reports without failing**: statuses reached on an assertion rather tha
 exit `1`. `validate` exits `1` on any problem, which makes it a CI gate on its own. See
 [Validate the plan in CI](../guides/validate-in-ci.md).
 
+## Packing closed work
+
+A long-lived store is mostly closed work: a story at `implemented`, `rejected` or `archived`, an
+archived `review-result`, and the evidence recorded against each. `aep plan store pack` moves those
+files into `aep.pack/1` files under `.engineering/packs/` and sets `project.yaml` to
+`aep.project/6`. Nothing is deleted: a pack holds each file's bytes verbatim, and Git keeps the
+history. Only committed bytes are packed; a file that is untracked or changed since `HEAD` stays
+loose and the command names it.
+
+```bash
+aep plan store pack --dry-run      # what would move, the pack name, file counts before and after
+aep plan store pack                # write the pack, remove the loose files
+git add -A && git commit -m "pack closed artifacts"
+aep plan store unpack story:login  # restore one artifact and its evidence
+aep plan store unpack --all        # restore everything; the store returns to aep.project/5
+```
+
+`validate`, `list`, `graph`, `history`, `explain` and `findings` print the same output and exit with
+the same codes before packing, after it and after unpacking; only the number of tracked files
+changes. An open artifact keeps its edges to a packed one. A command that would rewrite a packed
+artifact (`move`, `body`, `set`, `relate`, `redact`) refuses and names the pack: unpack the
+artifact first. `new` refuses a packed id.
+
+`validate` also checks each pack: its format and digests, that the paths are the store's own,
+that each record matches what Git committed, that only closed artifacts are packed, and that the
+project version agrees with the packs present.
+
+**Merging.** Branches that pack different artifacts write different packs and merge cleanly. Two
+branches that each unpack from the same pack conflict under Git's default rename detection, which
+pairs each rewritten pack with the deleted one. Keep both new packs and remove the old one, or merge
+with `-c merge.renames=false`. If a merge leaves a path both loose and packed with different bytes,
+`validate` names both places and `aep plan store unpack <id>` resolves it.
+
+**Older aep.** A build that does not know `aep.project/6` refuses the store by name instead of
+reading it as `/5`. A store that never packs stays `aep.project/5`.
+
 ## Concurrency
 
 Writes in one checkout take a writer lock. Inside a Git repository the lock files live under the
@@ -117,6 +153,7 @@ appear in the working tree.
 | `project.yaml` says | This release |
 |---|---|
 | `aep.project/5` | reads and writes it |
+| `aep.project/6` | reads and writes it: a `/5` store whose closed work `aep plan store pack` moved into packs |
 | `aep.project/1`, or no `version:` | refuses it and names `aep plan store migrate git --verify`, which this release runs |
 | no `project.yaml`, a `planning/` directory beside it | opens it as a Git-native store (`planning/` and `evidence/`); refuses it and names the migration while it still holds a `/1` `journal.jsonl` |
 | `aep.project/2`, `/3`, `/4` (event-log stores) | refuses it and names the migration path |

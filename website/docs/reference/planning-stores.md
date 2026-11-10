@@ -32,3 +32,11 @@ page disagrees with it. A release marked *next release* is not tagged yet.
 [The Git-native planning store](../concepts/planning-store.md) describes the default store's
 layout, and [migrating an older store](../guides/migrate-an-older-store.md) walks through a
 migration.
+
+## Packed stores
+
+A Git-native store that has run `aep plan store pack` is `aep.project/6`: closed artifacts and their
+evidence live in `aep.pack/1` files under `.engineering/packs/`, and every read verb answers as it did
+before. `aep plan store unpack --all` returns the store to `aep.project/5`. A build that does not
+know `aep.project/6` refuses the store by name. See
+[packing closed work](../concepts/planning-store.md#packing-closed-work).
