@@ -49,25 +49,25 @@ AEP needs two things from a repository: a `.engineering/project.yaml`, and a sou
 governing documents (lifecycles, relations, templates, principles). Pin that source to a commit, so
 the rules cannot change underneath you without a commit in your own repository:
 
-{/* generated:release-pin:begin version=0.79.1 commit=546375349c6ebb1ce64dac6b1923bff557009e80 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin version=0.80.0 commit=af11af152de1732383a5edee0da723bb72d9acb4 — kept by `cargo xtask status` */}
 ```shell-session
 $ cd shop            # any Git repository
 $ aep plan reverse init --profile development.standard \
-    --protocols git+https://github.com/beyond10x/aep#546375349c6ebb1ce64dac6b1923bff557009e80
+    --protocols git+https://github.com/beyond10x/aep#af11af152de1732383a5edee0da723bb72d9acb4
 …/shop/.engineering/project.yaml written
-  protocol source resolves to …/protocol-sources/cd43e0b7…/snapshots/546375349c6ebb1ce64dac6b1923bff557009e80
+  protocol source resolves to …/protocol-sources/cd43e0b7…/snapshots/af11af152de1732383a5edee0da723bb72d9acb4
   profile development.standard
   store: git (aep.project/5), planning_scope: shop (from the origin remote)
 ```
 
-The commit above is the `0.79.1` release. `reverse init` fetches that revision once into a local
+The commit above is the `0.80.0` release. `reverse init` fetches that revision once into a local
 cache and checks it before writing anything. The file it writes (its explanatory comment omitted):
 
 ```yaml
 version: aep.project/5
 protocol: adp/1
 profile: development.standard
-protocols: git+https://github.com/beyond10x/aep#546375349c6ebb1ce64dac6b1923bff557009e80
+protocols: git+https://github.com/beyond10x/aep#af11af152de1732383a5edee0da723bb72d9acb4
 planning_scope: "shop"
 store:
   git: {}
@@ -200,7 +200,7 @@ transitions:
 
 ## 7. Validate, commit, check the checkout
 
-{/* generated:release-pin:begin commit=546375349c6ebb1ce64dac6b1923bff557009e80 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin commit=af11af152de1732383a5edee0da723bb72d9acb4 — kept by `cargo xtask status` */}
 ```shell-session
 $ aep plan artifact validate
 2 file(s) in …/.engineering/planning: 2 artifact(s)
@@ -209,7 +209,7 @@ $ git add .engineering && git commit -m "plan: guest checkout"
 $ aep doctor
 ok    binary-version: 0.63.1
 ok    project-file: ./.engineering/project.yaml parses: protocol adp/1, profile development.standard
-ok    protocol-source: the locator `git+https://github.com/beyond10x/aep#546375349c6ebb1ce64dac6b1923bff557009e80` is well-formed and its snapshot is cached at …
+ok    protocol-source: the locator `git+https://github.com/beyond10x/aep#af11af152de1732383a5edee0da723bb72d9acb4` is well-formed and its snapshot is cached at …
 ok    planning-store: ./.engineering/planning (store: git): 2 artifact(s), 1 evidence file(s), no problems
 warn  plugin-directory: none given: pass `--plugin-dir <path>` or set `AEP_DRIVE_PLUGIN_DIR`. AEP ships no plugin sources and guesses no path
 warn  release-tag: no bare-version tag is reachable from HEAD, so there is nothing to compare version 0.63.1 against — `git fetch --tags` first
