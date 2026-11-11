@@ -121,7 +121,7 @@ function HonestStatus() {
       title="The protocol is separate from models and plugins"
       chip={
         /* generated:release-chip:begin — do not edit; run `cargo xtask status` */
-        <code>0.79.1</code>
+        <code>0.80.0</code>
         /* generated:release-chip:end */
       }>
       <div className={styles.ledger}>
