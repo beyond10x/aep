@@ -1,0 +1,12 @@
+{
+  "at": "2026-11-21T03:40:21Z",
+  "actor": "human:timo",
+  "artifact": "story:roadmap-kind",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "verification",
+    "source": "coordinator: AEP_BIN=target/release/aep task check, all 17 steps, exit 0, on the tree committed as 18a0506b1 (ess-gate with ESS_TOOLCHAIN=0.77.0, the pinned release; the installed ess dispatcher does not switch from the repository root)"
+  }
+}
