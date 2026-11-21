@@ -1,0 +1,14 @@
+{
+  "at": "2026-11-21T03:01:07Z",
+  "actor": "human:timo",
+  "artifact": "story:roadmap-kind",
+  "kind": "story",
+  "revision": 5,
+  "change": {
+    "change": "evidence",
+    "kind": "review_outcome",
+    "source": "all nine findings fixed in 88878b0d3; the adversary's 18 cases committed in 889464a92 and green with the unit's 16 and the block reader's 10 unit cases",
+    "review": "review-result:roadmap-kind-adversary-pass-1",
+    "outcome": "fixed"
+  }
+}
