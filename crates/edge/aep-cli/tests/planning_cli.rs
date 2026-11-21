@@ -2235,14 +2235,15 @@ fn the_vocabulary_verbs_answer_without_a_store() {
     assert_eq!(code(&kinds), 0, "{}", stderr(&kinds));
     let text = stdout(&kinds);
     assert!(text.contains("story"), "{text}");
-    // Six compiled kinds are intent decomposition. The seventh `planning` row is the open blocker
-    // family, which is not a kind and says so — and it is here rather than absent because *what can
-    // I create* is the question this verb answers, and the answer does not depend on a store.
+    // Seven compiled kinds are intent decomposition (`roadmap` the seventh, `story:roadmap-kind`).
+    // The eighth `planning` row is the open blocker family, which is not a kind and says so — and it
+    // is here rather than absent because *what can I create* is the question this verb answers, and
+    // the answer does not depend on a store.
     let planning: Vec<&str> = text
         .lines()
         .filter(|line| line.contains("planning"))
         .collect();
-    assert_eq!(planning.len(), 7, "{text}");
+    assert_eq!(planning.len(), 8, "{text}");
     assert!(
         planning
             .last()

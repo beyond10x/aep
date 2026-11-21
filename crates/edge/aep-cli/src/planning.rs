@@ -53,6 +53,8 @@ mod conformance_count;
 mod recorded_input;
 // Where `validate` places a review-result by its findings block, decided from facts it is handed.
 mod findings_standing;
+// The `roadmap` rules of `validate`: the entries each roadmap lists, and the approved order.
+mod roadmaps;
 // What a `task_spend` record reads out of a transcript, a run manifest or a driven run's cursor.
 mod task_spend;
 // `aep plan artifact spend`: spend per task kind and figure against the project's baseline and target.
@@ -3903,6 +3905,17 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
         .documents
         .get_mut(&id)
         .with_context(|| not_here)?;
+    // An approved roadmap is the order somebody approved; rewriting it in place would keep the
+    // approval and change what it approved. Evidence counts are cumulative, so a second approval
+    // of the same artifact could not be told from the first: the change is a successor.
+    let front = &stored.document.frontmatter;
+    if front.kind.is_a(&ArtifactKind::Roadmap) && front.status == ArtifactStatus::Approved {
+        anyhow::bail!(
+            "{id} is approved, and an approved roadmap is changed by a successor rather than \
+             rewritten: `aep plan artifact new roadmap <name> --relate supersedes:{id}` drafts it, \
+             it earns its own approval, and {id} then moves to `superseded`"
+        );
+    }
     let body = edited_body(&stored.document.body, &arriving, edit);
     if !stored.document.replace_body(body) {
         outln!("{id} already has those body bytes; nothing to do");
@@ -3991,6 +4004,7 @@ fn redact_literal(
         .get(&id)
         .with_context(|| opened.missing(&id))?;
     let (changes, count) = redacted_text(&id, &stored.document, literal, with)?;
+    approved_order_unchanged(&id, &stored.document, &changes)?;
     // Through the overlay: a record already packed is one the redaction did not write.
     let overlay = aep_backend_markdown::pack::Overlay::for_evidence(&evidence);
     let records = |directory: &Path| -> BTreeSet<PathBuf> {
@@ -4050,6 +4064,48 @@ fn redact_literal(
         )?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Refuses a redaction that would change what an approved roadmap orders.
+///
+/// `redact` exists to take a literal out of prose — a person's name in a rationale — and it may do
+/// that on an approved roadmap. What it may not do is change which epics the roadmap lists or where:
+/// that is the order somebody approved, and `body` already refuses it for the same reason. Compared
+/// as `(epic, horizon)` pairs, so a rationale may change and the order may not.
+fn approved_order_unchanged(
+    id: &ArtifactId,
+    document: &PlanningDocument,
+    changes: &BTreeMap<String, aep_domain::node::Node>,
+) -> Result<()> {
+    use aep_backend_markdown::roadmap::recorded;
+
+    let front = &document.frontmatter;
+    if !front.kind.is_a(&ArtifactKind::Roadmap) || front.status != ArtifactStatus::Approved {
+        return Ok(());
+    }
+    let Some(body) = changes
+        .get(aep_backend_markdown::backend::BODY_KEY)
+        .and_then(aep_domain::node::Node::as_text)
+    else {
+        return Ok(());
+    };
+    let order = |text: &str| {
+        recorded(text).map(|entries| {
+            entries
+                .unwrap_or_default()
+                .into_iter()
+                .map(|entry| (entry.epic, entry.horizon))
+                .collect::<Vec<_>>()
+        })
+    };
+    if order(&document.body) != order(body) {
+        anyhow::bail!(
+            "{id} is approved, and this redaction would change the epics it orders or their \
+             horizons; nothing was redacted. An approved roadmap's order changes only by a \
+             successor: `aep plan artifact new roadmap <name> --relate supersedes:{id}`"
+        );
+    }
+    Ok(())
 }
 
 /// The title, summary and body `document` has once every occurrence of `literal` reads `with`, as
@@ -6241,6 +6297,16 @@ pub(crate) fn findings(
     let reviews = review_findings(report, &recorded_at, findings_required_since);
     problems.extend(reviews.problems);
 
+    // A workspace file that does not read is reported by `graph_problems`; here it only means no
+    // spelling of this store's own member name is recognised.
+    let membership = declared_membership(repository_root).unwrap_or_default();
+    let roadmaps = roadmaps::check(
+        report,
+        membership.own(),
+        roadmaps::approved_limit(registry, repository_root),
+    );
+    problems.extend(roadmaps.problems);
+
     Summary {
         store: opened.plan.describe(),
         files_read: report.files_read,
@@ -6251,6 +6317,7 @@ pub(crate) fn findings(
         findings_standing: reviews.standings,
         without_an_outcome: Vec::new(),
         unscoped: unscoped_stories(report, registry.lifecycles()),
+        off_roadmap: roadmaps.off_roadmap,
     }
 }
 
@@ -7562,6 +7629,13 @@ fn print_validation(summary: &Summary, strict: bool) {
             outln!("  - {note}");
         }
     }
+    // Reported, and not a problem: see `Summary::off_roadmap`.
+    if !summary.off_roadmap.is_empty() {
+        outln!("{} epic(s) on no approved roadmap:", summary.off_roadmap.len());
+        for note in &summary.off_roadmap {
+            outln!("  - {note}");
+        }
+    }
     for (heading, notes) in [
         ("recorded no findings block", &summary.without_findings),
         ("have no recorded outcome", &summary.without_an_outcome),
@@ -7619,6 +7693,10 @@ fn strictly_refused(summary: &Summary) -> Vec<String> {
         (
             "without a recorded outcome",
             summary.without_an_outcome.len(),
+        ),
+        (
+            "epic(s) on no approved roadmap",
+            summary.off_roadmap.len(),
         ),
     ] {
         if count > 0 {
@@ -9791,6 +9869,13 @@ pub(crate) struct Summary {
     /// so rather than pretending the store decided it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     without_an_outcome: Vec<String>,
+    /// `proposed` and `active` epics that no approved roadmap lists, once one is approved.
+    ///
+    /// Reported and **not** counted as a problem: an epic is proposed before the roadmap that would
+    /// place it is approved, so refusing would break the store between every proposal and the next
+    /// approval. `--strict` refuses it, for a gate that wants the stop.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    off_roadmap: Vec<String>,
 }
 
 /// One `review-result` with no `findings` block, and where `validate` placed it.

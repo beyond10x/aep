@@ -98,6 +98,7 @@ pub mod kernel;
 pub mod pack;
 pub mod projection;
 pub mod provider;
+pub mod roadmap;
 pub mod store;
 
 pub use claim::{

@@ -386,6 +386,8 @@ pub enum ArtifactKind {
     ProductRequirements,
     /// A large body of work above an epic.
     Initiative,
+    /// An approved order over epics: which come now, next and later.
+    Roadmap,
     /// A major deliverable.
     Epic,
     /// An independently meaningful change.
@@ -447,6 +449,7 @@ impl ArtifactKind {
         Self::Vision,
         Self::ProductRequirements,
         Self::Initiative,
+        Self::Roadmap,
         Self::Epic,
         Self::Story,
         Self::Task,
@@ -478,6 +481,7 @@ impl ArtifactKind {
             Self::Vision => "vision",
             Self::ProductRequirements => "product-requirements",
             Self::Initiative => "initiative",
+            Self::Roadmap => "roadmap",
             Self::Epic => "epic",
             Self::Story => "story",
             Self::Task => "task",
@@ -687,9 +691,9 @@ impl ArtifactKind {
 
     /// `true` when this kind belongs to intent decomposition rather than to engineering output.
     ///
-    /// A vision, a PRD, an initiative, an epic, a story and a task are the layer where somebody
-    /// decides *what should happen*; everything else in this vocabulary is a record of engineering
-    /// having happened. That is the distinction, and it is the whole of it.
+    /// A vision, a PRD, an initiative, a roadmap, an epic, a story and a task are the layer where
+    /// somebody decides *what should happen*; everything else in this vocabulary is a record of
+    /// engineering having happened. That is the distinction, and it is the whole of it.
     ///
     /// **It is no longer an ownership boundary.** This used to say AEP models these kinds but does
     /// not own them, because they usually live in a planning system — and that sentence stopped
@@ -708,6 +712,7 @@ impl ArtifactKind {
             Self::Vision
                 | Self::ProductRequirements
                 | Self::Initiative
+                | Self::Roadmap
                 | Self::Epic
                 | Self::Story
                 | Self::Task

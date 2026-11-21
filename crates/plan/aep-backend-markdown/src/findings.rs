@@ -532,7 +532,7 @@ pub fn block(body: &str) -> Option<Block> {
 ///
 /// Backticks or tildes, three or more, as `CommonMark` has them. A backtick run whose info string
 /// holds a backtick is inline code, not a fence.
-fn fence(line: &str) -> Option<(char, usize, &str)> {
+pub(crate) fn fence(line: &str) -> Option<(char, usize, &str)> {
     let character = line.chars().next().filter(|c| *c == '`' || *c == '~')?;
     let length = line.chars().take_while(|c| *c == character).count();
     if length < 3 {

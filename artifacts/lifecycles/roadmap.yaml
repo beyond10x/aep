@@ -1,0 +1,41 @@
+# The vision ladder, with the approval it stands for made a cost.
+#
+# A roadmap is a standing statement, like a vision: approved means in force, and the day it stops
+# being true it is not finished, it is replaced. So the shape is `vision.yaml`'s, for the reason that
+# file gives — two document ladders that differed only by accident would make two kinds of agreement
+# out of one.
+#
+# What it adds is the price of `approved`. A roadmap orders the epics everybody else works under, so
+# the rung is paid for by an `approval` record, the way `outbound-claim.yaml`'s `cleared` is.
+#
+# A changed roadmap is a successor, not a second approval of this one. `requires:` counts every
+# matching record ever made about the artifact, so a re-approval of the same roadmap could not be
+# told from the first (the note in `outbound-claim.yaml` says why). The successor `supersedes` this
+# one and earns its own `approval`; `aep plan artifact body` refuses to rewrite an approved roadmap,
+# `redact` refuses to change its order, and both name that route; and `aep plan artifact validate` refuses more approved roadmaps than the
+# profile allows, so the old one has to move to `superseded`.
+kind: roadmap
+initial: draft
+
+transitions:
+  draft: [in_review, archived]
+  in_review: [draft, approved, rejected]
+  approved: [superseded, archived]
+  rejected: [archived]
+  superseded: [archived]
+  archived: []
+
+closed: [rejected]
+
+requires:
+  approved:
+    - evidence: approval
+      at_least: 1
+
+descriptions:
+  draft: Written down, not yet put to anybody.
+  in_review: Put to the people who approve it.
+  approved: In force, with a recorded approval; changed only by a successor.
+  rejected: Decided against, and kept so the next attempt can read why.
+  superseded: Replaced by a successor that supersedes it.
+  archived: Retired, kept for the record.

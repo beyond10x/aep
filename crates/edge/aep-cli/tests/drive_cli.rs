@@ -3087,7 +3087,7 @@ fn an_llm_step_runs_after_every_command_before_it_and_before_any_after_it() {
         seen: stub_host::Seen::default(),
         files: vec!["a.txt".to_owned(), "b.txt".to_owned(), "c.txt".to_owned()],
     };
-    aep_cli::drive::start_with_host(&run.args, &host).expect("the run reports");
+    let _exit = aep_cli::drive::start_with_host(&run.args, &host).expect("the run reports");
     let seen = host.seen.lock().expect("the run has ended").clone();
     assert_eq!(
         seen,

@@ -1640,6 +1640,33 @@ fn file_mode(metadata: &std::fs::Metadata) -> u32 {
     u32::from(metadata.permissions().readonly())
 }
 
+/// Merges a project's own profiles into `registry`, which holds the protocol tree's.
+///
+/// For a caller that already holds the tree's registry and needs the project's profile resolved
+/// the way [`load`] resolves it, without loading the rest of the project: `aep plan artifact
+/// validate` reads a fact the profile declares, and loading the task and the manifest there would
+/// make a store's validity depend on documents it does not read. `engineering` is the project
+/// directory the configuration was read from; a project with no profile directory merges nothing.
+///
+/// # Errors
+///
+/// Every profile document that does not read or parse, or conflicts with one already registered.
+pub fn merge_local_profiles(
+    registry: &mut Registry,
+    engineering: &Path,
+    config: &ProjectConfig,
+) -> Result<(), Vec<LoadFailure>> {
+    let directory = engineering.join(&config.paths.profiles);
+    if !directory.is_dir() {
+        return Ok(());
+    }
+    merge_local(
+        registry,
+        &directory,
+        aep_schema::parse::DocumentKind::Profile,
+    )
+}
+
 /// Merges a directory of project-local documents into `registry`.
 fn merge_local(
     registry: &mut Registry,

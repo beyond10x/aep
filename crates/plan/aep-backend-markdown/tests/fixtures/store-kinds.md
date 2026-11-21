@@ -25,6 +25,9 @@ implementable: it is `specification`'s ladder with `implemented` removed. It is 
 reason `design` is — the ladder exists, so the kernel has to agree about it whether or not a store
 holds one yet.
 
+`roadmap` joined on 2026-11-21 with `story:roadmap-kind`: the `vision` ladder with an `approval`
+cost on `approved`, covered for the same reason.
+
 ```
 architecture-decision-record
 blocker
@@ -35,6 +38,7 @@ initiative
 obligation
 outbound-claim
 review-result
+roadmap
 specification
 story
 task
