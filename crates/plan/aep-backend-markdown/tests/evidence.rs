@@ -196,6 +196,9 @@ fn the_shipped_ladders_cost_what_this_repository_thinks_they_cost() {
             // Two: one to send it, one to correct it. See the ladder's own note — at one, the
             // approval that cleared the original claim still satisfies this rung.
             "outbound-claim: corrected needs 2 approval".to_owned(),
+            // An approved roadmap is the order every epic works under; a changed one is a
+            // successor with its own approval, so one is exact (`story:roadmap-kind`).
+            "roadmap: approved needs 1 approval".to_owned(),
             "story: implemented needs 1 test_result".to_owned(),
         ],
         "a rung gaining or losing a cost is a change to what everybody's `move` costs, and it \

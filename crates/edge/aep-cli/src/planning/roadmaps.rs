@@ -114,40 +114,7 @@ pub(crate) fn check(
         for defect in roadmap::defects(&entries) {
             problems.push(format!("{id}: {defect}"));
         }
-        let mut named = BTreeSet::new();
-        for (index, entry) in entries.iter().enumerate() {
-            if !named.insert(&entry.epic) {
-                continue;
-            }
-            let position = index + 1;
-            let named_kind = ArtifactKind::parse(entry.epic.namespace()).ok();
-            match report.documents.get(&entry.epic) {
-                // One defect, not two: an id whose kind is not an epic is wrong whether or not it
-                // resolves, and saying it is missing as well would send the reader to create it.
-                None if !named_kind.is_some_and(|kind| kind.is_a(&ArtifactKind::Epic)) => problems
-                    .push(format!(
-                        "{id} lists {} at entry {position}, which is not an epic and is not in \
-                         this store; a roadmap orders epics",
-                        entry.epic
-                    )),
-                None => problems.push(format!(
-                    "{id} lists {} at entry {position}, and there is no such artifact in this \
-                     store — a roadmap orders this store's epics; create the epic or take the \
-                     entry out",
-                    entry.epic
-                )),
-                // An epic is anything on the epic family, so a `platform-epic` the off-roadmap
-                // list names is one a roadmap can place.
-                Some(listed) if !listed.document.frontmatter.kind.is_a(&ArtifactKind::Epic) => {
-                    problems.push(format!(
-                        "{id} lists {} at entry {position}, which is a {} and not an epic; a \
-                         roadmap orders epics",
-                        entry.epic, listed.document.frontmatter.kind
-                    ));
-                }
-                Some(_) => {}
-            }
-        }
+        problems.extend(listed_problems(report, id, &entries));
         if front.status == ArtifactStatus::Approved {
             approved.push(id);
             placed.extend(entries.into_iter().map(|entry| entry.epic));
@@ -195,4 +162,46 @@ pub(crate) fn check(
         problems,
         off_roadmap,
     }
+}
+
+/// What the entries of roadmap `id` list, judged against the store: an artifact it holds, on the
+/// epic family. Each epic is judged once, however often it is listed; listing it twice is
+/// `roadmap::defects`' finding, not this one's.
+fn listed_problems(report: &StoreReport, id: &ArtifactId, entries: &[roadmap::Entry]) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut named = BTreeSet::new();
+    for (index, entry) in entries.iter().enumerate() {
+        if !named.insert(&entry.epic) {
+            continue;
+        }
+        let position = index + 1;
+        let named_kind = ArtifactKind::parse(entry.epic.namespace()).ok();
+        match report.documents.get(&entry.epic) {
+            // One defect, not two: an id whose kind is not an epic is wrong whether or not it
+            // resolves, and saying it is missing as well would send the reader to create it.
+            None if !named_kind.is_some_and(|kind| kind.is_a(&ArtifactKind::Epic)) => {
+                problems.push(format!(
+                    "{id} lists {} at entry {position}, which is not an epic and is not in this \
+                     store; a roadmap orders epics",
+                    entry.epic
+                ));
+            }
+            None => problems.push(format!(
+                "{id} lists {} at entry {position}, and there is no such artifact in this store — \
+                 a roadmap orders this store's epics; create the epic or take the entry out",
+                entry.epic
+            )),
+            // An epic is anything on the epic family, so a `platform-epic` the off-roadmap list
+            // names is one a roadmap can place.
+            Some(listed) if !listed.document.frontmatter.kind.is_a(&ArtifactKind::Epic) => {
+                problems.push(format!(
+                    "{id} lists {} at entry {position}, which is a {} and not an epic; a roadmap \
+                     orders epics",
+                    entry.epic, listed.document.frontmatter.kind
+                ));
+            }
+            Some(_) => {}
+        }
+    }
+    problems
 }

@@ -3,6 +3,7 @@
 //! Same project setup as `roadmap_kind.rs`: the built binary over a fresh Git-native project whose
 //! document tree is this repository.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -114,7 +115,7 @@ fn file(project: &Path, name: &str, content: &str) -> String {
 fn roadmap_body(entries: &[(&str, &str)]) -> String {
     let mut block = String::new();
     for (epic, horizon) in entries {
-        block.push_str(&format!("- epic: {epic}\n  horizon: {horizon}\n"));
+        let _ = writeln!(block, "- epic: {epic}\n  horizon: {horizon}");
     }
     format!("# Roadmap\n\n```roadmap\n{block}```\n")
 }
@@ -198,9 +199,9 @@ fn validate(project: &Path, extra: &[&str]) -> (bool, String) {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Red: the kind hierarchy. `ArtifactKind::parent` makes `platform-epic` an epic and `team-roadmap`
-// a roadmap (the CLI accepts both, and `team-roadmap` gets the roadmap ladder with its approval
-// rung). `roadmaps.rs` asks `is_a(Epic)` in one place and `namespace() == "epic"` /
+// Red at 9dc5ea225: the kind hierarchy. `ArtifactKind::parent` makes `platform-epic` an epic and
+// `team-roadmap` a roadmap (the CLI accepts both, and `team-roadmap` gets the roadmap ladder with
+// its approval rung). `roadmaps.rs` asked `is_a(Epic)` in one place and `namespace() == "epic"` /
 // `kind == Roadmap` in the others.
 // ---------------------------------------------------------------------------------------------
 
@@ -278,7 +279,7 @@ fn a_roadmap_subkind_s_entries_are_validated() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Red: an id spelled with this store's own member name is the same artifact
+// Red at 9dc5ea225: an id spelled with this store's own member name is the same artifact
 // (`ArtifactId::local_to`: "the spelling an author chose must not decide anything").
 // ---------------------------------------------------------------------------------------------
 
@@ -302,7 +303,7 @@ fn an_epic_spelled_with_this_store_s_own_member_name_is_that_epic() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Red: what a renderer shows as the roadmap and validate does not read.
+// Red at 9dc5ea225: what a renderer shows as the roadmap and validate does not read.
 // ---------------------------------------------------------------------------------------------
 
 /// Two `roadmap` blocks: only the first is read, so the second (which a reader sees as part of the
@@ -343,7 +344,7 @@ fn a_tilde_fenced_roadmap_block_is_read_or_refused() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Red: validation accumulates (AGENTS.md invariant 3).
+// Red at 9dc5ea225: validation accumulates (AGENTS.md invariant *Validation accumulates*).
 // ---------------------------------------------------------------------------------------------
 
 #[test]
@@ -365,7 +366,7 @@ fn every_unreadable_entry_of_a_block_is_reported_together() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Red: an approved roadmap's order changed without `body`.
+// Red at 9dc5ea225: an approved roadmap's order changed without `body`.
 // ---------------------------------------------------------------------------------------------
 
 /// `redact` rewrites the block of an approved roadmap: the approved order now names a different
@@ -403,7 +404,7 @@ fn redact_does_not_change_what_an_approved_roadmap_orders() {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Green: mutant killers for guards the unit's suite does not exercise.
+// Green at 9dc5ea225: mutant killers for guards the unit's suite did not exercise.
 // ---------------------------------------------------------------------------------------------
 
 /// Kills dropping `entry.epic.namespace() == "epic"` from the existence check: a missing story is
