@@ -3909,7 +3909,7 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
     // approval and change what it approved. Evidence counts are cumulative, so a second approval
     // of the same artifact could not be told from the first: the change is a successor.
     let front = &stored.document.frontmatter;
-    if front.kind == ArtifactKind::Roadmap && front.status == ArtifactStatus::Approved {
+    if front.kind.is_a(&ArtifactKind::Roadmap) && front.status == ArtifactStatus::Approved {
         anyhow::bail!(
             "{id} is approved, and an approved roadmap is changed by a successor rather than \
              rewritten: `aep plan artifact new roadmap <name> --relate supersedes:{id}` drafts it, \
@@ -4004,6 +4004,7 @@ fn redact_literal(
         .get(&id)
         .with_context(|| opened.missing(&id))?;
     let (changes, count) = redacted_text(&id, &stored.document, literal, with)?;
+    approved_order_unchanged(&id, &stored.document, &changes)?;
     // Through the overlay: a record already packed is one the redaction did not write.
     let overlay = aep_backend_markdown::pack::Overlay::for_evidence(&evidence);
     let records = |directory: &Path| -> BTreeSet<PathBuf> {
@@ -4063,6 +4064,48 @@ fn redact_literal(
         )?,
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Refuses a redaction that would change what an approved roadmap orders.
+///
+/// `redact` exists to take a literal out of prose — a person's name in a rationale — and it may do
+/// that on an approved roadmap. What it may not do is change which epics the roadmap lists or where:
+/// that is the order somebody approved, and `body` already refuses it for the same reason. Compared
+/// as `(epic, horizon)` pairs, so a rationale may change and the order may not.
+fn approved_order_unchanged(
+    id: &ArtifactId,
+    document: &PlanningDocument,
+    changes: &BTreeMap<String, aep_domain::node::Node>,
+) -> Result<()> {
+    use aep_backend_markdown::roadmap::recorded;
+
+    let front = &document.frontmatter;
+    if !front.kind.is_a(&ArtifactKind::Roadmap) || front.status != ArtifactStatus::Approved {
+        return Ok(());
+    }
+    let Some(body) = changes
+        .get(aep_backend_markdown::backend::BODY_KEY)
+        .and_then(aep_domain::node::Node::as_text)
+    else {
+        return Ok(());
+    };
+    let order = |text: &str| {
+        recorded(text).map(|entries| {
+            entries
+                .unwrap_or_default()
+                .into_iter()
+                .map(|entry| (entry.epic, entry.horizon))
+                .collect::<Vec<_>>()
+        })
+    };
+    if order(&document.body) != order(body) {
+        anyhow::bail!(
+            "{id} is approved, and this redaction would change the epics it orders or their \
+             horizons; nothing was redacted. An approved roadmap's order changes only by a \
+             successor: `aep plan artifact new roadmap <name> --relate supersedes:{id}`"
+        );
+    }
+    Ok(())
 }
 
 /// The title, summary and body `document` has once every occurrence of `literal` reads `with`, as
@@ -6254,8 +6297,12 @@ pub(crate) fn findings(
     let reviews = review_findings(report, &recorded_at, findings_required_since);
     problems.extend(reviews.problems);
 
+    // A workspace file that does not read is reported by `graph_problems`; here it only means no
+    // spelling of this store's own member name is recognised.
+    let membership = declared_membership(repository_root).unwrap_or_default();
     let roadmaps = roadmaps::check(
         report,
+        membership.own(),
         roadmaps::approved_limit(registry, repository_root),
     );
     problems.extend(roadmaps.problems);

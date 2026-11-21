@@ -11,8 +11,8 @@
 # A changed roadmap is a successor, not a second approval of this one. `requires:` counts every
 # matching record ever made about the artifact, so a re-approval of the same roadmap could not be
 # told from the first (the note in `outbound-claim.yaml` says why). The successor `supersedes` this
-# one and earns its own `approval`; `aep plan artifact body` refuses to rewrite an approved roadmap
-# and names that route; and `aep plan artifact validate` refuses more approved roadmaps than the
+# one and earns its own `approval`; `aep plan artifact body` refuses to rewrite an approved roadmap,
+# `redact` refuses to change its order, and both name that route; and `aep plan artifact validate` refuses more approved roadmaps than the
 # profile allows, so the old one has to move to `superseded`.
 kind: roadmap
 initial: draft

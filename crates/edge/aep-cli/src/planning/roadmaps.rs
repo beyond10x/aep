@@ -69,8 +69,13 @@ pub(crate) fn approved_limit(
     }
 }
 
-/// Every roadmap rule over one opened store.
-pub(crate) fn check(report: &StoreReport, limit: Result<usize, String>) -> Roadmaps {
+/// Every roadmap rule over one opened store, whose own workspace member, if it declares one, is
+/// `own`.
+pub(crate) fn check(
+    report: &StoreReport,
+    own: Option<&aep_domain::workspace::MemberName>,
+    limit: Result<usize, String>,
+) -> Roadmaps {
     let mut problems = Vec::new();
     let mut approved: Vec<&ArtifactId> = Vec::new();
     let mut placed: BTreeSet<ArtifactId> = BTreeSet::new();
@@ -90,31 +95,57 @@ pub(crate) fn check(report: &StoreReport, limit: Result<usize, String>) -> Roadm
 
     for stored in report.documents.values() {
         let front = &stored.document.frontmatter;
-        if front.kind != ArtifactKind::Roadmap {
+        if !front.kind.is_a(&ArtifactKind::Roadmap) {
             continue;
         }
         let id = &front.id;
-        let entries = match roadmap::recorded(&stored.document.body) {
+        let mut entries = match roadmap::recorded(&stored.document.body) {
             Ok(entries) => entries.unwrap_or_default(),
-            Err(error) => {
-                problems.push(format!("{id}: {error}"));
+            Err(errors) => {
+                problems.extend(errors.iter().map(|error| format!("{id}: {error}")));
                 Vec::new()
             }
         };
+        // This store's own member name is this store's artifact written the long way, so the
+        // spelling decides nothing (`ArtifactId::local_to`), here as on an edge.
+        for entry in &mut entries {
+            entry.epic = entry.epic.local_to(own).into_owned();
+        }
         for defect in roadmap::defects(&entries) {
             problems.push(format!("{id}: {defect}"));
         }
         let mut named = BTreeSet::new();
-        for entry in &entries {
-            if entry.epic.namespace() == "epic"
-                && named.insert(&entry.epic)
-                && !report.documents.contains_key(&entry.epic)
-            {
-                problems.push(format!(
-                    "{id} lists {}, and there is no such artifact in this store — create the epic \
-                     or take the entry out",
+        for (index, entry) in entries.iter().enumerate() {
+            if !named.insert(&entry.epic) {
+                continue;
+            }
+            let position = index + 1;
+            let named_kind = ArtifactKind::parse(entry.epic.namespace()).ok();
+            match report.documents.get(&entry.epic) {
+                // One defect, not two: an id whose kind is not an epic is wrong whether or not it
+                // resolves, and saying it is missing as well would send the reader to create it.
+                None if !named_kind.is_some_and(|kind| kind.is_a(&ArtifactKind::Epic)) => problems
+                    .push(format!(
+                        "{id} lists {} at entry {position}, which is not an epic and is not in \
+                         this store; a roadmap orders epics",
+                        entry.epic
+                    )),
+                None => problems.push(format!(
+                    "{id} lists {} at entry {position}, and there is no such artifact in this \
+                     store — a roadmap orders this store's epics; create the epic or take the \
+                     entry out",
                     entry.epic
-                ));
+                )),
+                // An epic is anything on the epic family, so a `platform-epic` the off-roadmap
+                // list names is one a roadmap can place.
+                Some(listed) if !listed.document.frontmatter.kind.is_a(&ArtifactKind::Epic) => {
+                    problems.push(format!(
+                        "{id} lists {} at entry {position}, which is a {} and not an epic; a \
+                         roadmap orders epics",
+                        entry.epic, listed.document.frontmatter.kind
+                    ));
+                }
+                Some(_) => {}
             }
         }
         if front.status == ArtifactStatus::Approved {

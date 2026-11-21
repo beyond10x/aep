@@ -3,6 +3,7 @@
 //! Every case runs the built binary over a fresh Git-native project whose document tree is this
 //! repository, so the ladder and the template under test are the ones in `artifacts/`.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -111,9 +112,10 @@ fn file(project: &Path, name: &str, content: &str) -> String {
 fn roadmap_body(entries: &[(&str, &str)]) -> String {
     let mut block = String::new();
     for (epic, horizon) in entries {
-        block.push_str(&format!(
-            "- epic: {epic}\n  horizon: {horizon}\n  rationale: because\n"
-        ));
+        let _ = writeln!(
+            block,
+            "- epic: {epic}\n  horizon: {horizon}\n  rationale: because"
+        );
     }
     format!("# Roadmap\n\n```roadmap\n{block}```\n")
 }

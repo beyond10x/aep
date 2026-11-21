@@ -114,7 +114,8 @@ evidence it is stopping somebody from producing. `explain` shows that on the blo
 
 A `roadmap` orders epics. Its body carries a fenced `roadmap` block: one entry per epic, first to
 last, each with a `horizon` of `now`, `next` or `later` and an optional `rationale`. Position is the
-order; the horizon never goes back down the list.
+order; the horizon never goes back down the list. A body carries one block, fenced with backticks
+or tildes.
 
 ````markdown
 ```roadmap
@@ -129,8 +130,9 @@ order; the horizon never goes back down the list.
 Its lifecycle is the vision's: `draft → in_review → approved`, then `superseded` or `archived`.
 Reaching `approved` needs an `approval` evidence record, and `validate` needs an `approval-record`
 that `reviews` or `decides` the roadmap. An approved roadmap is not rewritten: `body` refuses, and
-the change is a successor created with `--relate supersedes:roadmap:<name>` that earns its own
-approval, after which the old one moves to `superseded`.
+`redact` may take a literal out of a rationale but not change the order. The change is a successor
+created with `--relate supersedes:roadmap:<name>` that earns its own approval, after which the old
+one moves to `superseded`. A kind ending in `-roadmap` is held to the same rules.
 
 `aep plan artifact validate` refuses an unreadable block, an entry that is not an epic or names an
 epic the store does not hold, an epic listed twice, a horizon that goes back, an approved roadmap no

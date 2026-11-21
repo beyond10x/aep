@@ -25,9 +25,16 @@
 //! inserting one would renumber every entry below it, and a diff of a roadmap would be noise. The
 //! horizon never goes back down the list, so the two cannot disagree.
 //!
-//! This module reads one block and judges what one block can judge: its shape, its vocabulary, that
-//! each entry names an epic, that no epic is named twice, and that the horizon never goes back.
-//! Whether the epic *exists* is a question about the store, and `aep plan artifact validate` asks it.
+//! # One block, either fence
+//!
+//! A body states its order once. A second top-level `roadmap` block is refused rather than ignored,
+//! because a reader sees both and a check that read only the first would approve an order nobody
+//! checked. A block fenced with tildes is read like one fenced with backticks, since a renderer shows
+//! them alike.
+//!
+//! This module reads one body and judges what one body can judge: its shape, its vocabulary, that no
+//! epic is named twice, and that the horizon never goes back. Whether each entry is an epic the
+//! store holds is a question about the store, and `aep plan artifact validate` asks it.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -82,7 +89,7 @@ impl fmt::Display for Horizon {
 /// One entry of a roadmap, as read.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct Entry {
-    /// The epic it places.
+    /// The epic it places, as written.
     pub epic: ArtifactId,
     /// How far off it is.
     pub horizon: Horizon,
@@ -101,7 +108,7 @@ struct RawEntry {
     rationale: Option<String>,
 }
 
-/// Why a block could not be read, and the body line it is on.
+/// Why a block, or one entry of it, could not be read, and the body line it is on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoadmapError {
     /// The body line, counting from 1.
@@ -124,71 +131,176 @@ impl fmt::Display for RoadmapError {
 
 impl std::error::Error for RoadmapError {}
 
-/// The entries a body's block states, `None` for a body with no block, or why the block is not
-/// readable.
+/// A top-level `roadmap` fence: the index of its opening line, and of its closing line if any.
+type Fence = (usize, Option<usize>);
+
+/// Every top-level fence in `body` whose info string is [`FENCE_INFO`], backticks or tildes.
+///
+/// Every fence is followed, whatever its info string, so a `roadmap` fence quoted inside another
+/// fence is code a renderer shows, not the roadmap.
+fn roadmap_fences(body: &str) -> Vec<Fence> {
+    let mut found = Vec::new();
+    let mut open: Option<(char, usize, bool, usize)> = None;
+    for (index, line) in body.lines().enumerate() {
+        let trimmed = line.trim();
+        match open {
+            None => {
+                if let Some((character, length, info)) = crate::findings::fence(trimmed) {
+                    open = Some((character, length, info == FENCE_INFO, index));
+                }
+            }
+            Some((character, length, named, opened)) => {
+                let closes = trimmed.chars().count() >= length
+                    && trimmed.chars().all(|found| found == character);
+                if closes {
+                    if named {
+                        found.push((opened, Some(index)));
+                    }
+                    open = None;
+                }
+            }
+        }
+    }
+    if let Some((_, _, true, opened)) = open {
+        found.push((opened, None));
+    }
+    found
+}
+
+/// The body line each entry of a block starts on, when the block's own layout says so.
+///
+/// An entry starts on a line that opens a sequence item (`- `) or a flow mapping (`{`) at the
+/// block's smallest such indentation. When that count is not the number of entries — a layout this
+/// does not recognise — every entry is placed at the block's first line, which is still a line in
+/// the block rather than a guess outside it.
+fn entry_lines(text: &str, first_line: usize, entries: usize) -> Vec<usize> {
+    let starts: Vec<(usize, usize)> = text
+        .lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let content = line.trim_start();
+            let opens = content == "-" || content.starts_with("- ") || content.starts_with('{');
+            opens.then(|| (line.len() - content.len(), index))
+        })
+        .collect();
+    let indent = starts.iter().map(|(indent, _)| *indent).min();
+    let lines: Vec<usize> = starts
+        .iter()
+        .filter(|(at, _)| Some(*at) == indent)
+        .map(|(_, index)| first_line + index)
+        .collect();
+    if lines.len() == entries {
+        lines
+    } else {
+        vec![first_line; entries]
+    }
+}
+
+/// The entries a body's block states, `None` for a body with no block, or every reason the block
+/// is not readable.
 ///
 /// An empty list (`[]`) is a roadmap that orders nothing yet, which is what the template seeds.
 ///
 /// # Errors
 ///
-/// A block opened and never closed, YAML that is not a sequence of entries, an entry with a key
-/// this format does not have or without a required one, an `epic` that is not an artifact id, or a
-/// `horizon` outside the vocabulary.
-pub fn recorded(body: &str) -> Result<Option<Vec<Entry>>, RoadmapError> {
-    let Some((opened, closed)) = crate::findings::named_fence(body, FENCE_INFO) else {
+/// A block opened and never closed, a second block, YAML that is not a sequence, and — every one of
+/// them, each at its entry's line — an entry with a key this format does not have or without a
+/// required one, an `epic` that is not an artifact id, or a `horizon` outside the vocabulary.
+pub fn recorded(body: &str) -> Result<Option<Vec<Entry>>, Vec<RoadmapError>> {
+    let fences = roadmap_fences(body);
+    let Some(&(opened, closed)) = fences.first() else {
         return Ok(None);
     };
+    let mut errors: Vec<RoadmapError> = fences
+        .iter()
+        .skip(1)
+        .map(|(second, _)| RoadmapError {
+            line: second + 1,
+            detail: format!(
+                "a second `roadmap` block (the first opens at line {}); a roadmap states its order \
+                 once, in one block",
+                opened + 1
+            ),
+        })
+        .collect();
     let Some(closed) = closed else {
-        return Err(RoadmapError {
+        errors.push(RoadmapError {
             line: opened + 1,
             detail: "the block is opened and never closed".to_owned(),
         });
+        return Err(errors);
     };
     let lines: Vec<&str> = body.lines().collect();
     let text = lines[opened + 1..closed].join("\n");
     let first_line = opened + 2;
     if text.trim().is_empty() {
-        return Err(RoadmapError {
+        errors.push(RoadmapError {
             line: first_line,
             detail: "the block is empty; a roadmap that orders nothing yet writes `[]`".to_owned(),
         });
+        return Err(errors);
     }
-    let raw: Vec<RawEntry> = serde_yaml::from_str(&text).map_err(|error| RoadmapError {
-        line: error
-            .location()
-            .map_or(first_line, |at| first_line + at.line().saturating_sub(1)),
-        detail: error.to_string(),
-    })?;
-    let mut entries = Vec::with_capacity(raw.len());
-    for (index, entry) in raw.into_iter().enumerate() {
+    let values: Vec<serde_yaml::Value> = match serde_yaml::from_str(&text) {
+        Ok(values) => values,
+        Err(error) => {
+            errors.push(RoadmapError {
+                line: error
+                    .location()
+                    .map_or(first_line, |at| first_line + at.line().saturating_sub(1)),
+                detail: error.to_string(),
+            });
+            return Err(errors);
+        }
+    };
+    let at = entry_lines(&text, first_line, values.len());
+    let mut entries = Vec::with_capacity(values.len());
+    for (index, value) in values.into_iter().enumerate() {
         let position = index + 1;
+        let line = at[index];
+        let entry: RawEntry = match serde_yaml::from_value(value) {
+            Ok(entry) => entry,
+            Err(error) => {
+                errors.push(RoadmapError {
+                    line,
+                    detail: format!("entry {position}: {error}"),
+                });
+                continue;
+            }
+        };
         let epic = ArtifactId::new(&entry.epic).map_err(|error| RoadmapError {
-            line: first_line,
+            line,
             detail: format!(
                 "entry {position}: `{}` is not an artifact id: {error}",
                 entry.epic
             ),
-        })?;
+        });
         let horizon = Horizon::parse(&entry.horizon).ok_or_else(|| RoadmapError {
-            line: first_line,
+            line,
             detail: format!(
                 "entry {position}: horizon `{}` is not one of now, next or later",
                 entry.horizon
             ),
-        })?;
-        entries.push(Entry {
-            epic,
-            horizon,
-            rationale: entry.rationale,
         });
+        match (epic, horizon) {
+            (Ok(epic), Ok(horizon)) => entries.push(Entry {
+                epic,
+                horizon,
+                rationale: entry.rationale,
+            }),
+            (epic, horizon) => errors.extend(epic.err().into_iter().chain(horizon.err())),
+        }
     }
-    Ok(Some(entries))
+    if errors.is_empty() {
+        Ok(Some(entries))
+    } else {
+        Err(errors)
+    }
 }
 
-/// What one block's entries get wrong on their own, every defect and not only the first.
+/// What one block's entries get wrong among themselves, every defect and not only the first.
 ///
-/// An entry naming something other than an epic, an epic named twice, and a horizon nearer than
-/// one above it. Whether each epic exists is not decided here: that needs the store.
+/// An epic named twice, and a horizon nearer than one above it. Entries are compared as given, so
+/// a caller that knows two spellings name one artifact passes them in one spelling.
 #[must_use]
 pub fn defects(entries: &[Entry]) -> Vec<String> {
     let mut defects = Vec::new();
@@ -196,12 +308,6 @@ pub fn defects(entries: &[Entry]) -> Vec<String> {
     let mut furthest: Option<(Horizon, &ArtifactId)> = None;
     for (index, entry) in entries.iter().enumerate() {
         let position = index + 1;
-        if entry.epic.namespace() != "epic" {
-            defects.push(format!(
-                "entry {position} names {}, which is not an epic; a roadmap orders epics",
-                entry.epic
-            ));
-        }
         if let Some(first) = seen.get(&entry.epic) {
             defects.push(format!(
                 "entry {position} lists {} twice (first at entry {first}); an epic has one place \
@@ -253,28 +359,37 @@ mod tests {
         assert_eq!(entries[0].epic.to_string(), "epic:a");
         assert_eq!(entries[0].rationale.as_deref(), Some("first"));
         assert_eq!(entries[1].horizon, Horizon::Later);
-        assert!(defects(&entries).is_empty());
+        assert_eq!(defects(&entries), Vec::<String>::new());
     }
 
     #[test]
-    fn a_horizon_outside_the_vocabulary_is_refused_and_quoted() {
-        let error = recorded(&body("- epic: epic:a\n  horizon: soon")).expect_err("refused");
-        assert!(error.detail.contains("`soon`"), "{error}");
-        assert_eq!(error.line, 4);
+    fn a_horizon_outside_the_vocabulary_is_refused_and_quoted_at_its_entry() {
+        let errors = recorded(&body(
+            "- epic: epic:a\n  horizon: now\n- epic: epic:b\n  horizon: soon",
+        ))
+        .expect_err("refused");
+        assert_eq!(errors.len(), 1);
+        assert!(errors[0].detail.contains("`soon`"), "{}", errors[0]);
+        assert_eq!(errors[0].line, 6, "entry 2 starts on body line 6");
     }
 
     #[test]
-    fn a_key_the_format_does_not_have_is_refused() {
-        let error =
-            recorded(&body("- epic: epic:a\n  horizon: now\n  rank: 1")).expect_err("refused");
-        assert!(error.detail.contains("rank"), "{error}");
+    fn every_unreadable_entry_is_reported() {
+        let errors = recorded(&body(
+            "- epic: epic:a\n  horizon: soon\n- epic: not an id\n  horizon: now\n\
+             - epic: epic:c\n  horizon: later\n  rank: 1",
+        ))
+        .expect_err("refused");
+        let lines: Vec<usize> = errors.iter().map(|error| error.line).collect();
+        assert_eq!(lines, [4, 6, 8], "{errors:?}");
+        assert!(errors[2].detail.contains("rank"), "{}", errors[2]);
     }
 
     #[test]
     fn an_unclosed_block_is_refused_at_its_opening_line() {
-        let error = recorded("intro\n```roadmap\n- epic: epic:a\n").expect_err("refused");
-        assert_eq!(error.line, 2);
-        assert!(error.detail.contains("never closed"));
+        let errors = recorded("intro\n```roadmap\n- epic: epic:a\n").expect_err("refused");
+        assert_eq!(errors[0].line, 2);
+        assert!(errors[0].detail.contains("never closed"));
     }
 
     #[test]
@@ -284,17 +399,36 @@ mod tests {
     }
 
     #[test]
+    fn a_tilde_fence_is_read_like_a_backtick_one() {
+        let entries = recorded("~~~roadmap\n- {epic: 'epic:a', horizon: now}\n~~~\n")
+            .expect("readable")
+            .expect("a block");
+        assert_eq!(entries[0].epic.to_string(), "epic:a");
+    }
+
+    #[test]
+    fn a_second_block_is_refused_at_its_opening_line() {
+        let text = format!(
+            "{}\n```roadmap\n- {{epic: 'epic:b', horizon: next}}\n```\n",
+            body("- {epic: 'epic:a', horizon: now}")
+        );
+        let errors = recorded(&text).expect_err("refused");
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].line, 7);
+        assert!(errors[0].detail.contains("second"), "{}", errors[0]);
+    }
+
+    #[test]
     fn every_defect_of_a_list_is_reported_together() {
         let entries = recorded(&body(
             "- {epic: 'epic:a', horizon: next}\n- {epic: 'epic:a', horizon: next}\n\
-             - {epic: 'story:b', horizon: next}\n- {epic: 'epic:c', horizon: now}",
+             - {epic: 'epic:c', horizon: now}",
         ))
         .expect("readable")
         .expect("a block");
         let found = defects(&entries);
-        assert_eq!(found.len(), 3, "{found:?}");
+        assert_eq!(found.len(), 2, "{found:?}");
         assert!(found[0].contains("twice"));
-        assert!(found[1].contains("not an epic"));
-        assert!(found[2].contains("goes back"));
+        assert!(found[1].contains("goes back"));
     }
 }
