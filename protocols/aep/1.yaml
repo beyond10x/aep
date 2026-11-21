@@ -86,6 +86,7 @@ artifact_kinds:
   - vision
   - product-requirements
   - initiative
+  - roadmap
   - epic
   - story
   - task

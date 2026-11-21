@@ -53,6 +53,8 @@ mod conformance_count;
 mod recorded_input;
 // Where `validate` places a review-result by its findings block, decided from facts it is handed.
 mod findings_standing;
+// The `roadmap` rules of `validate`: the entries each roadmap lists, and the approved order.
+mod roadmaps;
 // What a `task_spend` record reads out of a transcript, a run manifest or a driven run's cursor.
 mod task_spend;
 // `aep plan artifact spend`: spend per task kind and figure against the project's baseline and target.
@@ -3903,6 +3905,17 @@ fn replace_body(args: &StoreArgs, id: &str, from: &Path, edit: &BodyEdit) -> Res
         .documents
         .get_mut(&id)
         .with_context(|| not_here)?;
+    // An approved roadmap is the order somebody approved; rewriting it in place would keep the
+    // approval and change what it approved. Evidence counts are cumulative, so a second approval
+    // of the same artifact could not be told from the first: the change is a successor.
+    let front = &stored.document.frontmatter;
+    if front.kind == ArtifactKind::Roadmap && front.status == ArtifactStatus::Approved {
+        anyhow::bail!(
+            "{id} is approved, and an approved roadmap is changed by a successor rather than \
+             rewritten: `aep plan artifact new roadmap <name> --relate supersedes:{id}` drafts it, \
+             it earns its own approval, and {id} then moves to `superseded`"
+        );
+    }
     let body = edited_body(&stored.document.body, &arriving, edit);
     if !stored.document.replace_body(body) {
         outln!("{id} already has those body bytes; nothing to do");
@@ -6241,6 +6254,12 @@ pub(crate) fn findings(
     let reviews = review_findings(report, &recorded_at, findings_required_since);
     problems.extend(reviews.problems);
 
+    let roadmaps = roadmaps::check(
+        report,
+        roadmaps::approved_limit(registry, repository_root),
+    );
+    problems.extend(roadmaps.problems);
+
     Summary {
         store: opened.plan.describe(),
         files_read: report.files_read,
@@ -6251,6 +6270,7 @@ pub(crate) fn findings(
         findings_standing: reviews.standings,
         without_an_outcome: Vec::new(),
         unscoped: unscoped_stories(report, registry.lifecycles()),
+        off_roadmap: roadmaps.off_roadmap,
     }
 }
 
@@ -7562,6 +7582,13 @@ fn print_validation(summary: &Summary, strict: bool) {
             outln!("  - {note}");
         }
     }
+    // Reported, and not a problem: see `Summary::off_roadmap`.
+    if !summary.off_roadmap.is_empty() {
+        outln!("{} epic(s) on no approved roadmap:", summary.off_roadmap.len());
+        for note in &summary.off_roadmap {
+            outln!("  - {note}");
+        }
+    }
     for (heading, notes) in [
         ("recorded no findings block", &summary.without_findings),
         ("have no recorded outcome", &summary.without_an_outcome),
@@ -7619,6 +7646,10 @@ fn strictly_refused(summary: &Summary) -> Vec<String> {
         (
             "without a recorded outcome",
             summary.without_an_outcome.len(),
+        ),
+        (
+            "epic(s) on no approved roadmap",
+            summary.off_roadmap.len(),
         ),
     ] {
         if count > 0 {
@@ -9791,6 +9822,13 @@ pub(crate) struct Summary {
     /// so rather than pretending the store decided it.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     without_an_outcome: Vec<String>,
+    /// `proposed` and `active` epics that no approved roadmap lists, once one is approved.
+    ///
+    /// Reported and **not** counted as a problem: an epic is proposed before the roadmap that would
+    /// place it is approved, so refusing would break the store between every proposal and the next
+    /// approval. `--strict` refuses it, for a gate that wants the stop.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    off_roadmap: Vec<String>,
 }
 
 /// One `review-result` with no `findings` block, and where `validate` placed it.

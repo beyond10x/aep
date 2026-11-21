@@ -544,19 +544,28 @@ fn fence(line: &str) -> Option<(char, usize, &str)> {
 
 /// The first `findings` fence at the top level of `body`: the index of its opening line, and of
 /// its closing line where it has one.
+fn findings_fence(body: &str) -> Option<(usize, Option<usize>)> {
+    named_fence(body, FENCE_INFO)
+}
+
+/// The first backtick fence at the top level of `body` whose info string is `info`: the index of
+/// its opening line, and of its closing line where it has one.
+///
+/// Shared with the `roadmap` block (`crate::roadmap`), which is read by the same rule for the same
+/// reason: a block a renderer does not show as one would be a document saying two things.
 ///
 /// Every fence is followed, whatever its info string, because what is inside one is code to a
 /// renderer — a `findings` fence nested in it included — until a run of the same character at
 /// least as long closes it.
-fn findings_fence(body: &str) -> Option<(usize, Option<usize>)> {
+pub(crate) fn named_fence(body: &str, info: &str) -> Option<(usize, Option<usize>)> {
     let mut open: Option<(char, usize, bool, usize)> = None;
     for (index, line) in body.lines().enumerate() {
         let trimmed = line.trim();
         match open {
             None => {
-                if let Some((character, length, info)) = fence(trimmed) {
-                    let findings = character == '`' && info == FENCE_INFO;
-                    open = Some((character, length, findings, index));
+                if let Some((character, length, found)) = fence(trimmed) {
+                    let named = character == '`' && found == info;
+                    open = Some((character, length, named, index));
                 }
             }
             Some((character, length, findings, opened)) => {

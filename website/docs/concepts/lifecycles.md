@@ -1,3 +1,4 @@
+| `roadmap` | `draft → in_review → approved → superseded` (also `rejected`, `archived`) | `approved` costs one `approval`; a change is a successor that supersedes it, because evidence counts are cumulative |
 ---
 title: Lifecycles and rungs
 sidebar_position: 3
@@ -135,9 +136,10 @@ its source for those capabilities.
 
 ## Ladders that ship
 
-The shipped tree declares lifecycles for `vision`, `initiative`, `epic`, `story`, `task`,
-`specification`, `design`, `architecture-decision-record`, `executable-system-specification`,
-`review-result`, `blocker`, `obligation` and `outbound-claim`. A few worth knowing:
+The shipped tree declares lifecycles for `vision`, `initiative`, `roadmap`, `epic`, `story`,
+`task`, `specification`, `design`, `architecture-decision-record`,
+`executable-system-specification`, `review-result`, `blocker`, `obligation` and `outbound-claim`. A
+few worth knowing:
 
 | Kind | Ladder | Why it is shaped that way |
 |---|---|---|

@@ -8,6 +8,11 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Added
+
+- A `roadmap` artifact kind orders epics: its body's fenced `roadmap` block lists `{epic, horizon, rationale}` entries first to last, `horizon` one of `now`, `next`, `later`. Its lifecycle (`artifacts/lifecycles/roadmap.yaml`) is `draft → in_review → approved → superseded | archived`, `approved` needs an `approval` evidence record, and `aep plan artifact body` refuses to rewrite an approved roadmap; a change is a successor that `supersedes` it. `artifacts/templates/roadmap.md` seeds a new one.
+- `aep plan artifact validate` refuses an unreadable `roadmap` block, an entry that is not an epic or names one the store does not hold, an epic listed twice, a horizon that goes back down the list, an approved roadmap no `approval-record` reviews or decides, and more approved roadmaps than the project's profile allows (fact `roadmap.approved.limit`, default 1); once a roadmap is approved it lists `proposed` and `active` epics on no approved roadmap, which `--strict` refuses.
+
 ## [0.80.0] - 2026-11-10
 
 ### Added

@@ -18,9 +18,15 @@ scope:
 - confidence: cited
   path: crates/edge/aep-cli/src/planning.rs
 - confidence: cited
+  path: crates/edge/aep-cli/src/planning/roadmaps.rs
+- confidence: cited
   path: crates/edge/aep-cli/tests/roadmap_kind.rs
 - confidence: cited
+  path: crates/edge/aep-project/src/project.rs
+- confidence: cited
   path: crates/govern/aep-domain/src/artifact.rs
+- confidence: cited
+  path: crates/plan/aep-backend-markdown/src/findings.rs
 - confidence: cited
   path: crates/plan/aep-backend-markdown/src/lib.rs
 - confidence: cited
@@ -28,10 +34,16 @@ scope:
 - confidence: cited
   path: protocols/aep/1.yaml
 - confidence: cited
+  path: schemas/generated
+- confidence: cited
   path: website/docs/concepts/artifacts.md
 - confidence: cited
+  path: website/docs/concepts/lifecycles.md
+- confidence: cited
+  path: website/docs/reference/cli.md
+- confidence: cited
   path: website/docs/reference/vocabulary.md
-revision: 4
+revision: 5
 transitions:
 - {from: "draft", to: "proposed", at: "2026-11-21T02:33:12Z", actor: "human:timo", revision: 3, executor: "agent:aep-roadmap-session"}
 - {from: "proposed", to: "active", at: "2026-11-21T02:33:12Z", actor: "human:timo", revision: 4, executor: "agent:aep-roadmap-session"}

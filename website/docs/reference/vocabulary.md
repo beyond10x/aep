@@ -86,8 +86,8 @@ produce.
 
 ## Artifact kinds and statuses
 
-Kinds: `vision product-requirements initiative epic story task specification acceptance-criteria
-design feature-design component-design architecture-design api-design data-design
+Kinds: `vision product-requirements initiative roadmap epic story task specification
+acceptance-criteria design feature-design component-design architecture-design api-design data-design
 architecture-decision-record test-plan evaluation-plan verification-report review-result
 approval-record release-plan migration-plan runbook incident-report postmortem`, plus
 `executable-system-specification` under `adp/1`. Requiring `design` is satisfied by any design
