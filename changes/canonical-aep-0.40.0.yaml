@@ -11,5 +11,4 @@ source:
   version: 0.40.0
 journeys: [plan-work, specify, build-agents, operate-services]
 affectedSurfaces: [aep/docs]
-relations:
-  - {target: change:ess/standalone-0.1.0, kind: integrates-with, label: Consumes only the closed ESS conformance report}
+relations: []
