@@ -213,7 +213,7 @@ fn audit_lists_the_commands_that_seeded_the_manifest() {
     assert!(text.contains("command_accepted"), "{text}");
     assert!(text.contains("seed-design-passkeys-auth"), "{text}");
     assert!(
-        text.contains("seed-rel-design-passkeys-auth-designs-spec-passkeys-auth"),
+        text.contains("seed-rel-design-passkeys-auth/designs/spec-passkeys-auth"),
         "a relation is a command too, and leaves a record: {text}"
     );
 }
@@ -273,4 +273,57 @@ fn json_output_is_machine_readable() {
         .expect("the design is in the listing");
     assert_eq!(design["metadata"]["locator"], DESIGN);
     assert_eq!(design["data"]["status"], "approved");
+}
+
+/// A manifest of `ids`, each a draft story, written under the test's scratch directory.
+fn stories_manifest(name: &str, ids: &[&str]) -> PathBuf {
+    let directory = Path::new(env!("CARGO_TARGET_TMPDIR")).join("entity-cli");
+    std::fs::create_dir_all(&directory).expect("the scratch directory is writable");
+    let entry = "    kind: story\n    status: draft\n    location:\n      path: x.md\n";
+    let mut text = String::from("version: aep.artifacts/1\n\nartifacts:\n");
+    for id in ids {
+        text.push_str("  - id: ");
+        text.push_str(id);
+        text.push('\n');
+        text.push_str(entry);
+    }
+    let path = directory.join(format!("{name}.yaml"));
+    std::fs::write(&path, text).expect("the manifest is writable");
+    path
+}
+
+#[test]
+fn a_manifest_of_ids_that_differ_only_in_a_separator_seeds_one_entity_each() {
+    let manifest = stories_manifest(
+        "separators",
+        &["story:render-a", "story:render_a", "story:render.a"],
+    );
+    let manifest = manifest.to_str().expect("a printable path");
+    let output = aep(&["plan", "entity", "list", "--artifacts", manifest]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    assert_eq!(stdout(&output).lines().count(), 3, "{}", stdout(&output));
+}
+
+#[test]
+fn validate_names_two_manifest_artifacts_that_would_share_one_address() {
+    // A locator key cannot hold `/`: `story:a/b` is addressed as `story/a-b`, where `story:a-b`
+    // is. `govern validate` called this manifest valid while every verb that seeds it refused.
+    let manifest = stories_manifest("one-address", &["story:a-b", "story:a/b"]);
+    let manifest = manifest.to_str().expect("a printable path");
+
+    let validated = aep(&["govern", "validate", "--artifacts", manifest]);
+    let text = format!("{}{}", stdout(&validated), stderr(&validated));
+    assert_ne!(code(&validated), 0, "{text}");
+    assert!(
+        text.contains("`story:a-b` and `story:a/b`") && text.contains("one address"),
+        "the problem names both artifacts: {text}"
+    );
+
+    let listed = aep(&["plan", "entity", "list", "--artifacts", manifest]);
+    let refusal = stderr(&listed);
+    assert_ne!(code(&listed), 0);
+    assert!(
+        refusal.contains("`story:a-b` and `story:a/b`"),
+        "the refusal names both artifacts, not only the address: {refusal}"
+    );
 }

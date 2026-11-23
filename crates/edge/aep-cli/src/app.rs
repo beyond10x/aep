@@ -1529,6 +1529,8 @@ fn validate(
         let graph = read_artifacts(path)?;
         let lifecycle_errors = graph.validate_lifecycles(outcome.registry.lifecycles());
         problems.extend(lifecycle_errors.as_slice().iter().map(ToString::to_string));
+        // The seeder's own check: a manifest this calls valid is one `plan entity` can seed.
+        problems.extend(seed::collisions(&graph));
     }
 
     let summary = Summary {

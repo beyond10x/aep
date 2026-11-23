@@ -590,3 +590,24 @@ fn a_crossing_between_two_200_character_ids_is_written_and_taken_back() {
     let shown = ok(&alpha, &["show", &source]);
     assert!(!shown.contains(&format!("beta/{target}")), "{shown}");
 }
+
+#[test]
+fn a_store_holding_ids_that_differ_only_in_a_separator_still_takes_writes() {
+    // `story:render-a`, `story:render_a` and `story:render.a` are three ids `validate` accepts.
+    // Opening the store seeded all three under one command identifier, so every later write — to
+    // any artifact — was refused as a reuse of an idempotency key.
+    let project = project("separators");
+    for name in ["render-a", "render_a", "render.a"] {
+        ok(&project, &["new", "story", name, "--title", name]);
+    }
+    let validated = ok(&project, &["validate"]);
+    assert!(validated.contains("valid"), "{validated}");
+
+    ok(&project, &["new", "story", "other", "--title", "Other"]);
+    ok(
+        &project,
+        &["relate", "story:render_a", "depends_on", "story:render-a"],
+    );
+    let shown = ok(&project, &["show", "story:render_a"]);
+    assert!(shown.contains("story:render-a"), "{shown}");
+}
