@@ -8,6 +8,12 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact graph --format mermaid` gives every artifact its own node: the node id keeps letters and digits and writes every other character as `_` and its hex code, so `story:a-b` and `story:a_b` no longer share one node (the label still carries the artifact id).
+- `aep plan artifact board --format markdown --kind <kind>` says `<n> of <total> artifact(s) in the planning store match --kind <kind>` and names `aep plan artifact board --kind <kind> --format markdown` as its generator; it reported the matching count as the store's and named the unfiltered command.
+- `aep plan artifact board --format markdown` keeps the provider of a reference the project has no link for (`jira:EX-42, zendesk:EX-42`, was `EX-42, EX-42`); a linked reference still shows its key as the link text.
+
 ## [0.80.0] - 2026-11-10
 
 ### Added

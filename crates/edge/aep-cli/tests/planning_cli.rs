@@ -1174,6 +1174,98 @@ fn a_column_takes_its_description_from_the_ladder_that_governs_it() {
     );
 }
 
+/// A board narrowed by `--kind` says so, and does not pass its match count off as the store's.
+///
+/// The fixture holds three stories among seven artifacts. The story-only page used to open with
+/// "3 artifact(s) in the planning store" and name the unfiltered command as what generated it, so a
+/// copied page misreported the store and could not be regenerated from what it said.
+#[test]
+fn a_kind_filtered_markdown_board_names_its_filter_and_the_store_total() {
+    let output = aep(&[
+        "plan", "artifact", "board", "--format", "markdown", "--kind", "story", "--store", FIXTURE,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let page = stdout(&output);
+    assert!(
+        page.contains(&format!(
+            "3 of {FIXTURE_ARTIFACTS} artifact(s) in the planning store match `--kind story`"
+        )),
+        "the matching count is told apart from the store's: {page}"
+    );
+    assert!(
+        page.contains("`aep plan artifact board --kind story --format markdown`"),
+        "the page names the command that generated it, filter included: {page}"
+    );
+
+    let whole = stdout(&aep(&[
+        "plan", "artifact", "board", "--format", "markdown", "--store", FIXTURE,
+    ]));
+    assert!(
+        whole.starts_with(&format!(
+            "{FIXTURE_ARTIFACTS} artifact(s) in the planning store, one column per status."
+        )),
+        "the unfiltered page keeps its wording: {whole}"
+    );
+}
+
+/// A reference with no link keeps its tracker's name on the markdown board.
+///
+/// One story carried `jira:EX-42` and `zendesk:EX-42`; the JSON board told them apart and the page
+/// printed `EX-42, EX-42`. The key alone is only enough where a link says which tracker it is.
+#[test]
+fn an_unlinked_reference_keeps_its_provider_on_the_markdown_board() {
+    let project = scratch("aep-plan-board-references");
+    let store = project.join(".engineering/planning");
+    std::fs::create_dir_all(&store).expect("the store directory is writable");
+    let at = printable(&store);
+    let repository = root();
+    let tree = printable(&repository);
+    let made = aep(&[
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "references",
+        "--title",
+        "Two tracker records",
+        "--ref",
+        "jira:EX-42",
+        "--ref",
+        "zendesk:EX-42",
+        "--store",
+        at,
+        "--root",
+        tree,
+    ]);
+    assert_eq!(code(&made), 0, "{}", stderr(&made));
+
+    let board = |at: &str| {
+        let output = aep(&[
+            "plan", "artifact", "board", "--format", "markdown", "--store", at, "--root", tree,
+        ]);
+        assert_eq!(code(&output), 0, "{}", stderr(&output));
+        stdout(&output)
+    };
+    let page = board(at);
+    assert!(
+        page.contains("| jira:EX-42, zendesk:EX-42 |"),
+        "with no link configured the provider is all that tells the two apart: {page}"
+    );
+
+    // Where the project links one tracker, that reference is a link and the other keeps its name.
+    write(
+        &project.join(".engineering/project.yaml"),
+        "version: aep.project/5\nprotocol: adp/1\nprofile: development.standard\n\
+         planning_scope: references\nstore:\n  git: {}\nproviders:\n  \
+         jira: https://tracker.example/browse/{key}\n",
+    );
+    let linked = board(at);
+    assert!(
+        linked.contains("| [EX-42](https://tracker.example/browse/EX-42), zendesk:EX-42 |"),
+        "a linked reference is the link, an unlinked one keeps its provider: {linked}"
+    );
+}
+
 #[test]
 fn the_graph_renders_as_mermaid_with_ids_a_diagram_can_carry() {
     let output = aep(&[
@@ -1184,12 +1276,65 @@ fn the_graph_renders_as_mermaid_with_ids_a_diagram_can_carry() {
 
     assert!(diagram.starts_with("flowchart LR\n"), "{diagram}");
     assert!(
-        diagram.contains("story_passkey_login[\"story:passkey-login<br/>"),
-        "the node id is mangled and the real id is the label: {diagram}"
+        diagram.contains("story_3apasskey_2dlogin[\"story:passkey-login<br/>"),
+        "the node id is escaped and the real id is the label: {diagram}"
     );
     assert!(
         !diagram.contains("    story:passkey-login["),
         "a raw `:` in a node id is Mermaid syntax, not a name: {diagram}"
+    );
+}
+
+/// Two artifacts whose ids differ only in a character Mermaid cannot carry are two nodes.
+///
+/// `story:a-b` and `story:a_b` both mangled to `story_a_b`, so the diagram declared one node twice,
+/// Mermaid drew one box, and the edge between them became a loop on it: the JSON graph had both
+/// artifacts and the picture of it had one.
+#[test]
+fn the_mermaid_graph_keeps_artifacts_apart_whose_ids_mangle_alike() {
+    let store = scratch("aep-plan-mermaid-distinct-ids");
+    let at = printable(&store);
+    let repository = root();
+    let tree = printable(&repository);
+    for (name, relate) in [("a-b", None), ("a_b", Some("blocks:story:a-b"))] {
+        let mut args = vec![
+            "plan", "artifact", "new", "story", name, "--title", name, "--store", at, "--root",
+            tree,
+        ];
+        if let Some(edge) = relate {
+            args.extend(["--relate", edge]);
+        }
+        let made = aep(&args);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+    }
+
+    let output = aep(&[
+        "plan", "artifact", "graph", "--format", "mermaid", "--store", at, "--root", tree,
+    ]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let diagram = stdout(&output);
+
+    let node_of = |id: &str| -> String {
+        let label = format!("[\"{id}<br/>");
+        let line = diagram
+            .lines()
+            .find(|line| line.contains(&label))
+            .unwrap_or_else(|| panic!("no node is labelled `{id}`: {diagram}"));
+        line.trim()
+            .split('[')
+            .next()
+            .expect("a node id before its label")
+            .to_owned()
+    };
+    let dashed = node_of("story:a-b");
+    let underscored = node_of("story:a_b");
+    assert_ne!(
+        dashed, underscored,
+        "two artifacts were given one diagram id: {diagram}"
+    );
+    assert!(
+        diagram.contains(&format!("    {underscored} -->|\"blocks\"| {dashed}\n")),
+        "the edge joins the two nodes rather than looping on one: {diagram}"
     );
 }
 
