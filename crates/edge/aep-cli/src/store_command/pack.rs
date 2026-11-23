@@ -1,7 +1,7 @@
 //! `aep plan store pack`: closed artifacts and their evidence, moved into one `aep.pack/1` file.
 //!
 //! The plan is computed first, from the loose files, the packs already there and what Git holds at
-//! `HEAD`, and printed; `--dry-run` stops there. Only bytes Git has committed unchanged are packed
+//! `HEAD`, with the project file's version rewrite, and printed; `--dry-run` stops there. Only bytes Git has committed unchanged are packed
 //! or removed, so every byte this verb removes is held by the new pack *and* by Git. The writes are
 //! ordered so that each record is held by a loose file or a pack on disk at every point: the pack is
 //! written and read back first, the project file is flipped second, the loose files go last.
@@ -107,15 +107,22 @@ impl Store {
         Ok(parsed)
     }
 
-    /// Writes the project file with its `version:` set to `to`, when it is not already.
-    pub(super) fn set_version(&self, to: ProjectVersion) -> Result<bool> {
+    /// The project file with its `version:` set to `to`, or `None` when it selects `to` already.
+    ///
+    /// Prepared and read back before a verb writes anything, dry run included: the reader accepts
+    /// layouts the line swap cannot rewrite (`version:` with its value on the next line), and a
+    /// refusal found after the packs or loose files changed would leave them changed.
+    pub(super) fn version_change(&self, to: ProjectVersion) -> Result<Option<VersionChange>> {
         if self.config.version == to {
-            return Ok(false);
+            return Ok(None);
         }
         let from = self.config.version.as_str();
-        let text = swap_version(&self.selector_text, from, to.as_str())?;
-        write_atomic(&self.selector_path, text.as_bytes())?;
-        Ok(true)
+        let text = swap_version(&self.selector_text, from, to.as_str())
+            .map_err(|error| anyhow::anyhow!("{error}; nothing was written"))?;
+        Ok(Some(VersionChange {
+            path: self.selector_path.clone(),
+            text,
+        }))
     }
 
     fn packs_directory(&self) -> &Path {
@@ -129,6 +136,19 @@ impl Store {
             count_files(&self.engineering.join(GIT_EVIDENCE_DIRECTORY)),
             count_files(self.packs_directory()),
         ]
+    }
+}
+
+/// A project file rewrite that [`Store::version_change`] prepared and checked.
+pub(super) struct VersionChange {
+    path: PathBuf,
+    text: String,
+}
+
+impl VersionChange {
+    /// Writes the prepared project file.
+    pub(super) fn write(&self) -> Result<()> {
+        write_atomic(&self.path, self.text.as_bytes())
     }
 }
 
@@ -944,19 +964,22 @@ pub(crate) fn run(args: &PackArgs) -> Result<ExitCode> {
         )
     };
     // Every pack must read before anything is decided about what a pack holds.
-    store.parsed_packs()?;
+    let held_packs = !store.parsed_packs()?.is_empty();
     let plan = plan(&store, &repo)?;
+    // A `/5` store that holds packs is a `/6` one, whether or not this run packs more. The rewrite
+    // is prepared before anything is written, so a project file it cannot rewrite refuses first.
+    let version = if held_packs || plan.bytes.is_some() {
+        store.version_change(ProjectVersion::V6)?
+    } else {
+        None
+    };
     let before = store.counts();
     if plan.removals.is_empty() && plan.bytes.is_none() {
         for (path, why) in &plan.kept {
             outln!("  keep {path}: {why}");
         }
-        // A `/5` store that holds packs is a `/6` one, whether or not this run packs more.
-        if !args.dry_run
-            && store.config.version != ProjectVersion::V6
-            && !store.parsed_packs()?.is_empty()
-        {
-            store.set_version(ProjectVersion::V6)?;
+        if let Some(version) = version.as_ref().filter(|_| !args.dry_run) {
+            version.write()?;
             outln!("project.yaml: {PROJECT_VERSION_V5} -> {PROJECT_VERSION_V6}");
         }
         outln!("nothing to pack: no closed artifact has bytes Git has committed unchanged");
@@ -975,8 +998,8 @@ pub(crate) fn run(args: &PackArgs) -> Result<ExitCode> {
         ensure_attributes(&packs)?;
         write_pack(&packs, bytes)?;
     }
-    if !store.parsed_packs()?.is_empty() {
-        store.set_version(ProjectVersion::V6)?;
+    if let Some(version) = &version {
+        version.write()?;
     }
     let mut removed = 0_usize;
     for path in &plan.removals {

@@ -880,3 +880,90 @@ fn unpack_refuses_a_path_two_packs_hold_differently_until_from_chooses() {
         );
     }
 }
+
+#[test]
+fn unpack_with_one_id_given_twice_restores_it_once() {
+    let project = loose_store("unpack-twice");
+    let closed_a_before = closed_a(&project);
+    store_ok(&project, &["pack"]);
+    commit(&project, "packed");
+    let output = store(&project, &["unpack", "story:closed-a", "story:closed-a"]);
+    assert_eq!(output.status.code(), Some(0), "{}", said(&output));
+    assert!(
+        !said(&output).contains("is not packed in any pack"),
+        "{}",
+        said(&output)
+    );
+    assert_eq!(
+        closed_a(&project),
+        closed_a_before,
+        "the story and its evidence are restored"
+    );
+    assert_eq!(packs(&project).len(), 1);
+    assert_eq!(project_version(&project), "version: aep.project/6");
+}
+
+/// The project file rewritten with its version on the line after `version:`: YAML the reader
+/// accepts and the version swap cannot rewrite.
+fn version_on_its_own_line(project: &Path) {
+    let file = engineering(project).join("project.yaml");
+    let text = std::fs::read_to_string(&file).expect("the project file reads");
+    let (first, rest) = text.split_once('\n').expect("a first line");
+    let version = first
+        .strip_prefix("version: ")
+        .expect("the first line names the version");
+    std::fs::write(&file, format!("version:\n  {version}\n{rest}")).expect("writable");
+    commit(project, "the version on its own line");
+}
+
+/// `aep plan store <args>` exits 1 naming the project file's version line and changes no file.
+fn refuses_the_version_rewrite_before_writing(project: &Path, args: &[&str]) {
+    let before = files(project);
+    let output = store(project, args);
+    assert_eq!(output.status.code(), Some(1), "{}", said(&output));
+    assert!(
+        said(&output).contains("the project file has no `version:"),
+        "{}",
+        said(&output)
+    );
+    assert_eq!(
+        files(project),
+        before,
+        "`store {}` changed files",
+        args.join(" ")
+    );
+}
+
+#[test]
+fn pack_refuses_a_project_file_it_cannot_rewrite_before_writing_anything() {
+    let project = loose_store("pack-version-layout");
+    version_on_its_own_line(&project);
+    refuses_the_version_rewrite_before_writing(&project, &["pack", "--dry-run"]);
+    refuses_the_version_rewrite_before_writing(&project, &["pack"]);
+    assert!(!engineering(&project).join("packs").exists());
+}
+
+#[test]
+fn unpack_refuses_a_project_file_it_cannot_rewrite_before_writing_anything() {
+    let project = loose_store("unpack-version-layout");
+    store_ok(&project, &["pack"]);
+    commit(&project, "packed");
+    version_on_its_own_line(&project);
+    refuses_the_version_rewrite_before_writing(&project, &["unpack", "--all", "--dry-run"]);
+    refuses_the_version_rewrite_before_writing(&project, &["unpack", "--all"]);
+    assert_eq!(packs(&project).len(), 1);
+}
+
+#[test]
+fn unpack_with_no_pack_left_refuses_a_project_file_it_cannot_rewrite_before_writing_anything() {
+    let project = loose_store("unpack-no-pack-version-layout");
+    store_ok(&project, &["pack"]);
+    commit(&project, "packed");
+    for file in packs(&project) {
+        std::fs::remove_file(engineering(&project).join("packs").join(file)).expect("removable");
+    }
+    version_on_its_own_line(&project);
+    refuses_the_version_rewrite_before_writing(&project, &["unpack", "--all", "--dry-run"]);
+    refuses_the_version_rewrite_before_writing(&project, &["unpack", "--all"]);
+    assert!(engineering(&project).join("packs/.gitattributes").exists());
+}
