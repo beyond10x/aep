@@ -8,12 +8,14 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.80.1] - 2026-11-23
+
 ### Fixed
 
-- `aep plan artifact graph --format mermaid` gives every artifact its own node: the node id keeps letters and digits and writes every other character as `_` and its hex code, so `story:a-b` and `story:a_b` no longer share one node (the label still carries the artifact id).
+- `aep plan artifact graph --format mermaid` gives every artifact its own node: the node id keeps letters and digits and writes every other character as `_` and its hex code, so two ids that differ only in `-` against `_` no longer share one node (the label still carries the artifact id).
 - `aep plan artifact board --format markdown --kind <kind>` says `<n> of <total> artifact(s) in the planning store match --kind <kind>` and names `aep plan artifact board --kind <kind> --format markdown` as its generator; it reported the matching count as the store's and named the unfiltered command.
 - `aep plan artifact board --format markdown` keeps the provider of a reference the project has no link for (`jira:EX-42, zendesk:EX-42`, was `EX-42, EX-42`); a linked reference still shows its key as the link text.
-- A store holding artifact ids that differ only in a separator (`story:render-a`, `story:render_a`) no longer validates and then refuses every write with "idempotency key `seed-…` was already used": seeding gives each artifact id and each edge its own command identifier. Two manifest artifacts at one address (`story:a/b` beside `story:a-b`) are reported by `aep govern validate --artifacts` and refused by seeding, naming both, before anything is written.
+- A store holding artifact ids that differ only in a separator (`-` against `_` or `.`) no longer validates and then refuses every write with "idempotency key `seed-…` was already used": seeding gives each artifact id and each edge its own command identifier. Two manifest artifacts at one address (`story:a/b` beside `story:a-b`) are reported by `aep govern validate --artifacts` and refused by seeding, naming both, before anything is written.
 - `aep plan store unpack` restores an artifact whose id is given more than once; it refused it as "not packed in any pack".
 - `aep plan store pack` and `unpack` refuse a project file whose `version:` they cannot rewrite (its value on the next line) before writing anything, `--dry-run` included; they wrote the pack, or restored files and removed a pack, and then refused.
 - `aep plan artifact relate` and `new --relate` refuse a version pin (`story:target@1`) on an edge to the store's own artifact, naming the pin and the id the edge would store; they stored the edge without the pin and answered with it. A crossing into another member keeps its pin.
@@ -1899,7 +1901,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.0...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.1...HEAD
+[0.80.1]: https://github.com/beyond10x/aep/compare/0.80.0...0.80.1
 [0.80.0]: https://github.com/beyond10x/aep/compare/0.79.1...0.80.0
 [0.79.1]: https://github.com/beyond10x/aep/compare/0.79.0...0.79.1
 [0.79.0]: https://github.com/beyond10x/aep/compare/0.78.0...0.79.0
