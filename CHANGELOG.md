@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.80.1] - 2026-11-23
+
 ### Fixed
 
 - `aep plan artifact graph --format mermaid` gives every artifact its own node: the node id keeps letters and digits and writes every other character as `_` and its hex code, so two ids that differ only in `-` against `_` no longer share one node (the label still carries the artifact id).
@@ -1899,7 +1901,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.0...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.1...HEAD
+[0.80.1]: https://github.com/beyond10x/aep/compare/0.80.0...0.80.1
 [0.80.0]: https://github.com/beyond10x/aep/compare/0.79.1...0.80.0
 [0.79.1]: https://github.com/beyond10x/aep/compare/0.79.0...0.79.1
 [0.79.0]: https://github.com/beyond10x/aep/compare/0.78.0...0.79.0
