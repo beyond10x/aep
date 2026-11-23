@@ -2422,7 +2422,8 @@ fn create(args: &NewArgs) -> Result<ExitCode> {
     let membership = declared_membership(&root)?;
     for value in &args.relate {
         let (relation, target) = parse_relation(value)?;
-        let (target, _) = edge_target(&target, &membership, &root)?;
+        let (target, crossing) = edge_target(&target, &membership, &root)?;
+        refuse_a_pin_on_a_local_edge(&id, relation, &target, crossing)?;
         frontmatter
             .relations
             .push(aep_domain::artifact::ArtifactRelation::new(
@@ -3157,6 +3158,32 @@ fn relate_through_a_command(
     Ok(())
 }
 
+/// Refuses a version pin on an edge to this store's own artifact.
+///
+/// A local edge is the contract's relation between two entities ([`relate_through_a_command`]),
+/// and an entity reference names no version: the store keeps `{<relation>: <id>}` (git-native
+/// design § 4.2) in every backend. A pin was dropped on the way in while the answer echoed it, so
+/// the success and the next read disagreed. A crossing has no local entity and travels as the
+/// authored reference, so it keeps its pin and is not refused here. What a review approved is
+/// pinned on the review's own evidence (`reviewed_version`), not on the edge.
+fn refuse_a_pin_on_a_local_edge(
+    source: &ArtifactId,
+    relation: RelationKind,
+    target: &ArtifactRef,
+    crossing: bool,
+) -> Result<()> {
+    match target.version() {
+        Some(version) if !crossing => bail!(
+            "`{source} {relation} {target}` pins `{}` to version `{version}`, and an edge to this \
+             store's own artifact is stored by its id alone, so the pin would be dropped; relate \
+             `{}` without `@{version}`",
+            target.id(),
+            target.id()
+        ),
+        _ => Ok(()),
+    }
+}
+
 /// Where an edge's target lives, seen from the store `membership` was read in: `(target, false)`
 /// for this store's own artifact, `(target, true)` for a **crossing** into another declared member.
 ///
@@ -3352,6 +3379,7 @@ fn relate(args: &StoreArgs, id: &str, relation: &str, target: Option<&str>) -> R
     let root = args.repository_root();
     let membership = declared_membership(&root)?;
     let (target, crossing) = edge_target(&target, &membership, &root)?;
+    refuse_a_pin_on_a_local_edge(&id, relation, &target, crossing)?;
 
     if !crossing && !opened.report.documents.contains_key(target.id()) {
         bail!(
@@ -4619,6 +4647,34 @@ fn print_waves(derived: &waves::Derivation) {
     );
 }
 
+/// One artifact of `opened` as both `show` and a served read answer it: [`shown_from`], with a
+/// review's recorded outcomes joined on.
+///
+/// The join is here and not in either reader because it reads the store's history, which
+/// [`shown_from`] cannot see. The served read once took [`shown_from`] alone and answered a review
+/// with an empty `outcomes` list while `show` printed the outcome the store held.
+///
+/// On the review, not on the artifact it is about. A reader holding a review id is asking whether
+/// that lens ever changed anything, and the record that answers it is filed against the reviewed
+/// artifact — so a read that only showed what is filed *here* would answer *no* to a question the
+/// store holds the answer to.
+fn shown_joined(
+    opened: &Opened,
+    id: &ArtifactId,
+    providers: Option<&aep_domain::project::ProjectConfig>,
+) -> Result<Shown> {
+    let stored = opened
+        .report
+        .documents
+        .get(id)
+        .with_context(|| opened.missing(id))?;
+    let mut shown = shown_from(stored, providers);
+    if stored.document.frontmatter.kind == ArtifactKind::ReviewResult {
+        shown.outcomes = outcomes_of(opened, id);
+    }
+    Ok(shown)
+}
+
 /// `aep plan artifact show`
 ///
 /// One artifact, printed: the frontmatter fields a reader asks about, then the body as the store
@@ -4717,23 +4773,11 @@ fn show(args: &StoreArgs, id: &str, body_only: bool) -> Result<ExitCode> {
         );
     }
     let opened = open(&args.location, false)?;
-    let stored = opened
-        .report
-        .documents
-        .get(&id)
-        .with_context(|| opened.missing(&id))?;
     // The configuration only, and a failure to read it is not a failure to show an artifact: a
     // store handed to `--store` outside any project has no project.yaml, and printing the
     // references without their links is the right answer there.
     let config = aep_project::project::load_config(&args.repository_root()).ok();
-    let mut shown = shown_from(stored, config.as_ref());
-    // On the review, not on the artifact it is about. A reader holding a review id is asking
-    // whether that lens ever changed anything, and the record that answers it is filed against the
-    // reviewed artifact — so a verb that only showed what is filed *here* would answer *no* to a
-    // question the store holds the answer to.
-    if stored.document.frontmatter.kind == ArtifactKind::ReviewResult {
-        shown.outcomes = outcomes_of(&opened, &id);
-    }
+    let shown = shown_joined(&opened, &id, config.as_ref())?;
 
     // The bytes and nothing else — no labels, no blank line, no newline this verb added. What
     // `body --from` would write straight back, which is what makes *read it, edit it, hand it
@@ -5619,6 +5663,12 @@ fn review_history(opened: &Opened) -> Vec<aep_backend_markdown::journal::Entry> 
 /// record ([`Opened::journal`]) holds the order the store was actually written in, which is the
 /// order a second round happened in, and that is the order here. A review the record says nothing
 /// about falls to the id, so the answer is at least stable.
+///
+/// A review `new` writes carries no transition, so in a Git-native plan the journal holds no entry
+/// for it and the record of when it was written is the commit that added its file: committed
+/// reviews come in the order of those commits ([`git_record::committed_order`]), and a review not
+/// committed yet comes after them. Without that every review fell to its id, and `round-10` sorted
+/// before `round-9`, so the default ledger compared the newer round to the older one.
 fn reviews_of<'a>(
     opened: &'a Opened,
     subject: &ArtifactId,
@@ -5629,6 +5679,16 @@ fn reviews_of<'a>(
         .values()
         .filter(|stored| reviews(stored, subject))
         .collect();
+    let committed: BTreeMap<String, usize> = match &opened.plan {
+        Plan::Git { root, .. } => {
+            let paths: Vec<&str> = found
+                .iter()
+                .map(|stored| stored.relative_path.as_str())
+                .collect();
+            git_record::committed_order(root, &paths).unwrap_or_default()
+        }
+        Plan::Sqlite { .. } | Plan::Postgres { .. } => BTreeMap::new(),
+    };
     let order: BTreeMap<ArtifactId, usize> = opened
         .log()
         .map(|(entries, _)| {
@@ -5642,6 +5702,10 @@ fn reviews_of<'a>(
     found.sort_by(|left, right| {
         let key = |stored: &aep_backend_markdown::StoredDocument| {
             (
+                // `None` sorts first, so a review not committed yet is made to sort last.
+                committed
+                    .get(&stored.relative_path)
+                    .map_or((1, 0), |rank| (0, *rank)),
                 order.get(&stored.document.frontmatter.id).copied(),
                 stored.document.frontmatter.id.to_string(),
             )
@@ -10060,13 +10124,8 @@ pub(crate) fn documents_of(
 pub(crate) fn shown_of(location: &StoreLocation, id: &str) -> Result<Shown> {
     let id = artifact_id(id)?;
     let opened = open(location, false)?;
-    let stored = opened
-        .report
-        .documents
-        .get(&id)
-        .with_context(|| opened.missing(&id))?;
     let config = aep_project::project::load_config(&location.repository_root()).ok();
-    Ok(shown_from(stored, config.as_ref()))
+    shown_joined(&opened, &id, config.as_ref())
 }
 
 /// Where one artifact may go next, what each rung costs, and what it already holds.

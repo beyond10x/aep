@@ -893,6 +893,114 @@ fn an_edge_to_an_artifact_the_store_does_not_hold_is_refused() {
     );
 }
 
+/// A local edge is stored as its target's id, so a version pin on one is refused by `relate` and by
+/// `new --relate`, and nothing is written. Before, `relate` stored `story:target` and answered
+/// `story:target@1`: the answer named an edge the store did not hold.
+#[test]
+fn a_version_pin_on_a_local_edge_is_refused_rather_than_answered_and_dropped() {
+    let store = scratch("aep-plan-local-pin");
+    for name in ["source", "target"] {
+        let made = aep(&[
+            "plan",
+            "artifact",
+            "new",
+            "story",
+            name,
+            "--title",
+            name,
+            "--store",
+            printable(&store),
+        ]);
+        assert_eq!(code(&made), 0, "{}", stderr(&made));
+    }
+    let before = std::fs::read_to_string(store.join("story/source.md")).expect("readable");
+
+    let refused = aep(&[
+        "plan",
+        "artifact",
+        "relate",
+        "story:source",
+        "depends_on",
+        "story:target@1",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&refused), 1, "{}", stdout(&refused));
+    assert!(
+        stdout(&refused).is_empty(),
+        "a refusal prints no success answer: {}",
+        stdout(&refused)
+    );
+    let said = stderr(&refused);
+    assert!(
+        said.contains("story:target@1") && said.contains("pin") && said.contains("story:target"),
+        "the refusal names the pinned target, the pin and the id a local edge stores: {said}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(store.join("story/source.md")).expect("readable"),
+        before,
+        "a refused edge changes nothing"
+    );
+
+    let created = aep(&[
+        "plan",
+        "artifact",
+        "new",
+        "story",
+        "pinned-at-birth",
+        "--title",
+        "Pinned at birth",
+        "--relate",
+        "depends_on:story:target@1",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&created), 1, "{}", stdout(&created));
+    assert!(
+        stderr(&created).contains("story:target@1"),
+        "{}",
+        stderr(&created)
+    );
+    assert!(
+        !store.join("story/pinned-at-birth.md").exists(),
+        "a refused `new` writes no document"
+    );
+
+    // The same edge without the pin is the edge a local relation stores, and it is accepted.
+    let related = aep(&[
+        "plan",
+        "artifact",
+        "relate",
+        "story:source",
+        "depends_on",
+        "story:target",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&related), 0, "{}", stderr(&related));
+    let answered: serde_json::Value = serde_json::from_str(&stdout(&related)).expect("JSON");
+    let shown = aep(&[
+        "plan",
+        "artifact",
+        "show",
+        "story:source",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&shown), 0, "{}", stderr(&shown));
+    let shown: serde_json::Value = serde_json::from_str(&stdout(&shown)).expect("JSON");
+    assert_eq!(
+        shown["relations"][0]["target"], answered["target"],
+        "the answer of a write and a later read name the same target"
+    );
+}
+
 #[test]
 fn validate_lists_every_problem_in_a_broken_store() {
     // Three problems of three different classes, and an exact count: "some problems" would pass
@@ -6198,6 +6306,102 @@ fn the_findings_verb_takes_the_two_reviews_it_is_told_and_exits_zero_with_one_re
         Some(1),
         "{}",
         stdout(&chosen)
+    );
+}
+
+/// The default pair is the two newest reviews in the order the store recorded them: in a Git-native
+/// store, the order of the commits that added them. Before, the default fell to the ids, so
+/// `round-10` sorted before `round-9` and round 10's new finding was reported as resolved. Both
+/// commits carry one date, so only the commit order can tell them apart.
+#[test]
+fn the_default_findings_ledger_compares_reviews_in_the_order_git_recorded_them() {
+    let project = scratch("aep-plan-findings-commit-order");
+    let at = "2026-10-01T00:00:00Z";
+    fixture_git(&project, at, &["init", "--quiet"]);
+    fixture_git(&project, at, &["config", "user.name", "Findings Fixture"]);
+    fixture_git(
+        &project,
+        at,
+        &["config", "user.email", "findings-fixture@example.invalid"],
+    );
+    let store = project.join("planning");
+    std::fs::create_dir_all(&store).expect("the planning directory is writable");
+    let drafts = scratch("aep-plan-findings-commit-order-drafts");
+    subject_epic(&store);
+    for round in ["round-9", "round-10"] {
+        review_of(
+            &store,
+            &drafts,
+            round,
+            "epic:objectives",
+            &findings_body(&finding("plan.md", 1, &format!("{round} finding"))),
+        );
+        fixture_git(&project, at, &["add", "--all"]);
+        fixture_git(
+            &project,
+            at,
+            &["commit", "--quiet", "--no-verify", "-m", round],
+        );
+    }
+
+    let ledger = aep(&[
+        "plan",
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&ledger), 0, "{}", stderr(&ledger));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&ledger)).expect("JSON");
+    let messages = |key: &str| -> Vec<String> {
+        value[key]
+            .as_array()
+            .unwrap_or_else(|| panic!("`{key}` is an array: {value}"))
+            .iter()
+            .map(|finding| finding["message"].as_str().unwrap_or_default().to_owned())
+            .collect()
+    };
+    assert_eq!(
+        (value["from"].as_str(), value["to"].as_str()),
+        (
+            Some("review-result:round-9"),
+            Some("review-result:round-10")
+        ),
+        "the older commit is the earlier review: {value}"
+    );
+    assert_eq!(messages("new"), ["round-10 finding"], "{value}");
+    assert_eq!(messages("resolved"), ["round-9 finding"], "{value}");
+
+    // A review written and not committed yet is being recorded now, so it is the newest of all.
+    review_of(
+        &store,
+        &drafts,
+        "round-1",
+        "epic:objectives",
+        &findings_body(&finding("plan.md", 1, "round-1 finding")),
+    );
+    let ledger = aep(&[
+        "plan",
+        "artifact",
+        "findings",
+        "epic:objectives",
+        "--format",
+        "json",
+        "--store",
+        printable(&store),
+    ]);
+    assert_eq!(code(&ledger), 0, "{}", stderr(&ledger));
+    let value: serde_json::Value = serde_json::from_str(&stdout(&ledger)).expect("JSON");
+    assert_eq!(
+        (value["from"].as_str(), value["to"].as_str()),
+        (
+            Some("review-result:round-10"),
+            Some("review-result:round-1")
+        ),
+        "an uncommitted review comes after every committed one: {value}"
     );
 }
 
