@@ -8,6 +8,10 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Fixed
+
+- `aep plan artifact move --help` says in the `--via` line that the flag takes no value and walks the ladder's shortest route to `--to`, one journalled move per rung; `--via <text>` is refused as an unexpected argument.
+
 ## [0.80.1] - 2026-11-23
 
 ### Fixed

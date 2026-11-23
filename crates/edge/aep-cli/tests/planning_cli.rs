@@ -224,6 +224,26 @@ fn every_verb_can_be_built_and_asked_for_help() {
 }
 
 #[test]
+fn move_help_says_via_takes_no_value() {
+    let output = aep(&["plan", "artifact", "move", "--help"]);
+    assert_eq!(code(&output), 0, "{}", stderr(&output));
+    let help = stdout(&output);
+    let line = help
+        .lines()
+        .skip_while(|line| !line.trim_start().starts_with("--via"))
+        .nth(1)
+        .unwrap_or_else(|| panic!("`move --help` has no --via entry:\n{help}"));
+    assert!(
+        line.contains("takes no value"),
+        "the `--via` description must say it takes no value, read {line:?}"
+    );
+    assert!(
+        !help.contains("--via <"),
+        "`--via` must not show a value placeholder:\n{help}"
+    );
+}
+
+#[test]
 fn a_new_story_is_written_where_its_id_says_and_validates_clean() {
     let store = scratch("aep-plan-new");
 
