@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.80.2] - 2026-11-23
+
 ### Fixed
 
 - `aep plan artifact move --help` says in the `--via` line that the flag takes no value and walks the ladder's shortest route to `--to`, one journalled move per rung; `--via <text>` is refused as an unexpected argument.
@@ -1905,7 +1907,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.1...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.2...HEAD
+[0.80.2]: https://github.com/beyond10x/aep/compare/0.80.1...0.80.2
 [0.80.1]: https://github.com/beyond10x/aep/compare/0.80.0...0.80.1
 [0.80.0]: https://github.com/beyond10x/aep/compare/0.79.1...0.80.0
 [0.79.1]: https://github.com/beyond10x/aep/compare/0.79.0...0.79.1
