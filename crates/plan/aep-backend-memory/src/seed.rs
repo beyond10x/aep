@@ -12,7 +12,8 @@
 //!   `aep plan entity history` and `aep plan audit` have something real to show.
 //!
 //! Command ids and idempotency keys are derived from the artifact id, so seeding the same manifest
-//! into the same backend twice is a replay rather than a second set of entities.
+//! into the same backend twice is a replay rather than a second set of entities — and derived
+//! injectively, so two artifacts are never one command (see `token`).
 //!
 //! # Two passes
 //!
@@ -70,6 +71,15 @@ pub fn from_manifest<B: CommandService<Command = Command>>(
     at: Timestamp,
     actor: &ActorRef,
 ) -> Result<SeedReport, CommandError> {
+    // Before the first command, so a refusal writes nothing: two artifacts that would be one
+    // entity used to seed as one, or seed the first and refuse the second.
+    let shared = collisions(graph);
+    if !shared.is_empty() {
+        return Err(CommandError::Conflict {
+            reason: shared.join("; "),
+        });
+    }
+
     let mut report = SeedReport::default();
 
     for artifact in graph.artifacts() {
@@ -115,18 +125,60 @@ pub fn from_manifest<B: CommandService<Command = Command>>(
                 source: EntityRef::new(source.clone()),
                 target: EntityRef::new(target),
             });
-            let name = format!(
-                "seed-rel-{}-{}-{}",
-                token(&artifact.id),
-                relation.kind.as_str(),
-                token(target_id)
-            );
+            let name = relation_command_name(&artifact.id, relation.kind.as_str(), target_id);
             block_on(backend.execute(envelope(&name, payload, at, actor)?))?;
             report.relations += 1;
         }
     }
 
     Ok(report)
+}
+
+/// Every pair of artifacts in `graph` that seeding would store as one entity, one sentence each.
+///
+/// Two things identify a seeded artifact, and both are derived from it: its address — its kind and
+/// its name, with each `/` as `-` because a locator key cannot hold one — and its command
+/// identifier. `token` gives each artifact id its own identifier, so what this finds in practice
+/// is two artifacts at one address: `story:a/b` beside `story:a-b`, or `doc:x` of kind `design`
+/// beside `design:x`. The second identifier check costs nothing and keeps the guarantee checked
+/// rather than assumed — an identifier over the length cap is shortened with a digest.
+///
+/// [`from_manifest`] refuses a graph this reports on before it issues a command, and
+/// `aep govern validate --artifacts` reports the same sentences as problems, so a manifest that
+/// validates is one that seeds.
+#[must_use]
+pub fn collisions(graph: &ArtifactGraph) -> Vec<String> {
+    let mut problems = Vec::new();
+    let mut addresses: BTreeMap<String, &ArtifactId> = BTreeMap::new();
+    let mut commands: BTreeMap<String, &ArtifactId> = BTreeMap::new();
+    for artifact in graph.artifacts() {
+        let address = format!(
+            "{}/{}",
+            artifact.kind.as_str(),
+            locator_key(artifact.id.name())
+        );
+        if let Some(earlier) = addresses.get(&address) {
+            problems.push(format!(
+                "`{earlier}` and `{}` would be one entity at one address, `{address}` (an \
+                 address is the kind and the name with each `/` as `-`); rename one of them",
+                artifact.id
+            ));
+        } else {
+            addresses.insert(address, &artifact.id);
+        }
+
+        let name = bounded(&entity_command_name(&artifact.id));
+        if let Some(earlier) = commands.get(&name) {
+            problems.push(format!(
+                "`{earlier}` and `{}` would be seeded by one command, `{name}`; rename one of \
+                 them",
+                artifact.id
+            ));
+        } else {
+            commands.insert(name, &artifact.id);
+        }
+    }
+    problems
 }
 
 /// Issues the `CreateEntity` command for one artifact and returns the identity it was stored under.
@@ -153,7 +205,7 @@ fn create_entity<B: CommandService<Command = Command>>(
         locator,
         data: body(artifact),
     });
-    let name = format!("seed-{}", token(&artifact.id));
+    let name = entity_command_name(&artifact.id);
     let result = block_on(backend.execute(envelope(&name, payload, at, actor)?))?;
 
     result
@@ -207,7 +259,7 @@ fn envelope(
     at: Timestamp,
     actor: &ActorRef,
 ) -> Result<CommandEnvelope<Command>, CommandError> {
-    let name = &aep_domain::ids::bounded_identifier(name, "req-".len());
+    let name = &bounded(name);
     let command_id = CommandId::new(name).map_err(|error| unusable(name, &error))?;
     let idempotency_key = IdempotencyKey::new(name).map_err(|error| unusable(name, &error))?;
     let request_id =
@@ -236,33 +288,116 @@ fn unusable(name: &str, error: &ParseError) -> CommandError {
     }
 }
 
-/// A command-identifier fragment derived from an artifact id, such as `design-passkeys-auth`.
+/// `name` cut to the identifier cap with room for the `req-` a request id puts in front of it.
+fn bounded(name: &str) -> String {
+    aep_domain::ids::bounded_identifier(name, "req-".len())
+}
+
+/// The name of the command that creates the entity of `id`, before [`bounded`].
+fn entity_command_name(id: &ArtifactId) -> String {
+    format!("seed-{}", token(id))
+}
+
+/// The name of the command that seeds the edge `source kind target`, before [`bounded`].
+///
+/// `/` between the three parts, because no [`token`] holds one and no relation kind does: with
+/// `-` there, `story:a decomposes story:b-specifies-story-c` and
+/// `story:a-decomposes-story-b specifies story:c` were one command, and the second edge was
+/// refused as a reuse of the first's idempotency key.
+fn relation_command_name(source: &ArtifactId, kind: &str, target: &ArtifactId) -> String {
+    format!("seed-rel-{}/{kind}/{}", token(source), token(target))
+}
+
+/// A command-identifier fragment derived from an artifact id, different for every artifact id.
 ///
 /// Deterministic, because that is what makes a second seeding run a replay: the same artifact id
-/// must produce the same command id every time, in any process.
+/// must produce the same command id every time, in any process. **Injective**, because two
+/// artifacts given one fragment are one command: the second is refused as a reuse of the first's
+/// idempotency key — every verb that opens the store then refuses — or, when the two would create
+/// identical entities, silently replays the first.
+///
+/// An id is letter-or-digit runs with separator runs (`:`, `-`, `_`, `.`, `/`) between, before and
+/// after them. An identifier allows a single separator between two runs only, so:
+///
+/// * an id of one namespace word, `:`, and a name of runs joined by single `-` — `design:passkeys-auth`,
+///   `story:AUTH-141` — is its runs joined by `-`: `design-passkeys-auth`, as it always was. The
+///   first `-` is the `:`, so no two such ids share a fragment;
+/// * every other id — `story:render_a`, `review-result:initial`, `docs/design:a//b` — is its runs
+///   joined by `-`, then `.`, then one code per separator run, leading and trailing runs included,
+///   joined by `-`: each separator as a letter (`:` `c`, `-` `h`, `.` `d`, `_` `u`, `/` `s`), an
+///   empty run as `x`. `story:render_a` is `story-render-a.x-c-u-x`. The `.` is absent from the
+///   first form, and the codes give back every separator, so no two ids share a fragment here
+///   either. An id with no letter or digit is `artifact.` and its one code.
+///
+/// The fragment is a stored identity only for the length of one process — a Git-native store is
+/// hydrated into memory on each open, and no file holds it — so the second form changing the
+/// fragment some ids had before is invisible on disk.
 fn token(id: &ArtifactId) -> String {
-    let mut token = String::new();
-    for character in id.to_string().chars() {
+    let text = id.to_string();
+    let mut runs: Vec<String> = Vec::new();
+    // `gaps[0]` precedes the first run, `gaps[i]` follows run `i - 1`: one more than the runs.
+    let mut gaps: Vec<String> = vec![String::new()];
+    let mut run = String::new();
+    for character in text.chars() {
         if character.is_ascii_alphanumeric() {
-            token.push(character);
-        } else if !token.is_empty() && !token.ends_with('-') {
-            // Identifiers reject leading, trailing and repeated separators, so runs collapse.
-            token.push('-');
+            run.push(character);
+        } else {
+            if !run.is_empty() {
+                runs.push(std::mem::take(&mut run));
+                gaps.push(String::new());
+            }
+            gaps.last_mut()
+                .expect("there is always a gap")
+                .push(character);
         }
     }
-    let trimmed = token.trim_end_matches('-');
-    if trimmed.is_empty() {
+    if !run.is_empty() {
+        runs.push(run);
+        gaps.push(String::new());
+    }
+
+    let last = gaps.len() - 1;
+    let plain = runs.len() >= 2
+        && gaps[0].is_empty()
+        && gaps[last].is_empty()
+        && gaps[1] == ":"
+        && gaps[2..last].iter().all(|gap| gap == "-");
+    if plain {
+        return runs.join("-");
+    }
+
+    let head = if runs.is_empty() {
         "artifact".to_owned()
     } else {
-        trimmed.to_owned()
-    }
+        runs.join("-")
+    };
+    let codes: Vec<String> = gaps
+        .iter()
+        .map(|gap| {
+            if gap.is_empty() {
+                return "x".to_owned();
+            }
+            gap.chars()
+                .map(|separator| match separator {
+                    ':' => 'c',
+                    '-' => 'h',
+                    '.' => 'd',
+                    '_' => 'u',
+                    // `ArtifactId` admits no other character outside letters and digits.
+                    _ => 's',
+                })
+                .collect()
+        })
+        .collect();
+    format!("{head}.{}", codes.join("-"))
 }
 
 /// The locator key an artifact name maps to.
 ///
 /// Artifact names allow `/`, locator segments do not, so anything a locator cannot carry becomes
-/// `-`. Two artifacts that collide here are refused by the backend as a duplicate address rather
-/// than silently sharing one entity.
+/// `-`. That is the one lossy step left in seeding, and the only one a locator key's alphabet
+/// forces: [`collisions`] names two artifacts it would put at one address, and [`from_manifest`]
+/// refuses them before it writes anything.
 fn locator_key(name: &str) -> String {
     name.chars()
         .map(|character| {
@@ -587,8 +722,12 @@ mod tests {
         assert_eq!(token(&"adr:0042".parse().expect("artifact id")), "adr-0042");
         assert_eq!(
             token(&"docs/design:a//b".parse().expect("artifact id")),
-            "docs-design-a-b",
-            "runs of separators collapse, because identifiers reject empty segments"
+            "docs-design-a-b.x-s-c-ss-x",
+            "identifiers reject repeated separators, so a run of them is spelled as a code"
+        );
+        assert_eq!(
+            token(&"story:render_a".parse().expect("artifact id")),
+            "story-render-a.x-c-u-x"
         );
         assert!(CommandId::new(format!(
             "seed-{}",
@@ -598,6 +737,183 @@ mod tests {
 
         assert_eq!(locator_key("passkeys/auth"), "passkeys-auth");
         assert_eq!(locator_key("AUTH-141"), "AUTH-141");
+    }
+
+    /// A graph of draft stories with the given ids, so a test is about the ids alone.
+    fn stories(ids: &[&str]) -> ArtifactGraph {
+        ArtifactGraph::build(
+            ids.iter()
+                .map(|id| artifact(id, ArtifactKind::Story, ArtifactStatus::Draft)),
+        )
+        .expect("the graph is valid")
+    }
+
+    #[test]
+    fn ids_that_differ_only_in_a_separator_seed_as_distinct_entities() {
+        // `story:render-a` and `story:render_a` are two artifacts `validate` accepts; both used to
+        // seed under the command `seed-story-render-a`, and the second was refused as a reuse of
+        // the first's idempotency key, so every verb that opens the store refused.
+        let ids = [
+            "story:render-a",
+            "story:render_a",
+            "story:render.a",
+            "story:render--a",
+            "review-result:initial",
+            "review:result-initial",
+            "story-x:y",
+        ];
+        let backend = MemoryBackend::new();
+        let report = from_manifest(
+            &backend,
+            &stories(&ids),
+            "acme",
+            "payments",
+            Timestamp::from_epoch_millis(1_000),
+            &actor(),
+        )
+        .unwrap_or_else(|error| panic!("every accepted id seeds: {error}"));
+
+        assert_eq!(report.entities, ids.len());
+        assert_eq!(backend.len(), ids.len(), "one entity per artifact");
+        let identities: std::collections::BTreeSet<&EntityId> = report.by_id.values().collect();
+        assert_eq!(identities.len(), ids.len(), "no two artifacts share one");
+    }
+
+    #[test]
+    fn every_artifact_id_gets_its_own_command_identifier() {
+        // Every id over an alphabet of one letter and each separator an id allows, up to three
+        // characters a part: separators leading, trailing, repeated and mixed. A digit or a capital
+        // is a letter to `token`, and three more letters only multiply the run time.
+        let alphabet = ['a', '-', '_', '.', '/'];
+        let mut parts = Vec::new();
+        for length in 1..=3_u32 {
+            for index in 0..alphabet.len().pow(length) {
+                let mut rest = index;
+                let mut part = String::new();
+                for _ in 0..length {
+                    part.push(alphabet[rest % alphabet.len()]);
+                    rest /= alphabet.len();
+                }
+                parts.push(part);
+            }
+        }
+
+        let mut seen: BTreeMap<String, ArtifactId> = BTreeMap::new();
+        for namespace in &parts {
+            for name in &parts {
+                let id: ArtifactId = format!("{namespace}:{name}").parse().expect("artifact id");
+                let name = format!("seed-{}", token(&id));
+                assert!(CommandId::new(&name).is_ok(), "{id} gives `{name}`");
+                if let Some(earlier) = seen.insert(name.clone(), id.clone()) {
+                    panic!("{earlier} and {id} both give `{name}`");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn an_id_of_one_namespace_word_and_a_kebab_name_keeps_the_identifier_it_always_had() {
+        for (id, expected) in [
+            ("design:passkeys-auth", "design-passkeys-auth"),
+            ("adr:0042", "adr-0042"),
+            ("story:AUTH-141", "story-AUTH-141"),
+        ] {
+            assert_eq!(token(&id.parse().expect("artifact id")), expected, "{id}");
+        }
+    }
+
+    #[test]
+    fn relations_whose_parts_used_to_run_together_seed_as_two_edges() {
+        // Both edges were `seed-rel-story-a-decomposes-story-b-specifies-story-c`.
+        let graph = ArtifactGraph::build([
+            artifact("story:a", ArtifactKind::Story, ArtifactStatus::Draft).with_relation(
+                RelationKind::Decomposes,
+                ArtifactRef::unpinned("story:b-specifies-story-c".parse().expect("id")),
+            ),
+            artifact(
+                "story:a-decomposes-story-b",
+                ArtifactKind::Story,
+                ArtifactStatus::Draft,
+            )
+            .with_relation(
+                RelationKind::Specifies,
+                ArtifactRef::unpinned("story:c".parse().expect("id")),
+            ),
+            artifact(
+                "story:b-specifies-story-c",
+                ArtifactKind::Story,
+                ArtifactStatus::Draft,
+            ),
+            artifact("story:c", ArtifactKind::Story, ArtifactStatus::Draft),
+        ])
+        .expect("the graph is valid");
+        let backend = MemoryBackend::new();
+        let report = from_manifest(
+            &backend,
+            &graph,
+            "acme",
+            "payments",
+            Timestamp::from_epoch_millis(1_000),
+            &actor(),
+        )
+        .unwrap_or_else(|error| panic!("both edges seed: {error}"));
+
+        assert_eq!(report.relations, 2);
+        assert_eq!(backend.with_store(|store| store.relations().count()), 2);
+    }
+
+    #[test]
+    fn two_artifacts_at_one_address_are_refused_before_anything_is_written() {
+        // A locator key cannot hold `/`, so `story:a/b` is addressed as `story/a-b`, where
+        // `story:a-b` is too; and the address carries the kind, not the namespace, so `doc:x` of
+        // kind `design` is where `design:x` is. Seeding used to create the first of each pair, then
+        // refuse the second naming only the address.
+        let mut graph = stories(&["story:a-b", "story:a/b"]);
+        for id in ["design:x", "doc:x"] {
+            graph.insert(artifact(id, ArtifactKind::Design, ArtifactStatus::Draft));
+        }
+
+        let backend = MemoryBackend::new();
+        let error = from_manifest(
+            &backend,
+            &graph,
+            "acme",
+            "payments",
+            Timestamp::from_epoch_millis(1_000),
+            &actor(),
+        )
+        .expect_err("two artifacts cannot share one entity");
+        assert_eq!(error.code(), "conflict");
+        assert!(
+            ["story:a-b", "story:a/b", "design:x", "doc:x"]
+                .iter()
+                .all(|id| error.to_string().contains(id)),
+            "the refusal names every artifact involved: {error}"
+        );
+        assert_eq!(backend.len(), 0, "a refusal writes nothing");
+
+        let found = collisions(&graph);
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(
+            found
+                .iter()
+                .any(|problem| problem.contains("`story:a-b` and `story:a/b`")
+                    && problem.contains("one address, `story/a-b`")),
+            "{found:?}"
+        );
+    }
+
+    #[test]
+    fn a_graph_whose_artifacts_have_their_own_addresses_has_no_collisions() {
+        assert_eq!(collisions(&example()), Vec::<String>::new());
+        assert_eq!(
+            collisions(&stories(&[
+                "story:render-a",
+                "story:render_a",
+                "story:render.a"
+            ])),
+            Vec::<String>::new()
+        );
     }
 }
 
