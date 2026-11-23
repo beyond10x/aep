@@ -953,7 +953,7 @@ pub(crate) enum ArtifactCommand {
         /// move be replayed a year later and give the same answer.
         #[arg(long = "at", value_name = "INSTANT")]
         at: Option<String>,
-        /// Walk the ladder's intermediate rungs to get there, journalling each hop.
+        /// A switch that takes no value (`--to active --via`): walks the ladder's shortest route to `--to`, one journalled move per rung.
         ///
         /// `draft -> proposed -> active` is two commands per story on every wave (`8cffc110#184`,
         /// and `9da4f51c#3303`, a `python` loop issuing four commands for each of eight stories).
