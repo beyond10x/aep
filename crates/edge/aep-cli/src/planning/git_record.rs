@@ -651,6 +651,63 @@ pub(super) fn first_committed(root: &Path, paths: &[&str]) -> Option<BTreeMap<St
     Some(found)
 }
 
+/// In which order the history added each of `paths` (relative to `root`) in its current
+/// incarnation: `0` for the path the oldest commit added, counting up, keyed by the same relative
+/// path. Paths one commit added share its number.
+///
+/// The order of the commits, not of their dates: [`first_committed`] dates to the second, and two
+/// reviews committed within one second carry one date and no order. `--topo-order` lists a commit
+/// after every commit that descends from it, whatever the clocks said. A path with no committed
+/// version is absent: not committed yet, so recorded after every one that is. `None` when there is
+/// no history to order anything by.
+pub(super) fn committed_order(root: &Path, paths: &[&str]) -> Option<BTreeMap<String, usize>> {
+    if unversioned(root) {
+        return None;
+    }
+    if paths.is_empty() {
+        return Some(BTreeMap::new());
+    }
+    let prefix = String::from_utf8(git(root, &["rev-parse", "--show-prefix"])?).ok()?;
+    let prefix = prefix.trim_end_matches('\n');
+    let mut args = vec![
+        "log",
+        "--topo-order",
+        "--no-renames",
+        "--diff-filter=A",
+        "--format=%x01%H",
+        "--name-only",
+        "--",
+    ];
+    args.extend_from_slice(paths);
+    let Some(log) = git(root, &args) else {
+        return git(root, &["rev-parse", "--verify", "--quiet", "HEAD"])
+            .is_none()
+            .then(BTreeMap::new);
+    };
+    let log = String::from_utf8(log).ok()?;
+    // Newest first, so a commit's distance from the newest is counted here and turned around once
+    // the number of commits is known. The first addition met is the current incarnation's.
+    let mut newest_first: BTreeMap<String, usize> = BTreeMap::new();
+    let mut commits = 0_usize;
+    for line in log.lines() {
+        if line.starts_with('\u{1}') {
+            commits += 1;
+            continue;
+        }
+        if line.is_empty() || commits == 0 {
+            continue;
+        }
+        let relative = line.strip_prefix(prefix).unwrap_or(line).to_owned();
+        newest_first.entry(relative).or_insert(commits - 1);
+    }
+    Some(
+        newest_first
+            .into_iter()
+            .map(|(path, back)| (path, commits - 1 - back))
+            .collect(),
+    )
+}
+
 /// The boundary commits of a shallow repository — the ones its `shallow` file lists, whose parents
 /// were not fetched — or none when the repository is complete. `None` when Git cannot say.
 fn shallow_boundary(root: &Path) -> Option<std::collections::BTreeSet<String>> {

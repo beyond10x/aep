@@ -16,6 +16,9 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - A store holding artifact ids that differ only in a separator (`story:render-a`, `story:render_a`) no longer validates and then refuses every write with "idempotency key `seed-…` was already used": seeding gives each artifact id and each edge its own command identifier. Two manifest artifacts at one address (`story:a/b` beside `story:a-b`) are reported by `aep govern validate --artifacts` and refused by seeding, naming both, before anything is written.
 - `aep plan store unpack` restores an artifact whose id is given more than once; it refused it as "not packed in any pack".
 - `aep plan store pack` and `unpack` refuse a project file whose `version:` they cannot rewrite (its value on the next line) before writing anything, `--dry-run` included; they wrote the pack, or restored files and removed a pack, and then refused.
+- `aep plan artifact relate` and `new --relate` refuse a version pin (`story:target@1`) on an edge to the store's own artifact, naming the pin and the id the edge would store; they stored the edge without the pin and answered with it. A crossing into another member keeps its pin.
+- `aep plan serve` answers a `review-result` with the `review_outcome` records `aep plan artifact show` prints; its `outcomes` list was empty.
+- `aep plan artifact findings` without `--from` and `--to` compares the two newest reviews in the order a Git-native store committed them, with an uncommitted review newest; it ordered them by id, so `round-10` came before `round-9` and new and resolved findings were swapped.
 
 ## [0.80.0] - 2026-11-10
 

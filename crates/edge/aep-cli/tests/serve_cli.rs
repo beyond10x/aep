@@ -382,3 +382,94 @@ fn explain_answers_the_rungs_a_page_would_draw_and_what_each_costs() {
         next[0]
     );
 }
+
+/// Runs one `aep plan artifact` write or read against a test's store, and returns its standard
+/// output; a failure fails the test with what the verb said.
+fn artifact(store: &Path, args: &[&str]) -> String {
+    let root = repository();
+    let output = Command::new(env!("CARGO_BIN_EXE_aep"))
+        .args(["plan", "artifact"])
+        .args(args)
+        .args([
+            "--store",
+            &store.display().to_string(),
+            "--root",
+            &root.display().to_string(),
+        ])
+        .output()
+        .expect("the protocol binary runs");
+    assert!(
+        output.status.success(),
+        "aep plan artifact {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout).expect("UTF-8")
+}
+
+/// **A review read over the socket carries the outcomes `show` prints.** An outcome is filed on
+/// the reviewed artifact and joined onto the review by the reader; the served read once skipped
+/// that join and answered `outcomes: []` for a review the store records as `fixed`.
+#[test]
+fn a_served_review_carries_the_outcomes_show_prints() {
+    let store = scratch_store("review-outcomes");
+    artifact(
+        &store,
+        &[
+            "new",
+            "review-result",
+            "initial",
+            "--title",
+            "Review of the whole point",
+            "--relate",
+            "reviews:epic:the-whole-point",
+            "--prose-only",
+            "a fixture with no findings",
+        ],
+    );
+    artifact(
+        &store,
+        &[
+            "evidence",
+            "epic:the-whole-point",
+            "--kind",
+            "review_outcome",
+            "--review",
+            "review-result:initial",
+            "--outcome",
+            "fixed",
+        ],
+    );
+    let shown: serde_json::Value = serde_json::from_str(&artifact(
+        &store,
+        &["show", "review-result:initial", "--format", "json"],
+    ))
+    .expect("show --format json is JSON");
+    let outcomes = |value: &serde_json::Value| -> Vec<(String, String)> {
+        value["outcomes"]
+            .as_array()
+            .unwrap_or_else(|| panic!("`outcomes` is a list: {value}"))
+            .iter()
+            .map(|entry| {
+                (
+                    entry["reviewed"].as_str().unwrap_or_default().to_owned(),
+                    entry["outcome"].as_str().unwrap_or_default().to_owned(),
+                )
+            })
+            .collect()
+    };
+    assert_eq!(
+        outcomes(&shown),
+        [("epic:the-whole-point".to_owned(), "fixed".to_owned())],
+        "{shown}"
+    );
+
+    let served = serve(&store, &["--read-only"]);
+    let (status, body) = ask(&served, "GET", "/api/artifact/review-result:initial", None);
+    assert_eq!(status, 200, "{body}");
+    let read: serde_json::Value = serde_json::from_str(&body).expect("JSON");
+    assert_eq!(
+        outcomes(&read),
+        outcomes(&shown),
+        "the browser and the terminal show one recorded disposition: {body}"
+    );
+}
