@@ -4,7 +4,8 @@
 //! Everything is decided before anything is written: every record path is held to the pack path
 //! grammar, every target to "inside `.engineering`, through no symbolic link", every restored record
 //! to its digest, and every path a merge left in two places to the rule (loose copy kept; two packs
-//! with different bytes and no loose copy are refused unless `--from` chooses). The writes are
+//! with different bytes and no loose copy are refused unless `--from` chooses), and the project
+//! file's version rewrite is prepared and read back, dry run included. The writes are
 //! ordered so that each record is held by a loose file or a pack on disk at every point: restored
 //! files first, rewritten packs second, the old pack files last.
 
@@ -107,17 +108,21 @@ fn select(args: &UnpackArgs, packs: &[(String, std::sync::Arc<Pack>)]) -> Result
             refused.push(format!("`{id}`: {error}"));
             continue;
         }
-        let before = selected.len();
+        // Found is decided per id, not by whether the shared set grew: an id given twice adds
+        // nothing the second time and is still packed.
+        let mut found = false;
         for (_, pack) in packs {
-            selected.extend(
-                pack.records()
-                    .iter()
-                    .map(pack::PackRecord::path)
-                    .filter(|path| *path == document || path.starts_with(&evidence))
-                    .map(str::to_owned),
-            );
+            for path in pack
+                .records()
+                .iter()
+                .map(pack::PackRecord::path)
+                .filter(|path| *path == document || path.starts_with(&evidence))
+            {
+                found = true;
+                selected.insert(path.to_owned());
+            }
         }
-        if selected.len() == before {
+        if !found {
             refused.push(format!("`{id}` is not packed in any pack"));
         }
     }
@@ -212,16 +217,58 @@ fn no_pack(args: &UnpackArgs, store: &Store) -> Result<ExitCode> {
     let directory = store.overlay.packs_directory().to_path_buf();
     let stale =
         store.config.version != ProjectVersion::V5 || directory.join(".gitattributes").exists();
+    let version = store.version_change(ProjectVersion::V5)?;
     if !stale {
         outln!("nothing to unpack: no pack under .engineering/packs");
     } else if args.dry_run {
         outln!("no pack under .engineering/packs; would return project.yaml to aep.project/5");
     } else {
         ensure_attributes_removed(&directory)?;
-        store.set_version(ProjectVersion::V5)?;
+        if let Some(version) = &version {
+            version.write()?;
+        }
         outln!("no pack remains; project.yaml selects aep.project/5");
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Prints what `unpack` restores, keeps, drops and rewrites, and the file counts before and
+/// after; returns the counts before.
+fn print_plan(
+    store: &Store,
+    plan: &Plan,
+    rewrites: &BTreeMap<String, Option<Vec<u8>>>,
+    remaining: &BTreeSet<String>,
+) -> [usize; 3] {
+    let before = store.counts();
+    let mut after = before;
+    after[0] += plan.restore.keys().filter(|p| p.starts_with("planning/")).count();
+    after[1] += plan.restore.keys().filter(|p| p.starts_with("evidence/")).count();
+    after[2] = remaining.len();
+    for path in plan.restore.keys() {
+        outln!("  restore {path}");
+    }
+    for path in &plan.loose {
+        outln!("  keep {path}: a loose copy exists");
+    }
+    for (name, dropped) in &plan.drops {
+        for path in dropped {
+            outln!("  drop {path} from {name}");
+        }
+    }
+    for (name, bytes) in rewrites {
+        match bytes {
+            Some(bytes) => outln!("  rewrite {name} -> {}", pack::name(bytes)),
+            None => outln!("  delete {name}"),
+        }
+    }
+    print_counts(before, after);
+    if remaining.is_empty() && store.config.version != ProjectVersion::V5 {
+        outln!("project.yaml: aep.project/6 -> aep.project/5");
+    } else if !remaining.is_empty() && store.config.version != ProjectVersion::V6 {
+        outln!("project.yaml: aep.project/5 -> aep.project/6");
+    }
+    before
 }
 
 pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
@@ -253,35 +300,15 @@ pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
             .flatten()
             .map(|bytes| pack::name(bytes)),
     );
+    // Prepared before the dry run returns and before any write, so a project file the swap
+    // cannot rewrite refuses with every file as it was.
+    let version = store.version_change(if remaining.is_empty() {
+        ProjectVersion::V5
+    } else {
+        ProjectVersion::V6
+    })?;
 
-    let before = store.counts();
-    let mut after = before;
-    after[0] += plan.restore.keys().filter(|p| p.starts_with("planning/")).count();
-    after[1] += plan.restore.keys().filter(|p| p.starts_with("evidence/")).count();
-    after[2] = remaining.len();
-    for path in plan.restore.keys() {
-        outln!("  restore {path}");
-    }
-    for path in &plan.loose {
-        outln!("  keep {path}: a loose copy exists");
-    }
-    for (name, dropped) in &plan.drops {
-        for path in dropped {
-            outln!("  drop {path} from {name}");
-        }
-    }
-    for (name, bytes) in &rewrites {
-        match bytes {
-            Some(bytes) => outln!("  rewrite {name} -> {}", pack::name(bytes)),
-            None => outln!("  delete {name}"),
-        }
-    }
-    print_counts(before, after);
-    if remaining.is_empty() && store.config.version != ProjectVersion::V5 {
-        outln!("project.yaml: aep.project/6 -> aep.project/5");
-    } else if !remaining.is_empty() && store.config.version != ProjectVersion::V6 {
-        outln!("project.yaml: aep.project/5 -> aep.project/6");
-    }
+    let before = print_plan(&store, &plan, &rewrites, &remaining);
     if args.dry_run {
         outln!("dry run: nothing was written");
         return Ok(ExitCode::SUCCESS);
@@ -312,9 +339,9 @@ pub(crate) fn run(args: &UnpackArgs) -> Result<ExitCode> {
     }
     if remaining.is_empty() {
         ensure_attributes_removed(&directory)?;
-        store.set_version(ProjectVersion::V5)?;
-    } else {
-        store.set_version(ProjectVersion::V6)?;
+    }
+    if let Some(version) = &version {
+        version.write()?;
     }
     outln!(
         "restored {} file(s); rewrote {} pack(s); {} pack(s) remain",
