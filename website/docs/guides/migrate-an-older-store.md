@@ -76,10 +76,10 @@ the record's position, its file and the differing fields, never their values.
 
 Name the rules the new project file should carry:
 
-{/* generated:release-pin:begin commit=0c4065ed82a778b081bac7325c8fa1f760fcecd4 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin commit=ff194ee2305f1914578590b7b22c037cf9b88ec6 — kept by `cargo xtask status` */}
 ```bash
 aep plan store migrate git --verify \
-  --protocols git+https://github.com/beyond10x/aep#0c4065ed82a778b081bac7325c8fa1f760fcecd4 \
+  --protocols git+https://github.com/beyond10x/aep#ff194ee2305f1914578590b7b22c037cf9b88ec6 \
   --profile development.standard
 ```
 {/* generated:release-pin:end */}
