@@ -35,8 +35,10 @@ install -m 0755 aep-$VERSION-x86_64-unknown-linux-gnu/aep ~/.local/bin/aep
 aep --version
 ```
 
-Archives exist for `x86_64` and `aarch64`, on Linux (`unknown-linux-gnu`) and macOS
-(`apple-darwin`). To build from source instead, with Rust 1.91 or newer:
+Archives exist for `x86_64` and `aarch64`, on Linux (`unknown-linux-gnu` and
+`unknown-linux-musl`) and macOS (`apple-darwin`). The `unknown-linux-gnu` archives need glibc 2.39
+or newer. On an older glibc (Amazon Linux 2023 has 2.34) or on Alpine, use the static
+`unknown-linux-musl` archive. To build from source instead, with Rust 1.91 or newer:
 
 ```bash
 cargo install --locked --git https://github.com/beyond10x/aep --tag 0.80.2 aep-cli --bin aep

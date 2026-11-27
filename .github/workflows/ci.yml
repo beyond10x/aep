@@ -111,7 +111,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
-      TARGET: x86_64-unknown-linux-gnu
+      TARGET: x86_64-unknown-linux-musl
       GLIBC_2_34_IMAGE: amazonlinux:2023@sha256:edd3297df7d444ab9a7896b763d5305d4bab57d2fb3943e831c1713b97d32d9d
       NO_GLIBC_IMAGE: alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
     steps:
@@ -126,6 +126,13 @@ jobs:
           key: portable-${{ env.TARGET }}
 
       # The bundled SQLite is C; on a musl target it is compiled by musl's own compiler wrapper.
+      - name: Install the musl C toolchain
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends musl-tools
+          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
+
       - name: Build the static binary
         run: cargo build --release --locked -p aep-cli --target "$TARGET"
 

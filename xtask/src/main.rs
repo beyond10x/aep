@@ -689,16 +689,30 @@ fn authoritative_gate_text(ci: &str, release: &str) -> Result<()> {
 
 /// Holds every cut release to the binary platforms and verification record promised to adopters.
 fn release_asset_text(release: &str) -> Result<()> {
-    const TARGETS: [&str; 4] = [
+    const TARGETS: [&str; 6] = [
         "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
         "x86_64-apple-darwin",
         "aarch64-apple-darwin",
     ];
+    // The `-linux-gnu` archives need the glibc of the build runner (2.39). The `-linux-musl` ones
+    // are what an older host takes, so each is run, before it is packaged, on the oldest glibc a
+    // supported build host has (Amazon Linux 2023, glibc 2.34) and on a host with no glibc at all.
+    const PORTABILITY_IMAGES: [&str; 2] = ["amazonlinux:2023", "alpine:"];
     for target in TARGETS {
         let matrix_entry = format!("- target: {target}");
         if !release.lines().any(|line| line.trim() == matrix_entry) {
             bail!("{RELEASE_WORKFLOW} must build release target `{target}`");
+        }
+    }
+    for image in PORTABILITY_IMAGES {
+        if !pins_image(release, image) {
+            bail!(
+                "{RELEASE_WORKFLOW} must run the `-linux-musl` binaries in `{image}` pinned by \
+                 digest (`{image}…@sha256:<digest>`)"
+            );
         }
     }
     if release.to_ascii_lowercase().contains("windows") {
@@ -741,6 +755,21 @@ fn release_asset_text(release: &str) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Whether `text` names a container image starting with `image` and pinned by a sha256 digest:
+/// `amazonlinux:2023@sha256:<64 hex>`, or `alpine:3.24@sha256:<64 hex>` for the prefix `alpine:`.
+fn pins_image(text: &str, image: &str) -> bool {
+    text.match_indices(image).any(|(start, _)| {
+        let rest = &text[start + image.len()..];
+        let Some((tag, digest)) = rest.split_once("@sha256:") else {
+            return false;
+        };
+        let digest = digest.get(..64).unwrap_or_default();
+        !tag.contains(|c: char| c.is_whitespace() || c == '"' || c == '\'')
+            && digest.len() == 64
+            && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
+    })
 }
 
 /// Writes or checks the gate-step list in `AGENTS.md`.
@@ -2428,6 +2457,38 @@ mod currency_tests {
         assert!(
             release_asset_text(&skipped_backfill).is_err(),
             "a manual backfill cannot inherit the skipped tag-only gate"
+        );
+    }
+
+    #[test]
+    fn a_release_without_portable_linux_archives_or_their_old_glibc_run_is_drift() {
+        let path = workspace_root().join(RELEASE_WORKFLOW);
+        let release = std::fs::read_to_string(path).expect("reading the release workflow");
+
+        for target in ["x86_64-unknown-linux-musl", "aarch64-unknown-linux-musl"] {
+            let missing = release.replace(&format!("- target: {target}"), "- target: removed");
+            let refusal = release_asset_text(&missing)
+                .expect_err(&format!("a release without `{target}` must be refused"));
+            assert!(
+                refusal.to_string().contains(target),
+                "the refusal names the missing target: {refusal}"
+            );
+        }
+
+        let unpinned = release.replace("amazonlinux:2023@sha256:", "amazonlinux:2023 #");
+        let refusal = release_asset_text(&unpinned)
+            .expect_err("a release that never runs its binary on glibc 2.34 must be refused");
+        assert!(
+            refusal.to_string().contains("amazonlinux:2023"),
+            "the refusal names the glibc 2.34 image: {refusal}"
+        );
+
+        let no_glibc = release.replace("alpine:", "debian:");
+        let refusal = release_asset_text(&no_glibc)
+            .expect_err("a release that never runs its binary without glibc must be refused");
+        assert!(
+            refusal.to_string().contains("alpine"),
+            "the refusal names the image without glibc: {refusal}"
         );
     }
 
