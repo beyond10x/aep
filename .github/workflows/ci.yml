@@ -106,6 +106,56 @@ jobs:
       - name: Run the repository gate
         run: task ${{ inputs.source_release && 'check-source' || 'check' }}
 
+  portable-linux:
+    name: Portable Linux binary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+      GLIBC_2_34_IMAGE: amazonlinux:2023@sha256:edd3297df7d444ab9a7896b763d5305d4bab57d2fb3943e831c1713b97d32d9d
+      NO_GLIBC_IMAGE: alpine:3.24@sha256:f59abe656b692d901e184be3445e084786602108599d2a51d229c0f5a48c71bf
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
+        with:
+          targets: ${{ env.TARGET }}
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          key: portable-${{ env.TARGET }}
+
+      # The bundled SQLite is C; on a musl target it is compiled by musl's own compiler wrapper.
+      - name: Build the static binary
+        run: cargo build --release --locked -p aep-cli --target "$TARGET"
+
+      # The release's `-linux-musl` archives are for hosts older than the runner's glibc 2.39: the
+      # binary must answer silently on glibc 2.34 (Amazon Linux 2023) and with no glibc at all.
+      - name: Run the static binary on glibc 2.34 and without glibc
+        run: |
+          set -euo pipefail
+          version="$(cargo metadata --locked --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "aep-cli") | .version')"
+          binary="$PWD/target/${TARGET}/release/aep"
+          failed=0
+          for image in "$GLIBC_2_34_IMAGE" "$NO_GLIBC_IMAGE"; do
+            docker pull --quiet "$image" >/dev/null
+            if ! docker run --rm --network none --volume "${binary}:/usr/local/bin/aep:ro" \
+              "$image" aep --version >"$RUNNER_TEMP/stdout" 2>"$RUNNER_TEMP/stderr"; then
+              echo "::error::aep --version failed in ${image}"
+              failed=1
+            fi
+            if [ "$(cat "$RUNNER_TEMP/stdout")" != "aep ${version}" ]; then
+              echo "::error::aep --version in ${image} printed: $(cat "$RUNNER_TEMP/stdout")"
+              failed=1
+            fi
+            if [ -s "$RUNNER_TEMP/stderr" ]; then
+              echo "::error::aep --version in ${image} wrote to stderr:"
+              cat "$RUNNER_TEMP/stderr"
+              failed=1
+            fi
+          done
+          exit "$failed"
+
   macos:
     name: macOS protocol sources
     runs-on: macos-15
