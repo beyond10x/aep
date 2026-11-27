@@ -24,9 +24,9 @@ Download the archive for your platform from
 [GitHub Releases](https://github.com/beyond10x/aep/releases), check it, and put `aep` on your
 `PATH`:
 
-{/* generated:release-pin:begin version=0.80.2 — kept by `cargo xtask status` */}
+{/* generated:release-pin:begin version=0.81.0 — kept by `cargo xtask status` */}
 ```bash
-VERSION=0.80.2
+VERSION=0.81.0
 curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
 curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/SHA256SUMS
 sha256sum -c --ignore-missing SHA256SUMS
@@ -41,7 +41,7 @@ or newer. On an older glibc (Amazon Linux 2023 has 2.34) or on Alpine, use the s
 `unknown-linux-musl` archive. To build from source instead, with Rust 1.91 or newer:
 
 ```bash
-cargo install --locked --git https://github.com/beyond10x/aep --tag 0.80.2 aep-cli --bin aep
+cargo install --locked --git https://github.com/beyond10x/aep --tag 0.81.0 aep-cli --bin aep
 ```
 {/* generated:release-pin:end */}
 

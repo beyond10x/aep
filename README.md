@@ -31,9 +31,9 @@ Download a release archive for your platform from
 `SHA256SUMS` entry. On Linux, the `-unknown-linux-gnu` archives need glibc 2.39 or newer. On an
 older glibc (Amazon Linux 2023 has 2.34) or on Alpine, use the static `-unknown-linux-musl` archive.
 
-<!-- generated:release-pin:begin version=0.80.2 — kept by `cargo xtask status` -->
+<!-- generated:release-pin:begin version=0.81.0 — kept by `cargo xtask status` -->
 ```console
-$ VERSION=0.80.2
+$ VERSION=0.81.0
 $ curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/aep-$VERSION-x86_64-unknown-linux-gnu.tar.gz
 $ curl -LO https://github.com/beyond10x/aep/releases/download/$VERSION/SHA256SUMS
 $ sha256sum -c --ignore-missing SHA256SUMS
@@ -44,7 +44,7 @@ $ install -m 0755 aep-$VERSION-x86_64-unknown-linux-gnu/aep ~/.local/bin/aep
 To build from source instead, use Rust 1.91 or newer:
 
 ```console
-$ cargo install --locked --git https://github.com/beyond10x/aep --tag 0.80.2 aep-cli --bin aep
+$ cargo install --locked --git https://github.com/beyond10x/aep --tag 0.81.0 aep-cli --bin aep
 ```
 <!-- generated:release-pin:end -->
 

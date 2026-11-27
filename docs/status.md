@@ -130,6 +130,7 @@ fails if it drifts; `git tag -n99` carries the complete annotated messages.
 | `0.80.0` | aep 0.80.0 |
 | `0.80.1` | aep 0.80.1 |
 | `0.80.2` | aep 0.80.2 |
+| `0.81.0` | aep 0.81.0 |
 <!-- generated:delivered-waves:end -->
 
 ## Current work and verification
