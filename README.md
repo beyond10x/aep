@@ -28,7 +28,8 @@ all of them.
 
 Download a release archive for your platform from
 [GitHub Releases](https://github.com/beyond10x/aep/releases). Each archive has an `aep` binary and a
-`SHA256SUMS` entry.
+`SHA256SUMS` entry. On Linux, the `-unknown-linux-gnu` archives need glibc 2.39 or newer. On an
+older glibc (Amazon Linux 2023 has 2.34) or on Alpine, use the static `-unknown-linux-musl` archive.
 
 <!-- generated:release-pin:begin version=0.80.2 — kept by `cargo xtask status` -->
 ```console

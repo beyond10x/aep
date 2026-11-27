@@ -226,7 +226,7 @@ Tags are bare semantic versions (`0.64.0`). The step map `drivers/releases/sourc
    the bot with a merge commit (never a squash) once the required checks are green, so the tagged
    commit is on `origin/main`. If a fix lands on the branch first, move the tag to the branch
    head.
-6. Verify the `Release` workflow run for the tag succeeded and the GitHub Release carries the four
+6. Verify the `Release` workflow run for the tag succeeded and the GitHub Release carries the six
    `aep-<version>-<target>.tar.gz` archives and `SHA256SUMS`.
 7. Record the release on a `plan/release-<version>-record` branch: `cargo xtask release record`
    finds the tag's `Release` run (read-only) and runs

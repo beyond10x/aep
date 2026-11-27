@@ -8,6 +8,10 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+### Added
+
+- Static Linux archives `aep-<version>-x86_64-unknown-linux-musl.tar.gz` and `aep-<version>-aarch64-unknown-linux-musl.tar.gz`, listed in `SHA256SUMS`; the release runs each on glibc 2.34 (Amazon Linux 2023) and on Alpine and refuses any output on stderr. The `-unknown-linux-gnu` archives need glibc 2.39 or newer; on an older glibc the loader printed `weak version 'GLIBC_2.39' not found` on stderr.
+
 ## [0.80.2] - 2026-11-23
 
 ### Fixed
