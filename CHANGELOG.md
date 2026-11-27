@@ -8,6 +8,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 
 ## [Unreleased]
 
+## [0.81.0] - 2026-11-27
+
 ### Added
 
 - Static Linux archives `aep-<version>-x86_64-unknown-linux-musl.tar.gz` and `aep-<version>-aarch64-unknown-linux-musl.tar.gz`, listed in `SHA256SUMS`; the release runs each on glibc 2.34 (Amazon Linux 2023) and on Alpine and refuses any output on stderr. The `-unknown-linux-gnu` archives need glibc 2.39 or newer; on an older glibc the loader printed `weak version 'GLIBC_2.39' not found` on stderr.
@@ -1911,7 +1913,8 @@ One line per change. The reasoning lives in the commit messages and in `docs/des
 - `xtask schema [--check]` generates schemas from the Rust types and checks them in CI.
 - Repository scaffolding: workspace, `Taskfile.yml` gate, Apache-2.0 licence, `AGENTS.md`.
 
-[Unreleased]: https://github.com/beyond10x/aep/compare/0.80.2...HEAD
+[Unreleased]: https://github.com/beyond10x/aep/compare/0.81.0...HEAD
+[0.81.0]: https://github.com/beyond10x/aep/compare/0.80.2...0.81.0
 [0.80.2]: https://github.com/beyond10x/aep/compare/0.80.1...0.80.2
 [0.80.1]: https://github.com/beyond10x/aep/compare/0.80.0...0.80.1
 [0.80.0]: https://github.com/beyond10x/aep/compare/0.79.1...0.80.0
